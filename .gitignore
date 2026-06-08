@@ -1,0 +1,24 @@
+# General Node & Build
+node_modules/
+dist/
+.next/
+build/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Scratch / Temporary Files
+check.js
+check2.js
+fix.js
+
+# Unwanted dumps / nested repos
+super-league/
+frontend/spec.json
+frontend/src/pages/FifaPrediction.html
+
+# OS Files
+.DS_Store
+Thumbs.db

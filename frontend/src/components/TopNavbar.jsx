@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { cn } from '../utils/cn';
 
 export function TopNavbar() {
-    const { division, setDivision, view, setView, goBack } = useLeague();
+    const { division, setDivision, view, setView, goBack, fantasySection, setFantasySection } = useLeague();
     const { user, signInWithGoogle, signOut } = useAuth();
     const [menuOpen, setMenuOpen] = useState(false);
 
@@ -39,27 +39,31 @@ export function TopNavbar() {
                             <ArrowLeft size={20} className="sm:w-6 sm:h-6" />
                         </button>
                     )}
-                    <div
-                        className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => setView('home')}
-                    >
-                        {division === 'womens' ? (
-                            <>
-                                <img src="/slk-womens.png" alt="WSL" className="w-14 h-14 sm:w-20 sm:h-20 object-contain relative -ml-2" />
-                                <span className="text-lg sm:text-2xl font-black italic tracking-tighter text-white">
-                                    WSL
+                    {!(view === 'fantasy' && fantasySection === 'fifa') && (
+                        <div
+                            className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => setView('home')}
+                        >
+                            {division === 'womens' ? (
+                                <>
+                                    <img src="/slk-womens.png" alt="WSL" className="w-14 h-14 sm:w-20 sm:h-20 object-contain relative -ml-2" />
+                                    <span className="text-lg sm:text-2xl font-black italic tracking-tighter text-white">
+                                        WSL
+                                    </span>
+                                </>
+                            ) : (
+                                <span className="text-lg sm:text-xl font-black italic tracking-tighter text-white leading-none flex flex-col justify-center">
+                                    <span>SUPER</span>
+                                    <span>LEAGUE</span>
                                 </span>
-                            </>
-                        ) : (
-                            <span className="text-lg sm:text-xl font-black italic tracking-tighter text-white leading-none flex flex-col justify-center">
-                                <span>SUPER</span>
-                                <span>LEAGUE</span>
-                            </span>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    )}
+                    <div id="navbar-portal-target" className="flex items-center"></div>
                 </div>
 
                 {/* Center: Division Toggle */}
+                {view !== 'fantasy' || fantasySection !== 'fifa' ? (
                 <div className="absolute left-1/2 -translate-x-1/2 flex items-center bg-white/5 p-1 rounded-full border border-white/10">
                     <button
                         onClick={() => setDivision('mens')}
@@ -82,6 +86,30 @@ export function TopNavbar() {
                         <span className="hidden sm:inline">Women's</span>
                     </button>
                 </div>
+                ) : (
+                <div className="absolute left-1/2 -translate-x-1/2 flex items-center bg-white/5 p-1 rounded-full border border-white/10">
+                    <button
+                        onClick={() => setFantasySection('season1')}
+                        className={cn(
+                            "px-2 py-1 sm:px-4 sm:py-1.5 rounded-full text-[10px] sm:text-sm font-medium transition-colors duration-300 w-16 sm:w-24",
+                            fantasySection === 'season1' ? "bg-white text-black" : "text-zinc-400 hover:text-white"
+                        )}
+                    >
+                        <span className="sm:hidden">S1</span>
+                        <span className="hidden sm:inline">Season 1</span>
+                    </button>
+                    <button
+                        onClick={() => setFantasySection('fifa')}
+                        className={cn(
+                            "px-2 py-1 sm:px-4 sm:py-1.5 rounded-full text-[10px] sm:text-sm font-medium transition-colors duration-300 w-16 sm:w-24",
+                            fantasySection === 'fifa' ? "bg-white text-black" : "text-zinc-400 hover:text-white"
+                        )}
+                    >
+                        <span className="sm:hidden">FIFA</span>
+                        <span className="hidden sm:inline">FIFA</span>
+                    </button>
+                </div>
+                )}
 
                 {/* Right: Login & Hamburger */}
                 <div className="flex items-center gap-2 sm:gap-4">

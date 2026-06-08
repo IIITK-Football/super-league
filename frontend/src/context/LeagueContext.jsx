@@ -8,7 +8,7 @@ export function LeagueProvider({ children }) {
   // ADDED 'matchTimeline' and 'player-profile' to your tracker comment!
   const [view, setViewInternal] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('view') || 'home';
+    return params.get('view') || 'fantasy';
   }); // 'home' | 'matches' | 'standings' | 'teams' | 'fantasy' | 'leaderboard' | 'news' | 'legends' | 'rules' | 'login' | 'player-profile' | 'matchTimeline'
   
   const setView = (newView) => {
@@ -41,6 +41,7 @@ export function LeagueProvider({ children }) {
   const [fantasyPrediction, setFantasyPrediction] = useState(null);
   const [globalPollState, setGlobalPollState] = useState({ mens: null, womens: null });
   const [selectedArticle, setSelectedArticle] = useState(null);
+  const [fantasySection, setFantasySection] = useState('fifa'); // 'season1' | 'fifa'
 
   return (
     <LeagueContext.Provider value={{ 
@@ -48,7 +49,8 @@ export function LeagueProvider({ children }) {
       view, setView, goBack,
       fantasyPrediction, setFantasyPrediction, 
       globalPollState, setGlobalPollState,
-      selectedArticle, setSelectedArticle 
+      selectedArticle, setSelectedArticle,
+      fantasySection, setFantasySection
     }}>
       {children}
     </LeagueContext.Provider>

@@ -6,6 +6,7 @@ import { Loader } from './components/Loader';
 import { Onboarding } from './pages/Onboarding';
 import { AdminLogin } from './pages/AdminLogin';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { Login } from './pages/Login';
 
 function AuthGuard() {
   const { user, profile, loading } = useAuth();
@@ -39,7 +40,7 @@ function AuthGuard() {
     );
   }
 
-  if (user && (!profile?.nickname || !profile?.team_flair_id|| !profile.womens_team_flair)) {
+  if (user && (!profile?.nickname || !profile?.team_flair_id || !profile.womens_team_flair || !profile.wc_team_flair)) {
     return <Onboarding />;
   }
 

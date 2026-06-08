@@ -44,7 +44,7 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 max-w-7xl mx-auto selection:bg-white/20">
+    <div className={`min-h-screen pt-24 pb-12 px-4 sm:px-6 mx-auto selection:bg-white/20 ${view === 'fantasy' ? 'max-w-[1800px]' : 'max-w-7xl'}`}>
       <TopNavbar />
       <main className="animate-in fade-in zoom-in-95 duration-500">
         {renderView()}

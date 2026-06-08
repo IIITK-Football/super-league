@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { useAuth } from '../context/AuthContext';
+import { FifaPrediction } from './FifaPrediction';
 import { useApi } from '../hooks/useApi';
 import { fetchApi } from '../hooks/useApi';
 import { Send, CheckCircle2, RefreshCw, Loader2, Crown, Lock, Target, Clock, ChevronDown, ChevronUp } from 'lucide-react';
@@ -32,8 +33,9 @@ const getTeamColorClass = (teamName) => {
 };
 
 export function Fantasy() {
-    const { division } = useLeague();
+    const { division, fantasySection, setFantasySection } = useLeague();
     const { user, profile } = useAuth();
+    
 
     // --- Data fetching ---
     const { data: scheduleResp, loading: scheduleLoading } = useApi('/schedule');
@@ -319,7 +321,35 @@ export function Fantasy() {
     }
 
     return (
-        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
+        <div className="w-full mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
+
+            {/* Sub-tab navigation moved to TopNavbar */}
+
+            {fantasySection === 'season1' ? (
+                <>
+                    {/* S1/FIFA Toggle on the page itself */}
+                    <div className="flex justify-center mb-6">
+                        <div className="flex items-center bg-white/5 p-1 rounded-full border border-white/10 relative z-10">
+                            <button
+                                onClick={() => setFantasySection('season1')}
+                                className={cn(
+                                    "px-4 py-2 sm:px-6 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold uppercase tracking-widest transition-colors duration-300",
+                                    fantasySection === 'season1' ? "bg-white text-black" : "text-zinc-400 hover:text-white"
+                                )}
+                            >
+                                Season 1
+                            </button>
+                            <button
+                                onClick={() => setFantasySection('fifa')}
+                                className={cn(
+                                    "px-4 py-2 sm:px-6 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold uppercase tracking-widest transition-colors duration-300",
+                                    fantasySection === 'fifa' ? "bg-white text-black" : "text-zinc-400 hover:text-white"
+                                )}
+                            >
+                                FIFA
+                            </button>
+                        </div>
+                    </div>
 
             {/* Header */}
             <div className="text-center space-y-4 mb-8">
@@ -845,6 +875,10 @@ export function Fantasy() {
                     </>
                 )}
             </div>
+            </>
+            ) : (
+                <FifaPrediction />
+            )}
     </div>
   );
 }

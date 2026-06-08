@@ -1,0 +1,88 @@
+.autocomplete-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  max-height: 250px;
+  overflow-y: auto;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  z-index: 50;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Scrollbar styles */
+.autocomplete-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+.autocomplete-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+.autocomplete-dropdown::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+
+.autocomplete-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.2s ease;
+  color: #fff;
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.player-details {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.player-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.player-pos {
+  font-size: 11px;
+  background: rgba(0, 181, 64, 0.2);
+  color: var(--fifa-cyan);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.player-country {
+  font-size: 12px;
+  color: #aaa;
+  text-transform: uppercase;
+}
+
+.autocomplete-item.loading,
+.autocomplete-item.empty {
+  cursor: default;
+  color: #888;
+  justify-content: center;
+  font-style: italic;
+}
+.autocomplete-item.loading:hover,
+.autocomplete-item.empty:hover {
+  background: transparent;
+}
