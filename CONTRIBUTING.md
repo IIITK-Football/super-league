@@ -56,8 +56,8 @@ Navigate to the relevant workspace before installing:
 
 ```bash
 cd frontend  # or: cd backend
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 ### 4. Sync with upstream before pushing
