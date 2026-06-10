@@ -35,6 +35,7 @@ const pages = [
         const url = pageConfig.route ? `${BASE_URL}/${pageConfig.route}` : BASE_URL;
         const filename = pageConfig.route || 'home';
 
+<<<<<<< HEAD
         console.log(`\n📸 Capturing ${url}...`);
 
         try {
@@ -51,20 +52,48 @@ const pages = [
             });
 
             // 3. Take the screenshot
+=======
+        console.log(`📸 Capturing ${url}...`);
+
+        // 1. Navigate, but don't wait for network idle yet
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+        try {
+            // 2. THE CI FIX: Wait for the specific text to appear on the screen.
+            // This proves React Router has finished calculating and painting the component.
+            console.log(`   ⏳ Waiting for text: "${pageConfig.text}"`);
+            await page.getByText(pageConfig.text, { exact: false })
+                .first()
+                .waitFor({ state: 'visible', timeout: 15000 }); // Fails the build if it doesn't load in 15s
+
+            // 3. Optional but recommended: Now wait for any delayed images or API calls to finish
+            await page.waitForLoadState('networkidle');
+
+            // 4. Capture the screenshot
+>>>>>>> bdad86b (Add delay)
             await page.screenshot({ path: `./screenshots/${filename}.png` });
             console.log(`   ✅ Saved ${filename}.png`);
 
         } catch (error) {
+<<<<<<< HEAD
             console.error(`   ❌ Failed to capture ${filename}. Could not find data-testid="${pageConfig.testId}" within 15 seconds.`);
             hasErrors = true;
+=======
+            console.error(`   ❌ Failed to capture ${filename}. Could not find text: "${pageConfig.text}"`);
+            // In CI, you might want to process.exit(1) here to fail the workflow
+>>>>>>> bdad86b (Add delay)
         }
     }
 
     await browser.close();
+<<<<<<< HEAD
     console.log('\n🏁 All done!');
 
     // If any screenshot failed, exit with an error code so the GitHub Action turns red
     if (hasErrors) {
         process.exit(1);
     }
+=======
+    console.log('🏁 All done!');
+>>>>>>> bdad86b (Add delay)
 })();
