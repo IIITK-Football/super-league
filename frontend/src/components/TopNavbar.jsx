@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, X, User, ArrowLeft } from 'lucide-react';
+import { Menu, X, User } from 'lucide-react'; // Removed ArrowLeft
 import { useLeague } from '../context/LeagueContext';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../utils/cn';
@@ -14,12 +14,10 @@ export function TopNavbar() {
     const navigate = useNavigate();
     
     const currentPath = location.pathname;
-    // NEW: Treat both /fantasy and /wc as the fantasy section for UI purposes
     const isFantasyRoute = currentPath === '/fantasy' || currentPath === '/wc';
 
     const views = [
         { path: '/', label: 'Home' },
-        // NEW: Point the dropdown link directly to /wc
         { path: '/wc', id: 'fifa', label: 'FIFA FANTASY LEAGUE' }, 
         { path: '/matches', label: 'Matches' },
         { path: '/standings', label: 'Standings' },
@@ -33,7 +31,7 @@ export function TopNavbar() {
     const handleNav = (v) => {
         if (v.id === 'fifa') {
             setFantasySection('fifa');
-            navigate('/wc'); // Go to /wc instead of /fantasy
+            navigate('/wc');
         } else {
             navigate(v.path);
         }
@@ -43,22 +41,8 @@ export function TopNavbar() {
     return (
         <>
             <nav className="fixed top-0 left-0 right-0 z-50 h-[72px] bg-black/40 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-4 sm:px-6">
-                {/* Left: Logo & Back Button */}
+                {/* Left: Logo */}
                 <div className="flex items-center gap-1 sm:gap-4">
-                    {currentPath !== '/' && (
-                        <button
-                            onClick={() => {
-                                if (view === 'fantasy' && fantasySection === 'fifa') {
-                                    window.dispatchEvent(new CustomEvent('fifaBackClicked'));
-                                } else {
-                                    goBack();
-                                }
-                            }}
-                            className="p-1 sm:p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-colors flex-shrink-0"
-                        >
-                            <ArrowLeft size={20} className="sm:w-6 sm:h-6" />
-                        </button>
-                    )}
                     {!(isFantasyRoute && fantasySection === 'fifa') && (
                         <Link
                             to="/"
@@ -111,7 +95,7 @@ export function TopNavbar() {
                     <button
                         onClick={() => {
                             setFantasySection('season1');
-                            navigate('/fantasy'); // If they click Season 1, send them back to the main fantasy URL
+                            navigate('/fantasy');
                         }}
                         className={cn(
                             "px-2 py-1 sm:px-4 sm:py-1.5 rounded-full text-[10px] sm:text-sm font-medium transition-colors duration-300 w-16 sm:w-24",
