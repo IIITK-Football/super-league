@@ -1,55 +1,54 @@
 name: Update OG Screenshots to R2
 
 on:
-push:
-branches:
-- main
-- develop
+  push:
+    branches:
+      - main
+      - develop
 
-schedule:
-- cron: '0 0 * * *'
+  schedule:
+    - cron: '0 0 * * *'
 
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-snapshot-and-sync:
-runs-on: ubuntu-latest
-steps:
-- name: 📥 Checkout Code
-uses: actions/checkout@v4
+  snapshot-and-sync:
+    runs-on: ubuntu-latest
 
-  - name: ⚙️ Setup Node.js (Node 24)
-    uses: actions/setup-node@v4
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    with:
-      node-version: '24'
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
 
-  - name: 📦 Install Dependencies
-    working-directory: ./frontend
-    run: npm install
+      - name: ⚙️ Setup Node.js (Node 24)
+        uses: actions/setup-node@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+        with:
+          node-version: '24'
 
-  - name: 🎭 Install Playwright Browsers
-    working-directory: ./frontend
-    run: npx playwright install --with-deps chromium
+      - name: 📦 Install Dependencies
+        working-directory: ./frontend
+        run: npm install
 
-  - name: 📸 Take Screenshots
-    working-directory: ./frontend
-    run: node scripts/take-screenshots.js
+      - name: 🎭 Install Playwright Browsers
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
 
-  - name: 🔑 Configure AWS Credentials for Cloudflare R2
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
-      aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      aws-region: auto
+      - name: 📸 Take Screenshots
+        working-directory: ./frontend
+        run: node scripts/take-screenshots.js
 
-  - name: ☁️ Sync Screenshots to R2
-    working-directory: ./frontend
-    run: |
-      aws s3 sync ./screenshots s3://${{ secrets.R2_BUCKET_NAME }} \
-        --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
-        --exclude "*" \
-        --include "*.png"
-```
+      - name: 🔑 Configure AWS Credentials for Cloudflare R2
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws-region: auto
 
+      - name: ☁️ Sync Screenshots to R2
+        working-directory: ./frontend
+        run: |
+          aws s3 sync ./screenshots s3://${{ secrets.R2_BUCKET_NAME }} \
+            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            --exclude "*" \
+            --include "*.png"
