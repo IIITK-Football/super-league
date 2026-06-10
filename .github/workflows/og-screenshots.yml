@@ -1,19 +1,28 @@
 name: Update OG Screenshots to R2
 
 on:
+  push:
+    branches:
+      - main
+      - develop
+
+  workflow_dispatch:
+
   schedule:
     - cron: '0 0 * * *'
-  workflow_dispatch:
 
 jobs:
   snapshot-and-sync:
     runs-on: ubuntu-latest
+
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Node.js
+      - name: ⚙️ Setup Node.js (Node 24)
         uses: actions/setup-node@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           node-version: '24'
 
@@ -29,7 +38,7 @@ jobs:
         working-directory: ./frontend
         run: node scripts/take-screenshots.js
 
-      - name: ☁️ Upload Screenshots to Cloudflare R2
+      - name: ☁️ Sync Screenshots to Cloudflare R2
         working-directory: ./frontend
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -37,6 +46,5 @@ jobs:
         run: |
           aws s3 sync ./screenshots s3://${{ secrets.R2_BUCKET_NAME }} \
             --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
-            --region auto \
             --exclude "*" \
             --include "*.png"
