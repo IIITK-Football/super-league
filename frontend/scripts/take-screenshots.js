@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 
 const BASE_URL = 'https://super-league.pages.dev';
-const routes = ['matches', 'standings', 'clubs', 'statistics', 'legends', 'rules'];
+const routes = ['matches', 'fantasy', 'standings', 'clubs', 'statistics', 'legends', 'rules'];
 
 (async () => {
     console.log('🚀 Starting screenshot automation...');
