@@ -36,6 +36,7 @@ const pages = [
         const filename = pageConfig.route || 'home';
 
 <<<<<<< HEAD
+<<<<<<< HEAD
         console.log(`\n📸 Capturing ${url}...`);
 
         try {
@@ -57,24 +58,32 @@ const pages = [
 
         // 1. Navigate, but don't wait for network idle yet
         await page.goto(url, { waitUntil: 'domcontentloaded' });
+        console.log(`\n📸 Capturing ${url}...`);
 
         try {
-            // 2. THE CI FIX: Wait for the specific text to appear on the screen.
-            // This proves React Router has finished calculating and painting the component.
-            console.log(`   ⏳ Waiting for text: "${pageConfig.text}"`);
-            await page.getByText(pageConfig.text, { exact: false })
-                .first()
-                .waitFor({ state: 'visible', timeout: 15000 }); // Fails the build if it doesn't load in 15s
+            await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-            // 3. Optional but recommended: Now wait for any delayed images or API calls to finish
-            await page.waitForLoadState('networkidle');
+            console.log(`   ⏳ Waiting for test ID: "${pageConfig.testId}"...`);
 
+<<<<<<< HEAD
             // 4. Capture the screenshot
 >>>>>>> bdad86b (Add delay)
+=======
+            // 1. Wait strictly for the component to mount using the test ID
+            await page.getByTestId(pageConfig.testId).waitFor({ state: 'visible', timeout: 15000 });
+
+            // 2. Give the network a brief moment to download any images inside that component
+            await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {
+                console.log(`   ⚠️ Network didn't fully idle, but proceeding anyway...`);
+            });
+
+            // 3. Take the screenshot
+>>>>>>> 058d3f9 (Add test id)
             await page.screenshot({ path: `./screenshots/${filename}.png` });
             console.log(`   ✅ Saved ${filename}.png`);
 
         } catch (error) {
+<<<<<<< HEAD
 <<<<<<< HEAD
             console.error(`   ❌ Failed to capture ${filename}. Could not find data-testid="${pageConfig.testId}" within 15 seconds.`);
             hasErrors = true;
@@ -82,18 +91,28 @@ const pages = [
             console.error(`   ❌ Failed to capture ${filename}. Could not find text: "${pageConfig.text}"`);
             // In CI, you might want to process.exit(1) here to fail the workflow
 >>>>>>> bdad86b (Add delay)
+=======
+            console.error(`   ❌ Failed to capture ${filename}. Could not find data-testid="${pageConfig.testId}" within 15 seconds.`);
+            hasErrors = true;
+>>>>>>> 058d3f9 (Add test id)
         }
     }
 
     await browser.close();
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 058d3f9 (Add test id)
     console.log('\n🏁 All done!');
 
     // If any screenshot failed, exit with an error code so the GitHub Action turns red
     if (hasErrors) {
         process.exit(1);
     }
+<<<<<<< HEAD
 =======
     console.log('🏁 All done!');
 >>>>>>> bdad86b (Add delay)
+=======
+>>>>>>> 058d3f9 (Add test id)
 })();
