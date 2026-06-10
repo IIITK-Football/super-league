@@ -1,33 +1,50 @@
-steps:
-  - name: 📥 Checkout Code
-    uses: actions/checkout@v4
+name: Update OG Screenshots to R2
 
-  - name: ⚙️ Setup Node.js (Node 24)
-    uses: actions/setup-node@v4
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    with:
-      node-version: '24'
+on:
+  push:
+    branches:
+      - main
+      - develop
 
-  - name: 📦 Install Dependencies
-    working-directory: ./frontend
-    run: npm install
+  workflow_dispatch:
 
-  - name: 🎭 Install Playwright Browsers
-    working-directory: ./frontend
-    run: npx playwright install --with-deps chromium
+  schedule:
+    - cron: '0 0 * * *'
 
-  - name: 📸 Take Screenshots
-    working-directory: ./frontend
-    run: node scripts/take-screenshots.js
+jobs:
+  snapshot-and-sync:
+    runs-on: ubuntu-latest
 
-  - name: ☁️ Sync Screenshots to Cloudflare R2
-    working-directory: ./frontend
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-    run: |
-      aws s3 sync ./screenshots s3://${{ secrets.R2_BUCKET_NAME }} \
-        --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
-        --exclude "*" \
-        --include "*.png
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js (Node 24)
+        uses: actions/setup-node@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+        with:
+          node-version: '24'
+
+      - name: 📦 Install Dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: 🎭 Install Playwright Browsers
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: 📸 Take Screenshots
+        working-directory: ./frontend
+        run: node scripts/take-screenshots.js
+
+      - name: ☁️ Sync Screenshots to Cloudflare R2
+        working-directory: ./frontend
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          aws s3 sync ./screenshots s3://${{ secrets.R2_BUCKET_NAME }} \
+            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            --exclude "*" \
+            --include "*.png"
