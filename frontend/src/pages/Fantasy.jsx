@@ -289,17 +289,17 @@ export function Fantasy() {
     const myActiveFlair = division === 'mens' ? profile?.mens_team_flair : profile?.womens_team_flair;
 
     if (scheduleLoading) {
-        return <Loader text="Loading Predictor Engine..." />;
+        return <div data-testid="page-fantasy"><Loader text="Loading Predictor Engine..." /></div>;
     }
 
     if (!user) {
-        return <div className="animate-in fade-in zoom-in-95 duration-500"><Login /></div>;
+        return <div data-testid="page-fantasy" className="animate-in fade-in zoom-in-95 duration-500"><Login /></div>;
     }
 
     // --- NEW: THE FRIENDLY PROFILE BLOCKER ---
     if (!profile?.mens_team_flair || !profile?.womens_team_flair) {
         return (
-            <div className="max-w-xl mx-auto mt-20 p-8 bg-black/40 border border-white/10 rounded-3xl text-center backdrop-blur-md animate-in fade-in zoom-in-95 duration-500">
+            <div data-testid="page-fantasy" className="max-w-xl mx-auto mt-20 p-8 bg-black/40 border border-white/10 rounded-3xl text-center backdrop-blur-md animate-in fade-in zoom-in-95 duration-500">
                 <Target className="w-12 h-12 text-zinc-500 mx-auto mb-6" />
                 <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-2">Profile Update Required</h2>
                 <p className="text-zinc-400 mb-8">
@@ -308,8 +308,6 @@ export function Fantasy() {
                 {/* Notice we just change the state, no window.location.href! */}
                 <button
                     onClick={() => {
-                        // Assuming you have access to setView via useLeague context:
-                        // If you don't have setView in this file, you might need to import it!
                         window.location.href = '/?view=profile'; // Send them to the User Profile page!
                     }}
                     className="w-full h-14 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold uppercase tracking-widest transition-all duration-300"
