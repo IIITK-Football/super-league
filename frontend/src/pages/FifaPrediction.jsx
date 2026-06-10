@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLeague } from '../context/LeagueContext';
 import { createPortal } from 'react-dom';
 import { AutocompleteInput } from '../components/AutocompleteInput';
+import { KnockoutBracket } from './KnockoutBracket';
 import './FifaPrediction.css';
 import { supabase } from '../lib/supabase';
 
 export function FifaPrediction() {
   const { user, profile, signInWithGoogle } = useAuth();
+  const { goBack } = useLeague();
   const [flagAnimationEnabled, setFlagAnimationEnabled] = useState(() => {
     try {
       const saved = localStorage.getItem('flagAnimationEnabled');
@@ -26,6 +29,64 @@ export function FifaPrediction() {
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   const isLocked = hasSubmitted || isPastDeadline;
+
+  // Knockout phase states
+  const [predictionPhase, setPredictionPhase] = useState('groups');
+  const [showThirdPlaceSection, setShowThirdPlaceSection] = useState(false);
+  const [hasSelectedThirdPlace, setHasSelectedThirdPlace] = useState(false);
+  const [selectedThirdPlaceGroups, setSelectedThirdPlaceGroups] = useState([]);
+
+  useEffect(() => {
+    try {
+      const savedThirds = localStorage.getItem('selectedThirdPlace');
+      if (savedThirds) {
+        const parsed = JSON.parse(savedThirds);
+        if (parsed.length <= 8) {
+          setSelectedThirdPlaceGroups(parsed);
+          if (parsed.length === 8) {
+            setHasSelectedThirdPlace(true);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const thirdPlaceTeams = groupStandings ? Object.keys(groupStandings).map(group => {
+    return {
+      group,
+      team: groupStandings[group][2]
+    };
+  }).filter(item => item.team) : [];
+
+  const toggleThirdPlaceSelection = (group) => {
+    if (selectedThirdPlaceGroups.includes(group)) {
+      setSelectedThirdPlaceGroups(selectedThirdPlaceGroups.filter(g => g !== group));
+    } else if (selectedThirdPlaceGroups.length < 8) {
+      setSelectedThirdPlaceGroups([...selectedThirdPlaceGroups, group]);
+    }
+  };
+
+  const handleProceedToKnockouts = () => {
+    if (selectedThirdPlaceGroups.length === 8) {
+      localStorage.setItem('selectedThirdPlace', JSON.stringify(selectedThirdPlaceGroups));
+      setHasSelectedThirdPlace(true);
+      setPredictionPhase('knockouts');
+    }
+  };
+
+  useEffect(() => {
+    const handleFifaBack = () => {
+      if (predictionPhase === 'knockouts') {
+        setPredictionPhase('groups');
+      } else {
+        goBack();
+      }
+    };
+    window.addEventListener('fifaBackClicked', handleFifaBack);
+    return () => window.removeEventListener('fifaBackClicked', handleFifaBack);
+  }, [predictionPhase, goBack]);
 
   useEffect(() => {
     async function loadGroups() {
@@ -186,7 +247,7 @@ export function FifaPrediction() {
 
     return () => io.disconnect();
     
-  }, [dbGroups, groupStandings]); // <-- Add these dependencies!
+  }, [dbGroups, groupStandings, predictionPhase]); // <-- Added predictionPhase dependency
 
   const handleToggleFlags = (e) => {
     if (e) e.preventDefault();
@@ -380,9 +441,12 @@ export function FifaPrediction() {
       console.log("Predictions Submitted to API!");
       alert("Predictions submitted successfully!");
       setHasSubmitted(true);
+      setShowThirdPlaceModal(true); // Automatically show modal after submission
     } catch (e) {
       console.error("API submission failed:", e);
       alert("Failed to submit to database. Saving locally instead. " + e.message);
+      setHasSubmitted(true);
+      setShowThirdPlaceModal(true);
     }
 
     // Still save to local storage as fallback
@@ -434,20 +498,20 @@ export function FifaPrediction() {
   }, []);
   const toggleContent = (
     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-      <button 
-        onClick={handleToggleFlags}
-        title="Toggle background flag animations"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: 'rgba(255, 255, 255, 0.05)',
-          border: '1px solid rgba(255, 255, 255, 0.15)',
-          borderRadius: '50px',
-          padding: '4px 10px',
-          fontSize: '11px',
-          fontWeight: '600',
-          color: '#fff',
+        <button 
+          onClick={handleToggleFlags}
+          title="Toggle background flag animations"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '50px',
+            padding: '4px 10px',
+            fontSize: '11px',
+            fontWeight: '600',
+            color: '#fff',
           cursor: 'pointer',
           transition: 'all 0.2s ease'
         }}
@@ -497,10 +561,16 @@ export function FifaPrediction() {
     );
   }
 
+  if (predictionPhase === 'knockouts') {
+    return <KnockoutBracket onBack={() => setPredictionPhase('groups')} />;
+  }
+
   return (
     <div className="fifa-prediction-page" onClick={handlePageClick}>
       {portalTarget && createPortal(toggleContent, portalTarget)}
       
+
+
       <div className="bg-canvas">
         <div className="bg-ring bg-ring-1"></div>
         <div className="bg-ring bg-ring-2"></div>
@@ -590,6 +660,44 @@ export function FifaPrediction() {
             FIFA FANTASY<br /><span className="glow-word">LEAGUE</span>
           </h1>
         </header>
+
+        {/* Knockout Stage Proceed Button */}
+        {isLocked && !hasSelectedThirdPlace && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+            <button 
+              onClick={() => {
+                setShowThirdPlaceSection(true);
+                setTimeout(() => {
+                  document.getElementById('third-place-section')?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+              }}
+              style={{
+                background: '#fff', color: '#000', border: 'none', padding: '16px 32px', 
+                borderRadius: '8px', fontWeight: '800', fontSize: '18px', cursor: 'pointer', 
+                fontFamily: '"Montserrat", sans-serif', textTransform: 'uppercase',
+                boxShadow: '0 4px 15px rgba(255,255,255,0.2)'
+              }}
+            >
+              Proceed to round of 32
+            </button>
+          </div>
+        )}
+
+        {isLocked && hasSelectedThirdPlace && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+            <button 
+              onClick={() => setPredictionPhase('knockouts')}
+              style={{
+                background: '#fff', color: '#000', border: 'none', padding: '16px 32px', 
+                borderRadius: '8px', fontWeight: '800', fontSize: '18px', cursor: 'pointer', 
+                fontFamily: '"Montserrat", sans-serif', textTransform: 'uppercase',
+                boxShadow: '0 4px 15px rgba(255,255,255,0.2)'
+              }}
+            >
+              Predict Knockout Stages
+            </button>
+          </div>
+        )}
 
         {/* Top Dash Sections */}
         <div className="user-dash-top">
@@ -710,11 +818,23 @@ export function FifaPrediction() {
               <span className="font-fifa" style={{ color: 'var(--fifa-gold)', fontSize: '20px', letterSpacing: '1px' }}>
                 PREDICTIONS LOCKED
               </span>
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px', margin: 0, textAlign: 'center' }}>
+              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px', margin: '0 0 16px 0', textAlign: 'center' }}>
                 {isPastDeadline 
                   ? "The deadline for Group Stage predictions has officially passed." 
-                  : "Predictions already made for the Group Stage. Wait for the knockout phases!"}
+                  : "Predictions already made for the Group Stage. Proceed to the knockouts!"}
               </p>
+              {hasSelectedThirdPlace && (
+                <button 
+                  onClick={() => setPredictionPhase('knockouts')}
+                  style={{
+                    background: 'var(--fifa-cyan)', color: '#000', border: 'none', padding: '12px 24px', 
+                    borderRadius: '8px', fontWeight: '800', fontSize: '16px', cursor: 'pointer', 
+                    fontFamily: '"Montserrat", sans-serif', textTransform: 'uppercase'
+                  }}
+                >
+                  Predict Knockout Stages
+                </button>
+              )}
             </div>
           )}
           <div className="groups-container">
@@ -872,6 +992,117 @@ export function FifaPrediction() {
               Submit Predictions
             </button>
           </div>
+          )}
+
+          {showThirdPlaceSection && !hasSelectedThirdPlace && (
+            <div id="third-place-section" style={{ marginTop: '60px' }}>
+              <div className="sh" style={{ marginBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
+                  CHOOSE THE BEST THIRD PLACE <span style={{ color: 'var(--fifa-gold)' }}>TEAM</span>
+                </h2>
+                <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500', marginTop: '12px', fontSize: '15px', maxWidth: '500px' }}>
+                  {selectedThirdPlaceGroups.length}/8 SELECTED
+                </p>
+              </div>
+
+              <div className="groups-container">
+                <div className="group-card" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+                  <div className="group-list-container">
+                    <div className="group-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', padding: '16px' }}>
+                      {thirdPlaceTeams.map(({ group, team }) => {
+                        const isSelected = selectedThirdPlaceGroups.includes(group);
+                        const isDisabled = !isSelected && selectedThirdPlaceGroups.length >= 8;
+
+                        return (
+                          <div 
+                            key={group} 
+                            className={`team-card ${isSelected ? 'selected' : ''}`}
+                            onClick={() => !isDisabled && toggleThirdPlaceSelection(group)}
+                            style={{
+                              cursor: isDisabled ? 'not-allowed' : 'pointer',
+                              opacity: isDisabled ? 0.4 : 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: '12px',
+                              background: isSelected ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255,255,255,0.05)',
+                              border: isSelected ? '2px solid #FFFFFF' : '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '8px',
+                              boxShadow: isSelected ? '0 0 10px rgba(255,255,255,0.3)' : 'none'
+                            }}
+                          >
+                            <div className="team-info" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                              <img src={team.logo_url} alt={team.name} className="team-flag-img" style={{ width: '32px', height: '32px', marginRight: '12px' }} />
+                              <span className="team-name">{team.name}</span>
+                            </div>
+                            {isSelected && (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="submit-section" style={{ marginTop: '32px' }}>
+                <button 
+                  className="submit-btn" 
+                  disabled={selectedThirdPlaceGroups.length !== 8}
+                  onClick={handleProceedToKnockouts}
+                  style={{
+                    background: selectedThirdPlaceGroups.length === 8 ? 'var(--fifa-gold)' : 'rgba(255,255,255,0.1)',
+                    color: selectedThirdPlaceGroups.length === 8 ? '#000' : 'rgba(255,255,255,0.3)',
+                    cursor: selectedThirdPlaceGroups.length === 8 ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  Confirm 8 Teams
+                </button>
+              </div>
+            </div>
+          )}
+
+          {hasSelectedThirdPlace && (
+            <div style={{ marginTop: '60px' }}>
+              <div className="sh" style={{ marginBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
+                  QUALIFIED THIRD PLACE <span style={{ color: 'var(--fifa-gold)' }}>TEAMS</span>
+                </h2>
+              </div>
+
+              <div className="groups-container">
+                <div className="group-card" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+                  <div className="group-list-container">
+                    <div className="group-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', padding: '16px' }}>
+                      {thirdPlaceTeams.filter(t => selectedThirdPlaceGroups.includes(t.group)).map(({ group, team }) => {
+                        return (
+                          <div 
+                            key={group} 
+                            className="team-card selected"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: '12px',
+                              background: 'rgba(0, 0, 0, 0.6)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              borderRadius: '8px'
+                            }}
+                          >
+                            <div className="team-info" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                              <img src={team.logo_url} alt={team.name} className="team-flag-img" style={{ width: '32px', height: '32px', marginRight: '12px' }} />
+                              <span className="team-name">{team.name}</span>
+                            </div>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'rgba(255,255,255,0.4)', marginLeft: '12px' }}>Group {group}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </section>
 

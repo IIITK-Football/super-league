@@ -42,7 +42,13 @@ export function TopNavbar() {
                 <div className="flex items-center gap-1 sm:gap-4">
                     {view !== 'home' && (
                         <button
-                            onClick={goBack}
+                            onClick={() => {
+                                if (view === 'fantasy' && fantasySection === 'fifa') {
+                                    window.dispatchEvent(new CustomEvent('fifaBackClicked'));
+                                } else {
+                                    goBack();
+                                }
+                            }}
                             className="p-1 sm:p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-colors flex-shrink-0"
                         >
                             <ArrowLeft size={20} className="sm:w-6 sm:h-6" />

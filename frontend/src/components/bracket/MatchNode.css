@@ -1,0 +1,108 @@
+.match-node {
+  width: 180px;
+  background: rgba(10, 10, 10, 0.6);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  padding: 8px;
+}
+
+.match-node:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+
+.mn-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mn-team {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.mn-team.selectable {
+  cursor: pointer;
+}
+
+.mn-team.selectable:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.mn-team.winner {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: #fff;
+}
+
+.mn-team.loser {
+  opacity: 0.5;
+}
+
+.mn-team.tbd {
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.mn-flag {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  margin-right: 12px;
+}
+
+.mn-flag-placeholder {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  margin-right: 12px;
+}
+
+.mn-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.mn-name-placeholder {
+  height: 14px;
+  width: 60px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  flex: 1;
+}
+
+.mn-circle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  position: absolute;
+  right: 12px;
+  transition: all 0.2s ease;
+}
+
+.mn-circle.empty {
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+}
+
+.mn-team.winner .mn-circle.filled {
+  border: 2px solid #fff;
+  background: #fff;
+  /* Optionally add an inner circle or leave solid */
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.8);
+}
