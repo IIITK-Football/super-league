@@ -1,8 +1,10 @@
 name: Update OG Screenshots to R2
 
 on:
+  push:
+    branches: [main, develop]
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *' # Added missing 5th digit
   workflow_dispatch:
 
 jobs:
@@ -12,18 +14,16 @@ jobs:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Node.js (Node 24)
+      - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
-          node-version: '24'
+          node-version: '20' # Using current LTS
 
       - name: 📦 Install Dependencies
         working-directory: ./frontend
         run: npm install
 
-      - name: 🎭 Install Playwright Browsers
+      - name: 🎭 Install Playwright
         working-directory: ./frontend
         run: npx playwright install --with-deps chromium
 
@@ -31,17 +31,14 @@ jobs:
         working-directory: ./frontend
         run: node scripts/take-screenshots.js
 
-      - name: 🔑 Configure AWS Credentials for Cloudflare R2
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          aws-region: auto 
-
-      - name: ☁️ Sync Screenshots to R2
+      - name: ☁️ Upload to R2
         working-directory: ./frontend
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
         run: |
           aws s3 sync ./screenshots s3://${{ secrets.R2_BUCKET_NAME }} \
             --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
-            --exclude "*" \
-            --include "*.png"
+            --delete
+
