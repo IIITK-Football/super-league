@@ -587,7 +587,7 @@ export function FifaPrediction() {
 
     if (!dbGroups || !groupStandings) {
         return (
-            <div className="fifa-prediction-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: '#fff' }}>
+            <div data-testid="page-wc" className="fifa-prediction-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: '#fff' }}>
                 <div className="bg-canvas">
                     <div className="bg-ring bg-ring-1"></div>
                     <div className="bg-ring bg-ring-2"></div>
