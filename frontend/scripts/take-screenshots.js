@@ -3,18 +3,17 @@ import fs from 'fs';
 
 const BASE_URL = 'https://super-league.pages.dev';
 
-// Map each route to a word or heading that uniquely identifies that page.
-// Even if it's just a standard <h1> or a table header, Playwright will find it.
+// Map each route to the exact data-testid you added to the React components
 const pages = [
-    { route: '', text: 'Super League' }, // Replace with a word visible on your home page
-    { route: 'fantasy', text: 'Fantasy' },
-    { route: 'wc', text: 'World Cup' },
-    { route: 'matches', text: 'Matches' },
-    { route: 'standings', text: 'Standings' },
-    { route: 'clubs', text: 'Clubs' },
-    { route: 'statistics', text: 'Statistics' },
-    { route: 'legends', text: 'Legends' },
-    { route: 'rules', text: 'Rules' }
+    { route: '', testId: 'page-home' },
+    { route: 'fantasy', testId: 'page-fantasy' },
+    { route: 'wc', testId: 'page-wc' },
+    { route: 'matches', testId: 'page-matches' },
+    { route: 'standings', testId: 'page-standings' },
+    { route: 'clubs', testId: 'page-clubs' },
+    { route: 'statistics', testId: 'page-statistics' },
+    { route: 'legends', testId: 'page-legends' },
+    { route: 'rules', testId: 'page-rules' }
 ];
 
 (async () => {
@@ -24,41 +23,48 @@ const pages = [
     const browser = await chromium.launch();
     const context = await browser.newContext({
         viewport: { width: 1200, height: 630 },
-        deviceScaleFactor: 2
+        deviceScaleFactor: 2,
+        // Optional: Force a dark color scheme if your site supports it
+        colorScheme: 'dark'
     });
 
     const page = await context.newPage();
+    let hasErrors = false;
 
     for (const pageConfig of pages) {
         const url = pageConfig.route ? `${BASE_URL}/${pageConfig.route}` : BASE_URL;
         const filename = pageConfig.route || 'home';
 
-        console.log(`📸 Capturing ${url}...`);
-
-        // 1. Navigate, but don't wait for network idle yet
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        console.log(`\n📸 Capturing ${url}...`);
 
         try {
-            // 2. THE CI FIX: Wait for the specific text to appear on the screen.
-            // This proves React Router has finished calculating and painting the component.
-            console.log(`   ⏳ Waiting for text: "${pageConfig.text}"`);
-            await page.getByText(pageConfig.text, { exact: false })
-                .first()
-                .waitFor({ state: 'visible', timeout: 15000 }); // Fails the build if it doesn't load in 15s
+            await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-            // 3. Optional but recommended: Now wait for any delayed images or API calls to finish
-            await page.waitForLoadState('networkidle');
+            console.log(`   ⏳ Waiting for test ID: "${pageConfig.testId}"...`);
 
-            // 4. Capture the screenshot
+            // 1. Wait strictly for the component to mount using the test ID
+            await page.getByTestId(pageConfig.testId).waitFor({ state: 'visible', timeout: 15000 });
+
+            // 2. Give the network a brief moment to download any images inside that component
+            await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {
+                console.log(`   ⚠️ Network didn't fully idle, but proceeding anyway...`);
+            });
+
+            // 3. Take the screenshot
             await page.screenshot({ path: `./screenshots/${filename}.png` });
             console.log(`   ✅ Saved ${filename}.png`);
 
         } catch (error) {
-            console.error(`   ❌ Failed to capture ${filename}. Could not find text: "${pageConfig.text}"`);
-            // In CI, you might want to process.exit(1) here to fail the workflow
+            console.error(`   ❌ Failed to capture ${filename}. Could not find data-testid="${pageConfig.testId}" within 15 seconds.`);
+            hasErrors = true;
         }
     }
 
     await browser.close();
-    console.log('🏁 All done!');
+    console.log('\n🏁 All done!');
+
+    // If any screenshot failed, exit with an error code so the GitHub Action turns red
+    if (hasErrors) {
+        process.exit(1);
+    }
 })();
