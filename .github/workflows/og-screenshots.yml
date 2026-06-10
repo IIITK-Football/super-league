@@ -6,41 +6,39 @@ schedule:
 workflow_dispatch:
 
 jobs:
-snapshot-and-sync:
-runs-on: ubuntu-latest
+  snapshot-and-sync:
+  runs-on: ubuntu-latest
 
-```
-steps:
-  - name: 📥 Checkout Code
-    uses: actions/checkout@v4
+  steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
 
-  - name: ⚙️ Setup Node.js
-    uses: actions/setup-node@v4
-    with:
-      node-version: '24'
+    - name: ⚙️ Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
 
-  - name: 📦 Install Dependencies
-    working-directory: ./frontend
-    run: npm install
+    - name: 📦 Install Dependencies
+      working-directory: ./frontend
+      run: npm install
 
-  - name: 🎭 Install Playwright Browsers
-    working-directory: ./frontend
-    run: npx playwright install --with-deps chromium
+    - name: 🎭 Install Playwright Browsers
+      working-directory: ./frontend
+      run: npx playwright install --with-deps chromium
 
-  - name: 📸 Take Screenshots
-    working-directory: ./frontend
-    run: node scripts/take-screenshots.js
+    - name: 📸 Take Screenshots
+      working-directory: ./frontend
+      run: node scripts/take-screenshots.js
 
-  - name: ☁️ Upload Screenshots to Cloudflare R2
-    working-directory: ./frontend
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-    run: |
-      aws s3 sync ./screenshots s3://${{ secrets.R2_BUCKET_NAME }} \
-        --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
-        --region auto \
-        --exclude "*" \
-        --include "*.png"
-```
+    - name: ☁️ Upload Screenshots to Cloudflare R2
+      working-directory: ./frontend
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      run: |
+        aws s3 sync ./screenshots s3://${{ secrets.R2_BUCKET_NAME }} \
+          --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+          --region auto \
+          --exclude "*" \
+          --include "*.png"
 
