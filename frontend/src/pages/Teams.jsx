@@ -276,7 +276,7 @@ export function Teams() {
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+        <div data-testid="page-clubs" className="space-y-6 animate-in fade-in duration-500 pb-12">
             <h1 className="text-3xl sm:text-5xl font-black tracking-tighter uppercase">
                 Clubs <span className="text-zinc-600">Overview</span>
             </h1>

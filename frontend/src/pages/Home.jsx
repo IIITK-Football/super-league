@@ -74,7 +74,7 @@ export function Home() {
     const topAssist = data.topAssist;
 
     return (
-        <div className="space-y-12 animate-in fade-in duration-500 pb-12 overflow-x-hidden">
+        <div data-testid="page-home" className="space-y-12 animate-in fade-in duration-500 pb-12 overflow-x-hidden">
 
             {match ? (
                 <GlassPanel
@@ -227,8 +227,8 @@ export function Home() {
                     <div className="news-grid">
                         {newsItems.map((article, idx) => (
                             // <-- WRAPPED IN A LINK COMPONENT HERE
-                            <Link 
-                                key={article.id || idx} 
+                            <Link
+                                key={article.id || idx}
                                 to={`/article/${article.id}`}
                                 className="block hover:scale-[1.02] transition-transform duration-300"
                             >
@@ -251,7 +251,7 @@ export function Home() {
                                     // Notice: Currently you don't have a specific route mapped for the player profile modal. 
                                     // You'll need to handle this based on how you implement player modals in React Router!
                                     // For now, I'm leaving setView so it doesn't break, but ideally you'd use query params or a modal route.
-                                    setView('player-profile'); 
+                                    setView('player-profile');
                                 }
                             }}>
                                 <Goal className="absolute -right-4 -bottom-4 w-32 h-32 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none animate-float" />
