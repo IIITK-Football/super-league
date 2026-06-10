@@ -2,18 +2,15 @@ class MetaTagRewriter {
     constructor(tags) {
         this.tags = tags;
     }
-
     element(element) {
         const property = element.getAttribute("property") || element.getAttribute("name");
-
-        // Match specific tags
-        if (["og:title", "twitter:title"].includes(property)) {
+        if (property === "og:title" || property === "twitter:title") {
             element.setAttribute("content", this.tags.title);
         }
-        if (["og:image", "twitter:image"].includes(property)) {
+        if (property === "og:image" || property === "twitter:image") {
             element.setAttribute("content", this.tags.image);
         }
-        if (["og:description", "twitter:description"].includes(property)) {
+        if (property === "og:description" || property === "twitter:description") {
             element.setAttribute("content", this.tags.description);
         }
     }
@@ -26,47 +23,44 @@ export async function onRequest(context) {
     const articleId = url.searchParams.get("article");
 
     const response = await next();
-    if (!response.headers.get("content-type")?.includes("text/html")) return response;
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("text/html")) return response;
 
-    const SCREENSHOT_BASE = "https://your-new-r2-public-url.dev"; // UPDATE THIS
-    const LEGACY_BASE = "https://pub-07c808f42c4640ceb3db8a0ef856e898.r2.dev";
-
+    const IMAGE_BASE = "https://pub-5fcbf3326b604a8284068a24252f1585.r2.dev";
     let currentTags = {
         title: "Super League - IIIT Kottayam",
         description: "Welcome to the Super League at IIIT Kottayam!",
-        image: `${LEGACY_BASE}/wsl.png`
+        image: `${IMAGE_BASE}/home.png`
     };
 
-    // Newsletter logic
     if (articleId) {
         try {
             const supabaseResponse = await fetch(
                 `${env.SUPABASE_URL}/rest/v1/newsletter?id=eq.${articleId}&select=image_url`,
-                { headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}` } }
+                {
+                    headers: {
+                        apikey: env.SUPABASE_ANON_KEY,
+                        Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`
+                    }
+                }
             );
-            const data = await supabaseResponse.json();
-            if (data?.[0]?.image_url) {
-                currentTags.title = "Newsletter | Super League";
-                currentTags.image = data[0].image_url;
+            if (supabaseResponse.ok) {
+                const data = await supabaseResponse.json();
+                if (data?.[0]?.image_url) {
+                    currentTags.title = "Newsletter | Super League";
+                    currentTags.image = data[0].image_url;
+                }
             }
-        } catch (err) { console.error("Supabase failed:", err); }
-    }
-    // Static Routes
-    else if (path === "/wc" || path === "/fantasy") {
-        currentTags.title = "FIFA Fantasy League | Super League";
-        currentTags.image = `${LEGACY_BASE}/World%20cup.png`;
-    }
-    // Dynamic Screenshot Routes
-    else {
-        const screenshotRoutes = ["/matches", "/standings", "/clubs", "/statistics", "/legends", "/rules"];
-        if (screenshotRoutes.includes(path)) {
-            const pageName = path.slice(1).charAt(0).toUpperCase() + path.slice(2);
-            currentTags.title = `${pageName} | Super League`;
-            currentTags.image = `${SCREENSHOT_BASE}${path}.png`;
+        } catch (err) {
+            console.error("Supabase fetch failed:", err);
         }
+    } else if (["/", "/fantasy", "/wc", "/matches", "/standings", "/clubs", "/statistics", "/legends", "/rules"].includes(path)) {
+        const filename = path === "/" ? "home" : path.slice(1);
+        const pageName = path === "/" ? "Home" : path.slice(1).charAt(0).toUpperCase() + path.slice(2);
+        currentTags.title = `${pageName} | Super League`;
+        currentTags.image = `${IMAGE_BASE}/${filename}.png`;
     }
 
-    return new HTMLRewriter()
-        .on("meta", new MetaTagRewriter(currentTags))
-        .transform(response);
+    return new HTMLRewriter().on("meta", new MetaTagRewriter(currentTags)).transform(response);
 }
+
