@@ -634,10 +634,12 @@ export function FifaPrediction() {
   if (predictionPhase === 'knockouts') {
     return (
       <KnockoutBracket
+        viewingOtherUser={viewingOtherUser}
         onBack={(refresh = false) => {
-          navigate('/wc');
           if (refresh) {
             window.location.reload();
+          } else {
+            setPredictionPhase('groups');
           }
         }}
       />
@@ -700,7 +702,11 @@ export function FifaPrediction() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: '800', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '4px' }}>Rank</span>
-                      <span className="font-fifa" style={{ fontSize: '28px', color: '#fff', lineHeight: '1' }}>{profile?.rank || '-'}</span>
+                      <span className="font-fifa" style={{ fontSize: '28px', color: '#fff', lineHeight: '1' }}>
+                        {leaderboard.findIndex(p => p.user_profiles?.nickname === profile?.nickname) !== -1 
+                          ? leaderboard.findIndex(p => p.user_profiles?.nickname === profile?.nickname) + 1 
+                          : '-'}
+                      </span>
                     </div>
                     <div style={{ width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', flexShrink: '0', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
                       {userTeam ? (
@@ -1044,6 +1050,14 @@ export function FifaPrediction() {
                           View Knockout Stage Prediction
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {viewingOtherUser && (
+                    <div className="submit-section" style={{ marginTop: '40px', display: 'flex', justifyContent: 'center' }}>
+                      <button className="premium-proceed-btn" onClick={() => setPredictionPhase('knockouts')}>
+                        Show Knockout Predictions
+                      </button>
                     </div>
                   )}
                 </div>

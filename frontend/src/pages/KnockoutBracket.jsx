@@ -83,7 +83,7 @@ const FullScreenConfetti = () => {
     );
 };
 
-export function KnockoutBracket({ onBack }) {
+export function KnockoutBracket({ onBack, viewingOtherUser }) {
     const { user } = useAuth();
     const headerRef = useRef(null);
 
@@ -245,15 +245,23 @@ export function KnockoutBracket({ onBack }) {
                 let savedDbData = null;
 
                 // 1. Check DB as the ONLY source of truth for saved knockouts
-                if (user) {
+                const targetUserId = viewingOtherUser ? viewingOtherUser.userId : user?.id;
+                if (targetUserId) {
                     try {
-                        const koRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/knockouts?user_id=${user.id}`);
+                        const koRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/knockouts?user_id=${targetUserId}`);
                         const koJson = await koRes.json();
                         if (koJson.success && koJson.data) {
                             setIsLocked(true);
                             savedDbData = koJson.data;
+                        } else if (viewingOtherUser) {
+                            alert("This user hasn't submitted knockout predictions yet.");
+                            if (onBack) onBack(); return;
                         }
                     } catch (err) { console.error("Lock check failed", err); }
+                }
+
+                if (viewingOtherUser) {
+                    setIsLocked(true);
                 }
 
                 // NO MORE LOCAL STORAGE CACHE HERE! It forces a clean slate if DB is empty.
@@ -297,7 +305,7 @@ export function KnockoutBracket({ onBack }) {
                 const genRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/knockouts/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-                    body: JSON.stringify({ user_id: user?.id, advancing_third_place_groups: JSON.parse(savedThirds) })
+                    body: JSON.stringify({ user_id: targetUserId, advancing_third_place_groups: JSON.parse(savedThirds) })
                 });
 
                 const genJson = await genRes.json();
@@ -362,7 +370,7 @@ export function KnockoutBracket({ onBack }) {
         };
 
         loadBracketData();
-    }, [user?.id, onBack]);
+    }, [user?.id, viewingOtherUser, onBack]);
 
     const handleSelectWinner = (matchId, winnerTeam) => {
         if (isLocked) return;
@@ -599,21 +607,35 @@ export function KnockoutBracket({ onBack }) {
             </div>
 
             <header className="kb-header" style={{ flexDirection: 'column', paddingBottom: '20px' }}>
-                <h1 className="font-fifa-italic" style={{ marginBottom: '20px' }}>
-                    KNOCKOUT <span style={{ color: 'var(--fifa-gold)' }}>BRACKET</span>
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-start', padding: '16px 24px', position: 'absolute', top: 0, left: 0, zIndex: 100 }}>
+                    <button 
+                        onClick={() => onBack && onBack()} 
+                        style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}
+                    >
+                        ← Back
+                    </button>
+                </div>
+                <h1 className="font-fifa-italic" style={{ marginBottom: '20px', marginTop: '40px' }}>
+                    {viewingOtherUser ? (
+                        <>{viewingOtherUser.nickname.toUpperCase()}'S <span style={{ color: 'var(--fifa-gold)' }}>BRACKET</span></>
+                    ) : (
+                        <>KNOCKOUT <span style={{ color: 'var(--fifa-gold)' }}>BRACKET</span></>
+                    )}
                 </h1>
 
                 <div className="lb-wrap" style={{ width: '100%', maxWidth: '800px', margin: '0 auto', background: 'rgba(0,0,0,0.5)' }}>
                     <div className="lb-hdr" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', justifyContent: 'center', padding: '16px' }}>
                         <span className="lb-hdr-t font-fifa" style={{ fontSize: '20px' }}>
-                            {isLocked ? "YOUR PREDICTIONS" : "SCORING RULES"}
+                            {viewingOtherUser ? `${viewingOtherUser.nickname.toUpperCase()}'S PREDICTIONS` : (isLocked ? "YOUR PREDICTIONS" : "SCORING RULES")}
                         </span>
                     </div>
                     <div className="dash-rules" style={{ padding: '20px 24px' }}>
                         <p style={{ color: '#fff', opacity: 0.8, fontSize: '14px', marginBottom: '16px', textAlign: 'center', fontFamily: 'Inter, sans-serif' }}>
-                            {isLocked
-                                ? "These are your officially submitted predictions. Good luck!"
-                                : "Points are awarded for each team correctly predicted to win their matchup and advance to the subsequent round:"}
+                            {viewingOtherUser 
+                                ? `These are the official knockout predictions submitted by ${viewingOtherUser.nickname}.`
+                                : (isLocked
+                                    ? "These are your officially submitted predictions. Good luck!"
+                                    : "Points are awarded for each team correctly predicted to win their matchup and advance to the subsequent round:")}
                         </p>
                         {!isLocked && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
