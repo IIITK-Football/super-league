@@ -22,7 +22,13 @@ export async function onRequest(context) {
     const { request, next, env } = context;
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "") || "/";
-    const articleId = url.searchParams.get("article");
+    
+    // FIX: Extract articleId from the path instead of search parameters
+    let articleId = null;
+    if (path.startsWith("/article/")) {
+        const pathParts = path.split("/");
+        articleId = pathParts[2]; // Extracts the ID after "/article/"
+    }
 
     const response = await next();
     const contentType = response.headers.get("content-type") || "";
@@ -70,12 +76,10 @@ export async function onRequest(context) {
         const customNames = {
             "/": "Home",
             "/wc": "FIFA World Cup 2026 Fantasy"
-            // You can easily add more here later, e.g., "/faq": "Frequently Asked Questions"
         };
 
         const filename = path === "/" ? "home" : path.slice(1);
         
-        // This checks if the path exists in customNames. If not, it falls back to the default capitalization.
         const pageName = customNames[path] || (path.slice(1).charAt(0).toUpperCase() + path.slice(2));
 
         const descriptions = {
