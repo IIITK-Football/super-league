@@ -22,12 +22,11 @@ export async function onRequest(context) {
     const { request, next, env } = context;
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "") || "/";
-    
-    // FIX: Extract articleId from the path instead of search parameters
+
     let articleId = null;
     if (path.startsWith("/article/")) {
         const pathParts = path.split("/");
-        articleId = pathParts[2]; // Extracts the ID after "/article/"
+        articleId = pathParts[2];
     }
 
     const response = await next();
@@ -36,14 +35,12 @@ export async function onRequest(context) {
 
     const IMAGE_BASE = "https://pub-5fcbf3326b604a8284068a24252f1585.r2.dev";
 
-    // Base fallback tags
     let currentTags = {
         title: "Super League - IIIT Kottayam",
         description: "Official portal for The Super League at IIIT Kottayam. Access match schedules, recent results, and league announcements.",
         image: `${IMAGE_BASE}/home.png`
     };
 
-    // Dynamic Newsletter Handling
     if (articleId) {
         try {
             const supabaseResponse = await fetch(
@@ -60,26 +57,25 @@ export async function onRequest(context) {
                 const data = await supabaseResponse.json();
                 if (data?.[0]) {
                     currentTags.title = data[0].title || "Newsletter | Super League";
-                    currentTags.description = data[0].summary || currentTags.description;
+                    
+                    const rawSummary = data[0].summary || currentTags.description;
+                    currentTags.description = rawSummary.replace(/[\r\n]+/g, " ").trim();
+                    
                     if (data[0].image_url) {
                         currentTags.image = data[0].image_url;
                     }
                 }
             }
         } catch (err) {
-            console.error("Supabase fetch failed:", err);
+            console.error(err);
         }
-    }
-    // Static Route Handling
-    else if (["/", "/fantasy", "/wc", "/matches", "/standings", "/clubs", "/statistics", "/legends", "/rules"].includes(path)) {
-        
+    } else if (["/", "/fantasy", "/wc", "/matches", "/standings", "/clubs", "/statistics", "/legends", "/rules"].includes(path)) {
         const customNames = {
             "/": "Home",
             "/wc": "FIFA World Cup 2026 Fantasy"
         };
 
         const filename = path === "/" ? "home" : path.slice(1);
-        
         const pageName = customNames[path] || (path.slice(1).charAt(0).toUpperCase() + path.slice(2));
 
         const descriptions = {
