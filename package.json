@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "psql": "^0.0.1"
+  },
+  "devDependencies": {
+    "supabase": "^2.119.0"
+  }
+}

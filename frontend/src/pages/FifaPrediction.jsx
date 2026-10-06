@@ -10,7 +10,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import officialStandings from '../data/officialStandings.json';
 
 export function FifaPrediction() {
-  const { user, profile, signInWithGoogle } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -468,7 +468,7 @@ export function FifaPrediction() {
 
     if (!user) {
       alert("Please sign in to save your predictions! We will redirect you to login.");
-      signInWithGoogle();
+      navigate('/login');
       return;
     }
     if (!profile?.wc_team_flair) {
@@ -523,7 +523,7 @@ export function FifaPrediction() {
 
     if (!user) {
       alert("Please sign in to save your predictions!");
-      signInWithGoogle();
+      navigate('/login');
       return;
     }
 
@@ -733,8 +733,8 @@ export function FifaPrediction() {
             <div className="lb-wrap" style={{ flex: 1, minWidth: '320px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '24px', textAlign: 'center', background: 'rgba(0, 0, 0, 0.8)' }}>
               <h3 className="font-fifa" style={{ fontSize: '24px', color: 'white', marginBottom: '8px' }}>LOGIN REQUIRED</h3>
               <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '14px', marginBottom: '16px' }}>You must log in to participate and submit predictions.</p>
-              <button onClick={signInWithGoogle} style={{ background: 'var(--fifa-cyan)', color: '#000', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 auto' }}>
-                Sign in with Google
+              <button onClick={() => navigate('/login')} style={{ background: 'var(--fifa-cyan)', color: '#000', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 auto' }}>
+                Sign in to continue
               </button>
             </div>
           )}

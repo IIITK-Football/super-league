@@ -24,6 +24,7 @@ import { Vault } from './pages/Vault';
 import { Rules } from './pages/Rules';
 import { LeagueLanding } from './pages/LeagueLanding';
 import { Freshers } from './pages/Freshers';
+import { TeamBuilder } from './pages/TeamBuilder';
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -61,17 +62,18 @@ function PublicRoute({ children }) {
 function GlobalAuthRedirect() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // Whenever a user logs in, check if they had a saved destination!
-    if (user) {
+    if (user && location.pathname !== '/login') {
       const redirectUrl = sessionStorage.getItem('authRedirect');
       if (redirectUrl) {
         sessionStorage.removeItem('authRedirect'); // Clean up
         navigate(redirectUrl, { replace: true }); // Send them there!
       }
     }
-  }, [user, navigate]);
+  }, [user, navigate, location.pathname]);
 
   return null; // This component renders nothing visually
 }
@@ -96,6 +98,13 @@ function LeagueDashboardRoute({ division }) {
   return <PublicRoute><Home /></PublicRoute>;
 }
 
+function AuthenticatedRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen bg-black" />;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
 
 function App() {
   return (
@@ -114,6 +123,7 @@ function App() {
             <Route path="/super-league" element={<LeagueDashboardRoute division="mens" />} />
             <Route path="/wsl" element={<LeagueDashboardRoute division="womens" />} />
             <Route path="/freshers" element={<PublicRoute><Freshers /></PublicRoute>} />
+            <Route path="/team-builder" element={<AuthenticatedRoute><TeamBuilder /></AuthenticatedRoute>} />
             <Route path="/standings" element={<PublicRoute><Standings /></PublicRoute>} />
             <Route path="/teams" element={<PublicRoute><Teams /></PublicRoute>} />
             

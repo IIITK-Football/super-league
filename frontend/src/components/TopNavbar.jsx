@@ -7,7 +7,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export function TopNavbar() {
     const { division, setDivision, fantasySection, setFantasySection } = useLeague();
-    const { user, signInWithGoogle } = useAuth();
+    const { user } = useAuth();
     const [menuOpen, setMenuOpen] = useState(false);
     
     const location = useLocation();
@@ -133,7 +133,7 @@ export function TopNavbar() {
                         </button>
                     ) : (
                         <button
-                            onClick={signInWithGoogle}
+                            onClick={() => navigate('/login')}
                             className="flex items-center gap-2 px-3 py-1.5 sm:px-4 border border-white/20 rounded-full text-sm font-medium hover:bg-white/10 bg-white/5 transition-colors"
                         >
                             <User size={16} />

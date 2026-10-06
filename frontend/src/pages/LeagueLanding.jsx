@@ -10,6 +10,7 @@ const tournaments = [
         title: 'Super League',
         detail: 'Men\'s division',
         image: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1400&q=85',
+        video: import.meta.env.VITE_SUPER_LEAGUE_VIDEO_URL || '',
         accent: '#d9ff4a',
     },
     {
@@ -18,6 +19,7 @@ const tournaments = [
         title: 'WSL',
         detail: 'Women\'s division',
         image: 'https://images.unsplash.com/photo-1553778263-73a83bab9b0c?auto=format&fit=crop&w=1400&q=85',
+        video: import.meta.env.VITE_WSL_VIDEO_URL || '',
         accent: '#ff8a65',
     },
     {
@@ -26,6 +28,7 @@ const tournaments = [
         title: 'Freshers',
         detail: 'Tournament 2026',
         image: 'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?auto=format&fit=crop&w=1400&q=85',
+        video: import.meta.env.VITE_FRESHERS_VIDEO_URL || '',
         accent: '#7dd3fc',
     },
 ];
@@ -40,6 +43,41 @@ export function LeagueLanding() {
     const goTo = (index) => {
         setActiveIndex((index + tournaments.length) % tournaments.length);
     };
+
+    function CardMedia({ tournament }) {
+        const videoRef = useRef(null);
+        const [videoFailed, setVideoFailed] = useState(false);
+
+        useEffect(() => {
+            setVideoFailed(false);
+            const video = videoRef.current;
+            if (!video || !tournament.video) return undefined;
+            const playVideo = () => video.play().catch(() => {});
+            video.load();
+            playVideo();
+            return () => video.pause();
+        }, [tournament.id, tournament.video]);
+
+        if (!tournament.video || videoFailed) {
+            return <img src={tournament.image} alt="" className="landing-card-image" />;
+        }
+
+        return (
+            <video
+                ref={videoRef}
+                className="landing-card-image"
+                src={tournament.video}
+                poster={tournament.image}
+                muted
+                playsInline
+                loop
+                autoPlay
+                preload="metadata"
+                onError={() => setVideoFailed(true)}
+                aria-hidden="true"
+            />
+        );
+    }
 
     const openTournament = () => navigate(`/${activeTournament.id}`);
 
@@ -93,7 +131,7 @@ export function LeagueLanding() {
 
                 <div className="landing-card-wrap">
                     <button className="landing-card" onClick={openTournament} aria-label={`Open ${activeTournament.title}`}>
-                        <img src={activeTournament.image} alt="" className="landing-card-image" />
+                        <CardMedia tournament={activeTournament} />
                         <span className="landing-card-shade" />
                         <span className="landing-card-mark">SL / 26</span>
                         <span className="landing-card-action"><MoveUpRight size={18} /></span>
@@ -128,6 +166,7 @@ export function LeagueLanding() {
             </footer>
 
             <div className={`landing-menu-panel ${isMenuOpen ? 'is-open' : ''}`}>
+                <button onClick={() => navigate('/login')}>Sign in / Join</button>
                 {tournaments.map((tournament) => (
                     <button key={tournament.id} onClick={() => navigate(`/${tournament.id}`)}>
                         {tournament.title}

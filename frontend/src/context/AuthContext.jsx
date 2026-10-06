@@ -69,27 +69,38 @@ export function AuthProvider({ children }) {
     setLoading(false);
   };
 
+  const signInWithPassword = async (email, password) => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    setLoading(false);
+    return { error };
+  };
+
   const signInWithGoogle = async () => {
     setLoading(true);
-    
-    // Save current path to return here after login, unless we're already on the login page
-    if (window.location.pathname !== '/login') {
-      sessionStorage.setItem('authRedirect', window.location.pathname + window.location.search);
-    }
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
-        queryParams: {
-          prompt: 'select_account',
-        },
-      }
+        redirectTo: `${window.location.origin}/login`,
+        queryParams: { prompt: 'select_account' },
+      },
     });
-    if (error) {
-      console.error("Login failed:", error.message);
-      setLoading(false);
-    }
+    if (error) setLoading(false);
+    return { error };
+  };
+
+  const signUpWithPassword = async (email, password) => {
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { emailRedirectTo: window.location.origin + '/login' },
+    });
+    setLoading(false);
+    return { data, error };
   };
 
   const signOut = async () => {
@@ -101,7 +112,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signInWithGoogle, signOut, setProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signInWithGoogle, signInWithPassword, signUpWithPassword, signOut, setProfile }}>
       {children}
     </AuthContext.Provider>
   );

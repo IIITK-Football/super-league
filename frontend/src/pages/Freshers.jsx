@@ -10,7 +10,7 @@ export function Freshers() {
                 <p className="freshers-kicker">Super League / 2026</p>
                 <h1>Freshers<br /><em>Tournament</em></h1>
                 <p className="freshers-copy">A new season begins here. Fixtures, squads and match updates are coming soon.</p>
-                <div className="freshers-meta"><CalendarDays size={18} /> Registration opens soon <ArrowRight size={18} /></div>
+                <Link to="/team-builder" className="freshers-meta"><CalendarDays size={18} /> Build a Freshers team <ArrowRight size={18} /></Link>
             </div>
         </section>
     );
