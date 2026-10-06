@@ -22,6 +22,8 @@ import { UserProfile } from './pages/UserProfile'; // <-- FIXED: Added this miss
 import { Matches } from './pages/Matches';
 import { Vault } from './pages/Vault';
 import { Rules } from './pages/Rules';
+import { LeagueLanding } from './pages/LeagueLanding';
+import { Freshers } from './pages/Freshers';
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -84,6 +86,16 @@ function WcRoute() {
   return <Fantasy />;
 }
 
+function LeagueDashboardRoute({ division }) {
+  const { setDivision } = useLeague();
+
+  useEffect(() => {
+    setDivision(division);
+  }, [division, setDivision]);
+
+  return <PublicRoute><Home /></PublicRoute>;
+}
+
 
 function App() {
   return (
@@ -98,7 +110,10 @@ function App() {
             <Route path="/admin" element={<AdminDashboard />} />
 
             {/* Public App Routes */}
-            <Route path="/" element={<PublicRoute><Home /></PublicRoute>} />
+            <Route path="/" element={<LeagueLanding />} />
+            <Route path="/super-league" element={<LeagueDashboardRoute division="mens" />} />
+            <Route path="/wsl" element={<LeagueDashboardRoute division="womens" />} />
+            <Route path="/freshers" element={<PublicRoute><Freshers /></PublicRoute>} />
             <Route path="/standings" element={<PublicRoute><Standings /></PublicRoute>} />
             <Route path="/teams" element={<PublicRoute><Teams /></PublicRoute>} />
             
