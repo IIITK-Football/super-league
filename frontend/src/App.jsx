@@ -25,6 +25,7 @@ import { Rules } from './pages/Rules';
 import { LeagueLanding } from './pages/LeagueLanding';
 import { Freshers } from './pages/Freshers';
 import { TeamBuilder } from './pages/TeamBuilder';
+import { RoleWorkspace } from './pages/RoleWorkspace';
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -123,7 +124,9 @@ function App() {
             <Route path="/super-league" element={<LeagueDashboardRoute division="mens" />} />
             <Route path="/wsl" element={<LeagueDashboardRoute division="womens" />} />
             <Route path="/freshers" element={<PublicRoute><Freshers /></PublicRoute>} />
-            <Route path="/team-builder" element={<AuthenticatedRoute><TeamBuilder /></AuthenticatedRoute>} />
+            <Route path="/team-builder" element={<RoleWorkspace requiredRole="captain" />} />
+            <Route path="/editor" element={<RoleWorkspace requiredRole="editor" />} />
+            <Route path="/dictator" element={<RoleWorkspace requiredRole="dictator" />} />
             <Route path="/standings" element={<PublicRoute><Standings /></PublicRoute>} />
             <Route path="/teams" element={<PublicRoute><Teams /></PublicRoute>} />
             

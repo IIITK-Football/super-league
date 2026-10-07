@@ -6,7 +6,7 @@ import { cn } from '../utils/cn';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export function TopNavbar() {
-    const { division, setDivision, fantasySection, setFantasySection } = useLeague();
+    const { division, fantasySection, setFantasySection } = useLeague();
     const { user } = useAuth();
     const [menuOpen, setMenuOpen] = useState(false);
     
@@ -66,31 +66,8 @@ export function TopNavbar() {
                     <div id="navbar-portal-target" className="flex items-center"></div>
                 </div>
 
-                {/* Center: Division Toggle */}
-                {!isFantasyRoute || fantasySection !== 'fifa' ? (
-                <div className="absolute left-1/2 -translate-x-1/2 flex items-center bg-white/5 p-1 rounded-full border border-white/10">
-                    <button
-                        onClick={() => setDivision('mens')}
-                        className={cn(
-                            "px-2 py-1 sm:px-4 sm:py-1.5 rounded-full text-[10px] sm:text-sm font-medium transition-colors duration-300 w-12 sm:w-24",
-                            division === 'mens' ? "bg-white text-black" : "text-zinc-400 hover:text-white"
-                        )}
-                    >
-                        <span className="sm:hidden">Men</span>
-                        <span className="hidden sm:inline">Men's</span>
-                    </button>
-                    <button
-                        onClick={() => setDivision('womens')}
-                        className={cn(
-                            "px-2 py-1 sm:px-4 sm:py-1.5 rounded-full text-[10px] sm:text-sm font-medium transition-colors duration-300 w-12 sm:w-24",
-                            division === 'womens' ? "bg-white text-black" : "text-zinc-400 hover:text-white"
-                        )}
-                    >
-                        <span className="sm:hidden">Women</span>
-                        <span className="hidden sm:inline">Women's</span>
-                    </button>
-                </div>
-                ) : (
+                {/* Fantasy section switcher remains available only inside fantasy routes. */}
+                {isFantasyRoute && fantasySection === 'fifa' ? (
                 <div className="absolute left-1/2 -translate-x-1/2 flex items-center bg-white/5 p-1 rounded-full border border-white/10">
                     <button
                         onClick={() => {
@@ -119,7 +96,7 @@ export function TopNavbar() {
                         <span className="hidden sm:inline">FIFA</span>
                     </button>
                 </div>
-                )}
+                ) : null}
 
                 {/* Right: Login & Hamburger */}
                 <div className="flex items-center gap-2 sm:gap-4">

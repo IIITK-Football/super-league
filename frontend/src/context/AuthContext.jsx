@@ -6,6 +6,7 @@ const AuthContext = createContext({});
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Helper to fetch user's public profile strictly
@@ -46,6 +47,7 @@ export function AuthProvider({ children }) {
     if (!session?.user) {
       setUser(null);
       setProfile(null);
+      setRole(null);
       setLoading(false);
       return;
     }
@@ -57,6 +59,7 @@ export function AuthProvider({ children }) {
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
+      setRole(null);
       setLoading(false);
       alert("Access Denied: You must use your @iiitkottayam.ac.in college email to access the Super League App.");
       return;
@@ -66,6 +69,12 @@ export function AuthProvider({ children }) {
     setUser(user);
     const userProfile = await fetchProfile(user.id);
     setProfile(userProfile);
+    const { data: roleRecord } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    setRole(roleRecord?.role === 'admin' ? 'dictator' : roleRecord?.role || 'default');
     setLoading(false);
   };
 
@@ -108,11 +117,12 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    setRole(null);
     setLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signInWithGoogle, signInWithPassword, signUpWithPassword, signOut, setProfile }}>
+    <AuthContext.Provider value={{ user, profile, role, loading, signInWithGoogle, signInWithPassword, signUpWithPassword, signOut, setProfile }}>
       {children}
     </AuthContext.Provider>
   );

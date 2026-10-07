@@ -1,0 +1,7 @@
+ALTER TABLE public.team_members
+  ADD COLUMN IF NOT EXISTS first_name TEXT,
+  ADD COLUMN IF NOT EXISTS last_name TEXT,
+  ADD COLUMN IF NOT EXISTS jersey_number INTEGER,
+  ADD COLUMN IF NOT EXISTS image_url TEXT,
+  ADD COLUMN IF NOT EXISTS overall_rating INTEGER DEFAULT 50 CHECK (overall_rating BETWEEN 1 AND 99),
+  ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb;

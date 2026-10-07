@@ -9,7 +9,11 @@ const tournaments = [
         eyebrow: 'IIIT Kottayam',
         title: 'Super League',
         detail: 'Men\'s division',
-        image: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1400&q=85',
+        images: [
+            'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1400&q=85',
+            'https://images.unsplash.com/photo-1553778263-73a83bab9b0c?auto=format&fit=crop&w=1400&q=85',
+            'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?auto=format&fit=crop&w=1400&q=85',
+        ],
         video: import.meta.env.VITE_SUPER_LEAGUE_VIDEO_URL || '',
         accent: '#d9ff4a',
     },
@@ -18,7 +22,11 @@ const tournaments = [
         eyebrow: 'IIIT Kottayam',
         title: 'WSL',
         detail: 'Women\'s division',
-        image: 'https://images.unsplash.com/photo-1553778263-73a83bab9b0c?auto=format&fit=crop&w=1400&q=85',
+        images: [
+            'https://images.unsplash.com/photo-1553778263-73a83bab9b0c?auto=format&fit=crop&w=1400&q=85',
+            'https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=1400&q=85',
+            'https://images.unsplash.com/photo-1575361204480-aadea25e6e68?auto=format&fit=crop&w=1400&q=85',
+        ],
         video: import.meta.env.VITE_WSL_VIDEO_URL || '',
         accent: '#ff8a65',
     },
@@ -27,80 +35,73 @@ const tournaments = [
         eyebrow: 'New season',
         title: 'Freshers',
         detail: 'Tournament 2026',
-        image: 'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?auto=format&fit=crop&w=1400&q=85',
+        images: [
+            'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?auto=format&fit=crop&w=1400&q=85',
+            'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1400&q=85',
+            'https://images.unsplash.com/photo-1551958219-acbc608c6377?auto=format&fit=crop&w=1400&q=85',
+        ],
         video: import.meta.env.VITE_FRESHERS_VIDEO_URL || '',
         accent: '#7dd3fc',
     },
 ];
 
 export function LeagueLanding() {
-    const [activeIndex, setActiveIndex] = useState(0);
+    const [carouselIndex, setCarouselIndex] = useState(0);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const [timeRemaining, setTimeRemaining] = useState(4.2);
     const touchStart = useRef(null);
     const navigate = useNavigate();
-    const activeTournament = tournaments[activeIndex];
+    const activeTournamentIndex = carouselIndex % tournaments.length;
+    const mediaIndex = Math.floor(carouselIndex / tournaments.length);
+    const activeTournament = tournaments[activeTournamentIndex];
+    const totalSlides = tournaments.length * 3;
 
     const goTo = (index) => {
-        setActiveIndex((index + tournaments.length) % tournaments.length);
+        setCarouselIndex((index + totalSlides) % totalSlides);
+        setTimeRemaining(4.2);
     };
 
-    function CardMedia({ tournament }) {
-        const videoRef = useRef(null);
-        const [videoFailed, setVideoFailed] = useState(false);
+    useEffect(() => {
+        if (isPaused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
 
-        useEffect(() => {
-            setVideoFailed(false);
-            const video = videoRef.current;
-            if (!video || !tournament.video) return undefined;
-            const playVideo = () => video.play().catch(() => {});
-            video.load();
-            playVideo();
-            return () => video.pause();
-        }, [tournament.id, tournament.video]);
+        const timer = window.setInterval(() => {
+            setTimeRemaining((remaining) => {
+                if (remaining <= 0.1) {
+                    setCarouselIndex((index) => (index + 1) % totalSlides);
+                    return 4.2;
+                }
+                return Math.max(0, remaining - 0.1);
+            });
+        }, 100);
 
-        if (!tournament.video || videoFailed) {
-            return <img src={tournament.image} alt="" className="landing-card-image" />;
-        }
-
-        return (
-            <video
-                ref={videoRef}
-                className="landing-card-image"
-                src={tournament.video}
-                poster={tournament.image}
-                muted
-                playsInline
-                loop
-                autoPlay
-                preload="metadata"
-                onError={() => setVideoFailed(true)}
-                aria-hidden="true"
-            />
-        );
-    }
+        return () => window.clearInterval(timer);
+    }, [isPaused, totalSlides]);
 
     const openTournament = () => navigate(`/${activeTournament.id}`);
 
     useEffect(() => {
         const handleKeyDown = (event) => {
-            if (event.key === 'ArrowLeft') goTo(activeIndex - 1);
-            if (event.key === 'ArrowRight') goTo(activeIndex + 1);
-            if (event.key === 'Enter') navigate(`/${tournaments[activeIndex].id}`);
+            if (event.key === 'ArrowLeft') goTo(carouselIndex - 1);
+            if (event.key === 'ArrowRight') goTo(carouselIndex + 1);
+            if (event.key === 'Enter') navigate(`/${tournaments[activeTournamentIndex].id}`);
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [activeIndex, navigate]);
+    }, [carouselIndex, activeTournamentIndex, navigate]);
 
     return (
         <main
             className="league-landing"
             style={{ '--active-accent': activeTournament.accent }}
+            onFocus={() => setIsPaused(true)}
+            onBlur={() => setIsPaused(false)}
             onTouchStart={(event) => { touchStart.current = event.touches[0].clientX; }}
             onTouchEnd={(event) => {
                 if (touchStart.current === null) return;
                 const distance = event.changedTouches[0].clientX - touchStart.current;
-                if (Math.abs(distance) > 45) goTo(activeIndex + (distance < 0 ? 1 : -1));
+                if (Math.abs(distance) > 45) goTo(carouselIndex + (distance < 0 ? 1 : -1));
                 touchStart.current = null;
             }}
         >
@@ -131,38 +132,28 @@ export function LeagueLanding() {
 
                 <div className="landing-card-wrap">
                     <button className="landing-card" onClick={openTournament} aria-label={`Open ${activeTournament.title}`}>
-                        <CardMedia tournament={activeTournament} />
+                        <img key={`${activeTournament.id}-${mediaIndex}`} src={activeTournament.images[mediaIndex]} alt="" className="landing-card-image" />
                         <span className="landing-card-shade" />
                         <span className="landing-card-mark">SL / 26</span>
                         <span className="landing-card-action"><MoveUpRight size={18} /></span>
                     </button>
-                    <button className="landing-arrow landing-arrow-left" onClick={() => goTo(activeIndex - 1)} aria-label="Previous tournament">
+                    <button className="landing-arrow landing-arrow-left" onClick={() => goTo(carouselIndex - 1)} aria-label="Previous carousel image">
                         <ArrowLeft size={20} strokeWidth={1.5} />
                     </button>
-                    <button className="landing-arrow landing-arrow-right" onClick={() => goTo(activeIndex + 1)} aria-label="Next tournament">
+                    <button className="landing-arrow landing-arrow-right" onClick={() => goTo(carouselIndex + 1)} aria-label="Next carousel image">
                         <ArrowRight size={20} strokeWidth={1.5} />
                     </button>
                 </div>
 
-                <div className="landing-rail" aria-label="Tournament selection">
-                    {tournaments.map((tournament, index) => (
-                        <button
-                            key={tournament.id}
-                            className={`landing-rail-item ${index === activeIndex ? 'is-active' : ''}`}
-                            onClick={() => goTo(index)}
-                            aria-label={`Show ${tournament.title}`}
-                            aria-current={index === activeIndex ? 'true' : undefined}
-                        >
-                            <span>{tournament.title}</span>
-                            <i />
-                        </button>
-                    ))}
-                </div>
             </div>
 
             <footer className="landing-footer">
-                <span>01 / 03</span>
-                <span>Scroll to explore</span>
+                <div className="landing-progress" aria-label="Tournament selection">
+                    {tournaments.map((tournament, index) => (
+                        <button key={tournament.id} className={`landing-progress-dot ${index === activeTournamentIndex ? 'is-active' : ''}`} onClick={() => goTo(index + (mediaIndex * tournaments.length))} aria-label={`Show ${tournament.title}`} />
+                    ))}
+                </div>
+                <span className="landing-countdown">{isPaused ? 'Paused' : `Next in ${timeRemaining.toFixed(1)}s`}</span>
             </footer>
 
             <div className={`landing-menu-panel ${isMenuOpen ? 'is-open' : ''}`}>

@@ -19,14 +19,26 @@ async function getSupabaseClient(request: Request) {
   });
 }
 
+async function requireRole(request: Request, allowedRoles: string[]) {
+  const supabase = await getSupabaseClient(request);
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw { status: 401, message: 'Unauthorized' };
+
+  const { data: roleRecord } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  const role = roleRecord?.role;
+  if (!allowedRoles.includes(role)) throw { status: 403, message: 'Insufficient role' };
+  return { supabase, user };
+}
+
 // CREATE AN ARTICLE
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const supabase = await getSupabaseClient(request); // <-- PASS REQUEST
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) throw { status: 401, message: "Unauthorized" };
+    const { supabase, user } = await requireRole(request, ['editor', 'dictator', 'admin']);
 
     const { data, error } = await supabase
       .from('newsletter')
@@ -57,7 +69,7 @@ export async function DELETE(request: Request) {
 
     if (!id) throw { status: 400, message: "Article ID is required for deletion." };
 
-    const supabase = await getSupabaseClient(request); // <-- PASS REQUEST
+    const { supabase } = await requireRole(request, ['dictator', 'admin']);
 
     const { error } = await supabase
       .from('newsletter')

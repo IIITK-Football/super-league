@@ -1,6 +1,8 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { NextResponse } from "next/server";
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 // Initialize the R2 client using standard S3 configuration
 const r2Client = new S3Client({
@@ -14,6 +16,17 @@ const r2Client = new S3Client({
 
 export async function POST(req: Request) {
   try {
+    const cookieStore = await cookies();
+    const authHeader = req.headers.get('Authorization') || '';
+    const supabase = createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
+      cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} },
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { data: roleRecord } = await supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
+    if (!['editor', 'dictator', 'admin'].includes(roleRecord?.role)) return NextResponse.json({ error: 'Insufficient role' }, { status: 403 });
+
     const { filename, contentType } = await req.json();
 
     if (!filename || !contentType) {

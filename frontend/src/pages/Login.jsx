@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 
 export function Login() {
-  const { signInWithGoogle, signInWithPassword, signUpWithPassword, loading, user } = useAuth();
+  const { signInWithGoogle, signInWithPassword, signUpWithPassword, role, loading, user } = useAuth();
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,12 +30,17 @@ export function Login() {
 
   // 3. When the user comes back and is authenticated, send them to the saved route
   useEffect(() => {
-    if (user) {
-      // Team formation is the first step for every login method.
+    if (user && role) {
+      const roleDestination = {
+        captain: '/team-builder',
+        editor: '/editor',
+        dictator: '/dictator',
+        default: '/',
+      }[role] || '/';
       sessionStorage.removeItem('authRedirect'); 
-      navigate('/team-builder', { replace: true });
+      navigate(roleDestination, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, role, navigate]);
 
   const handlePasswordAuth = async (event) => {
     event.preventDefault();
