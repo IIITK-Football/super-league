@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { GlassPanel } from '../components/GlassPanel';
 import { FormGuide } from '../components/FormGuide';
 import { Loader } from '../components/Loader';
+import { STANDINGS_CONFIG } from '../data/standingsConfig';
 
 function MatchCard({ title, team1, team2, note1, note2 }) {
     return (
@@ -24,7 +27,7 @@ function MatchCard({ title, team1, team2, note1, note2 }) {
 }
 
 // 1. UPDATED BRACKET: Now it reads real data from the database!
-function WomensBracket({ matches = [] }) {
+function WomensBracket({ matches = [], title, buttonText }) {
 
     // Helper function to safely map chronologically scheduled games to the bracket slots
     const getMatchData = (index, fallbackHome, fallbackAway, fallbackNote1, fallbackNote2) => {
@@ -58,10 +61,10 @@ function WomensBracket({ matches = [] }) {
         <div className="space-y-12 animate-in fade-in duration-700 pb-12">
             <div className="text-center space-y-4">
                 <h2 className="text-4xl sm:text-5xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
-                    Road to Final
+                    {title}
                 </h2>
                 <p className="text-zinc-400 font-medium tracking-widest uppercase">
-                    Women's Division Playoff Bracket
+                    {buttonText}
                 </p>
             </div>
 
@@ -92,15 +95,23 @@ function WomensBracket({ matches = [] }) {
 }
 
 export function Standings() {
-    const { division } = useLeague();
+    const { division: divisionParam } = useParams();
+    const navigate = useNavigate();
+    const { setDivision } = useLeague();
+    const division = STANDINGS_CONFIG[divisionParam] ? divisionParam : 'mens';
+    const config = STANDINGS_CONFIG[division];
 
-    const { data: apiResponse, loading, error } = useApi(`/standings?division=${division}`);
+    useEffect(() => {
+        setDivision(division);
+    }, [division, setDivision]);
+
+    const { data: apiResponse, loading, error } = useApi(config.dataEndpoint);
 
     // 2. We extract the bracketMatches from the backend and pass it to the component!
     const bracketMatches = apiResponse?.data?.bracketMatches || [];
 
-    if (division === 'womens') {
-        return <WomensBracket matches={bracketMatches} />;
+    if (config.view === 'bracket') {
+        return <WomensBracket matches={bracketMatches} title={config.title} buttonText={config.buttonText} />;
     }
 
     if (loading) {
@@ -123,9 +134,16 @@ export function Standings() {
         <div className="space-y-6 animate-in fade-in duration-500 pb-12">
             <div className="flex items-end justify-between px-2">
                 <div>
-                    <h2 className="text-3xl sm:text-4xl font-black tracking-tighter uppercase">League Standings</h2>
+                    <h2 className="text-3xl sm:text-4xl font-black tracking-tighter uppercase">{config.title}</h2>
                     <p className="text-zinc-400 mt-1 font-medium">League leader wins the championship. Top 2 clubs qualify for next edition.</p>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => navigate(`/standings/${division}`)}
+                    className="hidden sm:block border border-white/15 px-4 py-2 text-xs font-black uppercase tracking-widest text-zinc-300 hover:border-white/40 hover:text-white transition-colors"
+                >
+                    {config.buttonText}
+                </button>
             </div>
 
             <GlassPanel className="overflow-x-auto relative">

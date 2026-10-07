@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Menu, MoveUpRight } from 'lucide-react';
+import Hls from 'hls.js';
+import { ArrowLeft, ArrowRight, Menu, MoveUpRight, Pause, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './LeagueLanding.css';
+
+const STREAM_BASE_URL = 'https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev';
+const STREAMS = {
+    'super-league': ['superLeague1', 'superLeague2', 'superLeague3'],
+    wsl: ['wsl1', 'wsl2', 'wsl3'],
+    freshers: ['freshers1', 'freshers2', 'freshers3'],
+};
 
 const tournaments = [
     {
@@ -9,12 +17,6 @@ const tournaments = [
         eyebrow: 'IIIT Kottayam',
         title: 'Super League',
         detail: 'Men\'s division',
-        images: [
-            'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1400&q=85',
-            'https://images.unsplash.com/photo-1553778263-73a83bab9b0c?auto=format&fit=crop&w=1400&q=85',
-            'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?auto=format&fit=crop&w=1400&q=85',
-        ],
-        video: import.meta.env.VITE_SUPER_LEAGUE_VIDEO_URL || '',
         accent: '#d9ff4a',
     },
     {
@@ -22,12 +24,6 @@ const tournaments = [
         eyebrow: 'IIIT Kottayam',
         title: 'WSL',
         detail: 'Women\'s division',
-        images: [
-            'https://images.unsplash.com/photo-1553778263-73a83bab9b0c?auto=format&fit=crop&w=1400&q=85',
-            'https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=1400&q=85',
-            'https://images.unsplash.com/photo-1575361204480-aadea25e6e68?auto=format&fit=crop&w=1400&q=85',
-        ],
-        video: import.meta.env.VITE_WSL_VIDEO_URL || '',
         accent: '#ff8a65',
     },
     {
@@ -35,12 +31,6 @@ const tournaments = [
         eyebrow: 'New season',
         title: 'Freshers',
         detail: 'Tournament 2026',
-        images: [
-            'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?auto=format&fit=crop&w=1400&q=85',
-            'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1400&q=85',
-            'https://images.unsplash.com/photo-1551958219-acbc608c6377?auto=format&fit=crop&w=1400&q=85',
-        ],
-        video: import.meta.env.VITE_FRESHERS_VIDEO_URL || '',
         accent: '#7dd3fc',
     },
 ];
@@ -49,36 +39,81 @@ export function LeagueLanding() {
     const [carouselIndex, setCarouselIndex] = useState(0);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
-    const [timeRemaining, setTimeRemaining] = useState(4.2);
+    const videoRef = useRef(null);
+    const hlsRef = useRef(null);
+    const isPausedRef = useRef(isPaused);
     const touchStart = useRef(null);
     const navigate = useNavigate();
     const activeTournamentIndex = carouselIndex % tournaments.length;
     const mediaIndex = Math.floor(carouselIndex / tournaments.length);
     const activeTournament = tournaments[activeTournamentIndex];
+    const videoSrc = `${STREAM_BASE_URL}/${STREAMS[activeTournament.id][mediaIndex]}/master.m3u8`;
     const totalSlides = tournaments.length * 3;
 
     const goTo = (index) => {
         setCarouselIndex((index + totalSlides) % totalSlides);
-        setTimeRemaining(4.2);
     };
 
     useEffect(() => {
-        if (isPaused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+        isPausedRef.current = isPaused;
+    }, [isPaused]);
 
-        const timer = window.setInterval(() => {
-            setTimeRemaining((remaining) => {
-                if (remaining <= 0.1) {
-                    setCarouselIndex((index) => (index + 1) % totalSlides);
-                    return 4.2;
-                }
-                return Math.max(0, remaining - 0.1);
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return undefined;
+
+        let hls;
+        const startPlayback = () => {
+            if (!isPausedRef.current) video.play().catch((error) => {
+                // Autoplay can still be denied by browser policy.
+                console.info('Carousel video autoplay was blocked:', error);
             });
-        }, 100);
+        };
+        // Prefer hls.js where MSE is supported; native HLS remains the Safari fallback.
+        if (Hls.isSupported()) {
+            hls = new Hls({
+                startLevel: 1,
+                capLevelToPlayerSize: false,
+                maxBufferLength: 12,
+                maxMaxBufferLength: 16,
+            });
+            hlsRef.current = hls;
+            hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
+            hls.on(Hls.Events.ERROR, (_event, data) => {
+                if (data.fatal) {
+                    console.error('Carousel HLS playback failed:', data.type, data.details, videoSrc);
+                }
+            });
+            hls.loadSource(videoSrc);
+            hls.attachMedia(video);
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = videoSrc;
+            video.addEventListener('loadedmetadata', startPlayback, { once: true });
+        } else {
+            console.error('This browser does not support HLS playback.');
+        }
 
-        return () => window.clearInterval(timer);
-    }, [isPaused, totalSlides]);
+        return () => {
+            hls?.destroy();
+            if (hlsRef.current === hls) hlsRef.current = null;
+            video.removeEventListener('loadedmetadata', startPlayback);
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+        };
+    }, [videoSrc]);
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+        if (isPaused) video.pause();
+        else video.play().catch(() => {});
+    }, [isPaused, carouselIndex]);
 
     const openTournament = () => navigate(`/${activeTournament.id}`);
+    const advanceWhenClipEnds = () => {
+        if (!isPausedRef.current) setCarouselIndex((index) => (index + 1) % totalSlides);
+    };
 
     useEffect(() => {
         const handleKeyDown = (event) => {
@@ -95,8 +130,6 @@ export function LeagueLanding() {
         <main
             className="league-landing"
             style={{ '--active-accent': activeTournament.accent }}
-            onFocus={() => setIsPaused(true)}
-            onBlur={() => setIsPaused(false)}
             onTouchStart={(event) => { touchStart.current = event.touches[0].clientX; }}
             onTouchEnd={(event) => {
                 if (touchStart.current === null) return;
@@ -132,7 +165,16 @@ export function LeagueLanding() {
 
                 <div className="landing-card-wrap">
                     <button className="landing-card" onClick={openTournament} aria-label={`Open ${activeTournament.title}`}>
-                        <img key={`${activeTournament.id}-${mediaIndex}`} src={activeTournament.images[mediaIndex]} alt="" className="landing-card-image" />
+                        <video
+                            ref={videoRef}
+                            key={`${activeTournament.id}-${mediaIndex}`}
+                            src={Hls.isSupported() ? undefined : videoSrc}
+                            className="landing-card-image"
+                            muted
+                            playsInline
+                            preload="metadata"
+                            onEnded={advanceWhenClipEnds}
+                        />
                         <span className="landing-card-shade" />
                         <span className="landing-card-mark">SL / 26</span>
                         <span className="landing-card-action"><MoveUpRight size={18} /></span>
@@ -153,7 +195,16 @@ export function LeagueLanding() {
                         <button key={tournament.id} className={`landing-progress-dot ${index === activeTournamentIndex ? 'is-active' : ''}`} onClick={() => goTo(index + (mediaIndex * tournaments.length))} aria-label={`Show ${tournament.title}`} />
                     ))}
                 </div>
-                <span className="landing-countdown">{isPaused ? 'Paused' : `Next in ${timeRemaining.toFixed(1)}s`}</span>
+                <button
+                    type="button"
+                    className="landing-play-pause"
+                    onClick={() => setIsPaused((paused) => !paused)}
+                    aria-label={isPaused ? 'Play carousel video' : 'Pause carousel video'}
+                    title={isPaused ? 'Play' : 'Pause'}
+                >
+                    {isPaused ? <Play size={15} fill="currentColor" /> : <Pause size={15} fill="currentColor" />}
+                    <span>{isPaused ? 'Play' : 'Pause'}</span>
+                </button>
             </footer>
 
             <div className={`landing-menu-panel ${isMenuOpen ? 'is-open' : ''}`}>

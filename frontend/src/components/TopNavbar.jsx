@@ -20,7 +20,7 @@ export function TopNavbar() {
         { path: '/', label: 'Home' },
         { path: '/wc', id: 'fifa', label: 'FIFA FANTASY LEAGUE' }, 
         { path: '/matches', label: 'Matches' },
-        { path: '/standings', label: 'Standings' },
+        { path: `/standings/${division}`, label: 'Standings' },
         { path: '/teams', label: 'Clubs' },
         { path: '/leaderboard', label: 'Statistics' },
         { path: '/vault', label: 'Newsletter' },

@@ -166,9 +166,9 @@ export function Home() {
 
                 <div className="bento-standings animate-slide-right opacity-0 stagger-2">
                     <SectionHeader
-                        title={division === 'womens' ? "Road to Final" : "Top 4 Standings"}
+                        title={division === 'womens' ? "Road to Final" : division === 'freshers' ? 'Freshers Standings' : "Top 4 Standings"}
                         action={division === 'womens' ? "Full Bracket" : "Full Table"}
-                        onAction={() => navigate('/standings')} // <-- UPDATE TO navigate
+                        onAction={() => navigate(`/standings/${division}`)}
                     />
                     <GlassPanel className="overflow-hidden relative h-fit">
                         {division === 'womens' ? (
@@ -198,7 +198,7 @@ export function Home() {
                                     </div>
                                     <div className="flex flex-col">
                                         {top4.map((team, idx) => (
-                                            <div key={team.teamId} className={`grid grid-cols-[3rem_minmax(120px,1fr)_3rem_3rem] gap-2 p-4 sm:p-5 items-center ${idx !== top4.length - 1 ? 'border-b border-white/5' : ''} hover:bg-white/10 transition-colors cursor-pointer`} onClick={() => navigate('/standings')}>
+                                            <div key={team.teamId} className={`grid grid-cols-[3rem_minmax(120px,1fr)_3rem_3rem] gap-2 p-4 sm:p-5 items-center ${idx !== top4.length - 1 ? 'border-b border-white/5' : ''} hover:bg-white/10 transition-colors cursor-pointer`} onClick={() => navigate(`/standings/${division}`)}>
                                                 <div className="font-mono text-base sm:text-lg font-black text-center text-zinc-400">{team.rank}</div>
                                                 <div className="font-black text-sm sm:text-lg tracking-tight text-white uppercase flex items-center gap-2 min-w-0 pr-2">
                                                     {team.logoUrl && <img src={team.logoUrl} className="w-5 h-5 sm:w-6 sm:h-6 object-contain shrink-0" alt={team.teamName} />}

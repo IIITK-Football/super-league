@@ -10,7 +10,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
-        const division = searchParams.get('division') || 'mens';
+        const requestedDivision = searchParams.get('division') || 'mens';
+        const division = ['mens', 'womens', 'freshers'].includes(requestedDivision) ? requestedDivision : 'mens';
 
         // 1. Fetch Latest News
         const { data: news } = await supabase

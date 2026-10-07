@@ -96,6 +96,7 @@ export default function ManageTeams() {
             <select required value={form.division} onChange={e => setForm({...form, division: e.target.value})} className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50 appearance-none">
               <option value="mens">Men's Division</option>
               <option value="womens">Women's Division</option>
+              <option value="freshers">Freshers</option>
             </select>
           </div>
 

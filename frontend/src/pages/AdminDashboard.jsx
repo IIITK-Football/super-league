@@ -6,7 +6,6 @@ import { GlassPanel } from '../components/GlassPanel';
 import LiveController from '../components/admin/LiveController';
 import ManagePlayers from '../components/admin/ManagePlayers';
 import ScheduleMatches from '../components/admin/ScheduleMatches';
-import ManageTeams from '../components/admin/ManageTeams';
 import ManageNews from '../components/admin/ManageNews';
 import GradePredictions from '../components/admin/GradePredictions';
 import ManageRegistrations from '../components/admin/ManageRegistrations';
@@ -56,8 +55,7 @@ export function AdminDashboard() {
   const tabs = [
     { id: 'live', label: 'Live Matches', icon: Activity, color: 'text-red-500' },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
-    { id: 'teams', label: 'Teams', icon: Shield },
-    { id: 'registrations', label: 'Formed Teams', icon: Users },
+    { id: 'registrations', label: 'Teams & Rosters', icon: Users },
     { id: 'roles', label: 'Access Control', icon: Shield },
     { id: 'players', label: 'Players', icon: Users },
     { id: 'grading', label: 'Grade Fantasy', icon: Calculator, color: 'text-[#E8C881]' },
@@ -148,7 +146,6 @@ export function AdminDashboard() {
         <GlassPanel className="min-h-full border border-white/10 bg-black/60">
           {activeTab === 'live' && <LiveController />}
           {activeTab === 'schedule' && <ScheduleMatches />}
-          {activeTab === 'teams' && <ManageTeams />}
           {activeTab === 'registrations' && <ManageRegistrations />}
           {activeTab === 'roles' && <ManageRoles currentUserId={user.id} />}
           {activeTab === 'players' && <ManagePlayers />}
