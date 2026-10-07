@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import './LeagueLanding.css';
 
 const STREAM_BASE_URL = 'https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev';
+const LOADING_THUMBNAIL = `${STREAM_BASE_URL}/loading.avif`;
 const STREAMS = {
     'super-league': ['superLeague1', 'superLeague2', 'superLeague3'],
     wsl: ['wsl1', 'wsl2', 'wsl3'],
@@ -39,6 +40,7 @@ export function LeagueLanding() {
     const [carouselIndex, setCarouselIndex] = useState(0);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
+    const [videoFailed, setVideoFailed] = useState(false);
     const videoRef = useRef(null);
     const hlsRef = useRef(null);
     const isPausedRef = useRef(isPaused);
@@ -57,6 +59,10 @@ export function LeagueLanding() {
     useEffect(() => {
         isPausedRef.current = isPaused;
     }, [isPaused]);
+
+    useEffect(() => {
+        setVideoFailed(false);
+    }, [videoSrc]);
 
     useEffect(() => {
         const video = videoRef.current;
@@ -82,6 +88,7 @@ export function LeagueLanding() {
             hls.on(Hls.Events.ERROR, (_event, data) => {
                 if (data.fatal) {
                     console.error('Carousel HLS playback failed:', data.type, data.details, videoSrc);
+                    setVideoFailed(true);
                 }
             });
             hls.loadSource(videoSrc);
@@ -91,6 +98,7 @@ export function LeagueLanding() {
             video.addEventListener('loadedmetadata', startPlayback, { once: true });
         } else {
             console.error('This browser does not support HLS playback.');
+            setVideoFailed(true);
         }
 
         return () => {
@@ -165,16 +173,22 @@ export function LeagueLanding() {
 
                 <div className="landing-card-wrap">
                     <button className="landing-card" onClick={openTournament} aria-label={`Open ${activeTournament.title}`}>
-                        <video
-                            ref={videoRef}
-                            key={`${activeTournament.id}-${mediaIndex}`}
-                            src={Hls.isSupported() ? undefined : videoSrc}
-                            className="landing-card-image"
-                            muted
-                            playsInline
-                            preload="metadata"
-                            onEnded={advanceWhenClipEnds}
-                        />
+                        {videoFailed ? (
+                            <img src={LOADING_THUMBNAIL} alt="Video loading" className="landing-card-image" />
+                        ) : (
+                            <video
+                                ref={videoRef}
+                                key={`${activeTournament.id}-${mediaIndex}`}
+                                src={Hls.isSupported() ? undefined : videoSrc}
+                                poster={LOADING_THUMBNAIL}
+                                className="landing-card-image"
+                                muted
+                                playsInline
+                                preload="metadata"
+                                onEnded={advanceWhenClipEnds}
+                                onError={() => setVideoFailed(true)}
+                            />
+                        )}
                         <span className="landing-card-shade" />
                         <span className="landing-card-mark">SL / 26</span>
                         <span className="landing-card-action"><MoveUpRight size={18} /></span>
