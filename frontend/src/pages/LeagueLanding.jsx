@@ -5,7 +5,17 @@ import { useNavigate } from 'react-router-dom';
 import './LeagueLanding.css';
 
 const STREAM_BASE_URL = 'https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev';
-const LOADING_THUMBNAIL = `${STREAM_BASE_URL}/loading.avif`;
+const STREAM_POSTERS = {
+    wsl1: `${STREAM_BASE_URL}/loading-wsl1.avif`,
+    wsl2: `${STREAM_BASE_URL}/loading-wsl2.avif`,
+    wsl3: `${STREAM_BASE_URL}/loading-wsl3.avif`,
+    superLeague1: `${STREAM_BASE_URL}/loading-superLeague1.avif`,
+    superLeague2: `${STREAM_BASE_URL}/loading-superLeague2.avif`,
+    superLeague3: `${STREAM_BASE_URL}/loading-superLeague3.avif`,
+    freshers1: `${STREAM_BASE_URL}/loading-freshers1.avif`,
+    freshers2: `${STREAM_BASE_URL}/loading-freshers2.avif`,
+    freshers3: `${STREAM_BASE_URL}/loading-freshers3.avif`,
+};
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const STREAMS = {
     'super-league': ['superLeague1', 'superLeague2', 'superLeague3'],
@@ -52,6 +62,7 @@ export function LeagueLanding() {
     const activeTournament = tournaments[activeTournamentIndex];
     const streamName = STREAMS[activeTournament.id][mediaIndex];
     const videoSrc = `${API_BASE_URL}/media/${streamName}/master.m3u8`;
+    const posterSrc = STREAM_POSTERS[streamName];
     const videoFailed = failedVideoSrc === videoSrc;
     const totalSlides = tournaments.length * 3;
 
@@ -181,13 +192,13 @@ export function LeagueLanding() {
                 <div className="landing-card-wrap">
                     <div className="landing-card">
                         {videoFailed ? (
-                            <img src={LOADING_THUMBNAIL} alt="Video loading" className="landing-card-image" />
+                            <img src={posterSrc} alt={`${activeTournament.title} video preview`} className="landing-card-image" />
                         ) : (
                             <video
                                 ref={videoRef}
                                 key={`${activeTournament.id}-${mediaIndex}`}
                                 src={Hls.isSupported() ? undefined : videoSrc}
-                                poster={LOADING_THUMBNAIL}
+                                poster={posterSrc}
                                 className="landing-card-image"
                                 autoPlay
                                 muted
