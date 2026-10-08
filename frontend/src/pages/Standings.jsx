@@ -6,6 +6,7 @@ import { GlassPanel } from '../components/GlassPanel';
 import { FormGuide } from '../components/FormGuide';
 import { Loader } from '../components/Loader';
 import { STANDINGS_CONFIG } from '../data/standingsConfig';
+import { FreshersRoadToFinal } from './RoadToFinal';
 
 function MatchCard({ title, team1, team2, note1, note2 }) {
     return (
@@ -106,6 +107,10 @@ export function Standings() {
     }, [division, setDivision]);
 
     const { data: apiResponse, loading, error } = useApi(config.dataEndpoint);
+
+    if (config.view === 'freshers-bracket') {
+        return <FreshersRoadToFinal />;
+    }
 
     // 2. We extract the bracketMatches from the backend and pass it to the component!
     const bracketMatches = apiResponse?.data?.bracketMatches || [];

@@ -20,7 +20,7 @@ export function TopNavbar() {
         { path: '/', label: 'Home' },
         { path: '/wc', id: 'fifa', label: 'Fantasy' }, 
         { path: '/matches', label: 'Matches' },
-        { path: `/standings/${division}`, label: 'Standings' },
+        { path: `/standings/${division}`, label: division === 'womens' || division === 'freshers' ? 'Road to Final' : 'Standings' },
         { path: '/teams', label: 'Clubs' },
         { path: '/leaderboard', label: 'Statistics' },
         { path: '/vault', label: 'Newsletter' },
@@ -132,7 +132,7 @@ export function TopNavbar() {
                 menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
             )}>
                 <div className="flex flex-col items-center justify-center flex-1 gap-6 sm:gap-8">
-                    {views.map((v, i) => (
+                    {views.filter((view) => division !== 'freshers' || view.id !== 'fifa').map((v, i) => (
                         <button
                             key={i}
                             onClick={() => handleNav(v)}

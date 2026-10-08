@@ -1,5 +1,16 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Freshers image uploads and mobile tournament videos
+
+Configure these server environment variables for Freshers player portraits:
+
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`
+- `R2_FRESHERS_BUCKET_NAME` set to the bucket behind `https://pub-156b66d0ff7841bc9601620610a8ebd3.r2.dev`
+- `NEXT_PUBLIC_FRESHERS_R2_URL` set to that public URL (the route has this URL as its default)
+- `NEXT_PUBLIC_VIDEO_R2_URL` set to the public R2 host containing the HLS clips (optional; defaults to the current video host)
+
+Apply `030_freshers_road_to_final.sql` in Supabase before using dictator fixture scheduling.
+
 ## Getting Started
 
 First, run the development server:

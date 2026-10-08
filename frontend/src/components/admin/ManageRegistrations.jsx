@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Save, Shield, Trash2, Users } from 'lucide-react';
+import { ImagePlus, Loader2, Plus, Save, Shield, Trash2, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -18,18 +18,19 @@ export default function ManageRegistrations() {
   const [captains, setCaptains] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
+  const [uploadingPlayer, setUploadingPlayer] = useState('');
   const [error, setError] = useState('');
 
   const loadRegistrations = async () => {
     setLoading(true);
     const [{ data, error: registrationsError }, { data: profiles, error: profilesError }] = await Promise.all([
       supabase.from('team_registrations').select('id, team_id, team_name, division, captain_id, team_members(*)').order('created_at', { ascending: false }),
-      supabase.from('user_profiles').select('id, email, real_name, nickname').order('real_name', { ascending: true }),
+      supabase.from('user_profiles').select('id, email, real_name, nickname').order('email', { ascending: true }),
     ]);
     if (registrationsError || profilesError) setError(registrationsError?.message || profilesError?.message || 'Could not load teams.');
     setCaptains((profiles || []).map((profile) => ({
       id: profile.id,
-      label: profile.nickname || profile.real_name || profile.email || profile.id,
+      label: profile.email || profile.id,
     })));
     setRegistrations(data || []);
     setLoading(false);
@@ -47,6 +48,60 @@ export default function ManageRegistrations() {
     ...team,
     team_members: team.team_members.map((member, memberIndex) => memberIndex === index ? { ...member, [field]: value } : member),
   } : team));
+
+  const uploadPlayerImage = async (team, index, file) => {
+    const player = team.team_members[index];
+    if (!player.email?.trim()) {
+      setError('Enter the player’s college email before uploading their image.');
+      return;
+    }
+    if (!file?.type.startsWith('image/')) {
+      setError('Choose an image file.');
+      return;
+    }
+    const uploadKey = `${teamKey(team)}-${index}`;
+    setUploadingPlayer(uploadKey);
+    setError('');
+    try {
+      const sourceUrl = URL.createObjectURL(file);
+      const image = new Image();
+      image.src = sourceUrl;
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error('Could not open that image.'));
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Image formatting is not available in this browser.');
+      const scale = Math.min(512 / image.width, 512 / image.height);
+      const width = image.width * scale;
+      const height = image.height * scale;
+      context.drawImage(image, (512 - width) / 2, (512 - height) / 2, width, height);
+      URL.revokeObjectURL(sourceUrl);
+      const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!png) throw new Error('Could not format the image as PNG.');
+
+      const formData = new FormData();
+      formData.append('email', player.email.trim());
+      formData.append('image', png, 'player.png');
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(`${API_URL}/admin/freshers/player-image`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: formData,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not upload the image.');
+      changePlayer(teamKey(team), index, 'image_url', result.imageUrl);
+    } catch (uploadError) {
+      setError(uploadError.message || 'Could not upload the player image.');
+    } finally {
+      setUploadingPlayer('');
+    }
+  };
 
   const saveTeam = async (team) => {
     setSavingId(teamKey(team));
@@ -102,16 +157,25 @@ export default function ManageRegistrations() {
         <div className="grid gap-3 md:grid-cols-[1fr_200px_1fr_auto]">
           <input value={team.team_name} onChange={(event) => changeTeam(teamKey(team), 'team_name', event.target.value)} placeholder="Team name" className={`${inputClass} font-bold`} />
           <select value={team.division} onChange={(event) => changeTeam(teamKey(team), 'division', event.target.value)} className={inputClass}>{divisions.map((division) => <option key={division.value} value={division.value}>{division.label}</option>)}</select>
-          <select value={team.captain_id} onChange={(event) => changeTeam(teamKey(team), 'captain_id', event.target.value)} className={inputClass}><option value="">Assign captain</option>{options.map((captain) => <option key={captain.id} value={captain.id}>{captain.label}</option>)}</select>
+          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Captain college email<select value={team.captain_id} onChange={(event) => changeTeam(teamKey(team), 'captain_id', event.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}><option value="">Select college email</option>{options.map((captain) => <option key={captain.id} value={captain.id}>{captain.label}</option>)}</select></label>
           <div className="flex gap-2"><button type="button" onClick={() => saveTeam(team)} disabled={savingId === teamKey(team)} className="flex items-center gap-2 rounded-lg bg-[#d9ff4a] px-3 py-2 text-xs font-black uppercase text-black"><Save size={14} /> Save</button>{team.id && <button type="button" onClick={() => deleteTeam(team.id)} className="rounded-lg border border-red-500/30 px-3 py-2 text-red-400" aria-label="Delete team"><Trash2 size={14} /></button>}</div>
         </div>
         <div className="flex items-center justify-between"><h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-zinc-300"><Shield size={15} /> Roster <span className="text-zinc-600">({team.team_members.length})</span></h3><button type="button" onClick={() => addPlayer(teamKey(team))} className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-[#d9ff4a]"><Plus size={14} /> Add player</button></div>
         {team.team_members.map((member, index) => <div key={member.id || `new-player-${teamKey(team)}-${index}`} className="grid gap-2 rounded-xl border border-white/5 bg-black/30 p-3 md:grid-cols-[1.2fr_1fr_160px_100px_auto]">
           <input value={member.name} onChange={(event) => changePlayer(teamKey(team), index, 'name', event.target.value)} placeholder="Player name" className={inputClass} />
-          <input type="email" value={member.email || ''} onChange={(event) => changePlayer(teamKey(team), index, 'email', event.target.value)} placeholder="Email (optional)" className={inputClass} />
+          <input type="email" value={member.email || ''} onChange={(event) => changePlayer(teamKey(team), index, 'email', event.target.value)} placeholder="College email (for image upload)" className={inputClass} />
           <select value={member.position || ''} onChange={(event) => changePlayer(teamKey(team), index, 'position', event.target.value)} className={inputClass}><option value="">Position (captain sets)</option>{positions.map((position) => <option key={position}>{position}</option>)}</select>
           <input type="number" min="1" max="99" value={member.jersey_number || ''} onChange={(event) => changePlayer(teamKey(team), index, 'jersey_number', event.target.value)} placeholder="#" className={inputClass} />
           <button type="button" onClick={() => removePlayer(team, index)} className="grid place-items-center rounded-lg border border-red-500/20 px-3 text-red-400" aria-label="Remove player"><Trash2 size={15} /></button>
+          {team.division === 'freshers' && <div className="flex items-center gap-3 md:col-span-5">
+            {member.image_url ? <img src={member.image_url} alt={`${member.name || 'Player'} portrait preview`} className="h-12 w-12 rounded-lg border border-white/10 bg-white/5 object-contain" /> : <div className="grid h-12 w-12 place-items-center rounded-lg border border-white/10 bg-white/5 text-zinc-600"><Users size={18} /></div>}
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/5">
+              {uploadingPlayer === `${teamKey(team)}-${index}` ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+              {member.image_url ? 'Replace player image' : 'Upload player image'}
+              <input type="file" accept="image/*" className="sr-only" disabled={uploadingPlayer === `${teamKey(team)}-${index}`} onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadPlayerImage(team, index, file); event.target.value = ''; }} />
+            </label>
+            <span className="text-[10px] text-zinc-600">Auto-fits to 512 × 512 PNG · saved as email ID.png</span>
+          </div>}
         </div>)}
         {!team.team_members.length && <p className="text-xs text-zinc-600">Add players to this roster. The captain can then assign positions and playstyles.</p>}
       </section>;

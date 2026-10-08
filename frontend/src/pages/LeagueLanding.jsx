@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { ArrowLeft, ArrowRight, Menu, MoveUpRight, Pause, Play } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Menu, Pause, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './LeagueLanding.css';
 
 const STREAM_BASE_URL = 'https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev';
 const LOADING_THUMBNAIL = `${STREAM_BASE_URL}/loading.avif`;
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const STREAMS = {
     'super-league': ['superLeague1', 'superLeague2', 'superLeague3'],
     wsl: ['wsl1', 'wsl2', 'wsl3'],
@@ -40,7 +41,7 @@ export function LeagueLanding() {
     const [carouselIndex, setCarouselIndex] = useState(0);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
-    const [videoFailed, setVideoFailed] = useState(false);
+    const [failedVideoSrc, setFailedVideoSrc] = useState('');
     const videoRef = useRef(null);
     const hlsRef = useRef(null);
     const isPausedRef = useRef(isPaused);
@@ -49,7 +50,9 @@ export function LeagueLanding() {
     const activeTournamentIndex = carouselIndex % tournaments.length;
     const mediaIndex = Math.floor(carouselIndex / tournaments.length);
     const activeTournament = tournaments[activeTournamentIndex];
-    const videoSrc = `${STREAM_BASE_URL}/${STREAMS[activeTournament.id][mediaIndex]}/master.m3u8`;
+    const streamName = STREAMS[activeTournament.id][mediaIndex];
+    const videoSrc = `${API_BASE_URL}/media/${streamName}/master.m3u8`;
+    const videoFailed = failedVideoSrc === videoSrc;
     const totalSlides = tournaments.length * 3;
 
     const goTo = (index) => {
@@ -61,34 +64,38 @@ export function LeagueLanding() {
     }, [isPaused]);
 
     useEffect(() => {
-        setVideoFailed(false);
-    }, [videoSrc]);
-
-    useEffect(() => {
         const video = videoRef.current;
         if (!video) return undefined;
 
         let hls;
+        const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const useNativeHls = isAppleMobile && Boolean(video.canPlayType('application/vnd.apple.mpegurl'));
         const startPlayback = () => {
             if (!isPausedRef.current) video.play().catch((error) => {
                 // Autoplay can still be denied by browser policy.
                 console.info('Carousel video autoplay was blocked:', error);
             });
         };
-        // Prefer hls.js where MSE is supported; native HLS remains the Safari fallback.
-        if (Hls.isSupported()) {
+        // iOS Safari's native HLS handles mobile power, memory, and autoplay policies best.
+        if (useNativeHls) {
+            video.src = videoSrc;
+            video.addEventListener('loadedmetadata', startPlayback, { once: true });
+        } else if (Hls.isSupported()) {
             hls = new Hls({
-                startLevel: 1,
-                capLevelToPlayerSize: false,
-                maxBufferLength: 12,
-                maxMaxBufferLength: 16,
+                startLevel: -1,
+                capLevelToPlayerSize: true,
+                maxBufferLength: 8,
+                maxMaxBufferLength: 12,
+                abrEwmaDefaultEstimate: 1200000,
+                lowLatencyMode: false,
             });
             hlsRef.current = hls;
             hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
             hls.on(Hls.Events.ERROR, (_event, data) => {
                 if (data.fatal) {
                     console.error('Carousel HLS playback failed:', data.type, data.details, videoSrc);
-                    setVideoFailed(true);
+                    setFailedVideoSrc(videoSrc);
                 }
             });
             hls.loadSource(videoSrc);
@@ -98,7 +105,7 @@ export function LeagueLanding() {
             video.addEventListener('loadedmetadata', startPlayback, { once: true });
         } else {
             console.error('This browser does not support HLS playback.');
-            setVideoFailed(true);
+            setFailedVideoSrc(videoSrc);
         }
 
         return () => {
@@ -106,8 +113,8 @@ export function LeagueLanding() {
             if (hlsRef.current === hls) hlsRef.current = null;
             video.removeEventListener('loadedmetadata', startPlayback);
             video.pause();
-            video.removeAttribute('src');
-            video.load();
+                video.removeAttribute('src');
+                video.load();
         };
     }, [videoSrc]);
 
@@ -172,7 +179,7 @@ export function LeagueLanding() {
                 </div>
 
                 <div className="landing-card-wrap">
-                    <button className="landing-card" onClick={openTournament} aria-label={`Open ${activeTournament.title}`}>
+                    <div className="landing-card">
                         {videoFailed ? (
                             <img src={LOADING_THUMBNAIL} alt="Video loading" className="landing-card-image" />
                         ) : (
@@ -182,21 +189,25 @@ export function LeagueLanding() {
                                 src={Hls.isSupported() ? undefined : videoSrc}
                                 poster={LOADING_THUMBNAIL}
                                 className="landing-card-image"
+                                autoPlay
                                 muted
                                 playsInline
                                 preload="metadata"
                                 onEnded={advanceWhenClipEnds}
-                                onError={() => setVideoFailed(true)}
+                                onError={() => setFailedVideoSrc(videoSrc)}
                             />
                         )}
                         <span className="landing-card-shade" />
                         <span className="landing-card-mark">SL / 26</span>
-                        <span className="landing-card-action"><MoveUpRight size={18} /></span>
-                    </button>
-                    <button type="button" className="landing-arrow landing-arrow-left" onClick={(event) => { event.stopPropagation(); goTo(carouselIndex - 1); }} aria-label="Previous carousel video">
+                        <button type="button" className="landing-enter-button" onClick={openTournament}>
+                            <span>Enter {activeTournament.title === 'Freshers' ? "Fresher's Tournament" : activeTournament.title}</span>
+                        </button>
+                        <span className="landing-redirect-note">Opens the {activeTournament.title} page</span>
+                    </div>
+                    <button type="button" className="landing-arrow landing-arrow-left" onPointerDown={(event) => event.stopPropagation()} onTouchStart={(event) => event.stopPropagation()} onTouchEnd={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); goTo(carouselIndex - 1); }} aria-label="Previous carousel video">
                         <ArrowLeft size={20} strokeWidth={1.5} />
                     </button>
-                    <button type="button" className="landing-arrow landing-arrow-right" onClick={(event) => { event.stopPropagation(); goTo(carouselIndex + 1); }} aria-label="Next carousel video">
+                    <button type="button" className="landing-arrow landing-arrow-right" onPointerDown={(event) => event.stopPropagation()} onTouchStart={(event) => event.stopPropagation()} onTouchEnd={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); goTo(carouselIndex + 1); }} aria-label="Next carousel video">
                         <ArrowRight size={20} strokeWidth={1.5} />
                     </button>
                 </div>

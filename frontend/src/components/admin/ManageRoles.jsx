@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, UserMinus, UserPlus } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
-const roleOptions = ['default', 'captain', 'editor', 'dictator'];
+const roleOptions = [
+  { value: 'default', label: 'No special role' },
+  { value: 'captain', label: 'Captain' },
+  { value: 'editor', label: 'Editor' },
+  { value: 'dictator', label: 'Dictator' },
+  { value: 'admin', label: 'Admin' },
+];
 
 export default function ManageRoles({ currentUserId }) {
   const [users, setUsers] = useState([]);
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('captain');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingUserId, setSavingUserId] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -41,37 +45,19 @@ export default function ManageRoles({ currentUserId }) {
     }
     setError('');
     setMessage('');
+    setSavingUserId(userId);
     const { error: updateError } = await supabase.from('user_roles').upsert({ user_id: userId, role: nextRole });
     if (updateError) setError(updateError.message);
     else {
       setUsers((current) => current.map((user) => user.id === userId ? { ...user, role: nextRole } : user));
       setMessage('Role updated.');
     }
-  };
-
-  const assignByEmail = async (event) => {
-    event.preventDefault();
-    setError('');
-    setMessage('');
-    const foundUser = users.find((user) => user.email?.toLowerCase() === email.trim().toLowerCase());
-    if (!foundUser) {
-      setError('No registered user was found with that college email. Ask them to create an account first.');
-      return;
-    }
-    setSaving(true);
-    await updateRole(foundUser.id, role);
-    setEmail('');
-    setSaving(false);
+    setSavingUserId('');
   };
 
   return <div className="space-y-8 p-6">
-    <div><h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><ShieldCheck size={21} /> Access control</h2><p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Only dictators can assign or remove roles</p></div>
-    <form onSubmit={assignByEmail} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-5 md:grid-cols-[1fr_180px_auto]">
-      <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="teammate@iiitkottayam.ac.in" className="rounded-lg border border-white/10 bg-black/50 px-3 py-3 text-white outline-none focus:border-white/40" required />
-      <select value={role} onChange={(event) => setRole(event.target.value)} className="rounded-lg border border-white/10 bg-black/50 px-3 py-3 text-white">{roleOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>
-      <button type="submit" disabled={saving} className="flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-xs font-black uppercase text-black"><UserPlus size={15} /> Assign role</button>
-    </form>
+    <div><h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><ShieldCheck size={21} /> Access control</h2><p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Choose a role beside a college email to update access</p></div>
     {(error || message) && <p className={error ? 'text-sm text-red-300' : 'text-sm text-emerald-300'}>{error || message}</p>}
-    {loading ? <p className="text-zinc-500">Loading registered users...</p> : <div className="divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10">{users.map((user) => <div key={user.id} className="grid gap-3 bg-black/30 p-4 md:grid-cols-[1fr_180px_auto] md:items-center"><div><p className="font-bold text-white">{user.real_name || user.email}</p><p className="text-xs text-zinc-500">{user.email}</p></div><select value={user.role} onChange={(event) => updateRole(user.id, event.target.value)} disabled={user.id === currentUserId} className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm capitalize text-white">{roleOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select><button type="button" onClick={() => updateRole(user.id, 'default')} disabled={user.id === currentUserId || user.role === 'default'} className="flex items-center justify-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-xs font-bold uppercase text-red-300 disabled:opacity-30"><UserMinus size={14} /> Remove role</button></div>)}</div>}
+    {loading ? <p className="text-zinc-500">Loading registered users...</p> : <div className="divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10">{users.map((user) => <div key={user.id} className="grid gap-3 bg-black/30 p-4 sm:grid-cols-[1fr_220px] sm:items-center"><div><p className="font-bold text-white">{user.email}</p>{user.real_name && <p className="mt-1 text-xs text-zinc-500">{user.real_name}</p>}</div><select value={user.role} onChange={(event) => updateRole(user.id, event.target.value)} disabled={savingUserId === user.id} aria-label={`Role for ${user.email}`} className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white disabled:opacity-50">{roleOptions.map((option) => <option key={option.value} value={option.value} disabled={user.id === currentUserId && option.value !== 'dictator'}>{option.label}</option>)}</select></div>)}</div>}
   </div>;
 }

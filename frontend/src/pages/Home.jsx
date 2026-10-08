@@ -166,13 +166,13 @@ export function Home() {
 
                 <div className="bento-standings animate-slide-right opacity-0 stagger-2">
                     <SectionHeader
-                        title={division === 'womens' ? "Road to Final" : division === 'freshers' ? 'Freshers Standings' : "Top 4 Standings"}
-                        action={division === 'womens' ? "Full Bracket" : "Full Table"}
+                        title={division === 'womens' || division === 'freshers' ? 'Road to Final' : 'Top 4 Standings'}
+                        action={division === 'womens' || division === 'freshers' ? 'View Fixtures' : 'Full Table'}
                         onAction={() => navigate(`/standings/${division}`)}
                     />
                     <GlassPanel className="overflow-hidden relative h-fit">
                         {division === 'womens' ? (
-                            <div className="p-6 sm:p-10 flex flex-col justify-center relative group cursor-pointer hover:bg-white/5 transition-colors overflow-hidden" onClick={() => navigate('/standings')}>
+                            <div className="p-6 sm:p-10 flex flex-col justify-center relative group cursor-pointer hover:bg-white/5 transition-colors overflow-hidden" onClick={() => navigate('/standings/womens')}>
                                 <Trophy className="absolute right-[-20px] bottom-[-20px] w-64 h-64 text-white/[0.03] -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none animate-float" />
                                 <h4 className="text-sm font-black text-zinc-500 tracking-widest uppercase mb-6 relative z-10">Final Result &bull; WSL</h4>
                                 <div className="space-y-4 relative z-10 w-full max-w-sm">
@@ -184,8 +184,16 @@ export function Home() {
                                     </div>
                                 </div>
                                 <div className="mt-8 text-xs font-bold text-zinc-400 uppercase flex items-center gap-2 tracking-widest group-hover:text-white transition-colors">
-                                    View Tournament Tree <ChevronRight size={14} />
+                                    View WSL Road to Final <ChevronRight size={14} />
                                 </div>
+                            </div>
+                        ) : division === 'freshers' ? (
+                            <div className="p-6 sm:p-8 flex flex-col justify-center relative group cursor-pointer hover:bg-white/5 transition-colors overflow-hidden min-h-64" onClick={() => navigate('/standings/freshers')}>
+                                <Trophy className="absolute right-[-18px] bottom-[-28px] w-56 h-56 text-sky-300/[0.05] -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none" />
+                                <p className="relative z-10 text-xs font-black tracking-[.2em] uppercase text-sky-200">Knockout Tournament · October 12–13</p>
+                                <h4 className="relative z-10 mt-3 text-2xl font-black uppercase text-white">Three quarter-finals.<br />One final.</h4>
+                                <p className="relative z-10 mt-3 max-w-sm text-sm text-zinc-400">See the match times, follow each round, and find out who makes it to the final.</p>
+                                <div className="relative z-10 mt-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sky-200 group-hover:text-white">View Road to Final <ChevronRight size={14} /></div>
                             </div>
                         ) : (
                             <div className="flex flex-col w-full overflow-x-auto">

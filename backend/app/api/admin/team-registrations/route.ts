@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       email: member.email?.trim() || null,
       position: member.position || null,
       jersey_number: Number(member.jersey_number) || null,
+      image_url: member.image_url || null,
       overall_rating: Number(member.overall_rating) || 50,
       attributes: member.attributes || {},
     }));

@@ -7,7 +7,7 @@ export const STANDINGS_CONFIG = {
     },
     womens: {
         title: 'Road to Final',
-        buttonText: "Women's Bracket",
+        buttonText: 'Road to Final',
         dataEndpoint: '/standings?division=womens',
         view: 'bracket'
     },
@@ -18,9 +18,9 @@ export const STANDINGS_CONFIG = {
         view: 'table'
     },
     freshers: {
-        title: 'Freshers Standings',
-        buttonText: 'Freshers Standings',
+        title: 'Road to Final',
+        buttonText: 'Road to Final',
         dataEndpoint: '/standings?division=freshers',
-        view: 'table'
+        view: 'freshers-bracket'
     }
 };

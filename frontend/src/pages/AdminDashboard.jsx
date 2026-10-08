@@ -10,6 +10,7 @@ import ManageNews from '../components/admin/ManageNews';
 import GradePredictions from '../components/admin/GradePredictions';
 import ManageRegistrations from '../components/admin/ManageRegistrations';
 import ManageRoles from '../components/admin/ManageRoles';
+import ManageRoadToFinal from '../components/admin/ManageRoadToFinal';
 
 export function AdminDashboard() {
   const { user, signOut } = useAuth();
@@ -55,6 +56,7 @@ export function AdminDashboard() {
   const tabs = [
     { id: 'live', label: 'Live Matches', icon: Activity, color: 'text-red-500' },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
+    { id: 'road-final', label: 'Road to Final', icon: Calendar },
     { id: 'registrations', label: 'Teams & Rosters', icon: Users },
     { id: 'roles', label: 'Access Control', icon: Shield },
     { id: 'players', label: 'Players', icon: Users },
@@ -146,6 +148,7 @@ export function AdminDashboard() {
         <GlassPanel className="min-h-full border border-white/10 bg-black/60">
           {activeTab === 'live' && <LiveController />}
           {activeTab === 'schedule' && <ScheduleMatches />}
+          {activeTab === 'road-final' && <ManageRoadToFinal />}
           {activeTab === 'registrations' && <ManageRegistrations />}
           {activeTab === 'roles' && <ManageRoles currentUserId={user.id} />}
           {activeTab === 'players' && <ManagePlayers />}
