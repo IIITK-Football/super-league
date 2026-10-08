@@ -39,7 +39,7 @@
 .landing-copy { position: relative; z-index: 2; width: min(100%, 460px); margin: 0 auto -44px; text-align: center; pointer-events: none; animation: landing-rise .8s cubic-bezier(.16,1,.3,1); }
 .landing-kicker, .landing-detail { color: rgba(255,255,255,.68); text-transform: uppercase; letter-spacing: .28em; font-size: 10px; }
 .landing-title { pointer-events: auto; margin: 10px 0; color: white; font-size: clamp(3.4rem, 14vw, 8rem); font-weight: 900; line-height: .82; letter-spacing: -.09em; text-transform: uppercase; text-shadow: 0 12px 35px rgba(0,0,0,.4); }
-.landing-card-wrap { position: absolute; z-index: 0; top: 50%; left: 50%; width: min(100vw, 56.25svh); height: min(100svh, 177.78vw); transform: translate(-50%, -50%); overflow: visible; }
+.landing-card-wrap { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; overflow: visible; }
 .landing-card-wrap::before, .landing-card-wrap::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .landing-card-wrap::before { background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,.18) 65%, rgba(0,0,0,.78) 100%); }
 .landing-card-wrap::after { background: linear-gradient(180deg, rgba(0,0,0,.58) 0%, transparent 24%, transparent 58%, rgba(0,0,0,.82) 100%); }
@@ -52,7 +52,7 @@
 .landing-card-action { position: absolute; right: 18px; bottom: 18px; display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid rgba(255,255,255,.65); border-radius: 50%; }
 .landing-arrow { position: absolute; top: 50%; width: 48px; height: 48px; border-radius: 50%; transform: translateY(-50%); z-index: 10; pointer-events: auto; transition: background .2s, color .2s; }
 .landing-arrow:hover { background: var(--active-accent); color: #101214; border-color: var(--active-accent); }
-.landing-arrow-left { left: 4vw; }.landing-arrow-right { right: 4vw; }
+.landing-arrow-left { left: max(16px, 4vw); }.landing-arrow-right { right: max(16px, 4vw); }
 .landing-rail { position: relative; z-index: 4; display: flex; gap: clamp(20px, 7vw, 60px); margin-top: 22px; }
 .landing-rail-item { display: grid; gap: 8px; color: rgba(255,255,255,.44); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; transition: color .25s; }
 .landing-rail-item i { width: 5px; height: 5px; margin: auto; border-radius: 50%; background: currentColor; }.landing-rail-item.is-active { color: white; }.landing-rail-item.is-active i { width: 9px; height: 9px; background: var(--active-accent); box-shadow: 0 0 14px var(--active-accent); }

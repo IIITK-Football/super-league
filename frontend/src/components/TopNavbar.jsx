@@ -18,7 +18,7 @@ export function TopNavbar() {
 
     const views = [
         { path: '/', label: 'Home' },
-        { path: '/wc', id: 'fifa', label: 'FIFA FANTASY LEAGUE' }, 
+        { path: '/wc', id: 'fifa', label: 'Fantasy' }, 
         { path: '/matches', label: 'Matches' },
         { path: `/standings/${division}`, label: 'Standings' },
         { path: '/teams', label: 'Clubs' },
@@ -139,7 +139,7 @@ export function TopNavbar() {
                             className={cn(
                                 "text-2xl sm:text-4xl font-bold tracking-widest transition-all duration-300 hover:scale-110",
                                 currentPath === v.path && (v.id !== 'fifa' || fantasySection === 'fifa') ? "text-white" : "text-zinc-600 hover:text-white",
-                                v.id === 'fifa' && "fifa-nav-item" 
+                                ""
                             )}
                         >
                             {v.label.toUpperCase()}

@@ -193,10 +193,10 @@ export function LeagueLanding() {
                         <span className="landing-card-mark">SL / 26</span>
                         <span className="landing-card-action"><MoveUpRight size={18} /></span>
                     </button>
-                    <button className="landing-arrow landing-arrow-left" onClick={() => goTo(carouselIndex - 1)} aria-label="Previous carousel image">
+                    <button type="button" className="landing-arrow landing-arrow-left" onClick={(event) => { event.stopPropagation(); goTo(carouselIndex - 1); }} aria-label="Previous carousel video">
                         <ArrowLeft size={20} strokeWidth={1.5} />
                     </button>
-                    <button className="landing-arrow landing-arrow-right" onClick={() => goTo(carouselIndex + 1)} aria-label="Next carousel image">
+                    <button type="button" className="landing-arrow landing-arrow-right" onClick={(event) => { event.stopPropagation(); goTo(carouselIndex + 1); }} aria-label="Next carousel video">
                         <ArrowRight size={20} strokeWidth={1.5} />
                     </button>
                 </div>

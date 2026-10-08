@@ -289,7 +289,7 @@ export function Home() {
                     </div>
                 </div>
 
-                <div className="bento-fantasy animate-fade-up opacity-0 stagger-5">
+                {division !== 'freshers' && <div className="bento-fantasy animate-fade-up opacity-0 stagger-5">
                     <SectionHeader
                         title="Fantasy Snapshot"
                         action="Play Predictor"
@@ -327,7 +327,7 @@ export function Home() {
                             View Global Leaderboard
                         </div>
                     </GlassPanel>
-                </div>
+                </div>}
 
             </div>
         </div>
