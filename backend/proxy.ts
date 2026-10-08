@@ -6,7 +6,8 @@ import { checkRateLimit } from './lib/rate-limit';
 export async function proxy(request: NextRequest) {
   const origin = request.headers.get('origin') || '';
   const allowedOrigin = /^https:\/\/([a-z0-9-]+\.)?super-league\.pages\.dev$/i.test(origin)
-    || origin === 'http://localhost:5173';
+    || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)
+    || /^http:\/\/(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):\d+$/.test(origin);
   const withCors = (response: NextResponse) => {
     if (allowedOrigin) {
       response.headers.set('Access-Control-Allow-Origin', origin);

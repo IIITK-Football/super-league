@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { ArrowLeft, ArrowRight, Menu, Pause, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../lib/api';
 import './LeagueLanding.css';
 
 const STREAM_BASE_URL = 'https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev';
@@ -61,7 +60,10 @@ export function LeagueLanding() {
     const mediaIndex = Math.floor(carouselIndex / tournaments.length);
     const activeTournament = tournaments[activeTournamentIndex];
     const streamName = STREAMS[activeTournament.id][mediaIndex];
-    const videoSrc = `${API_BASE_URL}/media/${streamName}/master.m3u8`;
+    // The public R2 bucket serves the HLS playlists and segments with CORS.
+    // Fetching the playlist directly avoids relying on an API route that Pages
+    // does not host alongside the static Vite app.
+    const videoSrc = `${STREAM_BASE_URL}/${streamName}/master.m3u8`;
     const posterSrc = STREAM_POSTERS[streamName];
     const videoFailed = failedVideoSrc === videoSrc;
     const totalSlides = tournaments.length * 3;
