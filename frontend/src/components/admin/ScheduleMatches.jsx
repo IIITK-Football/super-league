@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useApi } from '../../hooks/useApi';
+import { API_BASE_URL } from '../../lib/api';
 import { Calendar, Swords } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = API_BASE_URL;
 
 export default function ScheduleMatches() {
   const [division, setDivision] = useState('mens');

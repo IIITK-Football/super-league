@@ -8,6 +8,7 @@ import './FifaPrediction.css';
 import { supabase } from '../lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import officialStandings from '../data/officialStandings.json';
+import { API_BASE_URL } from '../lib/api';
 
 export function FifaPrediction() {
   const { user, profile } = useAuth();
@@ -48,7 +49,7 @@ export function FifaPrediction() {
 
   const handleViewOtherUserPredictions = async (userId, nickname) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/groups?user_id=${userId}`);
+      const res = await fetch(`${API_BASE_URL}/wc/predictions/groups?user_id=${userId}`);
       const json = await res.json();
       
       if (json.success && json.data && json.data.length > 0) {
@@ -166,7 +167,7 @@ export function FifaPrediction() {
   useEffect(() => {
     async function loadGroups() {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/wc/teams`);
+        const res = await fetch(`${API_BASE_URL}/wc/teams`);
         const json = await res.json();
         if (json.success && json.data) {
           const fetchedGroups = {};
@@ -231,7 +232,7 @@ export function FifaPrediction() {
     async function loadUserPredictions() {
       try {
         // 1. Fetch Group Stage Predictions
-        const groupRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/groups?user_id=${user.id}`);
+        const groupRes = await fetch(`${API_BASE_URL}/wc/predictions/groups?user_id=${user.id}`);
         const groupJson = await groupRes.json();
         
         if (groupJson.success && groupJson.data && groupJson.data.length > 0) {
@@ -257,7 +258,7 @@ export function FifaPrediction() {
         }
 
         // 2. Fetch Knockout Predictions
-        const koRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/knockouts?user_id=${user.id}`);
+        const koRes = await fetch(`${API_BASE_URL}/wc/predictions/knockouts?user_id=${user.id}`);
         const koJson = await koRes.json();
         
         if (koJson.success && koJson.data) {
@@ -284,7 +285,7 @@ export function FifaPrediction() {
     
     async function loadAwardPredictions() {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/awards?user_id=${user.id}`);
+        const res = await fetch(`${API_BASE_URL}/wc/predictions/awards?user_id=${user.id}`);
         const json = await res.json();
         
         if (json.success && json.data) {
@@ -485,7 +486,7 @@ export function FifaPrediction() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       
-      const awardsRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/awards`, {
+      const awardsRes = await fetch(`${API_BASE_URL}/wc/predictions/awards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -545,7 +546,7 @@ export function FifaPrediction() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const groupRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/groups`, {
+      const groupRes = await fetch(`${API_BASE_URL}/wc/predictions/groups`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ user_id: user.id, predictions: groupPredictions })
@@ -567,7 +568,7 @@ export function FifaPrediction() {
   useEffect(() => {
     async function fetchLeaderboard() {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/wc/leaderboard`);
+        const res = await fetch(`${API_BASE_URL}/wc/leaderboard`);
         const json = await res.json();
         
         if (json.success) {

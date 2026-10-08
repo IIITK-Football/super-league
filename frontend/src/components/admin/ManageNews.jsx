@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { Newspaper, Trash2, Plus, Image as ImageIcon, Type, Quote, UploadCloud } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { API_BASE_URL } from '../../lib/api';
+const API_URL = API_BASE_URL;
 
 
 export default function ManageNews() {

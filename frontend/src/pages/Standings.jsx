@@ -35,7 +35,7 @@ function WomensBracket({ matches = [], title, buttonText }) {
         if (!match?.id) return;
         sessionStorage.setItem('selectedMatch', JSON.stringify(match));
         sessionStorage.setItem('matchSource', 'standings');
-        navigate('/matches');
+        navigate(`/matches/${match.id}`);
     };
 
     // Helper function to safely map chronologically scheduled games to the bracket slots

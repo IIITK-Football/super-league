@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { ArrowLeft, Shield, Loader2, Users, Calendar } from 'lucide-react';
@@ -219,6 +220,7 @@ function TeamOverview({ team, allPlayers, onBack, onSelectPlayer, onSelectMatch 
 
 export function Teams() {
     const { setView: setLeagueView } = useLeague();
+    const navigate = useNavigate();
     const [selectedTeam, setSelectedTeam] = useState(() => {
         const saved = sessionStorage.getItem('selectedTeam');
         return saved ? JSON.parse(saved) : null;
@@ -244,7 +246,7 @@ export function Teams() {
     const handleSelectMatch = (match) => {
         sessionStorage.setItem('selectedMatch', JSON.stringify(match));
         sessionStorage.setItem('matchSource', 'teams');
-        setLeagueView('matchTimeline');
+        navigate(`/matches/${match.id}`);
     };
 
     if (teamsLoading) {

@@ -7,6 +7,7 @@ import { GlassPanel } from '../components/GlassPanel';
 import { Send, User, LogOut, Trophy, Medal } from 'lucide-react';
 import teamStyles from './Teams.module.css';
 import { cn } from '../utils/cn';
+import { API_BASE_URL } from '../lib/api';
 
 const getTeamColorClass = (teamName) => {
     if (!teamName) return teamStyles.defaultTeam;
@@ -61,7 +62,7 @@ export function UserProfile() {
 
             // Fetch World Cup Teams (Assuming they are in 'wc_teams' table or similar from your API)
             try {
-               const res = await fetch(`${import.meta.env.VITE_API_URL}/wc/teams`);
+               const res = await fetch(`${API_BASE_URL}/wc/teams`);
                const json = await res.json();
                if (json.success && json.data) {
                  // Sort them alphabetically for the dropdown

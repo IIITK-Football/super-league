@@ -7,6 +7,7 @@ import { fetchApi } from '../hooks/useApi';
 import { Send, CheckCircle2, RefreshCw, Loader2, Crown, Lock, Target, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { Onboarding } from './Onboarding';
 import { cn } from '../utils/cn';
+import { API_BASE_URL } from '../lib/api';
 import { Login } from './Login';
 import { supabase } from '../lib/supabase';
 import { Loader } from '../components/Loader';
@@ -71,7 +72,7 @@ export function Fantasy() {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) return;
-                const API_URL = import.meta.env.VITE_API_URL || '/api';
+                const API_URL = API_BASE_URL;
                 const res = await fetch(`${API_URL}/predictions/history`, {
                     headers: { 'Authorization': `Bearer ${session.access_token}` }
                 });
@@ -162,7 +163,7 @@ export function Fantasy() {
             setCheckingStatus(true);
             try {
                 const { data: { session } } = await supabase.auth.getSession();
-                const API_URL = import.meta.env.VITE_API_URL || '/api';
+                const API_URL = API_BASE_URL;
 
                 const res = await fetch(`${API_URL}/predictions/${selectedMatchId}`, {
                     headers: { 'Authorization': `Bearer ${session?.access_token}` }
@@ -238,7 +239,7 @@ export function Fantasy() {
 
         try {
             const { data: { session } } = await supabase.auth.getSession();
-            const API_URL = import.meta.env.VITE_API_URL || '/api';
+            const API_URL = API_BASE_URL;
 
             const res = await fetch(`${API_URL}/predictions/${selectedMatchId}`, {
                 method: 'POST',

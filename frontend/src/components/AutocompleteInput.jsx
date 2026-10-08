@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import './AutocompleteInput.css';
+import { API_BASE_URL } from '../lib/api';
 
 export function AutocompleteInput({ value, onChange, onSelect, placeholder, positionFilter = '' }) {
   const [inputValue, setInputValue] = useState(value || '');
@@ -78,7 +79,7 @@ export function AutocompleteInput({ value, onChange, onSelect, placeholder, posi
 
       setIsSearching(true);
       try {
-        let url = `${import.meta.env.VITE_API_URL}/wc/players?q=${encodeURIComponent(inputValue)}`;
+        let url = `${API_BASE_URL}/wc/players?q=${encodeURIComponent(inputValue)}`;
         if (positionFilter) {
           url += `&position=${encodeURIComponent(positionFilter)}`;
         }

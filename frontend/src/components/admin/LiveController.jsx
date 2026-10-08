@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApi } from '../../hooks/useApi';
+import { API_BASE_URL } from '../../lib/api';
 import { Activity, Trophy, CheckCircle, CheckCircle2, X, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -79,7 +80,7 @@ export default function LiveController() {
     setDisplayTime(timeStr);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      const API_URL = API_BASE_URL;
       await fetch(`${API_URL}/admin/matches/live`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
@@ -92,7 +93,7 @@ export default function LiveController() {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      const API_URL = API_BASE_URL;
       const res = await fetch(`${API_URL}/admin/matches/live`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Newspaper, Share2, Check } from 'lucide-react';
 import { Loader } from '../components/Loader';
+import { API_BASE_URL } from '../lib/api';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = API_BASE_URL;
 
 export function ArticleView() {
   const { id } = useParams(); // Grab the ID directly from the URL

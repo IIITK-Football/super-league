@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useLeague } from '../context/LeagueContext';
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+import { API_BASE_URL } from '../lib/api';
 /**
  * A React Hook for standard GET requests to the backend API.
  * Automatically injects the Supabase JWT Authorization header.

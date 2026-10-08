@@ -25,6 +25,7 @@ import { Rules } from './pages/Rules';
 import { LeagueLanding } from './pages/LeagueLanding';
 import { TeamBuilder } from './pages/TeamBuilder';
 import { RoleWorkspace } from './pages/RoleWorkspace';
+import MatchTimeline from './components/MatchTimeline';
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -132,6 +133,7 @@ function App() {
             
             {/* Navigation Sections */}
             <Route path="/matches" element={<PublicRoute><Matches /></PublicRoute>} />
+            <Route path="/matches/:id" element={<PublicRoute><MatchTimeline /></PublicRoute>} />
             <Route path="/vault" element={<PublicRoute><Vault /></PublicRoute>} />
             <Route path="/rules" element={<PublicRoute><Rules /></PublicRoute>} />
             

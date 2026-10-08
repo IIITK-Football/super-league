@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { GlassPanel } from '../components/GlassPanel';
 import { Send, User } from 'lucide-react';
+import { API_BASE_URL } from '../lib/api';
 
 export function Onboarding() {
   const { user, profile, setProfile, signOut } = useAuth();
@@ -47,7 +48,7 @@ export function Onboarding() {
     setError(null);
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      const API_URL = API_BASE_URL;
       const res = await fetch(`${API_URL}/wc/flair`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

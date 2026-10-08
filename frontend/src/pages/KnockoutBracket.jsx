@@ -4,6 +4,7 @@ import { generateRoundOf32, generateEmptyKnockouts } from '../utils/fifaBracketL
 import './KnockoutBracket.css';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { API_BASE_URL } from '../lib/api';
 
 //OFFICIAL TOURNAMENT RESULTS
 const OFFICIAL_R16 = ["Canada", "Morocco", "Paraguay", "France", "Brazil", "Norway", "Mexico", "England", "Portugal", "Spain", "United States", "Belgium", "Argentina", "Egypt", "Switzerland", "Colombia"];
@@ -247,7 +248,7 @@ export function KnockoutBracket({ onBack }) {
                 // 1. Check DB as the ONLY source of truth for saved knockouts
                 if (user) {
                     try {
-                        const koRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/knockouts?user_id=${user.id}`);
+                        const koRes = await fetch(`${API_BASE_URL}/wc/predictions/knockouts?user_id=${user.id}`);
                         const koJson = await koRes.json();
                         if (koJson.success && koJson.data) {
                             setIsLocked(true);
@@ -271,7 +272,7 @@ export function KnockoutBracket({ onBack }) {
 
                 let masterTeams = [];
                 try {
-                    const teamsRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/teams`);
+                        const teamsRes = await fetch(`${API_BASE_URL}/wc/teams`);
                     const teamsJson = await teamsRes.json();
                     if (teamsJson.success) masterTeams = teamsJson.data;
                 } catch (err) { console.error("Failed to fetch teams"); }
@@ -294,7 +295,7 @@ export function KnockoutBracket({ onBack }) {
                     return { id: `placeholder-${code}`, name: code, logo_url: '' };
                 };
 
-                const genRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/knockouts/generate`, {
+                        const genRes = await fetch(`${API_BASE_URL}/wc/predictions/knockouts/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
                     body: JSON.stringify({ user_id: user?.id, advancing_third_place_groups: JSON.parse(savedThirds) })
@@ -466,7 +467,7 @@ export function KnockoutBracket({ onBack }) {
                 }
             };
 
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/knockouts/submit`, {
+            const res = await fetch(`${API_BASE_URL}/wc/predictions/knockouts/submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
                 body: JSON.stringify(payload)

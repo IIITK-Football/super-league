@@ -4,6 +4,24 @@ import { createServerClient } from '@supabase/ssr';
 import { checkRateLimit } from './lib/rate-limit'; 
 
 export async function proxy(request: NextRequest) {
+  const origin = request.headers.get('origin') || '';
+  const allowedOrigin = /^https:\/\/([a-z0-9-]+\.)?super-league\.pages\.dev$/i.test(origin)
+    || origin === 'http://localhost:5173';
+  const withCors = (response: NextResponse) => {
+    if (allowedOrigin) {
+      response.headers.set('Access-Control-Allow-Origin', origin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
+      response.headers.set('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+      response.headers.set('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+      response.headers.append('Vary', 'Origin');
+    }
+    return response;
+  };
+
+  if (request.method === 'OPTIONS') {
+    return withCors(new NextResponse(null, { status: 204 }));
+  }
+
   const isMutation = ['POST', 'PUT', 'DELETE'].includes(request.method);
   
   // 1. PUBLIC READ RATE LIMIT 
@@ -15,14 +33,14 @@ export async function proxy(request: NextRequest) {
     const limitCheck = checkRateLimit(deviceFingerprint, 60, 60 * 1000);
     
     if (!limitCheck.success) {
-      return NextResponse.json({ success: false, message: 'Too Many Requests' }, { status: 429 });
+      return withCors(NextResponse.json({ success: false, message: 'Too Many Requests' }, { status: 429 }));
     }
-    return NextResponse.next();
+    return withCors(NextResponse.next());
   }
 
   // 2. EXCEPTIONS
   if (request.nextUrl.pathname === '/api/auth/login') {
-    return NextResponse.next();
+    return withCors(NextResponse.next());
   }
 
   if (request.nextUrl.pathname === '/api/polls/vote') {
@@ -30,9 +48,9 @@ export async function proxy(request: NextRequest) {
     const voteLimitCheck = checkRateLimit(`vote_${ip}`, 5, 60 * 1000);
     
     if (!voteLimitCheck.success) {
-      return NextResponse.json({ success: false, message: 'Too Many Votes' }, { status: 429 });
+      return withCors(NextResponse.json({ success: false, message: 'Too Many Votes' }, { status: 429 }));
     }
-    return NextResponse.next();
+    return withCors(NextResponse.next());
   }
 
   // 3. MUTATION SECURITY 
@@ -72,20 +90,20 @@ export async function proxy(request: NextRequest) {
 
   // Block unauthorized users immediately
   if (!user) {
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       { success: false, message: 'Unauthorized: Middleware blocked request. Token missing or invalid.' },
       { status: 401 }
-    );
+    ));
   }
 
   // BUMPED TO 100: So you can actually build your roster without getting rate-limited!
   const adminLimitCheck = checkRateLimit(`admin_${user.id}`, 100, 60 * 1000);
   
   if (!adminLimitCheck.success) {
-    return NextResponse.json({ success: false, message: 'Too Many Requests (Admin Limit Reached)' }, { status: 429 });
+    return withCors(NextResponse.json({ success: false, message: 'Too Many Requests (Admin Limit Reached)' }, { status: 429 }));
   }
 
-  return supabaseResponse;
+  return withCors(supabaseResponse);
 }
 
 export const config = {

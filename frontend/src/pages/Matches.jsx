@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { Calendar, Loader2, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -49,7 +50,8 @@ function MatchCard({ match, onClick }) {
 }
 
 export function Matches() {
-  const { division, setView } = useLeague();
+  const { division } = useLeague();
+  const navigate = useNavigate();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -78,7 +80,7 @@ export function Matches() {
   const handleSelectMatch = (match) => {
     sessionStorage.setItem('selectedMatch', JSON.stringify(match));
     sessionStorage.setItem('matchSource', 'matches'); // <-- ADD THIS
-    setView('matchTimeline'); 
+    navigate(`/matches/${match.id}`);
   };
   if (loading) {
     return <Loader text="Loading Matches..." />;

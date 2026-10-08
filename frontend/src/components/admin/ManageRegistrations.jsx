@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { ImagePlus, Loader2, Plus, Save, Shield, Trash2, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { API_BASE_URL } from '../../lib/api';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = API_BASE_URL;
 
 const divisions = [
   { value: 'mens', label: "Men's Division" },

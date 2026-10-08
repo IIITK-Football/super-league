@@ -3,8 +3,8 @@ import { useLeague } from '../context/LeagueContext';
 import { ArrowLeft, Loader2, Shield, Hexagon } from 'lucide-react';
 import { Loader } from './Loader';
 import styles from './PlayerProfile.module.css';
+import { API_BASE_URL } from '../lib/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const getStatColor = (val) => {
     if (val >= 80) return 'bg-[#00e676]';

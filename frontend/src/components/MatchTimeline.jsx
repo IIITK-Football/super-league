@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { ArrowLeft, Loader2, Clock, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Loader } from './Loader';
 
 export default function MatchTimeline() {
-  const { setView } = useLeague();
+  const navigate = useNavigate();
+  const { id } = useParams();
   const [matchData, setMatchData] = useState(null);
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,8 +16,8 @@ export default function MatchTimeline() {
     const fetchTimeline = async () => {
       const raw = sessionStorage.getItem('selectedMatch');
       // Default to returning to teams if something goes wrong
-      if (!raw) { setView('teams'); return; }
-      const baseMatch = JSON.parse(raw);
+      if (!raw && !id) { navigate('/matches', { replace: true }); return; }
+      const baseMatch = raw ? JSON.parse(raw) : { id };
 
       try {
         const { data: match } = await supabase
@@ -75,12 +77,12 @@ export default function MatchTimeline() {
     };
 
     fetchTimeline();
-  }, []);
+  }, [id, navigate]);
 
   // SMART BACK BUTTON: Reads where the user came from, defaults to 'matches'
   const handleBack = () => {
     const source = sessionStorage.getItem('matchSource') || 'matches';
-    setView(source);
+    navigate(source === 'teams' ? '/teams' : '/matches');
   };
 
   if (loading) {

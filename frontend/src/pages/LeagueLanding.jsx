@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { ArrowLeft, ArrowRight, Menu, Pause, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../lib/api';
 import './LeagueLanding.css';
 
 const STREAM_BASE_URL = 'https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev';
@@ -16,7 +17,6 @@ const STREAM_POSTERS = {
     freshers2: `${STREAM_BASE_URL}/loading-freshers2.avif`,
     freshers3: `${STREAM_BASE_URL}/loading-freshers3.avif`,
 };
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const STREAMS = {
     'super-league': ['superLeague1', 'superLeague2', 'superLeague3'],
     wsl: ['wsl1', 'wsl2', 'wsl3'],
