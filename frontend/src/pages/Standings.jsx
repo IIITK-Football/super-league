@@ -8,9 +8,9 @@ import { Loader } from '../components/Loader';
 import { STANDINGS_CONFIG } from '../data/standingsConfig';
 import { FreshersRoadToFinal } from './RoadToFinal';
 
-function MatchCard({ title, team1, team2, note1, note2 }) {
+function MatchCard({ title, team1, team2, note1, note2, onClick }) {
     return (
-        <div className="bg-white/[0.03] border border-white/10 p-4 rounded-2xl relative overflow-hidden group hover:bg-white/10 transition-all backdrop-blur-md">
+        <button type="button" onClick={onClick} className="w-full text-left bg-white/[0.03] border border-white/10 p-4 rounded-2xl relative overflow-hidden group hover:bg-white/10 transition-all backdrop-blur-md">
             <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-white/40 to-transparent"></div>
             <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">{title}</h3>
             <div className="space-y-2">
@@ -23,12 +23,20 @@ function MatchCard({ title, team1, team2, note1, note2 }) {
                     <span className="text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">{note2}</span>
                 </div>
             </div>
-        </div>
+        </button>
     );
 }
 
 // 1. UPDATED BRACKET: Now it reads real data from the database!
 function WomensBracket({ matches = [], title, buttonText }) {
+    const navigate = useNavigate();
+    const openMatch = (matchIndex) => {
+        const match = matches[matchIndex];
+        if (!match?.id) return;
+        sessionStorage.setItem('selectedMatch', JSON.stringify(match));
+        sessionStorage.setItem('matchSource', 'standings');
+        navigate('/matches');
+    };
 
     // Helper function to safely map chronologically scheduled games to the bracket slots
     const getMatchData = (index, fallbackHome, fallbackAway, fallbackNote1, fallbackNote2) => {
@@ -72,23 +80,23 @@ function WomensBracket({ matches = [], title, buttonText }) {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative">
                 <div className="space-y-6">
                     <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">1. Qualifiers</h3>
-                    <MatchCard title="Qualifier 1" {...q1} />
-                    <MatchCard title="Qualifier 2" {...q2} />
+                    <MatchCard title="Qualifier 1" {...q1} onClick={() => openMatch(0)} />
+                    <MatchCard title="Qualifier 2" {...q2} onClick={() => openMatch(1)} />
                 </div>
                 <div className="space-y-6">
                     <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">2. Eliminator</h3>
                     <div className="hidden lg:block h-[112px]"></div>
-                    <MatchCard title="Eliminator 1" {...e1} />
+                    <MatchCard title="Eliminator 1" {...e1} onClick={() => openMatch(2)} />
                 </div>
                 <div className="space-y-6">
                     <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">3. Semifinals</h3>
-                    <MatchCard title="Semifinal 1" {...s1} />
-                    <MatchCard title="Semifinal 2" {...s2} />
+                    <MatchCard title="Semifinal 1" {...s1} onClick={() => openMatch(3)} />
+                    <MatchCard title="Semifinal 2" {...s2} onClick={() => openMatch(4)} />
                 </div>
                 <div className="space-y-6">
                     <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">4. Finals</h3>
-                    <MatchCard title="Loser's Final" {...final} />
-                    <MatchCard title="Final" {...losers} />
+                    <MatchCard title="Loser's Final" {...final} onClick={() => openMatch(5)} />
+                    <MatchCard title="Final" {...losers} onClick={() => openMatch(6)} />
                 </div>
             </div>
         </div>

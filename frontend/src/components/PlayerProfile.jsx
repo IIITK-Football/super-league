@@ -45,7 +45,7 @@ const defaultAttributes = {
     playStyles: []
 };
 
-export default function PlayerProfile() {
+export default function PlayerProfile({ onBack }) {
     // 1. PULL DIVISION FROM CONTEXT
     const { setView, division } = useLeague();
     const [player, setPlayer] = useState(null);
@@ -88,7 +88,8 @@ useEffect(() => {
 
     const handleBack = () => {
       sessionStorage.removeItem('selectedPlayer');
-      setView('teams'); 
+      if (onBack) onBack();
+      else setView('teams');
   };
 
     if (loading) {

@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi';
 import { ArrowLeft, Shield, Loader2, Users, Calendar } from 'lucide-react';
 import { Loader } from '../components/Loader';
 import styles from './Teams.module.css';
+import PlayerProfile from '../components/PlayerProfile';
 
 const POSITION_ORDER = ['GK', 'DEF', 'MID', 'FWD'];
 const POSITION_LABELS = { GK: 'Goalkeepers', DEF: 'Defenders', MID: 'Midfielders', FWD: 'Forwards' };
@@ -248,6 +249,10 @@ export function Teams() {
 
     if (teamsLoading) {
         return <Loader text="Loading Clubs..." />;
+    }
+
+    if (selectedPlayer) {
+        return <PlayerProfile onBack={() => setSelectedPlayer(null)} />;
     }
 
     if (teamsError || teams.length === 0) {

@@ -30,6 +30,7 @@ export function FreshersRoadToFinal() {
 
   const days = [...new Set(fixtures.map((fixture) => fixture.date))];
 
+  const rounds = [...new Set(fixtures.map((fixture) => fixture.round))];
   return <section className="space-y-8 animate-in fade-in duration-500 pb-12">
     <header className="text-center space-y-3">
       <p className="text-xs font-black tracking-[.3em] uppercase text-zinc-500">Freshers Tournament · Knockout</p>
@@ -37,7 +38,19 @@ export function FreshersRoadToFinal() {
       <p className="mx-auto max-w-2xl text-sm text-zinc-400">Follow every knockout fixture from the quarter-finals to the final.</p>
     </header>
 
-    {days.map((date) => <section key={date} className="mx-auto w-full max-w-5xl space-y-3">
+    <div className="mx-auto grid w-full max-w-7xl gap-4 lg:grid-cols-4">
+      {rounds.map((round) => <section key={round} className="space-y-3">
+        <h2 className="text-center text-sm font-black uppercase tracking-[.18em] text-sky-200">{round}</h2>
+        <div className="space-y-3">
+          {fixtures.filter((fixture) => fixture.round === round).map((fixture) => <div key={fixture.key} className="rounded-2xl border border-white/10 bg-white/[.04] p-4 shadow-xl">
+            <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-zinc-400"><span>{formatDate(fixture.date)}</span><span className="flex items-center gap-1"><Clock3 size={12} />{formatTime(fixture.time)}</span></div>
+            <p className="mt-4 text-sm font-black leading-relaxed text-white">{fixture.fixture}</p>
+          </div>)}
+        </div>
+      </section>)}
+    </div>
+
+    {days.map((date) => <section key={date} className="mx-auto hidden w-full max-w-5xl space-y-3">
       <h2 className="text-center text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">{formatDate(date)}</h2>
       <div className="overflow-hidden rounded-xl border border-white/10 bg-black/40">
         <div className="grid grid-cols-[105px_92px_minmax(0,1fr)] gap-3 border-b border-white/10 bg-[#111827] px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white sm:grid-cols-[160px_120px_minmax(0,1fr)] sm:px-6">
