@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     if (roleError) throw roleError;
 
     const members = (body.members || []).map((member: any) => ({
-      ...(member.id ? { id: member.id } : {}),
+      id: member.id || crypto.randomUUID(),
       registration_id: registration.id,
       name: member.name.trim(),
       first_name: member.name.trim().split(/\s+/)[0],

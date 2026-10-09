@@ -56,8 +56,8 @@ export default function ManageRegistrations() {
       setError('Enter the player’s college email before uploading their image.');
       return;
     }
-    if (!file?.type.startsWith('image/')) {
-      setError('Choose an image file.');
+    if (!file?.type.includes('png') && !file?.name?.toLowerCase().endsWith('.png')) {
+      setError('Player image must be in PNG format (.png). Please convert and upload a PNG file.');
       return;
     }
     const uploadKey = `${teamKey(team)}-${index}`;
@@ -71,22 +71,17 @@ export default function ManageRegistrations() {
         image.onload = resolve;
         image.onerror = () => reject(new Error('Could not open that image.'));
       });
-      const canvas = document.createElement('canvas');
-      canvas.width = 512;
-      canvas.height = 512;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('Image formatting is not available in this browser.');
-      const scale = Math.min(512 / image.width, 512 / image.height);
-      const width = image.width * scale;
-      const height = image.height * scale;
-      context.drawImage(image, (512 - width) / 2, (512 - height) / 2, width, height);
+      const width = image.width;
+      const height = image.height;
       URL.revokeObjectURL(sourceUrl);
-      const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-      if (!png) throw new Error('Could not format the image as PNG.');
+
+      if (width !== 512 || height !== 512) {
+        throw new Error(`Player image must be exactly 512 × 512 pixels (selected image is ${width} × ${height}). Please resize and upload again.`);
+      }
 
       const formData = new FormData();
       formData.append('email', player.email.trim());
-      formData.append('image', png, 'player.png');
+      formData.append('image', file, `${player.email.trim()}.png`);
       const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(`${API_URL}/admin/freshers/player-image`, {
         method: 'POST',
@@ -168,15 +163,15 @@ export default function ManageRegistrations() {
           <select value={member.position || ''} onChange={(event) => changePlayer(teamKey(team), index, 'position', event.target.value)} className={inputClass}><option value="">Position (captain sets)</option>{positions.map((position) => <option key={position}>{position}</option>)}</select>
           <input type="number" min="1" max="99" value={member.jersey_number || ''} onChange={(event) => changePlayer(teamKey(team), index, 'jersey_number', event.target.value)} placeholder="#" className={inputClass} />
           <button type="button" onClick={() => removePlayer(team, index)} className="grid place-items-center rounded-lg border border-red-500/20 px-3 text-red-400" aria-label="Remove player"><Trash2 size={15} /></button>
-          {team.division === 'freshers' && <div className="flex items-center gap-3 md:col-span-5">
+          <div className="flex items-center gap-3 md:col-span-5">
             {member.image_url ? <img src={member.image_url} alt={`${member.name || 'Player'} portrait preview`} className="h-12 w-12 rounded-lg border border-white/10 bg-white/5 object-contain" /> : <div className="grid h-12 w-12 place-items-center rounded-lg border border-white/10 bg-white/5 text-zinc-600"><Users size={18} /></div>}
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/5">
               {uploadingPlayer === `${teamKey(team)}-${index}` ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
               {member.image_url ? 'Replace player image' : 'Upload player image'}
-              <input type="file" accept="image/*" className="sr-only" disabled={uploadingPlayer === `${teamKey(team)}-${index}`} onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadPlayerImage(team, index, file); event.target.value = ''; }} />
+              <input type="file" accept="image/png" className="sr-only" disabled={uploadingPlayer === `${teamKey(team)}-${index}`} onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadPlayerImage(team, index, file); event.target.value = ''; }} />
             </label>
-            <span className="text-[10px] text-zinc-600">Auto-fits to 512 × 512 PNG · saved as email ID.png</span>
-          </div>}
+            <span className="text-[10px] text-zinc-600">Must be a PNG format file with exact 512 × 512 resolution</span>
+          </div>
         </div>)}
         {!team.team_members.length && <p className="text-xs text-zinc-600">Add players to this roster. The captain can then assign positions and playstyles.</p>}
       </section>;
