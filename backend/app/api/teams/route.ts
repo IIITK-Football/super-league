@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('teams')
-      .select('id, name, logo_url')
+      .select('id, name, logo_url, team_color')
       .order('name', { ascending: true });
 
     if (!all) {

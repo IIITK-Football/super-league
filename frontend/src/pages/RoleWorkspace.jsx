@@ -11,7 +11,7 @@ export function RoleWorkspace({ requiredRole }) {
     if (!user) return <Navigate to="/login" replace />;
     if (!role) return <div className="min-h-screen bg-black" />;
     if (requiredRole === 'dictator' && (role !== 'dictator' && role !== 'admin')) return <Navigate to="/" replace />;
-    if (requiredRole !== 'dictator' && role !== requiredRole) return <Navigate to="/" replace />;
+    if (requiredRole !== 'dictator' && role !== requiredRole && !(requiredRole === 'captain' && ['dictator', 'admin'].includes(role))) return <Navigate to="/" replace />;
 
     if (requiredRole === 'dictator') return <AdminDashboard />;
     if (requiredRole === 'editor') return <div className="min-h-screen bg-black pt-20 text-white"><ManageNews /></div>;

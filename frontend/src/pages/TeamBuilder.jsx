@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { getPlayStyle, PLAY_STYLES } from '../data/playStyles';
 import { API_BASE_URL } from '../lib/api';
 import './TeamBuilder.css';
+import './TeamBranding.css';
 
 const API_URL = API_BASE_URL;
 const statKeys = ['pace', 'shooting', 'passing', 'dribbling', 'defending', 'physicality'];
@@ -50,14 +51,20 @@ function PlayStylePicker({ value, onChange }) {
 }
 
 export function TeamBuilder() {
-    const { user } = useAuth();
+    const { user, role } = useAuth();
+    const isDictatorPreview = role === 'dictator' || role === 'admin';
     const [registration, setRegistration] = useState(null);
+    const [registrations, setRegistrations] = useState([]);
     const [players, setPlayers] = useState([]);
     const [activePlayer, setActivePlayer] = useState(0);
     const [activeTab, setActiveTab] = useState('basic');
     const [loading, setLoading] = useState(true);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [teamLogoFile, setTeamLogoFile] = useState(null);
+    const [teamColor, setTeamColor] = useState('#ffffff');
+    const [teamColorSelected, setTeamColorSelected] = useState(false);
+    const [savingBranding, setSavingBranding] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
@@ -65,28 +72,105 @@ export function TeamBuilder() {
         let cancelled = false;
         const loadTeam = async () => {
             if (!user?.id) return;
-            const { data, error: loadError } = await supabase
+            let query = supabase
                 .from('team_registrations')
-                .select('id, team_name, division, team_members(*)')
-                .eq('captain_id', user.id)
-                .maybeSingle();
+                .select('id, team_id, team_name, division, team_members(*)')
+                .order('team_name', { ascending: true });
+            if (!isDictatorPreview) query = query.eq('captain_id', user.id);
+            const { data, error: loadError } = isDictatorPreview
+                ? await query
+                : await query.maybeSingle();
             if (cancelled) return;
             if (loadError) setError(loadError.message);
-            if (data) {
-                setRegistration(data);
-                setPlayers((data.team_members || []).map(fromMember));
+            const teamRegistrations = (isDictatorPreview ? data || [] : data ? [data] : []);
+            const teamIds = teamRegistrations.map((item) => item.team_id).filter(Boolean);
+            let teamsById = {};
+            if (teamIds.length) {
+                const { data: teams, error: teamsError } = await supabase
+                    .from('teams')
+                    .select('id, logo_url, team_color')
+                    .in('id', teamIds);
+                if (teamsError) setError(teamsError.message);
+                teamsById = Object.fromEntries((teams || []).map((team) => [team.id, team]));
             }
+            if (cancelled) return;
+            const choices = teamRegistrations.map((item) => ({ ...item, team: teamsById[item.team_id] || null }));
+            setRegistrations(choices);
+            const selected = isDictatorPreview
+                ? choices[0] || null
+                : choices[0] || null;
+            setRegistration(selected);
+            setPlayers((selected?.team_members || []).map(fromMember));
+            setTeamColor(selected?.team?.team_color || '#ffffff');
+            setTeamColorSelected(Boolean(selected?.team?.team_color));
             setLoading(false);
         };
         loadTeam();
         return () => { cancelled = true; };
-    }, [user?.id]);
+    }, [user?.id, isDictatorPreview]);
 
     const currentPlayer = players[activePlayer];
+    const selectRegistration = (registrationId) => {
+        const selected = registrations.find((item) => item.id === registrationId) || null;
+        setRegistration(selected);
+        setPlayers((selected?.team_members || []).map(fromMember));
+        setActivePlayer(0);
+        setActiveTab('basic');
+        setTeamLogoFile(null);
+        setTeamColor(selected?.team?.team_color || '#ffffff');
+        setTeamColorSelected(Boolean(selected?.team?.team_color));
+        setError('');
+        setSuccess('');
+    };
     const updatePlayer = (field, value) => setPlayers((current) => current.map((player, index) => index === activePlayer ? { ...player, [field]: value } : player));
     const updateStat = (stat, value) => updatePlayer('stats', { ...currentPlayer.stats, [stat]: Number(value) || 0 });
 
+    const handleBrandingSubmit = async (event) => {
+        event.preventDefault();
+        if (isDictatorPreview) return;
+        setError('');
+        setSuccess('');
+        if (!teamLogoFile && !registration?.team?.logo_url) {
+            setError('Upload your team logo before continuing.');
+            return;
+        }
+        if (!registration?.team?.team_color && !teamColorSelected) {
+            setError('Choose your team color before continuing.');
+            return;
+        }
+
+        setSavingBranding(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const formData = new FormData();
+            formData.append('team_color', teamColor);
+            if (teamLogoFile) formData.append('logo', teamLogoFile);
+
+            const response = await fetch(`${API_URL}/captain/team-branding`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+                body: formData,
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Could not save team branding.');
+
+            setRegistration((current) => ({
+                ...current,
+                team: { ...current.team, ...result.data },
+            }));
+            setTeamLogoFile(null);
+            setTeamColorSelected(true);
+            setSuccess('Team logo and color saved.');
+        } catch (saveError) {
+            setError(saveError.message || 'Could not save team branding.');
+        } finally {
+            setSavingBranding(false);
+        }
+    };
+
     const handleImageUpload = async (event) => {
+        if (isDictatorPreview) return;
         const file = event.target.files?.[0];
         if (!file) return;
         
@@ -145,6 +229,7 @@ export function TeamBuilder() {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
+        if (isDictatorPreview) return;
         setError('');
         setSuccess('');
 
@@ -205,20 +290,69 @@ export function TeamBuilder() {
 
     if (!registration) return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
-        <div className="team-builder-empty"><Users size={32} /><p>Captain workspace</p><h1>No squad<br /><em>assigned.</em></h1><span>A dictator will assign your team and roster here.</span>{error && <p className="team-builder-error">{error}</p>}</div>
+        <div className="team-builder-empty"><Users size={32} /><p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'}</p><h1>No squad<br /><em>assigned.</em></h1><span>{isDictatorPreview ? 'No captain teams have been assigned yet.' : 'A dictator will assign your team and roster here.'}</span>{error && <p className="team-builder-error">{error}</p>}</div>
+    </main>;
+
+    if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictatorPreview) return <main className="team-builder">
+        <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
+        <div className="team-builder-shell">
+            <div className="team-builder-heading"><Shield size={28} /><p>Captain workspace / {registration.division}</p><h1>Brand your<br /><em>team.</em></h1><span>Set your team identity before entering the Team Builder.</span></div>
+            <form onSubmit={handleBrandingSubmit} className="team-builder-form team-builder-brand-form">
+                <div className="team-builder-brand-preview" style={{ borderColor: teamColor }}>
+                    {teamLogoFile ? <span>{teamLogoFile.name}</span> : registration.team?.logo_url ? <img src={registration.team.logo_url} alt={`${registration.team_name} logo`} /> : <Shield size={38} />}
+                    <strong>{registration.team_name}</strong>
+                </div>
+                <label>Team logo (Required)
+                    <input type="file" accept="image/png,image/jpeg,image/webp" required={!registration.team?.logo_url} onChange={(event) => setTeamLogoFile(event.target.files?.[0] || null)} />
+                </label>
+                <span className="team-builder-brand-hint">PNG, JPEG, or WebP; maximum file size 5 MB.</span>
+                <label className="team-builder-color-label">Team color (Required)
+                    <span className="team-builder-color-picker">
+                        <input type="color" value={teamColor} onChange={(event) => { setTeamColor(event.target.value); setTeamColorSelected(true); }} aria-label="Choose your team's color" />
+                        <span>{teamColor.toUpperCase()}</span>
+                    </span>
+                </label>
+                {(error || success) && <p className={error ? 'team-builder-error' : 'team-builder-success'}>{error || success}</p>}
+                <button className="team-builder-submit" type="submit" disabled={savingBranding}>
+                    {savingBranding ? <><Loader2 size={18} className="animate-spin" /> Saving team identity...</> : <><UploadCloud size={18} /> Save team identity</>}
+                </button>
+            </form>
+        </div>
+    </main>;
+
+    if ((!registration.team?.logo_url || !registration.team?.team_color) && isDictatorPreview) return <main className="team-builder">
+        <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
+        <div className="team-builder-shell">
+            <div className="team-builder-heading"><Shield size={28} /><p>Dictator preview / {registration.division}</p><h1>Brand your<br /><em>team.</em></h1><span>This captain is prompted to upload a team logo and choose its color before accessing the roster.</span></div>
+            <div className="team-builder-form team-builder-brand-form">
+                <label>Captain team
+                    <select value={registration.id} onChange={(event) => selectRegistration(event.target.value)}>
+                        {registrations.map((item) => <option key={item.id} value={item.id}>{item.team_name}</option>)}
+                    </select>
+                </label>
+                <div className="team-builder-brand-preview" style={{ borderColor: teamColor }}>
+                    {registration.team?.logo_url ? <img src={registration.team.logo_url} alt={`${registration.team_name} logo`} /> : <Shield size={38} />}
+                    <strong>{registration.team_name}</strong>
+                </div>
+                <p className="team-builder-brand-hint">Captain view preview — changes are disabled.</p>
+            </div>
+        </div>
     </main>;
 
     if (!players.length) return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
-        <div className="team-builder-empty"><Shield size={32} /><p>{registration.team_name}</p><h1>Roster<br /><em>pending.</em></h1><span>Your dictator is forming the player roster.</span></div>
+        <div className="team-builder-empty"><Shield size={32} /><p>{registration.team_name}</p><h1>Roster<br /><em>pending.</em></h1><span>{isDictatorPreview ? 'This is what captains see while their roster is being formed.' : 'Your dictator is forming the player roster.'}</span></div>
     </main>;
 
     return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
         <div className="team-builder-shell team-builder-shell-wide">
-            <div className="team-builder-heading"><Users size={28} /><p>Captain workspace / {registration.division}</p><h1>Set your<br /><em>lineup.</em></h1><span>Assign roles, mandatory emails, and images for {registration.team_name}.</span></div>
+            <div className="team-builder-heading"><Users size={28} /><p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'} / {registration.division}</p><h1>Set your<br /><em>lineup.</em></h1><span>Assign roles, mandatory emails, and images for {registration.team_name}.</span></div>
             <form onSubmit={handleSubmit} className="team-builder-form">
+                {isDictatorPreview && <label>Captain team<select value={registration.id} onChange={(event) => selectRegistration(event.target.value)}>{registrations.map((item) => <option key={item.id} value={item.id}>{item.team_name}</option>)}</select></label>}
+                {isDictatorPreview && <p className="team-builder-brand-hint">Captain view preview — editing and uploads are disabled.</p>}
                 <div className="team-builder-player-nav"><div className="team-builder-player-tabs">{players.map((player, index) => <button type="button" key={player.id} onClick={() => { setActivePlayer(index); setActiveTab('basic'); }} className={index === activePlayer ? 'is-active' : ''}>{String(index + 1).padStart(2, '0')} {player.fullName || 'Player'}</button>)}</div></div>
+                <fieldset disabled={isDictatorPreview} className="team-builder-preview-fieldset">
                 <div className="team-builder-card">
                     <div className="team-builder-card-head"><div><p>{currentPlayer?.fullName}</p><span>{currentPlayer?.email || 'Email required'}</span></div></div>
                     <div className="team-builder-form-tabs"><button type="button" onClick={() => setActiveTab('basic')} className={activeTab === 'basic' ? 'is-active' : ''}>Position & Details</button><button type="button" onClick={() => setActiveTab('bio')} className={activeTab === 'bio' ? 'is-active' : ''}>Bio & Playstyle</button><button type="button" onClick={() => setActiveTab('stats')} className={activeTab === 'stats' ? 'is-active' : ''}>Attributes</button></div>
@@ -251,6 +385,7 @@ export function TeamBuilder() {
                 </div>
                 {(error || success) && <p className={error ? 'team-builder-error' : 'team-builder-success'}>{error || success}</p>}
                 <button className="team-builder-submit" type="submit" disabled={saving}>{saving ? 'Saving player profiles...' : <><Save size={18} /> Save player profiles</>}</button>
+                </fieldset>
             </form>
         </div>
     </main>;

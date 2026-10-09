@@ -28,7 +28,7 @@ export function Leaderboard() {
             {/* Header */}
             <div className="text-center space-y-4">
                 <h1 className="text-4xl sm:text-5xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
-                    {division === 'mens' ? "Super League" : "WSL"} Player Stats
+                    {division === 'mens' ? "Super League" : division === 'freshers' ? "Freshers" : "WSL"} Player Stats
                 </h1>
             </div>
 

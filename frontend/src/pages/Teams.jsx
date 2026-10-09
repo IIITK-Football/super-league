@@ -31,13 +31,13 @@ const getTeamColorClass = (teamName) => {
     return map[cleanName] || styles.defaultTeam;
 };
 
-function PlayerRow({ player, teamColor, onSelect }) {
+function PlayerRow({ player, teamColor, teamColorHex, onSelect }) {
     return (
         <div
             onClick={() => onSelect(player)}
             className="flex items-center gap-4 py-3 px-2 border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors group rounded-lg"
         >
-            <div className={`w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-white/10 ${teamColor}`}>
+            <div className={`w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-white/10 ${teamColorHex ? '' : teamColor}`} style={teamColorHex ? { backgroundColor: teamColorHex } : undefined}>
                 {player.image_url ? (
                     <img src={player.image_url} alt={player.name} className="w-full h-full object-cover" />
                 ) : (
@@ -183,7 +183,7 @@ function TeamOverview({ team, allPlayers, onBack, onSelectPlayer, onSelectMatch 
                                 </h3>
                                 <div>
                                     {players.map(player => (
-                                        <PlayerRow key={player.id} player={player} teamColor={teamColorClass} onSelect={onSelectPlayer} />
+                                        <PlayerRow key={player.id} player={player} teamColor={teamColorClass} teamColorHex={team.team_color} onSelect={onSelectPlayer} />
                                     ))}
                                 </div>
                             </div>
@@ -302,7 +302,8 @@ export function Teams() {
                             className="group relative cursor-pointer overflow-hidden rounded-2xl border border-white/10 shadow-lg hover:shadow-2xl transition-shadow duration-300"
                         >
                             <div
-                                className={`absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity duration-300 ${getTeamColorClass(team.name)}`}
+                                className={`absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity duration-300 ${team.team_color ? '' : getTeamColorClass(team.name)}`}
+                                style={team.team_color ? { backgroundImage: `linear-gradient(135deg, ${team.team_color}, #18181b)` } : undefined}
                             />
                             <div className="relative p-8 flex flex-col items-center justify-center text-center gap-3 h-52">
                                 {team.logo_url ? (
