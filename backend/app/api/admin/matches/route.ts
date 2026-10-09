@@ -82,6 +82,18 @@ export async function POST(request: Request) {
     const body = await request.json();
     const supabase = await getSupabaseClient(request); 
 
+    const isWalkover = body.is_walkover === true;
+    const walkoverWinner = body.walkover_winner; // 'home' or 'away'
+    
+    let initialStatus = isWalkover ? 'completed' : 'scheduled';
+    let initialHomeScore = 0;
+    let initialAwayScore = 0;
+
+    if (isWalkover) {
+      if (walkoverWinner === 'home') initialHomeScore = 3;
+      else if (walkoverWinner === 'away') initialAwayScore = 3;
+    }
+
     const { data, error } = await supabase
       .from('matches')
       .insert([{
@@ -90,9 +102,9 @@ export async function POST(request: Request) {
         date: body.date,
         venue: body.venue,
         division: body.division,
-        status: 'scheduled', 
-        home_score: 0,
-        away_score: 0
+        status: initialStatus, 
+        home_score: initialHomeScore,
+        away_score: initialAwayScore
       }])
       .select()
       .single();

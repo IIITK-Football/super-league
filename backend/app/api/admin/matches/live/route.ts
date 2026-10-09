@@ -46,7 +46,8 @@ export async function POST(request: Request) {
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
-      .eq('role', 'admin')
+      .in('role', ['admin', 'dictator', 'captain'])
+      .limit(1)
       .single();
 
     if (!roleData) {
@@ -118,12 +119,16 @@ export async function POST(request: Request) {
 
       case 'update_time':
         updatePayload.status = 'live';
-        if (body.minute) {
+        if (body.minute !== undefined) {
           updatePayload.minute = body.minute;
-          responseMessage = `Match clock synced to ${body.minute}`;
-        } else {
-          responseMessage = "Match is now LIVE!";
         }
+        if (body.timer_start_time !== undefined) {
+          updatePayload.timer_start_time = body.timer_start_time;
+        }
+        if (body.timer_calibration !== undefined) {
+          updatePayload.timer_calibration = body.timer_calibration;
+        }
+        responseMessage = `Match clock synced to ${body.minute}`;
         break;
 
       case 'half_time':

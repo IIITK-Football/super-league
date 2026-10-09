@@ -7,7 +7,7 @@ const roleOptions = [
   { value: 'captain', label: 'Captain' },
   { value: 'editor', label: 'Editor' },
   { value: 'dictator', label: 'Dictator' },
-  { value: 'admin', label: 'Admin' },
+  { value: 'admin', label: 'Scorer' },
 ];
 
 export default function ManageRoles({ currentUserId }) {

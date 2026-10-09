@@ -9,7 +9,7 @@ const API_URL = API_BASE_URL;
 export default function ScheduleMatches() {
   const [division, setDivision] = useState('mens');
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ home_team_id: '', away_team_id: '', date: '', venue: '' });
+  const [form, setForm] = useState({ home_team_id: '', away_team_id: '', date: '', venue: '', is_walkover: false, walkover_winner: '' });
 
   // Fetch teams specifically for the selected division!
   const { data: teamsResp } = useApi(`/teams?division=${division}`);
@@ -42,8 +42,8 @@ export default function ScheduleMatches() {
       });
       
       if (res.ok) {
-        alert("Match Scheduled!");
-        setForm({ home_team_id: '', away_team_id: '', date: '', venue: '' });
+        alert("Match Scheduled" + (form.is_walkover ? " as a Walkover!" : "!"));
+        setForm({ home_team_id: '', away_team_id: '', date: '', venue: '', is_walkover: false, walkover_winner: '' });
       } else {
         const errorData = await res.json();
         alert(`Failed to schedule match: ${errorData.message || 'Unknown error'}`);
@@ -111,8 +111,38 @@ export default function ScheduleMatches() {
             </div>
           </div>
 
+          {/* WALKOVER SETTINGS */}
+          <div className="bg-black/30 border border-white/5 rounded-xl p-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <input 
+                type="checkbox" 
+                id="walkover-toggle"
+                checked={form.is_walkover}
+                onChange={(e) => setForm({...form, is_walkover: e.target.checked, walkover_winner: e.target.checked ? 'home' : ''})}
+                className="w-4 h-4 accent-white"
+              />
+              <label htmlFor="walkover-toggle" className="text-sm font-bold text-white uppercase tracking-widest cursor-pointer">Register as Walkover (Instant 3-0 Win)</label>
+            </div>
+            
+            {form.is_walkover && (
+              <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-white/5">
+                <label className="block text-xs font-bold text-red-400 uppercase tracking-widest mb-2">Who gets the 3-0 Win?</label>
+                <select 
+                  required={form.is_walkover}
+                  value={form.walkover_winner} 
+                  onChange={e => setForm({...form, walkover_winner: e.target.value})} 
+                  className="w-full bg-red-950/30 border border-red-500/30 rounded-xl px-4 py-3 outline-none focus:border-red-500/50 appearance-none text-red-200"
+                >
+                  <option value="" disabled>Select the Winner...</option>
+                  <option value="home">Home Team (Left)</option>
+                  <option value="away">Away Team (Right)</option>
+                </select>
+              </div>
+            )}
+          </div>
+
           <button type="submit" disabled={loading} className="w-full bg-white text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-zinc-200 transition-colors mt-4">
-            {loading ? "Locking in Fixture..." : "Schedule Match"}
+            {loading ? (form.is_walkover ? "Registering Walkover..." : "Locking in Fixture...") : (form.is_walkover ? "Register Walkover" : "Schedule Match")}
           </button>
         </form>
       </div>

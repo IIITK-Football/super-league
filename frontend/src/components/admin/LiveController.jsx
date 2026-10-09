@@ -19,6 +19,7 @@ export default function LiveController() {
   const [liveMinute, setLiveMinute] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [displayTime, setDisplayTime] = useState('');
+  const [calibration, setCalibration] = useState(0);
 
   // --- GOALS STATE ---
   const [goalsList, setGoalsList] = useState([]);
@@ -46,11 +47,22 @@ export default function LiveController() {
       const dbMinute = selectedMatch.minute || "0'";
       setDisplayTime(dbMinute);
       const parsed = parseInt(dbMinute);
-      setLiveMinute(isNaN(parsed) ? 0 : parsed);
+      
+      // Timer state from backend instead of local storage
+      const savedStart = selectedMatch.timer_start_time ? new Date(selectedMatch.timer_start_time).getTime() : null;
+      const savedCalib = selectedMatch.timer_calibration !== undefined && selectedMatch.timer_calibration !== null 
+                           ? selectedMatch.timer_calibration 
+                           : (isNaN(parsed) ? 0 : parsed);
+                           
+      setCalibration(savedCalib);
       
       // Smart Timer Resume Logic
       if (selectedMatch.status === 'live' && dbMinute !== 'HT' && dbMinute !== 'FT') {
-        setTimerRunning(true);
+        if (!savedStart && timerRunning === false) {
+           // We'll let the user hit start.
+        } else if (savedStart) {
+           setTimerRunning(true);
+        }
       } else {
         setTimerRunning(false); 
       }
@@ -59,32 +71,43 @@ export default function LiveController() {
     }
   }, [selectedMatch]);
 
-  // 3. The Auto-Ticker! (Fires every 60 seconds)
+  // 3. The Auto-Ticker! (Fires every second to compute elapsed time)
   useEffect(() => {
     let interval;
-    if (timerRunning) {
+    if (timerRunning && selectedMatch && selectedMatch.timer_start_time) {
       interval = setInterval(() => {
-        setLiveMinute(prev => {
-          const next = prev + 1;
-          syncTimeToDb(`${next}'`); 
-          return next;
+        const startTime = new Date(selectedMatch.timer_start_time).getTime();
+        const elapsedMinutes = Math.floor((Date.now() - startTime) / 60000);
+        const currentCalib = selectedMatch.timer_calibration || 0;
+        
+        const next = elapsedMinutes + currentCalib;
+        setLiveMinute(next);
+        
+        // Only sync display string every 60 seconds (but do not ping DB)
+        setDisplayTime(prev => {
+          return `${next}'`;
         });
-      }, 60000); 
+      }, 1000); 
     }
     return () => clearInterval(interval);
   }, [timerRunning, selectedMatch]);
 
   // 4. Silent Sync Function
-  const syncTimeToDb = async (timeStr) => {
+  const syncTimeToDb = async (timeStr, startTime = undefined, calib = undefined) => {
     if (!selectedMatch) return;
-    setDisplayTime(timeStr);
+    if (timeStr) setDisplayTime(timeStr);
+    
+    const payload = { match_id: selectedMatch.id, action: 'update_time', minute: timeStr };
+    if (startTime !== undefined) payload.timer_start_time = startTime;
+    if (calib !== undefined) payload.timer_calibration = calib;
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const API_URL = API_BASE_URL;
       await fetch(`${API_URL}/admin/matches/live`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ match_id: selectedMatch.id, action: 'update_time', minute: timeStr })
+        body: JSON.stringify(payload)
       });
     } catch (err) { console.error(err); }
   };
@@ -200,20 +223,56 @@ export default function LiveController() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {!timerRunning ? (
-                <button type="button" onClick={() => { setTimerRunning(true); syncTimeToDb(`${liveMinute}'`); }} className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
+                <button type="button" onClick={() => { 
+                  const startIso = new Date().toISOString();
+                  setTimerRunning(true); 
+                  syncTimeToDb(`${calibration}'`, startIso, calibration);
+                  // Optimistically update local selectedMatch to prevent jump
+                  setSelectedMatch(prev => ({ ...prev, timer_start_time: startIso, timer_calibration: calibration }));
+                }} className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
                   ▶ Start
                 </button>
               ) : (
-                <button type="button" onClick={() => { setTimerRunning(false); syncTimeToDb(`${liveMinute}'`); }} className="bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30 font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
+                <button type="button" onClick={() => { 
+                  setTimerRunning(false); 
+                  // Update calibration to lock the time
+                  const startTime = selectedMatch.timer_start_time ? new Date(selectedMatch.timer_start_time).getTime() : Date.now();
+                  const elapsed = Math.floor((Date.now() - startTime) / 60000);
+                  const newCalib = elapsed + calibration;
+                  setCalibration(newCalib);
+                  syncTimeToDb(`${newCalib}'`, null, newCalib); 
+                  setSelectedMatch(prev => ({ ...prev, timer_start_time: null, timer_calibration: newCalib }));
+                }} className="bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30 font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
                   ⏸ Pause
                 </button>
               )}
-              <button type="button" onClick={() => { setTimerRunning(false); syncTimeToDb('HT'); }} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
+              <button type="button" onClick={() => { 
+                  setTimerRunning(false); 
+                  syncTimeToDb('HT', null, calibration); 
+                  setSelectedMatch(prev => ({ ...prev, timer_start_time: null }));
+              }} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
                 Half Time
               </button>
               <div className="flex border border-white/10 rounded-xl overflow-hidden bg-black/60">
-                <input type="number" value={liveMinute} onChange={e => setLiveMinute(parseInt(e.target.value) || 0)} className="w-full bg-transparent text-white text-center font-bold outline-none" />
-                <button type="button" onClick={() => syncTimeToDb(`${liveMinute}'`)} className="bg-white/20 px-4 hover:bg-white/30 text-xs font-bold uppercase tracking-widest transition-colors">Set</button>
+                <input 
+                  type="number" 
+                  value={calibration} 
+                  onChange={e => {
+                    const val = parseInt(e.target.value) || 0;
+                    setCalibration(val);
+                    // If not running, immediately show the updated calibration
+                    if (!timerRunning) {
+                       setLiveMinute(val);
+                       setDisplayTime(`${val}'`);
+                    }
+                  }} 
+                  className="w-full bg-transparent text-white text-center font-bold outline-none" 
+                  placeholder="Calib"
+                />
+                <button type="button" onClick={() => {
+                  syncTimeToDb(timerRunning ? undefined : `${calibration}'`, undefined, calibration);
+                  setSelectedMatch(prev => ({ ...prev, timer_calibration: calibration }));
+                }} className="bg-white/20 px-4 hover:bg-white/30 text-xs font-bold uppercase tracking-widest transition-colors">Set</button>
               </div>
             </div>
           </div>
@@ -277,7 +336,7 @@ export default function LiveController() {
                 onClick={() => {
                   let hp = undefined;
                   let ap = undefined;
-                  if (selectedMatch.home_score === selectedMatch.away_score && (division === 'womens' || division === 'freshers')) {
+                  if (selectedMatch.home_score === selectedMatch.away_score) {
                     const hpStr = prompt(`Match is tied! Enter ${selectedMatch.home_team_name} (Home) Penalty Score (leave blank if not applicable):`);
                     const apStr = prompt(`Enter ${selectedMatch.away_team_name} (Away) Penalty Score (leave blank if not applicable):`);
                     if (hpStr && apStr) {
