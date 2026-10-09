@@ -148,29 +148,7 @@ export function TeamBuilder() {
         setError('');
         setSuccess('');
 
-        // MANDATORY VALIDATION FOR CAPTAINS
-        for (let i = 0; i < players.length; i++) {
-            const player = players[i];
-            const name = player.fullName || `Player #${i + 1}`;
-            if (!player.email?.trim() || !player.email.includes('@')) {
-                setError(`Email is mandatory for every player. Please enter a valid email for ${name}.`);
-                setActivePlayer(i);
-                setActiveTab('basic');
-                return;
-            }
-            if (!player.imageUrl?.trim()) {
-                setError(`Player image is mandatory for every player. Please upload an image to Cloudflare bucket for ${name}.`);
-                setActivePlayer(i);
-                setActiveTab('basic');
-                return;
-            }
-            if (!player.position) {
-                setError(`Choose a position for every player before saving.`);
-                setActivePlayer(i);
-                setActiveTab('basic');
-                return;
-            }
-        }
+        // Removed mandatory validation for all players to allow partial saving
 
         setSaving(true);
         try {
@@ -188,12 +166,12 @@ export function TeamBuilder() {
                 try {
                     const { error } = await supabase.rpc('captain_update_team_member', {
                         p_member_id: player.id,
-                        p_position: player.position,
+                        p_position: player.position || null,
                         p_jersey_number: Number(player.jerseyNumber) || null,
                         p_overall_rating: Number(player.overallRating) || 50,
                         p_attributes: attributes,
-                        p_email: player.email.trim(),
-                        p_image_url: player.imageUrl,
+                        p_email: player.email ? player.email.trim() : null,
+                        p_image_url: player.imageUrl || null,
                     });
                     rpcError = error;
                 } catch (e) {
@@ -205,12 +183,12 @@ export function TeamBuilder() {
                     const { error: directError } = await supabase
                         .from('team_members')
                         .update({
-                            position: player.position,
+                            position: player.position || null,
                             jersey_number: Number(player.jerseyNumber) || null,
                             overall_rating: Number(player.overallRating) || 50,
                             attributes: attributes,
-                            email: player.email.trim(),
-                            image_url: player.imageUrl,
+                            email: player.email ? player.email.trim() : null,
+                            image_url: player.imageUrl || null,
                         })
                         .eq('id', player.id);
                     if (directError) throw directError;
