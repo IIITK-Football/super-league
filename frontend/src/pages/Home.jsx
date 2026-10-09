@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { GlassPanel } from '../components/GlassPanel';
@@ -5,7 +6,7 @@ import { FormGuide } from '../components/FormGuide';
 import { NewsArticle } from '../components/NewsArticle';
 import { ChevronRight, Trophy, Goal, Zap, Loader2, Calendar } from 'lucide-react';
 import { Loader } from '../components/Loader';
-import { Link, useNavigate } from 'react-router-dom'; // <-- IMPORT LINK and useNavigate HERE
+import { Link, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import './DashboardGrid.css';
 import teamStyles from './Teams.module.css';
 import { cn } from '../utils/cn';
@@ -50,8 +51,32 @@ function SectionHeader({ title, action, onAction }) {
 
 export function Home() {
     const { division, setView } = useLeague();
+    // useApi automatically appends the selected division and refetches when it changes.
+    // Keep the endpoint division-neutral to avoid duplicate `division` query parameters.
     const { data: apiResponse, loading, error } = useApi('/home/dashboard');
-    const navigate = useNavigate(); // <-- ADD useNavigate hook
+    const navigate = useNavigate();
+    const location = useLocation();
+    const navigationType = useNavigationType();
+
+    // Work around the dashboard occasionally remaining black after SPA navigation:
+    // force a document reload on PUSH/REPLACE entry. A browser refresh is a POP,
+    // so the reload does not loop and direct URL loads are left alone.
+    useEffect(() => {
+        if (navigationType === 'POP') return;
+
+        const guardKey = `home-document-refresh:${location.pathname}:${location.key}`;
+        try {
+            if (window.sessionStorage.getItem(guardKey) === 'done') return;
+            window.sessionStorage.setItem(guardKey, 'done');
+        } catch (storageError) {
+            // If session storage is unavailable, skip the workaround rather than
+            // risking a reload loop in a restrictive/private browsing context.
+            console.warn('[Home] Could not store the one-time reload guard:', storageError);
+            return;
+        }
+
+        window.location.reload();
+    }, [location.key, location.pathname, navigationType]);
 
     if (loading) {
         return <Loader variant="spinner" fullScreen text="Aggregating Live Data..." />;
@@ -70,15 +95,18 @@ export function Home() {
     const top4 = data.standings || [];
     const newsItems = data.news || [];
     const fantasyTop = data.fantasyTop || [];
-    const topScorer = data.topScorer;
-    const topAssist = data.topAssist;
+    // Prefer explicitly division-scoped payloads when the API provides them;
+    // otherwise the query above asks the endpoint to return this division's leaders.
+    const divisionData = data.divisions?.[division] ?? data[division] ?? data;
+    const topScorer = divisionData.topScorer;
+    const topAssist = divisionData.topAssist;
 
     return (
-        <div className="space-y-12 animate-in fade-in duration-500 pb-12 overflow-x-hidden">
+        <div className="space-y-12 pb-12 overflow-x-hidden">
 
             {match ? (
                 <GlassPanel
-                    className="p-8 sm:p-12 md:p-20 relative overflow-hidden border border-white/20 animate-fade-up opacity-0 stagger-1 cursor-pointer hover:bg-white/5 transition-colors group"
+                    className="p-8 sm:p-12 md:p-20 relative overflow-hidden border border-white/20 cursor-pointer hover:bg-white/5 transition-colors group"
                     onClick={() => navigate('/matches')} // <-- UPDATE TO navigate
                 >
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-white/5 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
@@ -155,7 +183,7 @@ export function Home() {
                 </GlassPanel>
             ) : (
                 <GlassPanel
-                    className="p-12 relative overflow-hidden border border-white/10 animate-fade-up flex justify-center items-center cursor-pointer hover:bg-white/5 transition-colors group"
+                    className="p-12 relative overflow-hidden border border-white/10 flex justify-center items-center cursor-pointer hover:bg-white/5 transition-colors group"
                     onClick={() => navigate('/matches')} // <-- UPDATE TO navigate
                 >
                     <span className="text-sm font-black tracking-[0.3em] uppercase text-zinc-500 group-hover:text-zinc-400 transition-colors">No Fixtures Currently Scheduled</span>
@@ -164,7 +192,7 @@ export function Home() {
 
             <div className="dashboard-grid">
 
-                <div className="bento-standings animate-slide-right opacity-0 stagger-2">
+                <div className="bento-standings">
                     <SectionHeader
                         title={division === 'womens' || division === 'freshers' ? 'Road to Final' : 'Top 4 Standings'}
                         action={division === 'womens' || division === 'freshers' ? 'View Fixtures' : 'Full Table'}
@@ -226,7 +254,7 @@ export function Home() {
                         )}
                     </GlassPanel>
                 </div>
-                <div className="bento-news animate-slide-right opacity-0 stagger-3">
+                <div className="bento-news">
                     <SectionHeader
                         title="The Onion Drops"
                         action="The Vault"
@@ -245,7 +273,7 @@ export function Home() {
                         ))}
                     </div>
                 </div>
-                <div className="bento-stats animate-fade-up opacity-0 stagger-4">
+                <div className="bento-stats">
                     <SectionHeader
                         title="Player Leaders"
                         action="All Players"
@@ -297,7 +325,7 @@ export function Home() {
                     </div>
                 </div>
 
-                {division !== 'freshers' && <div className="bento-fantasy animate-fade-up opacity-0 stagger-5">
+                {division !== 'freshers' && <div className="bento-fantasy">
                     <SectionHeader
                         title="Fantasy Snapshot"
                         action="Play Predictor"

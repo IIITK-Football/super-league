@@ -1,16 +1,53 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 
 const LeagueContext = createContext(undefined);
 
+const DIVISION_STORAGE_KEY = 'league:division';
+const VALID_DIVISIONS = ['mens', 'womens', 'freshers'];
+
+function getInitialDivision() {
+  if (typeof window === 'undefined') return 'mens';
+
+  try {
+    const savedDivision = window.sessionStorage.getItem(DIVISION_STORAGE_KEY);
+    return VALID_DIVISIONS.includes(savedDivision) ? savedDivision : 'mens';
+  } catch {
+    // Storage can be unavailable in private/restricted browsing contexts.
+    return 'mens';
+  }
+}
+
 export function LeagueProvider({ children }) {
-  const [division, setDivision] = useState('mens'); // 'mens' | 'womens'
-  
+  const [division, setDivisionInternal] = useState(getInitialDivision);
+  const divisionRef = useRef(division);
+
+  // Persist immediately when the division changes, so a route-triggered full
+  // page reload cannot reset the dashboard back to 'mens'. Supports both
+  // setDivision('womens') and setDivision(current => ...).
+  const setDivision = useCallback((nextDivision) => {
+    const resolvedDivision = typeof nextDivision === 'function'
+      ? nextDivision(divisionRef.current)
+      : nextDivision;
+
+    if (!VALID_DIVISIONS.includes(resolvedDivision)) return;
+
+    divisionRef.current = resolvedDivision;
+
+    try {
+      window.sessionStorage.setItem(DIVISION_STORAGE_KEY, resolvedDivision);
+    } catch {
+      // Keep the in-memory selection working if storage is unavailable.
+    }
+
+    setDivisionInternal(resolvedDivision);
+  }, []);
+
   // ADDED 'matchTimeline' and 'player-profile' to your tracker comment!
   const [view, setViewInternal] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('view') || 'fantasy';
   }); // 'home' | 'matches' | 'standings' | 'teams' | 'fantasy' | 'leaderboard' | 'news' | 'legends' | 'rules' | 'login' | 'player-profile' | 'matchTimeline'
-  
+
   const setView = (newView) => {
     setViewInternal(newView);
     window.history.pushState({ view: newView }, '', `?view=${newView}`);
@@ -44,10 +81,10 @@ export function LeagueProvider({ children }) {
   const [fantasySection, setFantasySection] = useState('fifa'); // 'season1' | 'fifa'
 
   return (
-    <LeagueContext.Provider value={{ 
-      division, setDivision, 
+    <LeagueContext.Provider value={{
+      division, setDivision,
       view, setView, goBack,
-      fantasyPrediction, setFantasyPrediction, 
+      fantasyPrediction, setFantasyPrediction,
       globalPollState, setGlobalPollState,
       selectedArticle, setSelectedArticle,
       fantasySection, setFantasySection
@@ -64,3 +101,4 @@ export function useLeague() {
   }
   return context;
 }
+
