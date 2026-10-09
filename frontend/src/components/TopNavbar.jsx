@@ -55,6 +55,10 @@ export function TopNavbar() {
                                         WSL
                                     </span>
                                 </>
+                            ) : division === 'freshers' ? (
+                                <span className="text-2xl sm:text-3xl font-black tracking-tighter text-white leading-none">
+                                    FRESHERS
+                                </span>
                             ) : (
                                 <span className="text-lg sm:text-xl font-black italic tracking-tighter text-white leading-none flex flex-col justify-center">
                                     <span>SUPER</span>

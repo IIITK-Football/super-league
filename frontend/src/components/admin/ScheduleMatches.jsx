@@ -3,6 +3,7 @@ import { useApi } from '../../hooks/useApi';
 import { API_BASE_URL } from '../../lib/api';
 import { Calendar, Swords } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { WomensBracket, FreshersBracket } from '../../pages/Standings';
 const API_URL = API_BASE_URL;
 
 export default function ScheduleMatches() {
@@ -13,6 +14,10 @@ export default function ScheduleMatches() {
   // Fetch teams specifically for the selected division!
   const { data: teamsResp } = useApi(`/teams?division=${division}`);
   const teams = teamsResp?.data || [];
+
+  // Fetch the current standings/schedule data to display the bracket preview
+  const { data: standingsResp } = useApi(`/standings?division=${division}`);
+  const bracketMatches = standingsResp?.data?.bracketMatches || [];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,10 +45,11 @@ export default function ScheduleMatches() {
         alert("Match Scheduled!");
         setForm({ home_team_id: '', away_team_id: '', date: '', venue: '' });
       } else {
-        alert("Failed to schedule match.");
+        const errorData = await res.json();
+        alert(`Failed to schedule match: ${errorData.message || 'Unknown error'}`);
       }
     } catch (err) {
-      alert("Failed to schedule match.");
+      alert(`Failed to schedule match: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -110,6 +116,24 @@ export default function ScheduleMatches() {
           </button>
         </form>
       </div>
+
+      {/* RENDER THE SCHEDULE MAP FOR BRACKET DIVISIONS */}
+      {(division === 'womens' || division === 'freshers') && (
+        <div className="mt-16 pt-8 border-t border-white/10">
+          <div className="text-center mb-8">
+            <h3 className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2">Live Preview</h3>
+            <p className="text-xs text-zinc-400">This is how the bracket will look to the public based on the chronologically scheduled dates.</p>
+          </div>
+          
+          <div className="opacity-90 scale-95 origin-top">
+            {division === 'womens' ? (
+              <WomensBracket matches={bracketMatches} title="Bracket Preview" buttonText="Current mapping of slots" />
+            ) : (
+              <FreshersBracket matches={bracketMatches} title="Bracket Preview" buttonText="Current mapping of slots" />
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

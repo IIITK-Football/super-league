@@ -6,7 +6,6 @@ import { GlassPanel } from '../components/GlassPanel';
 import { FormGuide } from '../components/FormGuide';
 import { Loader } from '../components/Loader';
 import { STANDINGS_CONFIG } from '../data/standingsConfig';
-import { FreshersRoadToFinal } from './RoadToFinal';
 
 function MatchCard({ title, team1, team2, note1, note2, onClick }) {
     return (
@@ -28,7 +27,7 @@ function MatchCard({ title, team1, team2, note1, note2, onClick }) {
 }
 
 // 1. UPDATED BRACKET: Now it reads real data from the database!
-function WomensBracket({ matches = [], title, buttonText }) {
+export function WomensBracket({ matches = [], title, buttonText }) {
     const navigate = useNavigate();
     const openMatch = (matchIndex) => {
         const match = matches[matchIndex];
@@ -50,11 +49,23 @@ function WomensBracket({ matches = [], title, buttonText }) {
         const homeName = Array.isArray(m.home) ? m.home[0]?.name : m.home?.name;
         const awayName = Array.isArray(m.away) ? m.away[0]?.name : m.away?.name;
 
+        let homeScoreDisplay = fallbackNote1;
+        let awayScoreDisplay = fallbackNote2;
+
+        if (showScore) {
+            homeScoreDisplay = m.home_score;
+            awayScoreDisplay = m.away_score;
+            if (m.home_penalties !== null && m.home_penalties !== undefined && m.away_penalties !== null && m.away_penalties !== undefined) {
+                homeScoreDisplay = `${m.home_score} (${m.home_penalties})`;
+                awayScoreDisplay = `${m.away_score} (${m.away_penalties})`;
+            }
+        }
+
         return {
             team1: homeName || fallbackHome,
             team2: awayName || fallbackAway,
-            note1: showScore ? m.home_score : fallbackNote1,
-            note2: showScore ? m.away_score : fallbackNote2
+            note1: homeScoreDisplay,
+            note2: awayScoreDisplay
         };
     };
 
@@ -103,6 +114,87 @@ function WomensBracket({ matches = [], title, buttonText }) {
     );
 }
 
+export function FreshersBracket({ matches = [], title, buttonText }) {
+    const navigate = useNavigate();
+    const openMatch = (matchIndex) => {
+        const match = matches[matchIndex];
+        if (!match?.id) return;
+        sessionStorage.setItem('selectedMatch', JSON.stringify(match));
+        sessionStorage.setItem('matchSource', 'standings');
+        navigate(`/matches/${match.id}`);
+    };
+
+    const getMatchData = (index, fallbackHome, fallbackAway, fallbackNote1, fallbackNote2) => {
+        const m = matches[index];
+        if (!m) return { team1: fallbackHome, team2: fallbackAway, note1: fallbackNote1, note2: fallbackNote2 };
+
+        const showScore = m.status === 'live' || m.status === 'completed';
+        const homeName = Array.isArray(m.home) ? m.home[0]?.name : m.home?.name;
+        const awayName = Array.isArray(m.away) ? m.away[0]?.name : m.away?.name;
+
+        let homeScoreDisplay = fallbackNote1;
+        let awayScoreDisplay = fallbackNote2;
+
+        if (showScore) {
+            homeScoreDisplay = m.home_score;
+            awayScoreDisplay = m.away_score;
+            if (m.home_penalties !== null && m.home_penalties !== undefined && m.away_penalties !== null && m.away_penalties !== undefined) {
+                homeScoreDisplay = `${m.home_score} (${m.home_penalties})`;
+                awayScoreDisplay = `${m.away_score} (${m.away_penalties})`;
+            }
+        }
+
+        return {
+            team1: homeName || fallbackHome,
+            team2: awayName || fallbackAway,
+            note1: homeScoreDisplay,
+            note2: awayScoreDisplay
+        };
+    };
+
+    const qf1 = getMatchData(0, "TBD (QF 1)", "TBD (QF 1)", "", "");
+    const qf2 = getMatchData(1, "TBD (QF 2)", "TBD (QF 2)", "", "");
+    const qf3 = getMatchData(2, "TBD (QF 3)", "TBD (QF 3)", "", "");
+    const sf1 = getMatchData(3, "Winner of QF 1", "TBD (SF 1)", "", "");
+    const sf2 = getMatchData(4, "Winner of QF 2", "Winner of QF 3", "", "");
+    const playoff = getMatchData(5, "Loser of SF 1", "Loser of SF 2", "3rd", "");
+    const final = getMatchData(6, "Winner of Semi 1", "Winner of Semi 2", "Champ", "Runner Up");
+
+    return (
+        <div className="space-y-12 animate-in fade-in duration-700 pb-12">
+            <div className="text-center space-y-4">
+                <h2 className="text-4xl sm:text-5xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
+                    {title}
+                </h2>
+                <p className="text-zinc-400 font-medium tracking-widest uppercase">
+                    {buttonText}
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+                <div className="space-y-6">
+                    <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">1. Quarter Finals</h3>
+                    <MatchCard title="QF 1" {...qf1} onClick={() => openMatch(0)} />
+                    <MatchCard title="QF 2" {...qf2} onClick={() => openMatch(1)} />
+                    <MatchCard title="QF 3" {...qf3} onClick={() => openMatch(2)} />
+                </div>
+                <div className="space-y-6">
+                    <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">2. Semifinals</h3>
+                    <div className="hidden md:block h-[56px]"></div>
+                    <MatchCard title="Semifinal 1" {...sf1} onClick={() => openMatch(3)} />
+                    <MatchCard title="Semifinal 2" {...sf2} onClick={() => openMatch(4)} />
+                </div>
+                <div className="space-y-6">
+                    <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">3. Finals</h3>
+                    <div className="hidden md:block h-[56px]"></div>
+                    <MatchCard title="3rd Place Playoff" {...playoff} onClick={() => openMatch(5)} />
+                    <MatchCard title="Final" {...final} onClick={() => openMatch(6)} />
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export function Standings() {
     const { division: divisionParam } = useParams();
     const navigate = useNavigate();
@@ -116,12 +208,11 @@ export function Standings() {
 
     const { data: apiResponse, loading, error } = useApi(config.dataEndpoint);
 
-    if (config.view === 'freshers-bracket') {
-        return <FreshersRoadToFinal />;
-    }
-
-    // 2. We extract the bracketMatches from the backend and pass it to the component!
     const bracketMatches = apiResponse?.data?.bracketMatches || [];
+
+    if (config.view === 'freshers-bracket') {
+        return <FreshersBracket matches={bracketMatches} title={config.title} buttonText={config.buttonText} />;
+    }
 
     if (config.view === 'bracket') {
         return <WomensBracket matches={bracketMatches} title={config.title} buttonText={config.buttonText} />;

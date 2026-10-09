@@ -135,6 +135,10 @@ export async function POST(request: Request) {
       case 'close_match':
         updatePayload.status = 'completed';
         updatePayload.minute = 'FT';
+        if (body.home_penalties !== undefined && body.away_penalties !== undefined) {
+          updatePayload.home_penalties = body.home_penalties;
+          updatePayload.away_penalties = body.away_penalties;
+        }
         responseMessage = "Match officially closed! Ready for grading.";
         break;
       

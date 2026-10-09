@@ -273,10 +273,20 @@ export default function LiveController() {
               </button>
              <button 
                 disabled={loading} 
-                onClick={() => { 
+                onClick={() => {
+                  let hp = undefined;
+                  let ap = undefined;
+                  if (selectedMatch.home_score === selectedMatch.away_score && (division === 'womens' || division === 'freshers')) {
+                    const hpStr = prompt(`Match is tied! Enter ${selectedMatch.home_team_name} (Home) Penalty Score (leave blank if not applicable):`);
+                    const apStr = prompt(`Enter ${selectedMatch.away_team_name} (Away) Penalty Score (leave blank if not applicable):`);
+                    if (hpStr && apStr) {
+                      hp = parseInt(hpStr);
+                      ap = parseInt(apStr);
+                    }
+                  }
                   if(confirm("End match and lock scores?")) { 
                     setTimerRunning(false); 
-                    handleAction('close_match'); 
+                    handleAction('close_match', { home_penalties: hp, away_penalties: ap }); 
                   } 
                 }} 
                 className="flex items-center justify-center gap-3 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-600/30 transition-colors"

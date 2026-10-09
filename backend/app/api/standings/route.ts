@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     // This fixes the Form Bug AND gives us the Bracket schedule!
     const { data: allMatches, error: matchesError } = await supabase
       .from('matches')
-      .select('id, home_team_id, away_team_id, home_score, away_score, status, date, home:teams!home_team_id(name), away:teams!away_team_id(name)')
+      .select('id, home_team_id, away_team_id, home_score, away_score, home_penalties, away_penalties, status, date, home:teams!home_team_id(name), away:teams!away_team_id(name)')
       .eq('division', division)
       .order('date', { ascending: true }); // MUST BE ASCENDING FOR CORRECT FORM
 
