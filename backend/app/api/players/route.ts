@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../lib/errorHandler';
 
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,

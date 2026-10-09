@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../lib/errorHandler'; 
 
-export const revalidate = 60; 
+export const dynamic = 'force-dynamic'; 
 
 export async function GET() {
   try {

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Save, Shield, Users } from 'lucide-react';
+import { ArrowLeft, ImagePlus, Loader2, Save, Shield, UploadCloud, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPlayStyle, PLAY_STYLES } from '../data/playStyles';
+import { API_BASE_URL } from '../lib/api';
 import './TeamBuilder.css';
 
+const API_URL = API_BASE_URL;
 const statKeys = ['pace', 'shooting', 'passing', 'dribbling', 'defending', 'physicality'];
 const positions = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'CF', 'ST'];
 
@@ -54,6 +56,7 @@ export function TeamBuilder() {
     const [activePlayer, setActivePlayer] = useState(0);
     const [activeTab, setActiveTab] = useState('basic');
     const [loading, setLoading] = useState(true);
+    const [uploadingImage, setUploadingImage] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -83,15 +86,93 @@ export function TeamBuilder() {
     const updatePlayer = (field, value) => setPlayers((current) => current.map((player, index) => index === activePlayer ? { ...player, [field]: value } : player));
     const updateStat = (stat, value) => updatePlayer('stats', { ...currentPlayer.stats, [stat]: Number(value) || 0 });
 
-    const handleSubmit = async (event) => {
-        event.preventDefault();
-        if (players.some((player) => !player.position)) {
-            setError('Choose a position for every player before saving.');
+    const handleImageUpload = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        
+        if (!currentPlayer?.email?.trim() || !currentPlayer.email.includes('@')) {
+            setError(`Please enter a valid email for ${currentPlayer?.fullName || 'the player'} before uploading an image.`);
             return;
         }
-        setSaving(true);
+
+        setUploadingImage(true);
+        setError('');
+        try {
+            if (!file.type.includes('png') && !file.name.toLowerCase().endsWith('.png')) {
+                throw new Error('Player image must be in PNG format (.png). Please convert and upload a PNG file.');
+            }
+
+            const sourceUrl = URL.createObjectURL(file);
+            const image = new Image();
+            image.src = sourceUrl;
+            await new Promise((resolve, reject) => {
+                image.onload = resolve;
+                image.onerror = () => reject(new Error('Could not open that image file.'));
+            });
+
+            const width = image.width;
+            const height = image.height;
+            URL.revokeObjectURL(sourceUrl);
+
+            if (width !== 512 || height !== 512) {
+                throw new Error(`Player image must be exactly 512 × 512 pixels (selected image is ${width} × ${height}). Please resize and upload again.`);
+            }
+
+            const formData = new FormData();
+            formData.append('email', currentPlayer.email.trim());
+            formData.append('image', file, `${currentPlayer.email.trim()}.png`);
+
+            const { data: { session } } = await supabase.auth.getSession();
+            const response = await fetch(`${API_URL}/admin/freshers/player-image`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { Authorization: `Bearer ${session?.access_token}` },
+                body: formData,
+            });
+
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to upload player image.');
+
+            updatePlayer('imageUrl', result.imageUrl);
+            setSuccess(`Image uploaded successfully for ${currentPlayer.fullName}!`);
+        } catch (uploadError) {
+            setError(uploadError.message || 'Could not upload player image.');
+        } finally {
+            setUploadingImage(false);
+            event.target.value = '';
+        }
+    };
+
+    const handleSubmit = async (event) => {
+        event.preventDefault();
         setError('');
         setSuccess('');
+
+        // MANDATORY VALIDATION FOR CAPTAINS
+        for (let i = 0; i < players.length; i++) {
+            const player = players[i];
+            const name = player.fullName || `Player #${i + 1}`;
+            if (!player.email?.trim() || !player.email.includes('@')) {
+                setError(`Email is mandatory for every player. Please enter a valid email for ${name}.`);
+                setActivePlayer(i);
+                setActiveTab('basic');
+                return;
+            }
+            if (!player.imageUrl?.trim()) {
+                setError(`Player image is mandatory for every player. Please upload an image to Cloudflare bucket for ${name}.`);
+                setActivePlayer(i);
+                setActiveTab('basic');
+                return;
+            }
+            if (!player.position) {
+                setError(`Choose a position for every player before saving.`);
+                setActivePlayer(i);
+                setActiveTab('basic');
+                return;
+            }
+        }
+
+        setSaving(true);
         try {
             for (const player of players) {
                 const style = getPlayStyle(player.playStyleId);
@@ -102,16 +183,40 @@ export function TeamBuilder() {
                     playStyles: style ? [{ name: style.name, description: style.description, icon_url: style.imageUrl }] : [],
                     stats: Object.fromEntries(statKeys.map((stat) => [stat[0].toUpperCase() + stat.slice(1), { total: Number(player.stats[stat]) || 50 }])),
                 };
-                const { error: updateError } = await supabase.rpc('captain_update_team_member', {
-                    p_member_id: player.id,
-                    p_position: player.position,
-                    p_jersey_number: Number(player.jerseyNumber) || null,
-                    p_overall_rating: Number(player.overallRating) || 50,
-                    p_attributes: attributes,
-                });
-                if (updateError) throw updateError;
+
+                let rpcError = null;
+                try {
+                    const { error } = await supabase.rpc('captain_update_team_member', {
+                        p_member_id: player.id,
+                        p_position: player.position,
+                        p_jersey_number: Number(player.jerseyNumber) || null,
+                        p_overall_rating: Number(player.overallRating) || 50,
+                        p_attributes: attributes,
+                        p_email: player.email.trim(),
+                        p_image_url: player.imageUrl,
+                    });
+                    rpcError = error;
+                } catch (e) {
+                    rpcError = e;
+                }
+
+                if (rpcError) {
+                    // Fallback to direct update if RPC fails
+                    const { error: directError } = await supabase
+                        .from('team_members')
+                        .update({
+                            position: player.position,
+                            jersey_number: Number(player.jerseyNumber) || null,
+                            overall_rating: Number(player.overallRating) || 50,
+                            attributes: attributes,
+                            email: player.email.trim(),
+                            image_url: player.imageUrl,
+                        })
+                        .eq('id', player.id);
+                    if (directError) throw directError;
+                }
             }
-            setSuccess('Player roles and profiles saved.');
+            setSuccess('Player profiles, mandatory emails, and Cloudflare images saved successfully.');
         } catch (saveError) {
             setError(saveError.message || 'Could not save player profiles.');
         } finally {
@@ -134,13 +239,36 @@ export function TeamBuilder() {
     return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
         <div className="team-builder-shell team-builder-shell-wide">
-            <div className="team-builder-heading"><Users size={28} /><p>Captain workspace / {registration.division}</p><h1>Set your<br /><em>lineup.</em></h1><span>Assign roles and player attributes for {registration.team_name}. Your dictator manages the roster.</span></div>
+            <div className="team-builder-heading"><Users size={28} /><p>Captain workspace / {registration.division}</p><h1>Set your<br /><em>lineup.</em></h1><span>Assign roles, mandatory emails, and images for {registration.team_name}.</span></div>
             <form onSubmit={handleSubmit} className="team-builder-form">
                 <div className="team-builder-player-nav"><div className="team-builder-player-tabs">{players.map((player, index) => <button type="button" key={player.id} onClick={() => { setActivePlayer(index); setActiveTab('basic'); }} className={index === activePlayer ? 'is-active' : ''}>{String(index + 1).padStart(2, '0')} {player.fullName || 'Player'}</button>)}</div></div>
                 <div className="team-builder-card">
-                    <div className="team-builder-card-head"><div><p>{currentPlayer?.fullName}</p><span>{currentPlayer?.email || registration.team_name}</span></div></div>
-                    <div className="team-builder-form-tabs"><button type="button" onClick={() => setActiveTab('basic')} className={activeTab === 'basic' ? 'is-active' : ''}>Position</button><button type="button" onClick={() => setActiveTab('bio')} className={activeTab === 'bio' ? 'is-active' : ''}>Bio & Playstyle</button><button type="button" onClick={() => setActiveTab('stats')} className={activeTab === 'stats' ? 'is-active' : ''}>Attributes</button></div>
-                    {activeTab === 'basic' && <div className="team-builder-grid team-builder-basic"><label>Player<select value={activePlayer} onChange={(event) => setActivePlayer(Number(event.target.value))}>{players.map((player, index) => <option key={player.id} value={index}>{player.fullName}</option>)}</select></label><label>Position<select value={currentPlayer.position} onChange={(event) => updatePlayer('position', event.target.value)} required><option value="">Choose position</option>{positions.map((position) => <option key={position}>{position}</option>)}</select></label><label>Jersey number<input type="number" min="1" max="99" value={currentPlayer.jerseyNumber} onChange={(event) => updatePlayer('jerseyNumber', event.target.value)} /></label><label>Overall rating<input type="number" min="1" max="99" value={currentPlayer.overallRating} onChange={(event) => updatePlayer('overallRating', event.target.value)} /></label>{currentPlayer.imageUrl && <img src={currentPlayer.imageUrl} alt={currentPlayer.fullName} className="team-builder-preview" />}</div>}
+                    <div className="team-builder-card-head"><div><p>{currentPlayer?.fullName}</p><span>{currentPlayer?.email || 'Email required'}</span></div></div>
+                    <div className="team-builder-form-tabs"><button type="button" onClick={() => setActiveTab('basic')} className={activeTab === 'basic' ? 'is-active' : ''}>Position & Details</button><button type="button" onClick={() => setActiveTab('bio')} className={activeTab === 'bio' ? 'is-active' : ''}>Bio & Playstyle</button><button type="button" onClick={() => setActiveTab('stats')} className={activeTab === 'stats' ? 'is-active' : ''}>Attributes</button></div>
+                    {activeTab === 'basic' && <div className="team-builder-grid team-builder-basic">
+                        <label>Player<select value={activePlayer} onChange={(event) => setActivePlayer(Number(event.target.value))}>{players.map((player, index) => <option key={player.id} value={index}>{player.fullName}</option>)}</select></label>
+                        <label>Position (Mandatory)<select value={currentPlayer.position} onChange={(event) => updatePlayer('position', event.target.value)} required><option value="">Choose position</option>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
+                        <label className="col-span-2">Player email (Mandatory for Captain)<input type="email" value={currentPlayer.email || ''} onChange={(event) => updatePlayer('email', event.target.value)} placeholder="e.g. ebinthomas24bcs99@iiitkottayam.ac.in" required /></label>
+                        <label>Jersey number<input type="number" min="1" max="99" value={currentPlayer.jerseyNumber} onChange={(event) => updatePlayer('jerseyNumber', event.target.value)} /></label>
+                        <label>Overall rating<input type="number" min="1" max="99" value={currentPlayer.overallRating} onChange={(event) => updatePlayer('overallRating', event.target.value)} /></label>
+                        
+                        <div className="col-span-2 space-y-2">
+                            <label className="block">Player Image (Mandatory for Captain)</label>
+                            <div className="flex items-center gap-4">
+                                {currentPlayer.imageUrl ? (
+                                    <img src={currentPlayer.imageUrl} alt={currentPlayer.fullName} className="w-16 h-16 rounded-lg object-cover border border-[#d9ff4a]" />
+                                ) : (
+                                    <div className="w-16 h-16 rounded-lg bg-white/5 border border-dashed border-white/20 flex items-center justify-center text-zinc-500 text-xs">No image</div>
+                                )}
+                                <label className="flex-1 cursor-pointer flex items-center gap-2 px-4 py-3 bg-[#191c1d] border border-[#303536] hover:border-[#d9ff4a] rounded-lg text-xs font-bold text-zinc-300 uppercase tracking-wider transition-colors">
+                                    {uploadingImage ? <Loader2 size={16} className="animate-spin text-[#d9ff4a]" /> : <ImagePlus size={16} className="text-[#d9ff4a]" />}
+                                    <span>{uploadingImage ? 'Uploading to Cloudflare...' : (currentPlayer.imageUrl ? 'Change Image' : 'Upload Image')}</span>
+                                    <input type="file" accept="image/png" onChange={handleImageUpload} disabled={uploadingImage} hidden />
+                                </label>
+                            </div>
+                            <span className="text-[10px] text-zinc-500">Must be a PNG format file with exact 512 × 512 resolution</span>
+                        </div>
+                    </div>}
                     {activeTab === 'bio' && <div className="team-builder-grid"><label>Preferred foot<select value={currentPlayer.preferredFoot} onChange={(event) => updatePlayer('preferredFoot', event.target.value)}><option>Right</option><option>Left</option><option>Both</option></select></label><PlayStylePicker value={currentPlayer.playStyleId} onChange={(value) => updatePlayer('playStyleId', value)} /></div>}
                     {activeTab === 'stats' && <div className="team-builder-stats">{statKeys.map((stat) => <label key={stat}>{stat}<input type="number" min="1" max="99" value={currentPlayer.stats[stat]} onChange={(event) => updateStat(stat, event.target.value)} /></label>)}</div>}
                 </div>

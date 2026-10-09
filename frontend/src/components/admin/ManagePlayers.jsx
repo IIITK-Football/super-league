@@ -7,7 +7,7 @@ const API_URL = API_BASE_URL;
 
 // 1. MASSIVELY SIMPLIFIED STATE: Only the exact fields the Profile Card uses!
 const initialFormState = { 
-  first_name: '', last_name: '', team_id: '', position: '', jersey_number: '', overall_rating: 50, 
+  first_name: '', last_name: '', email: '', team_id: '', position: '', jersey_number: '', overall_rating: 50, 
   preferredFoot: 'Right',
   play_style_name: '', play_style_desc: '',
   stats: { pace: 50, shooting: 50, passing: 50, dribbling: 50, defending: 50, physicality: 50 }
@@ -45,68 +45,60 @@ export default function ManagePlayers() {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      let finalImageUrl = null;
-      let finalPlayStyleUrl = null;
-
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('player-images').upload(fileName, imageFile);
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from('player-images').getPublicUrl(fileName);
-        finalImageUrl = publicUrl;
+      
+      if (!form.email?.trim() || !form.email.includes('@')) {
+        alert("A valid player email (e.g. ebinthomas24bcs99@iiitkottayam.ac.in) is required.");
+        setLoading(false);
+        return;
+      }
+      if (!imageFile) {
+        alert("A player image is required.");
+        setLoading(false);
+        return;
       }
 
-      if (playStyleImageFile) {
-        const fileExt = playStyleImageFile.name.split('.').pop();
-        const fileName = `ps_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-        const { error: psUploadError } = await supabase.storage.from('player-images').upload(fileName, playStyleImageFile);
-        if (psUploadError) throw psUploadError;
-        const { data: { publicUrl } } = supabase.storage.from('player-images').getPublicUrl(fileName);
-        finalPlayStyleUrl = publicUrl;
+      if (!imageFile.type.includes('png') && !imageFile.name.toLowerCase().endsWith('.png')) {
+        alert("Player image must be in PNG format (.png). Please convert and upload a PNG file.");
+        setLoading(false);
+        return;
       }
 
-      const playStylesArray = [];
-      if (form.play_style_name) {
-        playStylesArray.push({
-          name: form.play_style_name.trim(),
-          description: form.play_style_desc.trim(),
-          icon_url: finalPlayStyleUrl
-        });
+      const sourceUrl = URL.createObjectURL(imageFile);
+      const img = new Image();
+      img.src = sourceUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('Could not open player image file.'));
+      });
+      const imgWidth = img.width;
+      const imgHeight = img.height;
+      URL.revokeObjectURL(sourceUrl);
+
+      if (imgWidth !== 512 || imgHeight !== 512) {
+        alert(`Player image must be exactly 512 × 512 pixels (selected image is ${imgWidth} × ${imgHeight}). Please resize and upload again.`);
+        setLoading(false);
+        return;
       }
 
-      // 2. SIMPLIFIED PAYLOAD: Sends only exactly what is needed
-      const payload = {
-        first_name: form.first_name,
-        last_name: form.last_name,
-        team_id: form.team_id,
-        position: form.position.toUpperCase(),
-        jersey_number: parseInt(form.jersey_number) || null,
-        image_url: finalImageUrl, 
-        overall_rating: parseInt(form.overall_rating) || 50,
-        attributes: {
-          bio: { preferredFoot: form.preferredFoot },
-          playStyles: playStylesArray,
-          stats: {
-            Pace: { total: form.stats.pace },
-            Shooting: { total: form.stats.shooting },
-            Passing: { total: form.stats.passing },
-            Dribbling: { total: form.stats.dribbling },
-            Defending: { total: form.stats.defending },
-            Physicality: { total: form.stats.physicality }
-          }
-        }
-      };
+      const formData = new FormData();
+      formData.append('first_name', form.first_name);
+      formData.append('last_name', form.last_name);
+      formData.append('email', form.email.trim());
+      formData.append('team_id', form.team_id || '');
+      formData.append('position', form.position.toUpperCase());
+      formData.append('jersey_number', form.jersey_number || '');
+      formData.append('overall_rating', String(form.overall_rating));
+      formData.append('image', imageFile);
 
       const res = await fetch(`${API_URL}/admin/players`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify(payload)
+        headers: { 'Authorization': `Bearer ${session?.access_token}` },
+        body: formData
       });
       
       if (res.ok) {
-        alert("Player added to Database!");
+        alert("Player created and image uploaded to Cloudflare bucket!");
         refetchPlayers();
         setImageFile(null);
         setPlayStyleImageFile(null);
@@ -114,7 +106,7 @@ export default function ManagePlayers() {
         setActiveFormTab('basic');
       } else {
         const errData = await res.json();
-        alert(`Error: ${errData.message}`);
+        alert(`Error: ${errData.message || 'Could not create player'}`);
       }
     } catch (err) {
       alert("Failed to add player.");
@@ -161,16 +153,17 @@ export default function ManagePlayers() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-in slide-in-from-left-4">
               <input type="text" placeholder="First Name" required value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} className="col-span-1 md:col-span-2 bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50" />
               <input type="text" placeholder="Last Name" required value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} className="col-span-1 md:col-span-2 bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50" />
-              <select required value={form.team_id} onChange={e => setForm({...form, team_id: e.target.value})} className="col-span-1 md:col-span-2 bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50 appearance-none">
-                <option value="" disabled>Select Team...</option>
+              <input type="email" placeholder="Player Email (e.g. ebinthomas24bcs99@iiitkottayam.ac.in)" required value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="col-span-1 md:col-span-4 bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50" />
+              <select value={form.team_id} onChange={e => setForm({...form, team_id: e.target.value})} className="col-span-1 md:col-span-2 bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50 appearance-none">
+                <option value="">Select Team (Optional)...</option>
                 {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
               <input type="text" placeholder="Position (e.g. ST)" required value={form.position} onChange={e => setForm({...form, position: e.target.value})} className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50" />
-              <input type="number" placeholder="Jersey No." required value={form.jersey_number} onChange={e => setForm({...form, jersey_number: e.target.value})} className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50" />
+              <input type="number" placeholder="Jersey No." value={form.jersey_number} onChange={e => setForm({...form, jersey_number: e.target.value})} className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50" />
               
               <div className="col-span-1 md:col-span-3 bg-black/50 border border-white/10 rounded-xl px-4 py-2 flex items-center gap-3">
                 <UploadCloud size={20} className="text-zinc-500" />
-                <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-white/10 file:text-white hover:file:bg-white/20" />
+                <input type="file" accept="image/png" required onChange={e => setImageFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-white/10 file:text-white hover:file:bg-white/20" />
               </div>
               <input type="number" placeholder="OVR (1-99)" min="1" max="99" required value={form.overall_rating} onChange={e => setForm({...form, overall_rating: e.target.value})} className="bg-[#E8C881]/20 text-[#E8C881] placeholder:text-[#E8C881]/50 font-black border border-[#E8C881]/30 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]" />
             </div>
