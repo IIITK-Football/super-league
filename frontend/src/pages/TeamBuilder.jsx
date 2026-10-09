@@ -148,30 +148,7 @@ export function TeamBuilder() {
         setError('');
         setSuccess('');
 
-        // MANDATORY VALIDATION FOR CAPTAINS
-        for (let i = 0; i < players.length; i++) {
-            const player = players[i];
-            const name = player.fullName || `Player #${i + 1}`;
-            if (!player.email?.trim() || !player.email.includes('@')) {
-                setError(`Email is mandatory for every player. Please enter a valid email for ${name}.`);
-                setActivePlayer(i);
-                setActiveTab('basic');
-                return;
-            }
-            if (!player.imageUrl?.trim()) {
-                setError(`Player image is mandatory for every player. Please upload an image to Cloudflare bucket for ${name}.`);
-                setActivePlayer(i);
-                setActiveTab('basic');
-                return;
-            }
-            if (!player.position) {
-                setError(`Choose a position for every player before saving.`);
-                setActivePlayer(i);
-                setActiveTab('basic');
-                return;
-            }
-        }
-
+        // Removed mandatory validation for all players to allow partial saving
         setSaving(true);
         try {
             for (const player of players) {
@@ -188,12 +165,12 @@ export function TeamBuilder() {
                 try {
                     const { error } = await supabase.rpc('captain_update_team_member', {
                         p_member_id: player.id,
-                        p_position: player.position,
+                        p_position: player.position || null,
                         p_jersey_number: Number(player.jerseyNumber) || null,
                         p_overall_rating: Number(player.overallRating) || 50,
                         p_attributes: attributes,
-                        p_email: player.email.trim(),
-                        p_image_url: player.imageUrl,
+                        p_email: player.email ? player.email.trim() : null,
+                        p_image_url: player.imageUrl || null,
                     });
                     rpcError = error;
                 } catch (e) {
@@ -205,12 +182,12 @@ export function TeamBuilder() {
                     const { error: directError } = await supabase
                         .from('team_members')
                         .update({
-                            position: player.position,
+                            position: player.position || null,
                             jersey_number: Number(player.jerseyNumber) || null,
                             overall_rating: Number(player.overallRating) || 50,
                             attributes: attributes,
-                            email: player.email.trim(),
-                            image_url: player.imageUrl,
+                            email: player.email ? player.email.trim() : null,
+                            image_url: player.imageUrl || null,
                         })
                         .eq('id', player.id);
                     if (directError) throw directError;
@@ -247,8 +224,8 @@ export function TeamBuilder() {
                     <div className="team-builder-form-tabs"><button type="button" onClick={() => setActiveTab('basic')} className={activeTab === 'basic' ? 'is-active' : ''}>Position & Details</button><button type="button" onClick={() => setActiveTab('bio')} className={activeTab === 'bio' ? 'is-active' : ''}>Bio & Playstyle</button><button type="button" onClick={() => setActiveTab('stats')} className={activeTab === 'stats' ? 'is-active' : ''}>Attributes</button></div>
                     {activeTab === 'basic' && <div className="team-builder-grid team-builder-basic">
                         <label>Player<select value={activePlayer} onChange={(event) => setActivePlayer(Number(event.target.value))}>{players.map((player, index) => <option key={player.id} value={index}>{player.fullName}</option>)}</select></label>
-                        <label>Position (Mandatory)<select value={currentPlayer.position} onChange={(event) => updatePlayer('position', event.target.value)} required><option value="">Choose position</option>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
-                        <label className="col-span-2">Player email (Mandatory for Captain)<input type="email" value={currentPlayer.email || ''} onChange={(event) => updatePlayer('email', event.target.value)} placeholder="e.g. ebinthomas24bcs99@iiitkottayam.ac.in" required /></label>
+                        <label>Position (Mandatory)<select value={currentPlayer.position} onChange={(event) => updatePlayer('position', event.target.value)}><option value="">Choose position</option>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
+                        <label className="col-span-2">Player email (Mandatory for Captain)<input type="email" value={currentPlayer.email || ''} onChange={(event) => updatePlayer('email', event.target.value)} placeholder="e.g. ebinthomas24bcs99@iiitkottayam.ac.in" /></label>
                         <label>Jersey number<input type="number" min="1" max="99" value={currentPlayer.jerseyNumber} onChange={(event) => updatePlayer('jerseyNumber', event.target.value)} /></label>
                         <label>Overall rating<input type="number" min="1" max="99" value={currentPlayer.overallRating} onChange={(event) => updatePlayer('overallRating', event.target.value)} /></label>
                         

@@ -128,9 +128,10 @@ function TeamOverview({ team, allPlayers, onBack, onSelectPlayer, onSelectMatch 
             if (inPos.length > 0) groups[pos] = inPos;
         }
         teamPlayers.forEach(p => {
-            if (!POSITION_ORDER.includes(p.position) && p.position) {
-                if (!groups[p.position]) groups[p.position] = [];
-                if (!groups[p.position].find(x => x.id === p.id)) groups[p.position].push(p);
+            const pos = p.position || 'UNASSIGNED';
+            if (!POSITION_ORDER.includes(pos)) {
+                if (!groups[pos]) groups[pos] = [];
+                if (!groups[pos].find(x => x.id === p.id)) groups[pos].push(p);
             }
         });
         return groups;
