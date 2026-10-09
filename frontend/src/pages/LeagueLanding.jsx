@@ -47,6 +47,130 @@ const tournaments = [
     },
 ];
 
+// WARM-START
+// Background probe. For each clip, in carousel order, it:
+//   1. measures real download throughput (once, from the cheapest rung),
+//   2. picks the best rung for that clip: the smallest one that covers the card at this screen's pixel
+//      ratio, as long as the measured bandwidth can afford it,
+//   3. downloads that rung into the HTTP cache and records it in `streamPlans`.
+// When a slide later builds its hls.js instance it starts on the recorded rung (startLevel) with the
+// measured bandwidth as its estimate, so it plays the optimal quality straight from cache.
+// Needs the /media responses to be cacheable (Cache-Control forwarded by the proxy).
+const warmedStreams = new Set();
+const streamPlans = new Map(); // streamName -> { level }  (index into hls.js's sorted level list)
+let measuredBandwidth = 0;     // bits per second, smoothed across the background downloads
+
+const BANDWIDTH_SAFETY = 0.7;  // only pick a rung whose BANDWIDTH <= measured * this
+const MAX_DPR = 2;             // cap devicePixelRatio when matching rung width to card width
+
+const playlistUris = (text) => text.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+
+// `variants` must be in hls.js's level order (height, then bitrate), lowest first.
+function pickLevel(variants, cardWidthCssPx, bandwidth) {
+    const neededPx = cardWidthCssPx * Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    let target = 0;
+    for (let i = 0; i < variants.length; i += 1) {
+        if (i > 0 && bandwidth && variants[i].bandwidth > bandwidth * BANDWIDTH_SAFETY) break;
+        target = i;
+        if (variants[i].width >= neededPx) break;
+    }
+    return target;
+}
+
+async function warmStream(name, signal, cardWidthCssPx) {
+    const masterUrl = new URL(`${API_BASE_URL}/media/${name}/master.m3u8`, window.location.href).href;
+    const masterRes = await fetch(masterUrl, { signal });
+    if (!masterRes.ok) throw new Error(`master ${masterRes.status}`);
+    const masterLines = (await masterRes.text()).split('\n').map((line) => line.trim());
+
+    const variants = [];
+    masterLines.forEach((line, index) => {
+        if (!line.startsWith('#EXT-X-STREAM-INF')) return;
+        const bandwidth = Number((/BANDWIDTH=(\d+)/.exec(line) || [])[1]);
+        const resolution = /RESOLUTION=(\d+)x(\d+)/.exec(line);
+        const uri = masterLines.slice(index + 1).find((next) => next && !next.startsWith('#'));
+        if (bandwidth && uri) {
+            variants.push({
+                bandwidth,
+                uri,
+                width: resolution ? Number(resolution[1]) : 0,
+                height: resolution ? Number(resolution[2]) : 0,
+            });
+        }
+    });
+    // Same order hls.js uses for its level indexes: height first, then bitrate.
+    variants.sort((a, b) => (a.height - b.height) || (a.bandwidth - b.bandwidth));
+    if (!variants.length) return;
+
+    // Downloads one rung's playlist and segments (bodies must be read in full to be cached) and
+    // folds the observed throughput into measuredBandwidth.
+    const fetchRung = async (variant) => {
+        const levelUrl = new URL(variant.uri, masterUrl).href;
+        const levelRes = await fetch(levelUrl, { signal });
+        if (!levelRes.ok) throw new Error(`level ${levelRes.status}`);
+        const segmentUrls = playlistUris(await levelRes.text()).map((uri) => new URL(uri, levelUrl).href);
+
+        const started = performance.now();
+        const sizes = await Promise.all(segmentUrls.map(async (url) => {
+            const res = await fetch(url, { signal });
+            if (!res.ok) throw new Error(`segment ${res.status}`);
+            return (await res.arrayBuffer()).byteLength;
+        }));
+        const seconds = (performance.now() - started) / 1000;
+        const bytes = sizes.reduce((sum, size) => sum + size, 0);
+        // Ignore near-instant transfers: those came from the cache and say nothing about the network.
+        if (seconds >= 0.03 && bytes > 0) {
+            const sample = (bytes * 8) / seconds;
+            measuredBandwidth = measuredBandwidth ? (measuredBandwidth * 0.5) + (sample * 0.5) : sample;
+        }
+    };
+
+    // Until we have a throughput figure, take a sample from the cheapest rung before choosing.
+    let downloaded = -1; // index of the rung already in the cache for this clip
+    if (!measuredBandwidth) {
+        await fetchRung(variants[0]);
+        downloaded = 0;
+    }
+
+    let level = pickLevel(variants, cardWidthCssPx, measuredBandwidth);
+    if (level !== downloaded) {
+        await fetchRung(variants[level]);
+        downloaded = level;
+    }
+
+    // Downloading the chosen rung gave a better measurement; re-check and, if it changes the answer,
+    // warm the corrected rung too so playback still starts from cache.
+    const refined = pickLevel(variants, cardWidthCssPx, measuredBandwidth);
+    if (refined !== level) {
+        level = refined;
+        if (level !== downloaded) await fetchRung(variants[level]);
+    }
+    streamPlans.set(name, { level });
+}
+// WARM-END
+
+const CLIP_COUNT = tournaments.length * 3;
+const streamNameAt = (index) => STREAMS[tournaments[index % tournaments.length].id][Math.floor(index / tournaments.length)];
+
+// Load and decode every AVIF loader image up front, in carousel order (slide 0 first). References are
+// kept so the browser does not drop the decoded images. Returns a promise that resolves once every
+// poster has been decoded (or has failed); the video probe waits for it, so posters always win.
+const warmedPosters = [];
+let posterWarmup = null;
+function warmPosters() {
+    if (posterWarmup) return posterWarmup;
+    posterWarmup = Promise.all(Array.from({ length: CLIP_COUNT }, (_, index) => new Promise((resolve) => {
+        const image = new Image();
+        image.decoding = 'async';
+        warmedPosters.push(image);
+        image.onerror = () => resolve();
+        image.src = STREAM_POSTERS[streamNameAt(index)];
+        if (image.decode) image.decode().then(resolve, resolve);
+        else image.onload = () => resolve();
+    })));
+    return posterWarmup;
+}
+
 export function LeagueLanding() {
     const [carouselIndex, setCarouselIndex] = useState(0);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -74,6 +198,43 @@ export function LeagueLanding() {
         isPausedRef.current = isPaused;
     }, [isPaused]);
 
+    // Upfront loading, strictly in this order: all nine AVIFs first; then, once they are decoded and the
+    // first clip has its first frame, the background probe over the other eight clips in carousel order;
+    // finally clip 0 again so a second pass through the carousel starts on its optimal rung too.
+    useEffect(() => {
+        const postersDone = warmPosters();
+        if (navigator.connection?.saveData) return undefined;
+        const controller = new AbortController();
+
+        (async () => {
+            // Posters gate the video probe (capped at 4s so a slow image can never block it forever).
+            await Promise.race([postersDone, new Promise((resolve) => setTimeout(resolve, 4000))]);
+            if (controller.signal.aborted) return;
+            const video = videoRef.current;
+            await new Promise((resolve) => {
+                if (!video || video.readyState >= 2) { resolve(); return; } // already has a frame
+                const timer = setTimeout(resolve, 3000);
+                video.addEventListener('loadeddata', () => { clearTimeout(timer); resolve(); }, { once: true });
+            });
+
+            for (let step = 1; step <= CLIP_COUNT; step += 1) {
+                if (controller.signal.aborted) return;
+                const name = streamNameAt(step % CLIP_COUNT); // slides 1..8, then 0
+                if (warmedStreams.has(name)) continue;
+                try {
+                    const cardWidth = videoRef.current?.clientWidth || window.innerWidth;
+                    await warmStream(name, controller.signal, cardWidth);
+                    warmedStreams.add(name);
+                } catch (error) {
+                    if (controller.signal.aborted) return;
+                    console.info('Carousel prefetch skipped for', name, error);
+                }
+            }
+        })();
+
+        return () => controller.abort();
+    }, []);
+
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return undefined;
@@ -93,12 +254,18 @@ export function LeagueLanding() {
             video.src = videoSrc;
             video.addEventListener('loadedmetadata', startPlayback, { once: true });
         } else if (Hls.isSupported()) {
+            // The background probe's choice for this clip, if it has run yet; otherwise hls.js decides.
+            const plan = streamPlans.get(streamName);
             hls = new Hls({
-                startLevel: -1,
+                startLevel: plan ? plan.level : -1,
+                // With no plan (slide 0, or a slide skipped to before it was probed) hls.js would otherwise
+                // download a throwaway first segment just to test bandwidth before loading the real one.
+                // We already supply an estimate, so skip that extra round trip.
+                testBandwidth: false,
                 capLevelToPlayerSize: true,
                 maxBufferLength: 8,
                 maxMaxBufferLength: 12,
-                abrEwmaDefaultEstimate: 1200000,
+                abrEwmaDefaultEstimate: measuredBandwidth || 1200000,
                 lowLatencyMode: false,
             });
             hlsRef.current = hls;
