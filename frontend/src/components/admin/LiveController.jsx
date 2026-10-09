@@ -149,6 +149,7 @@ export default function LiveController() {
         <div className="bg-black/50 p-1 rounded-full border border-white/10 flex">
           <button onClick={() => handleDivisionSwitch('mens')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'mens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Men's</button>
           <button onClick={() => handleDivisionSwitch('womens')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'womens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Women's</button>
+          <button onClick={() => handleDivisionSwitch('freshers')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'freshers' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Freshers</button>
         </div>
       </div>
 
