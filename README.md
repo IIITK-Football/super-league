@@ -6,6 +6,8 @@
 **Super League** is the official football league and fantasy prediction platform for the Indian Institute of Information Technology, Kottayam. Designed and built by three students, it is maintained by the open-source community and serves as the authoritative digital record for collegiate football at IIIT Kottayam.
 
 **Live Platform:** [super-league.pages.dev](https://super-league.pages.dev/)
+**Test Platform:** [develop.super-league.pages.dev](https://develop.super-league.pages.dev/)
+
 
 ---
 
