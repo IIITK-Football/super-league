@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ImagePlus, Loader2, Save, Shield, UploadCloud, Users } from 'lucide-react';
+import { ArrowLeft, ImagePlus, Loader2, Save, Shield, UploadCloud, Users, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -67,6 +67,9 @@ export function TeamBuilder() {
     const [savingBranding, setSavingBranding] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [brandingModalOpen, setBrandingModalOpen] = useState(false);
+    const [brandingError, setBrandingError] = useState('');
+    const [brandingSuccess, setBrandingSuccess] = useState('');
 
     useEffect(() => {
         let cancelled = false;
@@ -121,6 +124,8 @@ export function TeamBuilder() {
         setTeamColorSelected(Boolean(selected?.team?.team_color));
         setError('');
         setSuccess('');
+        setBrandingError('');
+        setBrandingSuccess('');
     };
     const updatePlayer = (field, value) => setPlayers((current) => current.map((player, index) => index === activePlayer ? { ...player, [field]: value } : player));
     const updateStat = (stat, value) => updatePlayer('stats', { ...currentPlayer.stats, [stat]: Number(value) || 0 });
@@ -133,15 +138,21 @@ export function TeamBuilder() {
         }
 
         setError('');
+        setBrandingError('');
+        const setBrandErr = (msg) => {
+            if (brandingModalOpen) setBrandingError(msg);
+            else setError(msg);
+        };
+
         if (file.type !== 'image/png') {
-            setError('Club logo must be in PNG format.');
+            setBrandErr('Club logo must be in PNG format.');
             setTeamLogoFile(null);
             event.target.value = '';
             return;
         }
 
         if (file.size > 5 * 1024 * 1024) {
-            setError('Club logo must be no larger than 5 MB.');
+            setBrandErr('Club logo must be no larger than 5 MB.');
             setTeamLogoFile(null);
             event.target.value = '';
             return;
@@ -152,7 +163,7 @@ export function TeamBuilder() {
         img.onload = () => {
             URL.revokeObjectURL(objectUrl);
             if (img.naturalWidth !== 256 || img.naturalHeight !== 256) {
-                setError(`Club logo must be exactly 256x256 pixels (selected image is ${img.naturalWidth}x${img.naturalHeight}px). Uploads cannot be auto-cropped; please provide a 256x256 PNG.`);
+                setBrandErr(`Club logo must be exactly 256x256 pixels (selected image is ${img.naturalWidth}x${img.naturalHeight}px). Uploads cannot be auto-cropped; please provide a 256x256 PNG.`);
                 setTeamLogoFile(null);
                 event.target.value = '';
                 return;
@@ -161,7 +172,7 @@ export function TeamBuilder() {
         };
         img.onerror = () => {
             URL.revokeObjectURL(objectUrl);
-            setError('Could not read the selected image file.');
+            setBrandErr('Could not read the selected image file.');
             setTeamLogoFile(null);
             event.target.value = '';
         };
@@ -173,16 +184,23 @@ export function TeamBuilder() {
         if (isDictatorPreview) return;
         setError('');
         setSuccess('');
+        setBrandingError('');
+        setBrandingSuccess('');
+        const setBrandErr = (msg) => {
+            if (brandingModalOpen) setBrandingError(msg);
+            else setError(msg);
+        };
+
         if (!teamLogoFile && !registration?.team?.logo_url) {
-            setError('Upload your team logo before continuing.');
+            setBrandErr('Upload your team logo before continuing.');
             return;
         }
         if (teamLogoFile && teamLogoFile.type !== 'image/png') {
-            setError('Club logo must be in PNG format.');
+            setBrandErr('Club logo must be in PNG format.');
             return;
         }
         if (!registration?.team?.team_color && !teamColorSelected) {
-            setError('Choose your team color before continuing.');
+            setBrandErr('Choose your team color before continuing.');
             return;
         }
 
@@ -209,8 +227,13 @@ export function TeamBuilder() {
             setTeamLogoFile(null);
             setTeamColorSelected(true);
             setSuccess('Team logo and color saved.');
+            setBrandingSuccess('Team logo and color saved.');
+            setTimeout(() => {
+                setBrandingModalOpen(false);
+                setBrandingSuccess('');
+            }, 1000);
         } catch (saveError) {
-            setError(saveError.message || 'Could not save team branding.');
+            setBrandErr(saveError.message || 'Could not save team branding.');
         } finally {
             setSavingBranding(false);
         }
@@ -394,7 +417,38 @@ export function TeamBuilder() {
     return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
         <div className="team-builder-shell team-builder-shell-wide">
-            <div className="team-builder-heading"><Users size={28} /><p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'} / {registration.division}</p><h1>Set your<br /><em>lineup.</em></h1><span>Assign roles, mandatory emails, and images for {registration.team_name}.</span></div>
+            <div className="team-builder-heading">
+                <Users size={28} />
+                <p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'} / {registration.division}</p>
+                <h1>Set your<br /><em>lineup.</em></h1>
+                <span>Assign roles, mandatory emails, and images for {registration.team_name}.</span>
+
+                <div className="team-builder-identity-badge" style={{ borderLeftColor: registration.team?.team_color || '#d9ff4a' }}>
+                    {registration.team?.logo_url ? (
+                        <img src={registration.team.logo_url} alt={`${registration.team_name} logo`} />
+                    ) : (
+                        <Shield size={28} />
+                    )}
+                    <div className="team-builder-identity-info">
+                        <strong>{registration.team_name}</strong>
+                        <span>Color: {registration.team?.team_color || '#FFFFFF'}</span>
+                    </div>
+                    {!isDictatorPreview && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setBrandingModalOpen(true);
+                                setBrandingError('');
+                                setBrandingSuccess('');
+                                setTeamLogoFile(null);
+                            }}
+                            className="team-builder-identity-edit-btn"
+                        >
+                            <Shield size={14} /> Change Logo
+                        </button>
+                    )}
+                </div>
+            </div>
             <form onSubmit={handleSubmit} className="team-builder-form">
                 {isDictatorPreview && <label>Captain team<select value={registration.id} onChange={(event) => selectRegistration(event.target.value)}>{registrations.map((item) => <option key={item.id} value={item.id}>{item.team_name}</option>)}</select></label>}
                 {isDictatorPreview && <p className="team-builder-brand-hint">Captain view preview — editing and uploads are disabled.</p>}
@@ -435,5 +489,78 @@ export function TeamBuilder() {
                 </fieldset>
             </form>
         </div>
+
+        {brandingModalOpen && (
+            <div className="team-builder-modal-backdrop" onClick={() => !savingBranding && setBrandingModalOpen(false)}>
+                <div className="team-builder-modal-card" onClick={(e) => e.stopPropagation()}>
+                    <div className="team-builder-modal-head">
+                        <h2><Shield size={18} className="text-[#d9ff4a]" /> Change Team Logo & Color</h2>
+                        <button type="button" onClick={() => !savingBranding && setBrandingModalOpen(false)} aria-label="Close modal">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <form onSubmit={handleBrandingSubmit} className="team-builder-form team-builder-brand-form">
+                        <div className="team-builder-brand-preview" style={{ borderColor: teamColor }}>
+                            {teamLogoFile ? (
+                                <span>{teamLogoFile.name} (Selected)</span>
+                            ) : registration.team?.logo_url ? (
+                                <img src={registration.team.logo_url} alt={`${registration.team_name} logo`} />
+                            ) : (
+                                <Shield size={38} />
+                            )}
+                            <strong>{registration.team_name}</strong>
+                        </div>
+                        <label>New team logo
+                            <input
+                                type="file"
+                                accept="image/png"
+                                onChange={handleLogoChange}
+                            />
+                        </label>
+                        <span className="team-builder-brand-hint">PNG only, exactly 256x256 px; maximum file size 5 MB. Cropping is disabled.</span>
+                        <label className="team-builder-color-label">Team color
+                            <span className="team-builder-color-picker">
+                                <input
+                                    type="color"
+                                    value={teamColor}
+                                    onChange={(event) => {
+                                        setTeamColor(event.target.value);
+                                        setTeamColorSelected(true);
+                                    }}
+                                    aria-label="Choose your team's color"
+                                />
+                                <span>{teamColor.toUpperCase()}</span>
+                            </span>
+                        </label>
+                        {(brandingError || brandingSuccess) && (
+                            <p className={brandingError ? 'team-builder-error' : 'team-builder-success'}>
+                                {brandingError || brandingSuccess}
+                            </p>
+                        )}
+                        <div className="flex gap-3 mt-2">
+                            <button
+                                className="team-builder-submit flex-1"
+                                type="submit"
+                                disabled={savingBranding}
+                            >
+                                {savingBranding ? (
+                                    <><Loader2 size={18} className="animate-spin" /> Saving identity...</>
+                                ) : (
+                                    <><UploadCloud size={18} /> Update Logo & Color</>
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                className="px-4 py-2 border border-[#303536] bg-[#191c1d] hover:bg-[#252a2b] text-zinc-300 rounded text-xs font-bold uppercase tracking-wider transition-colors"
+                                onClick={() => setBrandingModalOpen(false)}
+                                disabled={savingBranding}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
     </main>;
 }
