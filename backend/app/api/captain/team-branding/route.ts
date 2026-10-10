@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: registration, error: registrationError } = await adminClient
       .from('team_registrations')
-      .select('id, team_id, division, teams!inner(id, logo_url, team_color)')
+      .select('id, team_id, team_name, division, teams!inner(id, name, logo_url, team_color)')
       .eq('captain_id', user.id)
       .maybeSingle();
 
@@ -117,16 +117,25 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
 
-      const divisionPrefix = registration.division && registration.division !== 'freshers'
-        ? `${registration.division}/`
-        : '';
-      uploadedKey = `freshers/${divisionPrefix}${registration.team_id}/${crypto.randomUUID()}.png`;
+      const rawName = registration.team_name || team.name || 'team';
+      const teamSlug = rawName
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9._-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^[.-]+|[.-]+$/g, '') || registration.team_id;
+
+      const folder = registration.division === 'freshers' || !registration.division
+        ? 'freshers'
+        : registration.division;
+
+      uploadedKey = `${folder}/${teamSlug}.png`;
       await r2.send(new PutObjectCommand({
         Bucket: bucket,
         Key: uploadedKey,
         Body: buffer,
         ContentType: 'image/png',
-        CacheControl: 'public, max-age=31536000, immutable',
+        CacheControl: 'public, max-age=3600',
       }));
       logoUrl = getPublicLogoUrl(uploadedKey, publicLogoBaseUrl);
     }
