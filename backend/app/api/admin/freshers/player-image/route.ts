@@ -55,8 +55,8 @@ export async function POST(request: Request) {
     const width = buffer.readUInt32BE(16);
     const height = buffer.readUInt32BE(20);
 
-    if (width !== 512 || height !== 512) {
-      return NextResponse.json({ error: `Player image must be 512x512 pixels (received ${width}x${height}).` }, { status: 400 });
+    if (width !== 500 || height !== 500) {
+      return NextResponse.json({ error: `Player image must be 500*500 pixels (received ${width}x${height}).` }, { status: 400 });
     }
 
     const emailId = email.split('@')[0].replace(/[^a-z0-9._-]/g, '-').replace(/^[.-]+|[.-]+$/g, '');
