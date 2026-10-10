@@ -125,6 +125,49 @@ export function TeamBuilder() {
     const updatePlayer = (field, value) => setPlayers((current) => current.map((player, index) => index === activePlayer ? { ...player, [field]: value } : player));
     const updateStat = (stat, value) => updatePlayer('stats', { ...currentPlayer.stats, [stat]: Number(value) || 0 });
 
+    const handleLogoChange = (event) => {
+        const file = event.target.files?.[0];
+        if (!file) {
+            setTeamLogoFile(null);
+            return;
+        }
+
+        setError('');
+        if (file.type !== 'image/png') {
+            setError('Club logo must be in PNG format.');
+            setTeamLogoFile(null);
+            event.target.value = '';
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            setError('Club logo must be no larger than 5 MB.');
+            setTeamLogoFile(null);
+            event.target.value = '';
+            return;
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            if (img.naturalWidth !== 256 || img.naturalHeight !== 256) {
+                setError(`Club logo must be exactly 256x256 pixels (selected image is ${img.naturalWidth}x${img.naturalHeight}px). Uploads cannot be auto-cropped; please provide a 256x256 PNG.`);
+                setTeamLogoFile(null);
+                event.target.value = '';
+                return;
+            }
+            setTeamLogoFile(file);
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            setError('Could not read the selected image file.');
+            setTeamLogoFile(null);
+            event.target.value = '';
+        };
+        img.src = objectUrl;
+    };
+
     const handleBrandingSubmit = async (event) => {
         event.preventDefault();
         if (isDictatorPreview) return;
@@ -132,6 +175,10 @@ export function TeamBuilder() {
         setSuccess('');
         if (!teamLogoFile && !registration?.team?.logo_url) {
             setError('Upload your team logo before continuing.');
+            return;
+        }
+        if (teamLogoFile && teamLogoFile.type !== 'image/png') {
+            setError('Club logo must be in PNG format.');
             return;
         }
         if (!registration?.team?.team_color && !teamColorSelected) {
@@ -303,9 +350,9 @@ export function TeamBuilder() {
                     <strong>{registration.team_name}</strong>
                 </div>
                 <label>Team logo (Required)
-                    <input type="file" accept="image/png,image/jpeg,image/webp" required={!registration.team?.logo_url} onChange={(event) => setTeamLogoFile(event.target.files?.[0] || null)} />
+                    <input type="file" accept="image/png" required={!registration.team?.logo_url} onChange={handleLogoChange} />
                 </label>
-                <span className="team-builder-brand-hint">PNG, JPEG, or WebP; maximum file size 5 MB.</span>
+                <span className="team-builder-brand-hint">PNG only, exactly 256x256 px; maximum file size 5 MB. Cropping is disabled.</span>
                 <label className="team-builder-color-label">Team color (Required)
                     <span className="team-builder-color-picker">
                         <input type="color" value={teamColor} onChange={(event) => { setTeamColor(event.target.value); setTeamColorSelected(true); }} aria-label="Choose your team's color" />

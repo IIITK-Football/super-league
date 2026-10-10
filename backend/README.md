@@ -10,7 +10,7 @@ Configure these server environment variables for Freshers player portraits:
 - `NEXT_PUBLIC_VIDEO_R2_URL` set to the public R2 host containing the HLS clips (optional; defaults to the current video host)
 
 Set `R2_LOGO_BUCKET=team-logos` for the team-logo bucket.
-Set `R2_LOGO_PUBLIC_URL` to that bucket's public base URL (`R2_PUBLIC_URL` and `NEXT_PUBLIC_R2_URL` are fallbacks). Apply `035_team_branding.sql` to add team color storage before captains complete the Team Builder setup.
+Set `R2_LOGO_PUBLIC_URL=https://pub-faaac762b0254fb88c3967f021ced499.r2.dev` for that bucket's public base URL (logos are uploaded to the `freshers` directory). Club logos must be strictly 256x256 px PNG format without cropping. Apply `035_team_branding.sql` to add team color storage before captains complete the Team Builder setup.
 
 Apply `030_freshers_road_to_final.sql` in Supabase before using dictator fixture scheduling.
 

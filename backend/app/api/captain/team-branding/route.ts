@@ -7,20 +7,19 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 
 const MAX_LOGO_SIZE = 5 * 1024 * 1024;
-const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-function hasValidImageSignature(type: string, buffer: Buffer) {
-  if (type === 'image/png') {
-    return buffer.length >= 8 &&
-      buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  }
-  if (type === 'image/jpeg') {
-    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  }
-  return type === 'image/webp' &&
-    buffer.length >= 12 &&
-    buffer.toString('ascii', 0, 4) === 'RIFF' &&
-    buffer.toString('ascii', 8, 12) === 'WEBP';
+function isPngBuffer(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 24 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  );
 }
 
 function getPublicLogoUrl(key: string, publicBaseUrl: string) {
@@ -35,8 +34,10 @@ export async function POST(request: Request) {
     const accountId = process.env.R2_ACCOUNT_ID;
     const accessKeyId = process.env.R2_ACCESS_KEY_ID;
     const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    const bucket = process.env.R2_LOGO_BUCKET;
-    const publicLogoBaseUrl = process.env.R2_LOGO_PUBLIC_URL || process.env.R2_PUBLIC_URL || process.env.NEXT_PUBLIC_R2_URL;
+    const bucket = process.env.R2_LOGO_BUCKET || 'team-logos';
+    const publicLogoBaseUrl =
+      process.env.R2_LOGO_PUBLIC_URL ||
+      'https://pub-faaac762b0254fb88c3967f021ced499.r2.dev';
     const supabaseUrl = process.env.SUPABASE_URL;
     const anonKey = process.env.SUPABASE_ANON_KEY;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -99,22 +100,32 @@ export async function POST(request: Request) {
       if (!logo.size || logo.size > MAX_LOGO_SIZE) {
         return NextResponse.json({ error: 'Team logos must be no larger than 5 MB.' }, { status: 413 });
       }
-      if (!IMAGE_TYPES.has(logo.type)) {
-        return NextResponse.json({ error: 'Use a PNG, JPEG, or WebP image for the team logo.' }, { status: 400 });
+      if (logo.type !== 'image/png') {
+        return NextResponse.json({ error: 'Club logo must be in PNG format.' }, { status: 400 });
       }
 
       const buffer = Buffer.from(await logo.arrayBuffer());
-      if (!hasValidImageSignature(logo.type, buffer)) {
-        return NextResponse.json({ error: 'The selected file is not a valid image.' }, { status: 400 });
+      if (!isPngBuffer(buffer)) {
+        return NextResponse.json({ error: 'The selected file is not a valid PNG image.' }, { status: 400 });
       }
 
-      const extension = logo.type === 'image/jpeg' ? 'jpg' : logo.type.split('/')[1];
-      uploadedKey = `${registration.division}/${registration.team_id}/${crypto.randomUUID()}.${extension}`;
+      const width = buffer.readUInt32BE(16);
+      const height = buffer.readUInt32BE(20);
+      if (width !== 256 || height !== 256) {
+        return NextResponse.json({
+          error: `Club logo must be exactly 256x256 pixels (received ${width}x${height}). Do not crop, please upload a 256x256 PNG.`,
+        }, { status: 400 });
+      }
+
+      const divisionPrefix = registration.division && registration.division !== 'freshers'
+        ? `${registration.division}/`
+        : '';
+      uploadedKey = `freshers/${divisionPrefix}${registration.team_id}/${crypto.randomUUID()}.png`;
       await r2.send(new PutObjectCommand({
         Bucket: bucket,
         Key: uploadedKey,
         Body: buffer,
-        ContentType: logo.type,
+        ContentType: 'image/png',
         CacheControl: 'public, max-age=31536000, immutable',
       }));
       logoUrl = getPublicLogoUrl(uploadedKey, publicLogoBaseUrl);

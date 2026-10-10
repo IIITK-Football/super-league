@@ -13,6 +13,39 @@ export default function ManageTeams() {
   const [imageFile, setImageFile] = useState(null);
   const [form, setForm] = useState({ name: '', short_name: '', division: 'mens' });
 
+  const handleLogoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setImageFile(null);
+      return;
+    }
+    if (file.type !== 'image/png') {
+      alert('Club logo must be in PNG format.');
+      e.target.value = '';
+      setImageFile(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      if (img.naturalWidth !== 256 || img.naturalHeight !== 256) {
+        alert(`Club logo must be exactly 256x256 pixels (selected image is ${img.naturalWidth}x${img.naturalHeight}px). Uploads cannot be auto-cropped; please upload a 256x256 PNG.`);
+        e.target.value = '';
+        setImageFile(null);
+        return;
+      }
+      setImageFile(file);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      alert('Could not read the selected image file.');
+      e.target.value = '';
+      setImageFile(null);
+    };
+    img.src = objectUrl;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -103,8 +136,9 @@ export default function ManageTeams() {
 
           <div className="bg-black/50 border border-white/10 rounded-xl px-4 py-2 flex items-center gap-3">
             <UploadCloud size={20} className="text-zinc-500" />
-            <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-white/10 file:text-white hover:file:bg-white/20" />
+            <input type="file" accept="image/png" onChange={handleLogoChange} className="w-full text-sm text-zinc-400 file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-white/10 file:text-white hover:file:bg-white/20" />
           </div>
+          <span className="text-[11px] text-zinc-400 block -mt-2">PNG only, exactly 256x256 px. Cropping is disabled.</span>
 
           <button type="submit" disabled={loading} className="w-full bg-[#E8C881] text-black font-black uppercase tracking-widest py-3 rounded-xl hover:bg-[#F9D992] transition-colors">
             {loading ? "Registering..." : "Publish Team to Database"}
