@@ -268,8 +268,8 @@ export function TeamBuilder() {
             const height = image.height;
             URL.revokeObjectURL(sourceUrl);
 
-            if (width !== 512 || height !== 512) {
-                throw new Error(`Player image must be exactly 512 × 512 pixels (selected image is ${width} × ${height}). Please resize and upload again.`);
+            if (width !== 500 || height !== 500) {
+                throw new Error(`Player image must be exactly 500 × 500 pixels (selected image is ${width} × ${height}). Please resize and upload again.`);
             }
 
             const formData = new FormData();
@@ -478,7 +478,7 @@ export function TeamBuilder() {
                                     <input type="file" accept="image/png" onChange={handleImageUpload} disabled={uploadingImage} hidden />
                                 </label>
                             </div>
-                            <span className="text-[10px] text-zinc-500">Must be a PNG format file with exact 512 × 512 resolution</span>
+                            <span className="text-[10px] text-zinc-500">Must be a PNG format file with exact 500 × 500 resolution</span>
                         </div>
                     </div>}
                     {activeTab === 'bio' && <div className="team-builder-grid"><label>Preferred foot<select value={currentPlayer.preferredFoot} onChange={(event) => updatePlayer('preferredFoot', event.target.value)}><option>Right</option><option>Left</option><option>Both</option></select></label><PlayStylePicker value={currentPlayer.playStyleId} onChange={(value) => updatePlayer('playStyleId', value)} /></div>}
