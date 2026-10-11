@@ -18,10 +18,82 @@ class MetaTagRewriter {
     }
 }
 
+const MATCH_METADATA = {
+    "/qf1": () => ({
+        title: "Quarter Final 1",
+        description: "Anna Ball vs PFC",
+        image: "qf1.png"
+    }),
+    "/qf2": () => ({
+        title: "Quarter Final 2",
+        description: "KTM BLASTERS vs 23-Balls",
+        image: "qf2.png"
+    }),
+    "/sf1": (opt) => {
+        const options = {
+            A: "Anna Ball vs Mourinho's Pawn",
+            B: "PFC vs Mourinho's Pawn"
+        };
+        return {
+            title: "Semifinal 1",
+            description: options[opt] || options.A,
+            image: "sf1.png"
+        };
+    },
+    "/sf2": (opt) => {
+        const options = {
+            A: "KTM BLASTERS vs Arakkal Strikers",
+            B: "23-Balls vs Arakkal Strikers"
+        };
+        return {
+            title: "Semifinal 2",
+            description: options[opt] || options.A,
+            image: "sf2.png"
+        };
+    },
+    "/lf1": (opt) => {
+        const options = {
+            "1": "Anna Ball vs KTM BLASTERS",
+            "2": "Anna Ball vs 23-Balls",
+            "3": "Anna Ball vs Arakkal Strikers",
+            "4": "PFC vs KTM BLASTERS",
+            "5": "PFC vs 23-Balls",
+            "6": "PFC vs Arakkal Strikers",
+            "7": "Mourinho's Pawn vs KTM BLASTERS",
+            "8": "Mourinho's Pawn vs 23-Balls",
+            "9": "Mourinho's Pawn vs Arakkal Strikers"
+        };
+        return {
+            title: "3rd Place Playoff",
+            description: options[opt] || options["1"],
+            image: "lf1.png"
+        };
+    },
+    "/f1": (opt) => {
+        const options = {
+            "1": "Anna Ball vs KTM BLASTERS",
+            "2": "Anna Ball vs 23-Balls",
+            "3": "Anna Ball vs Arakkal Strikers",
+            "4": "PFC vs KTM BLASTERS",
+            "5": "PFC vs 23-Balls",
+            "6": "PFC vs Arakkal Strikers",
+            "7": "Mourinho's Pawn vs KTM BLASTERS",
+            "8": "Mourinho's Pawn vs 23-Balls",
+            "9": "Mourinho's Pawn vs Arakkal Strikers"
+        };
+        return {
+            title: "Final",
+            description: options[opt] || options["1"],
+            image: "f1.png"
+        };
+    }
+};
+
 export async function onRequest(context) {
     const { request, next, env } = context;
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "") || "/";
+    const optionParam = url.searchParams.get("option")?.toUpperCase() || url.searchParams.get("option");
 
     let articleId = null;
     if (path.startsWith("/article/")) {
@@ -69,6 +141,12 @@ export async function onRequest(context) {
         } catch (err) {
             console.error(err);
         }
+    } else if (MATCH_METADATA[path]) {
+        const details = MATCH_METADATA[path](optionParam);
+
+        currentTags.title = `${details.title} | Super League`;
+        currentTags.description = details.description;
+        currentTags.image = `${IMAGE_BASE}/${details.image}`;
     } else if (["/", "/fantasy", "/wc", "/matches", "/standings", "/clubs", "/statistics", "/legends", "/rules"].includes(path)) {
         const customNames = {
             "/": "Home",

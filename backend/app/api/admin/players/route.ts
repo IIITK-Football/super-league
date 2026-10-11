@@ -127,8 +127,8 @@ export async function POST(request: Request) {
     const width = buffer.readUInt32BE(16);
     const height = buffer.readUInt32BE(20);
 
-    if (width !== 512 || height !== 512) {
-      return jsonError(`Player image must be 512x512 pixels (received ${width}x${height}).`, 400);
+    if (width !== 500 || height !== 500) {
+      return jsonError(`Player image must be 500 pixels (received ${width}x${height}).`, 400);
     }
 
     const jerseyNumber = jerseyValue ? Number(jerseyValue) : null;
