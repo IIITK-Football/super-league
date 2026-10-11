@@ -26,7 +26,7 @@ const MATCH_METADATA = {
     }),
     "/qf2": () => ({
         title: "Quarter Final 2",
-        description: "KTM BLASTERS vs 23-Balls",
+        description: "KTM BLASTERS vs 23 Balls",
         image: "qf2.png"
     }),
     "/sf1": (opt) => {
@@ -43,7 +43,7 @@ const MATCH_METADATA = {
     "/sf2": (opt) => {
         const options = {
             A: "KTM BLASTERS vs Arakkal Strikers",
-            B: "23-Balls vs Arakkal Strikers"
+            B: "23 Balls vs Arakkal Strikers"
         };
         return {
             title: "Semifinal 2",
@@ -54,13 +54,13 @@ const MATCH_METADATA = {
     "/lf1": (opt) => {
         const options = {
             "1": "Anna Ball vs KTM BLASTERS",
-            "2": "Anna Ball vs 23-Balls",
+            "2": "Anna Ball vs 23 Balls",
             "3": "Anna Ball vs Arakkal Strikers",
             "4": "PFC vs KTM BLASTERS",
-            "5": "PFC vs 23-Balls",
+            "5": "PFC vs 23 Balls",
             "6": "PFC vs Arakkal Strikers",
             "7": "Mourinho's Pawn vs KTM BLASTERS",
-            "8": "Mourinho's Pawn vs 23-Balls",
+            "8": "Mourinho's Pawn vs 23 Balls",
             "9": "Mourinho's Pawn vs Arakkal Strikers"
         };
         return {
@@ -72,13 +72,13 @@ const MATCH_METADATA = {
     "/f1": (opt) => {
         const options = {
             "1": "Anna Ball vs KTM BLASTERS",
-            "2": "Anna Ball vs 23-Balls",
+            "2": "Anna Ball vs 23 Balls",
             "3": "Anna Ball vs Arakkal Strikers",
             "4": "PFC vs KTM BLASTERS",
-            "5": "PFC vs 23-Balls",
+            "5": "PFC vs 23 Balls",
             "6": "PFC vs Arakkal Strikers",
             "7": "Mourinho's Pawn vs KTM BLASTERS",
-            "8": "Mourinho's Pawn vs 23-Balls",
+            "8": "Mourinho's Pawn vs 23 Balls",
             "9": "Mourinho's Pawn vs Arakkal Strikers"
         };
         return {
