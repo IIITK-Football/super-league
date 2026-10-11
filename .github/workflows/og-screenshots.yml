@@ -39,5 +39,4 @@ jobs:
           AWS_DEFAULT_REGION: auto
         run: |
           aws s3 sync ./screenshots s3://${{ secrets.R2_BUCKET_NAME }} \
-            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
-            --delete
+            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
