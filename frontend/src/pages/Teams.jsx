@@ -7,8 +7,19 @@ import { Loader } from '../components/Loader';
 import styles from './Teams.module.css';
 import PlayerProfile from '../components/PlayerProfile';
 
-const POSITION_ORDER = ['GK', 'DEF', 'MID', 'FWD'];
-const POSITION_LABELS = { GK: 'Goalkeepers', DEF: 'Defenders', MID: 'Midfielders', FWD: 'Forwards' };
+const POSITION_ORDER = [
+    'GK', 'Goalkeepers',
+    'CB', 'LB', 'RB', 'LWB', 'RWB', 'DEF', 'Defenders',
+    'CDM', 'CM', 'CAM', 'LM', 'RM', 'MID', 'Midfielders',
+    'LW', 'RW', 'CF', 'ST', 'FWD', 'Forwards', 'Attackers'
+];
+const POSITION_LABELS = {
+    GK: 'Goalkeepers',
+    DEF: 'Defenders',
+    MID: 'Midfielders',
+    FWD: 'Forwards',
+    UNASSIGNED: 'UNASSIGNED',
+};
 
 const getTeamColorClass = (teamName) => {
     if (!teamName) return styles.defaultTeam;
@@ -123,17 +134,47 @@ function TeamOverview({ team, allPlayers, onBack, onSelectPlayer, onSelectMatch 
 
     const playersByPosition = useMemo(() => {
         const groups = {};
+
+        // 1. Group by known tactical order
         for (const pos of POSITION_ORDER) {
-            const inPos = teamPlayers.filter(p => p.position === pos);
-            if (inPos.length > 0) groups[pos] = inPos;
+            const inPos = teamPlayers.filter(p => {
+                const pPos = (p.position || '').trim();
+                return pPos.toUpperCase() === pos.toUpperCase();
+            });
+            if (inPos.length > 0) {
+                groups[pos] = inPos;
+            }
         }
+
+        // 2. Any other assigned positions not in POSITION_ORDER and not unassigned
         teamPlayers.forEach(p => {
-            const pos = p.position || 'UNASSIGNED';
-            if (!POSITION_ORDER.includes(pos)) {
-                if (!groups[pos]) groups[pos] = [];
-                if (!groups[pos].find(x => x.id === p.id)) groups[pos].push(p);
+            const rawPos = (p.position || '').trim();
+            const isUnassigned = !rawPos || rawPos.toUpperCase() === 'UNASSIGNED';
+            if (!isUnassigned) {
+                const alreadyGrouped = POSITION_ORDER.some(pos => pos.toUpperCase() === rawPos.toUpperCase());
+                if (!alreadyGrouped) {
+                    if (!groups[rawPos]) groups[rawPos] = [];
+                    if (!groups[rawPos].find(x => x.id === p.id)) groups[rawPos].push(p);
+                }
             }
         });
+
+        // 3. UNASSIGNED players strictly at the very end
+        const unassignedPlayers = teamPlayers.filter(p => {
+            const rawPos = (p.position || '').trim();
+            return !rawPos || rawPos.toUpperCase() === 'UNASSIGNED';
+        });
+
+        if (unassignedPlayers.length > 0) {
+            unassignedPlayers.sort((a, b) => {
+                if (Boolean(a.image_url) !== Boolean(a.image_url)) {
+                    return a.image_url ? -1 : 1;
+                }
+                return (a.name || '').localeCompare(b.name || '');
+            });
+            groups['UNASSIGNED'] = unassignedPlayers;
+        }
+
         return groups;
     }, [teamPlayers]);
 
@@ -177,11 +218,11 @@ function TeamOverview({ team, allPlayers, onBack, onSelectPlayer, onSelectMatch 
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                         {Object.entries(playersByPosition).map(([position, players]) => (
-                            <div key={position}>
+                            <div key={position} className={position === 'UNASSIGNED' ? 'col-span-1 md:col-span-2' : ''}>
                                 <h3 className="text-base font-bold text-white mb-3">
                                     {POSITION_LABELS[position] || position}
                                 </h3>
-                                <div>
+                                <div className={position === 'UNASSIGNED' ? 'grid grid-cols-1 md:grid-cols-2 gap-x-12' : ''}>
                                     {players.map(player => (
                                         <PlayerRow key={player.id} player={player} teamColor={teamColorClass} teamColorHex={team.team_color} onSelect={onSelectPlayer} />
                                     ))}
