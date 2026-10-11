@@ -148,7 +148,7 @@ export async function onRequest(context) {
     } else if (MATCH_METADATA[path]) {
         const details = MATCH_METADATA[path](optionParam);
 
-        currentTags.title = `${details.title} | Super League`;
+        currentTags.title = `${details.title}`;
         currentTags.description = details.description;
         currentTags.image = `${IMAGE_BASE}/${details.image}`;
     } else if (["/", "/fantasy", "/wc", "/matches", "/standings", "/clubs", "/statistics", "/legends", "/rules"].includes(path)) {
