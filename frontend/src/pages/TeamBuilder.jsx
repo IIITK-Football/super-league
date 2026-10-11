@@ -14,11 +14,36 @@ const positions = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM
 
 const getPlayStyleId = (name) => PLAY_STYLES.find((style) => style.name.toLowerCase() === name?.replace(/\+$/, '').toLowerCase())?.id || '';
 
+const getRandomStat = () => Math.floor(Math.random() * (80 - 40 + 1)) + 40;
+
 const fromMember = (member) => {
     const attributes = member.attributes || {};
     const bio = attributes.bio || {};
     const playStyle = attributes.playStyles?.[0] || {};
-    const stats = attributes.stats || {};
+    const rawStats = attributes.stats || {};
+
+    const statEntries = statKeys.map((key) => {
+        const val = rawStats[key[0].toUpperCase() + key.slice(1)]?.total;
+        return [key, typeof val === 'number' ? val : null];
+    });
+
+    const isAllDefaultOrMissing = statEntries.every(([_, val]) => val === null || val === 50);
+
+    const stats = Object.fromEntries(
+        statEntries.map(([key, val]) => [
+            key,
+            isAllDefaultOrMissing || val === null ? getRandomStat() : val,
+        ])
+    );
+
+    const calculatedAvgRating = Math.round(
+        Object.values(stats).reduce((acc, curr) => acc + curr, 0) / statKeys.length
+    );
+
+    const overallRating = (!member.overall_rating || member.overall_rating === 50)
+        ? calculatedAvgRating
+        : member.overall_rating;
+
     return {
         id: member.id,
         fullName: member.name || [member.first_name, member.last_name].filter(Boolean).join(' '),
@@ -28,9 +53,9 @@ const fromMember = (member) => {
         imageUrl: member.image_url || '',
         preferredFoot: bio.preferredFoot || 'Right',
         playStyleId: getPlayStyleId(playStyle.name),
-        overallRating: member.overall_rating || 50,
+        overallRating,
         attributes,
-        stats: Object.fromEntries(statKeys.map((key) => [key, stats[key[0].toUpperCase() + key.slice(1)]?.total ?? 50])),
+        stats,
     };
 };
 
@@ -313,7 +338,7 @@ export function TeamBuilder() {
                     ...oldAttributes,
                     bio: { ...(oldAttributes.bio || {}), preferredFoot: player.preferredFoot },
                     playStyles: style ? [{ name: style.name, description: style.description, icon_url: style.imageUrl }] : [],
-                    stats: Object.fromEntries(statKeys.map((stat) => [stat[0].toUpperCase() + stat.slice(1), { total: Number(player.stats[stat]) || 50 }])),
+                    stats: Object.fromEntries(statKeys.map((stat) => [stat[0].toUpperCase() + stat.slice(1), { total: Number(player.stats[stat]) || getRandomStat() }])),
                 };
 
                 let rpcError = null;
@@ -322,7 +347,7 @@ export function TeamBuilder() {
                         p_member_id: player.id,
                         p_position: player.position || null,
                         p_jersey_number: Number(player.jerseyNumber) || null,
-                        p_overall_rating: Number(player.overallRating) || 50,
+                        p_overall_rating: Number(player.overallRating) || getRandomStat(),
                         p_attributes: attributes,
                         p_email: player.email ? player.email.trim() : null,
                         p_image_url: player.imageUrl || null,
@@ -339,7 +364,7 @@ export function TeamBuilder() {
                         .update({
                             position: player.position || null,
                             jersey_number: Number(player.jerseyNumber) || null,
-                            overall_rating: Number(player.overallRating) || 50,
+                            overall_rating: Number(player.overallRating) || getRandomStat(),
                             attributes: attributes,
                             email: player.email ? player.email.trim() : null,
                             image_url: player.imageUrl || null,
