@@ -30,28 +30,31 @@ const MATCH_METADATA = {
         image: "qf2.png"
     }),
     "/sf1": (opt) => {
+        const option = opt || "A";
         const options = {
             A: "Anna Ball vs Mourinho's Pawn",
             B: "PFC vs Mourinho's Pawn"
         };
         return {
             title: "Semifinal 1",
-            description: options[opt] || options.A,
-            image: "sf1.png"
+            description: options[option] || options.A,
+            image: `sf1_${option}.png`
         };
     },
     "/sf2": (opt) => {
+        const option = opt || "A";
         const options = {
             A: "KTM BLASTERS vs Arakkal Strikers",
             B: "23 Balls vs Arakkal Strikers"
         };
         return {
             title: "Semifinal 2",
-            description: options[opt] || options.A,
-            image: "sf2.png"
+            description: options[option] || options.A,
+            image: `sf2_${option}.png`
         };
     },
     "/lf1": (opt) => {
+        const option = opt || "1";
         const options = {
             "1": "Anna Ball vs KTM BLASTERS",
             "2": "Anna Ball vs 23 Balls",
@@ -65,11 +68,12 @@ const MATCH_METADATA = {
         };
         return {
             title: "3rd Place Playoff",
-            description: options[opt] || options["1"],
-            image: "lf1.png"
+            description: options[option] || options["1"],
+            image: `lf1_${option}.png`
         };
     },
     "/f1": (opt) => {
+        const option = opt || "1";
         const options = {
             "1": "Anna Ball vs KTM BLASTERS",
             "2": "Anna Ball vs 23 Balls",
@@ -83,8 +87,8 @@ const MATCH_METADATA = {
         };
         return {
             title: "Final",
-            description: options[opt] || options["1"],
-            image: "f1.png"
+            description: options[option] || options["1"],
+            image: `f1_${option}.png`
         };
     }
 };
@@ -129,10 +133,10 @@ export async function onRequest(context) {
                 const data = await supabaseResponse.json();
                 if (data?.[0]) {
                     currentTags.title = data[0].title || "Newsletter | Super League";
-                    
+
                     const rawSummary = data[0].summary || currentTags.description;
                     currentTags.description = rawSummary.replace(/[\r\n]+/g, " ").trim();
-                    
+
                     if (data[0].image_url) {
                         currentTags.image = data[0].image_url;
                     }

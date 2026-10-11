@@ -1,20 +1,19 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
-import sharp from 'sharp';
 
 const BASE_URL = 'https://super-league.pages.dev';
 const routes = ['', 'fantasy', 'wc', 'matches', 'standings', 'clubs', 'statistics', 'legends', 'rules'];
 
 (async () => {
-    console.log('🚀 Starting screenshot automation (2400x1260)...');
+    console.log('🚀 Starting native screenshot automation (1200x630)...');
     if (!fs.existsSync('./screenshots')) fs.mkdirSync('./screenshots');
 
     const browser = await chromium.launch();
     
-    // Retains exact 2400x1260 pixel output
+    // Exact 1200x630 frame, scale 1 = direct 1200x630 pixel output
     const context = await browser.newContext({
         viewport: { width: 1200, height: 630 },
-        deviceScaleFactor: 2
+        deviceScaleFactor: 1
     });
 
     const page = await context.newPage();
@@ -28,21 +27,13 @@ const routes = ['', 'fantasy', 'wc', 'matches', 'standings', 'clubs', 'statistic
 
         try {
             await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-            await page.waitForTimeout(2000); // Allow frontend animations to settle
+            await page.waitForTimeout(2000); // Allow animations to settle
 
-            const rawBuffer = await page.screenshot();
-
-            // Compress buffer while preserving 2400x1260 resolution
-            await sharp(rawBuffer)
-                .png({
-                    quality: 85,        // High-quality palette quantization
-                    palette: true,      // 8-bit palette drops size drastically
-                    compressionLevel: 9 // Maximum PNG compression effort
-                })
-                .toFile(outputPath);
+            // Native Playwright PNG output — no sharp dependency needed
+            await page.screenshot({ path: outputPath });
 
             const stats = fs.statSync(outputPath);
-            console.log(`  └─ Saved ${filename}.png (${Math.round(stats.size / 1024)} KB) [2400x1260]`);
+            console.log(`  └─ Saved ${filename}.png (${Math.round(stats.size / 1024)} KB) [1200x630]`);
 
         } catch (error) {
             console.error(`❌ Failed to capture ${url}:`, error.message);
@@ -50,5 +41,5 @@ const routes = ['', 'fantasy', 'wc', 'matches', 'standings', 'clubs', 'statistic
     }
 
     await browser.close();
-    console.log('✅ Screenshots captured & compressed under 600 KB!');
+    console.log('✅ Direct 1200x630 screenshots complete!');
 })();
