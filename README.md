@@ -5,8 +5,10 @@
 
 **Super League** is the official football league and fantasy prediction platform for the Indian Institute of Information Technology, Kottayam. Designed and built by three students, it is maintained by the open-source community and serves as the authoritative digital record for collegiate football at IIIT Kottayam.
 
-**Live Platform:** [super-league.pages.dev](https://super-league.pages.dev/)
-**Test Platform:** [develop.super-league.pages.dev](https://develop.super-league.pages.dev/)
+| | |
+|---|---|
+| **Live** | [super-league.pages.dev](https://super-league.pages.dev/) |
+| **Test** | [develop.super-league.pages.dev](https://develop.super-league.pages.dev/) |
 
 
 ---
@@ -24,6 +26,35 @@ A proprietary fantasy system in which users predict match results, exact scoreli
 
 **League Administration**
 Centralised access to official rules, newsletter integration, and a Legends archive preserving historical college football records.
+
+---
+
+## Stack
+
+| Layer | Tech |
+|-------|------|
+| Frontend | React 18, Vite, Tailwind CSS 4, React Router |
+| Backend | Next.js (API routes), Zod |
+| Database & Auth | Supabase (Postgres, Auth, RLS) |
+| Storage | Cloudflare R2 |
+| Hosting | Cloudflare Pages (frontend) |
+
+```
+frontend/   React + Vite app, Cloudflare Pages Functions for OG meta tags
+backend/    Next.js API and Supabase migrations
+```
+
+---
+
+## Getting Started
+
+```bash
+cd frontend   # or: cd backend
+pnpm install
+pnpm run dev
+```
+
+See the [Contributing Guide](CONTRIBUTING.md) for the full workflow.
 
 ---
 

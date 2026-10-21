@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
 export function handleError(error: any, context: string) {
-  // 1. VERCEL LOGGING: Log the raw, highly-detailed error to the server console.
-  // Vercel automatically captures `console.error` and stores it in your deployment logs!
+  // 1. SERVER LOGGING: Log the raw, highly-detailed error to the server console
+  // so it lands in the hosting platform's deployment logs.
   console.error(`[SERVER ERROR] - ${context}:`, error);
 
   // 2. DATA SANITIZATION: Strip sensitive data for the client
