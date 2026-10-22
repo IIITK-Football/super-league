@@ -12,7 +12,8 @@ const supabase = createClient(
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q');
+    // Strip PostgREST filter syntax so the search text can't inject extra filters into .or()
+    const query = searchParams.get('q')?.replace(/[,()]/g, '');
     const position = searchParams.get('position');
 
     let dbQuery = supabase

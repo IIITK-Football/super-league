@@ -49,9 +49,10 @@ export function Onboarding() {
 
     try {
       const API_URL = API_BASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${API_URL}/wc/flair`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ user_id: user.id, wc_team_flair: wcFlair })
       });
       if (!res.ok) throw new Error('Failed to update World Cup flair via API');

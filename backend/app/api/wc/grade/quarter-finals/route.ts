@@ -9,7 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function GET(request: NextRequest) {
   const auth = request.nextUrl.searchParams.get('auth');
-  if (auth !== process.env.CRON_SECRET) {
+  if (!process.env.CRON_SECRET || auth !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

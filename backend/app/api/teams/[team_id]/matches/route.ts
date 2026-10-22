@@ -15,6 +15,8 @@ export async function GET(
 ) {
   try {
     const { team_id } = await params;
+    // team_id is interpolated into .or() below, so reject anything but an id
+    if (!/^[\w-]+$/.test(team_id)) throw { status: 400, message: 'Invalid team id' };
 
     const { data, error } = await supabase
       .from('matches')

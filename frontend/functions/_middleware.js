@@ -120,7 +120,7 @@ export async function onRequest(context) {
     if (articleId) {
         try {
             const supabaseResponse = await fetch(
-                `${env.SUPABASE_URL}/rest/v1/newsletter?id=eq.${articleId}&select=title,summary,image_url`,
+                `${env.SUPABASE_URL}/rest/v1/newsletter?id=eq.${encodeURIComponent(articleId)}&select=title,summary,image_url`,
                 {
                     headers: {
                         apikey: env.SUPABASE_ANON_KEY,

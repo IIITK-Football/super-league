@@ -38,7 +38,7 @@ The following workflow applies to all contributors, including Maintainers.
 ### 1. Fork and clone the repository
 
 ```bash
-gh repo fork kevinmatheuu/super-league --clone
+gh repo fork IIITK-Football/super-league --clone
 cd super-league
 ```
 

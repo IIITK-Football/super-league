@@ -9,7 +9,15 @@ export async function PATCH(request: NextRequest) {
   try {
     // 1. Parse the incoming request from the frontend
     const body = await request.json();
-    const { user_id, wc_team_flair } = body;
+    const { wc_team_flair } = body;
+
+    // Identify the caller from their token, never from the request body
+    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    const { data: { user } } = await supabase.auth.getUser(token);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const user_id = user.id;
 
     // 2. Validate that the frontend sent the required data
     if (!user_id || !wc_team_flair) {

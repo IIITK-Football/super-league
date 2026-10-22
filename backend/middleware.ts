@@ -31,11 +31,11 @@ export async function middleware(request: NextRequest) {
     return applyCors(new NextResponse(null, { status: 204 }));
   }
 
-  const isMutation = ['POST', 'PUT', 'DELETE'].includes(request.method);
+  const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method);
 
   // 2. Public Read Rate Limiting
   if (!isMutation) {
-    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
     const userAgent = request.headers.get('user-agent') || 'unknown-device';
     const deviceFingerprint = `public_${ip}_${userAgent}`;
 
@@ -63,7 +63,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (request.nextUrl.pathname === '/api/polls/vote') {
-    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
     const voteLimitCheck = checkRateLimit(`vote_${ip}`, 5, 60 * 1000);
 
     if (!voteLimitCheck.success) {

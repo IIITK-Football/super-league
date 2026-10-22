@@ -78,6 +78,13 @@ export async function POST(request: Request) {
       }
     );
 
+    const { data: roleRecord } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (!['admin', 'dictator'].includes(roleRecord?.role)) throw { status: 403, message: "Forbidden" };
+
     const { data: match, error: matchError } = await supabaseAdmin
       .from('matches')
       .select('home_score, away_score, scorers, assists, status')

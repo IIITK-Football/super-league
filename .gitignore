@@ -22,3 +22,8 @@ frontend/src/pages/FifaPrediction.html
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Editor / tool caches
+.lsp/
+frontend/vite.config.js.timestamp-*
+*.orig

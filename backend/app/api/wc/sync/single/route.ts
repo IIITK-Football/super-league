@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const playerName = searchParams.get('name');
   const dbTeamId = searchParams.get('team_id');
 
-  if (auth !== process.env.CRON_SECRET) {
+  if (!process.env.CRON_SECRET || auth !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

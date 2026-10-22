@@ -68,6 +68,13 @@ export async function POST(request: Request) {
       }
     );
 
+    const { data: roleRecord } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (!['admin', 'dictator'].includes(roleRecord?.role)) throw { status: 403, message: "Forbidden" };
+
     // 2. Fetch all completed matches
     const { data: matches, error: matchesError } = await supabaseAdmin
       .from('matches')
@@ -193,8 +200,7 @@ export async function POST(request: Request) {
     console.error("FATAL REGRADING ERROR:", error);
     return NextResponse.json({ 
       success: false, 
-      message: error.message || (typeof error === 'string' ? error : "Unknown internal error"),
-      detail: JSON.stringify(error)
+      message: error.message || (typeof error === 'string' ? error : "Unknown internal error")
     }, { status: 500 });
   }
 }
