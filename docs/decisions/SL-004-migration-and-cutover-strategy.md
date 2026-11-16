@@ -1,19 +1,19 @@
 # SL-004 — Migration map and cutover strategy
 
-**Status:** Draft for review (Phase 0 decision record). Must be approved before the first domain-model migration (SL-020).
+**Status:** Revised draft for review (Phase 0 decision record). Must be approved before the first domain-model migration (SL-020).
 
 ## 1. Baseline facts
 
 - Active chain: `backend/supabase/migrations/20261106000000_baseline.sql` (20 tables, 3 views, 10 functions, 44 policies); `20261106180125_harden_roles_and_rpc.sql` is empty (placeholder for SL-024/025). Archive: `migrations_legacy/001–035` (reference only, not applied). Local seed: `backend/supabase/seed.sql`.
 - Supabase stays DB + auth behind Workers.
-- `freshers_fixtures` exists only in archived `030`; the frontend (`RoadToFinal.jsx`, `ManageRoadToFinal.jsx`) still queries it. **Hosted contents of this table are unknown** and must be checked read-only by the user/owner before SL-102 retires it.
+- `freshers_fixtures` exists only in archived `030`. Owner checked the hosted Supabase dashboard and found **no such table**; it is treated as absent from the hosted schema and **nothing is migrated from it**. The frontend (`RoadToFinal.jsx`, `ManageRoadToFinal.jsx`) still queries it; that runtime dependency is removed in the later backlog work that replaces it with the canonical fixture/match model (SL-054 / SL-091; final retirement check in SL-102). No hosted re-check is made.
 
 ## 2. Data to retain and mapping
 
 | Legacy | Target | Notes / unsupported or duplicate |
 |---|---|---|
-| `teams.division` (`mens/womens/freshers`) | `divisions` rows + `team_entries.season_id` | Create one division per value; one initial season each (e.g. "2026"). `teams` becomes a reusable club identity; name/logo/colour retained. |
-| `matches.division` (adds `inter`) | `matches.season_id/phase_id` | `inter` has no division; **needs owner decision**: own division or archive. Flag rows during dry-run. |
+| `teams.division` (`mens/womens/freshers`) | `divisions` rows + `team_entries.season_id` | Create one division record per value that has data; one initial season each (e.g. "2026"). Divisions are ordinary data records (no enum). `teams` becomes a reusable club identity; name/logo/colour retained. |
+| `matches.division` (check constraint also allows `inter`) | `matches.season_id/phase_id` | Inter has not started and has no data to preserve: **no Inter division is created**. The dry-run asserts zero `inter` rows; any found is reported as an anomaly, not mapped. A dictator can create Inter later. |
 | `polls.division` (`both`) | poll → division(s) join | `both` = linked to men's+women's. |
 | `team_registrations` (+`division`, `captain_id`, `team_id`) | `team_entries` + captain assignment | Preserves captain→team link. |
 | `players` (team-bound) | `persons` + `roster_memberships` | `players.team_id` → membership for the initial season. |
@@ -22,7 +22,7 @@
 | `goals` | `match_events` (goal/own_goal + assist) | Canonical source. |
 | `matches.scorers/assists/own_goals` JSON | `match_events` | **Parallel duplicate** of `goals`. Reconcile per match: where JSON and `goals` disagree, produce a discrepancy report; owner picks winner (default: `goals` rows, JSON used to fill missing attribution). Keep JSON columns until verified, then retire (SL-102). |
 | `matches.home_score/away_score/penalties/status/minute/timer_*` | retained on match | Authority rule when score ≠ events is a Phase 2 open item (backlog §5). |
-| `user_roles` (`default/editor/captain/dictator/admin`) | four roles + assignments | `default→user`, `captain→captain` (+ assignment from `team_registrations`), `dictator→dictator`. **`admin` and `editor`: owner must list who holds them** and decide scorer vs dictator per person; no blanket auto-mapping. |
+| `user_roles` (`default/editor/captain/dictator/admin`) | five roles + assignments | `default→user`, `captain→captain` (+ assignment from `team_registrations`), `dictator→dictator`, **`editor→editor` (newsletter-only, preserved)**. **`admin` → user with no elevated access**, recorded for explicit review; never auto-mapped to scorer or dictator (see §3a and SL-003). |
 | `user_profiles` (`mens_team_flair`, `womens_team_flair`, `wc_team_flair`, `points`) | profile + per-division fantasy profile + WC profile | `points` is derived; recompute and compare. |
 | `predictions` | prediction scoped to season via match | Retained as-is; FK to match unchanged. |
 | `wc_*` (10 tables) | unchanged | Separate domain; no division/season columns. |
@@ -38,15 +38,30 @@ Orphans/unsupported to report in dry-run: matches with null team ids, players wi
 4. No `DROP`/`TRUNCATE` of tables holding retained data in the same release as its replacement.
 5. Local first: every migration proven on a fresh local reset **and** on a local copy loaded with a sanitized production-shaped dump, if the owner supplies one.
 
+## 3a. Legacy-admin review (local-only, read-only)
+
+Run only against the local database (port 54322) to list legacy admins needing an explicit decision:
+
+```sql
+-- read-only; run via: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+SELECT ur.user_id, up.email, up.real_name, ur.role
+FROM public.user_roles ur
+LEFT JOIN public.user_profiles up ON up.id = ur.user_id
+WHERE ur.role = 'admin'
+ORDER BY up.email;
+```
+
+The output stays local (git-ignored), is never committed, and is never run against hosted. A dictator assigns scorer, dictator, or nothing per person after the migration. A local list file is kept at `.claude/superpowers/legacy-admin-review.md`.
+
 ## 4. Environments and release targets
 
 | Target | Database | Who may mutate | How |
 |---|---|---|---|
 | **local** | local Supabase, 127.0.0.1:54322 | developer | `supabase db reset --local` / `migration up --local` (see `docs/local-development.md`) |
-| **develop** | a separate hosted Supabase project/branch for `develop.super-league.pages.dev` | CI on merge to `develop`, after review | automated migration workflow (SL-080) |
+| **develop** | **Not configured.** No separate hosted develop Supabase project exists. `develop.super-league.pages.dev` is a frontend preview only. | nobody | No develop migration target is assumed. To be created (and recorded here) before SL-080 can automate any develop deployment. |
 | **production** | the hosted project currently linked in this checkout | CI only on approved release, by a dictator/owner | protected environment + manual approval (SL-080/101) |
 
-Owner to confirm: whether a separate develop project exists (README names a develop site; current link is a single project `Super League`). Until confirmed, **no hosted migration is run by anyone from a laptop**, and nothing in this plan connects to hosted.
+The only hosted project is the one currently linked (`Super League`). Until a develop project is created, staged verification is **local only** (fresh reset plus a sanitized production-shaped dump if the owner supplies one), and **no hosted migration is run by anyone from a laptop**. Nothing in this plan connects to hosted.
 
 ## 5. Rollback and forward-repair policy
 
@@ -58,8 +73,12 @@ Owner to confirm: whether a separate develop project exists (README names a deve
 
 ## 6. Staged release order
 
-1. Local proof (reset + seed + tests green). 2. develop deploy and parity checks. 3. Production expand migration + backfill during a quiet window. 4. Parity verification queries. 5. Switch consumers (Workers, then frontend). 6. Hold window. 7. Contract/retire (SL-102). Each stage needs explicit owner approval; nothing is deployed by Claude.
+1. Local proof (reset + seed + tests green). 2. (Develop deploy only if a develop project is later created.) 3. Production expand migration + backfill during a quiet window. 4. Parity verification queries. 5. Switch consumers (Workers, then frontend). 6. Hold window. 7. Contract/retire (SL-102). Each stage needs explicit owner approval; nothing is deployed by Claude.
 
 ## 7. Open items for the owner
 
-`inter` division handling; who holds `admin`/`editor`; whether a develop Supabase project exists; whether hosted `freshers_fixtures` has data; whether to supply a sanitized prod-shaped dump.
+- Whether to create a separate hosted develop Supabase project (currently unconfigured).
+- Whether to supply a sanitized production-shaped dump for local rehearsal.
+- Per-person decision for each legacy `admin` (from the local-only review list), made by a dictator after migration.
+
+Resolved 2026-11-16: `inter` (no data, no division created), `editor` (preserved as editor), `freshers_fixtures` (absent on hosted).
