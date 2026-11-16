@@ -16,12 +16,12 @@ export function Login() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // 1. Grab the intended destination (defaults to "/")
-  const from = location.state?.from?.pathname || "/team-builder";
+  // The page the user was sent from, if any. Without one we keep the role-based default below.
+  const from = location.state?.from?.pathname;
 
   // Save the destination before authentication.
   useEffect(() => {
-    if (from !== "/") {
+    if (from && from !== "/") {
       sessionStorage.setItem('authRedirect', from);
     }
   }, [from]);
@@ -63,7 +63,7 @@ export function Login() {
     } else if (mode === 'signup') {
       const { error: err, needsConfirmation } = await signUpWithPassword(email, password);
       if (err) setError(err);
-      else if (needsConfirmation) setNotice('Check your college inbox for a confirmation link, then sign in.');
+      else if (needsConfirmation) setNotice('Check your college inbox for a confirmation link, then sign in. Already use Google with this email? No email will arrive: sign in with Google and add a password from your profile, or use Forgot password.');
     } else {
       const { error: err, message } = await requestPasswordReset(email);
       if (err) setError(err);

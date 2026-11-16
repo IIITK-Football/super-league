@@ -92,7 +92,11 @@
         "frontend/src/context/AuthContext.jsx",
         "frontend/src/pages/Login.jsx",
         "frontend/src/pages/ResetPassword.jsx",
-        "frontend/src/components/PasswordSettings.jsx"
+        "frontend/src/components/PasswordSettings.jsx",
+        "frontend/src/components/GlobalAuthRedirect.jsx",
+        "frontend/src/pages/__tests__/**",
+        "frontend/src/components/__tests__/**",
+        "frontend/src/App.jsx"
       ],
       "run": [
         {
@@ -113,7 +117,9 @@
             "vitest",
             "run",
             "src/lib/__tests__/authRules.test.js",
-            "src/lib/__tests__/authApi.test.js"
+            "src/lib/__tests__/authApi.test.js",
+            "src/pages/__tests__",
+            "src/components/__tests__"
           ]
         }
       ]

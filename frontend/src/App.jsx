@@ -6,6 +6,7 @@ import { Loader } from './components/Loader';
 import { useLocation } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { ResetPassword } from './pages/ResetPassword';
+import { GlobalAuthRedirect } from './components/GlobalAuthRedirect';
 
 // Pages
 import { Home } from './pages/Home';
@@ -29,7 +30,6 @@ import { RoleWorkspace } from './pages/RoleWorkspace';
 import MatchTimeline from './components/MatchTimeline';
 
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useLeague } from './context/LeagueContext';
 // A smart wrapper to protect routes that require login
 function ProtectedRoute({ children }) {
@@ -59,25 +59,6 @@ function PublicRoute({ children }) {
       <main className="animate-in fade-in duration-500">{children}</main>
     </div>
   );
-}
-
-function GlobalAuthRedirect() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    // Whenever a user logs in, check if they had a saved destination!
-    if (user && location.pathname !== '/login') {
-      const redirectUrl = sessionStorage.getItem('authRedirect');
-      if (redirectUrl) {
-        sessionStorage.removeItem('authRedirect'); // Clean up
-        navigate(redirectUrl, { replace: true }); // Send them there!
-      }
-    }
-  }, [user, navigate, location.pathname]);
-
-  return null; // This component renders nothing visually
 }
 
 function WcRoute() {
