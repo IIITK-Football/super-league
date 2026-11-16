@@ -212,11 +212,14 @@ token_verifications = 30
 # Number of Web3 logins that can be made in a 5 minute interval per IP address.
 web3 = 30
 
-# Configure one of the supported captcha providers: `hcaptcha`, `turnstile`.
-# [auth.captcha]
-# enabled = true
-# provider = "hcaptcha"
-# secret = ""
+# Cloudflare Turnstile protects password sign-in, sign-up and reset: Supabase Auth verifies the
+# token the browser sends. The secret comes from the environment (never commit a real one). With
+# `pnpm db:start` it defaults to Cloudflare's always-pass TEST secret; put a real one in the
+# git-ignored backend/supabase/.env as SUPABASE_AUTH_CAPTCHA_SECRET. Google sign-in is unaffected.
+[auth.captcha]
+enabled = true
+provider = "turnstile"
+secret = "env(SUPABASE_AUTH_CAPTCHA_SECRET)"
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.

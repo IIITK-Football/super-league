@@ -27,7 +27,8 @@
         "backend/lib/env.ts",
         "backend/instrumentation.ts",
         "frontend/src/lib/env.js",
-        "frontend/src/lib/supabase.js"
+        "frontend/src/lib/supabase.js",
+        "backend/supabase/config.toml"
       ],
       "run": [
         {

@@ -24,6 +24,14 @@ describe.each(files)('%s', (rel) => {
     }
   });
 
+  it('holds only Cloudflare Turnstile TEST keys, never a real site key or secret', () => {
+    // Real Turnstile keys start with 0x; Cloudflare's published test keys start with 1x, 2x or 3x.
+    for (const v of vars.filter((x) => /TURNSTILE|CAPTCHA/.test(x.name) && x.value !== '')) {
+      expect(v.value).toMatch(/^[123]x[0-9A-Za-z]+$/);
+    }
+    expect(text).not.toMatch(/\b0x4[0-9A-Za-z_-]{15,}/);
+  });
+
   it('points Supabase at the local stack', () => {
     for (const v of vars.filter((x) => /SUPABASE_URL$/.test(x.name))) {
       expect(v.value).toMatch(/^http:\/\/(127\.0\.0\.1|localhost):54321$/);

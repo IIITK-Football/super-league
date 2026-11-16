@@ -18,6 +18,7 @@ function fakeCli(statusUrl: string | null) {
 echo "$@" >> "${log}"
 if [ "$1" = "start" ]; then
   echo "google-client-id=$SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID google-secret=$SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET" >> "${log}"
+  echo "captcha-secret=$SUPABASE_AUTH_CAPTCHA_SECRET" >> "${log}"
   touch "${dir}/started"
 fi
 if [ "$1" = "status" ] && [ -n "$STATUS_AFTER_START" ] && [ ! -f "${dir}/started" ]; then
@@ -130,6 +131,25 @@ describe('local-db.sh', () => {
     });
     expect(r.status).toBe(0);
     expect(calls()).toContain('google-client-id= google-secret=');
+  });
+
+  it('start uses Cloudflare\'s published always-pass test secret for Turnstile when none is set', () => {
+    const r = run(['start'], { env: { STATUS_AFTER_START: '1' } });
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('captcha-secret=1x0000000000000000000000000000000AA');
+  });
+
+  it('start keeps a real Turnstile secret from the environment', () => {
+    const r = run(['start'], { env: { STATUS_AFTER_START: '1', SUPABASE_AUTH_CAPTCHA_SECRET: 'real-turnstile-secret' } });
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('captcha-secret=real-turnstile-secret');
+    expect(calls()).not.toContain('1x0000000000000000000000000000000AA');
+  });
+
+  it('start does not override a Turnstile secret defined in supabase/.env', () => {
+    const r = run(['start'], { env: { STATUS_AFTER_START: '1' }, supabaseEnvFile: 'SUPABASE_AUTH_CAPTCHA_SECRET=from-file\n' });
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('captcha-secret=\n');
   });
 
   it('rejects unknown commands and forwarded flags', () => {
