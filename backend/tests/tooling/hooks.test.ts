@@ -4,7 +4,6 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error plain ESM script without types
 import { checkStagedFiles, scanAddedLines, validateCommitMessage } from '../../../scripts/hooks/lib.mjs';
 
 const root = join(__dirname, '../../..');

@@ -43,7 +43,7 @@ function run(args: string[], opts: { url?: string | null; port?: string; project
       LOCAL_DB_SUPABASE_CMD: fakeCli(url),
       LOCAL_DB_BACKEND_DIR: backendDir(opts.port, opts.project),
       LOCAL_DB_SKIP_PORT_CHECK: '1',
-    },
+    } as unknown as NodeJS.ProcessEnv,
   });
 }
 

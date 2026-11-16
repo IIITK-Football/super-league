@@ -2,7 +2,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error plain ESM script without types
 import { affectedGroups, globToRegExp, loadGroups, validateGroups } from '../../../scripts/test-groups.mjs';
 
 const root = join(__dirname, '../../..');
