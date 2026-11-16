@@ -1,5 +1,16 @@
 BEGIN;
 
+-- Offline, deterministic image placeholder (SVG data URI). Local fixtures must not
+-- depend on third-party image hosts or production R2.
+CREATE FUNCTION pg_temp.placeholder_svg(label text, bg text, size integer DEFAULT 256)
+RETURNS text LANGUAGE sql IMMUTABLE AS $f$
+  SELECT 'data:image/svg+xml;base64,' || translate(encode(convert_to(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' || size || '" height="' || size
+    || '" viewBox="0 0 100 100"><rect width="100" height="100" fill="' || bg
+    || '"/><text x="50" y="58" font-family="sans-serif" font-size="26" font-weight="700" '
+    || 'fill="#ffffff" text-anchor="middle">' || label || '</text></svg>', 'UTF8'), 'base64'), E'\n', '')
+$f$;
+
 -- Local fixture accounts. Their empty passwords mean they cannot sign in.
 INSERT INTO auth.users (
   id, aud, role, email, encrypted_password,
@@ -39,6 +50,41 @@ INSERT INTO _mega_users VALUES
   ('60000000-0000-4000-8000-000000000002', 'river@iiitkottayam.ac.in', 'River Cartwright', 'River', 'captain', 36),
   ('60000000-0000-4000-8000-000000000003', 'diana@iiitkottayam.ac.in', 'Diana Taverner', 'Taverner', 'editor', 29),
   ('60000000-0000-4000-8000-000000000004', 'sydney@iiitkottayam.ac.in', 'Sydney Adamu', 'Sydney', 'default', 21);
+
+-- 46 additional plain fixture accounts so leaderboards and pagination have volume.
+CREATE TEMP TABLE _mega_fans ON COMMIT DROP AS
+SELECT
+  md5('mega-fan:' || n)::uuid AS id,
+  'fan' || lpad(n::text, 2, '0') || '@iiitkottayam.ac.in' AS email,
+  'Fixture Fan ' || lpad(n::text, 2, '0') AS full_name,
+  'fan' || lpad(n::text, 2, '0') AS nickname,
+  mod(n * 7, 50) AS points
+FROM generate_series(1, 46) AS n;
+
+INSERT INTO auth.users (
+  id, aud, role, email, encrypted_password,
+  raw_app_meta_data, raw_user_meta_data,
+  created_at, updated_at, is_sso_user, is_anonymous
+)
+SELECT id, 'authenticated', 'authenticated', email, '',
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  jsonb_build_object('full_name', full_name), now(), now(), false, false
+FROM _mega_fans
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.user_profiles (id, email, real_name, nickname, points)
+SELECT id, email, full_name, nickname, points FROM _mega_fans
+ON CONFLICT (id) DO UPDATE
+SET email = EXCLUDED.email, real_name = EXCLUDED.real_name,
+    nickname = EXCLUDED.nickname, points = EXCLUDED.points;
+
+INSERT INTO public.user_roles (user_id, role)
+SELECT id, 'default' FROM _mega_fans
+ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role;
+
+INSERT INTO public.wc_leaderboard (user_id, points, updated_at)
+SELECT id, points, now() FROM _mega_fans
+ON CONFLICT (user_id) DO UPDATE SET points = EXCLUDED.points, updated_at = now();
 
 INSERT INTO public.user_profiles (id, email, real_name, nickname, points)
 SELECT id, email, full_name, nickname, points
@@ -91,21 +137,16 @@ INSERT INTO _mega_roster VALUES
   ('The Penguin', 7, 'Eve', 'Karlo', 'Forward'),
   ('The Penguin', 8, 'Alberto', 'Falcone', 'Defender');
 
--- Generic stock portraits reused across local fixture players.
+-- Generated placeholder portraits reused across local fixture players.
 CREATE TEMP TABLE _mega_portraits (
   slot integer PRIMARY KEY,
   image_url text NOT NULL
 ) ON COMMIT DROP;
 
-INSERT INTO _mega_portraits VALUES
-  (1, 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80'),
-  (2, 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80'),
-  (3, 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80'),
-  (4, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=500&q=80'),
-  (5, 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=500&q=80'),
-  (6, 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=500&q=80'),
-  (7, 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=500&q=80'),
-  (8, 'https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=500&q=80');
+INSERT INTO _mega_portraits
+SELECT slot, pg_temp.placeholder_svg('P' || slot,
+  (ARRAY['#1f6feb','#8957e5','#d29922','#238636','#da3633','#0e8a8a','#bc4c00','#6e7681'])[slot])
+FROM generate_series(1, 8) AS slot;
 
 -- Teams are assigned to divisions by show:
 -- mens = Slow Horses; womens = The Penguin; freshers = The Bear.
@@ -163,9 +204,7 @@ SELECT
   c.team_name,
   c.short_name,
   c.team_color,
-  'https://ui-avatars.com/api/?name=' || c.short_name
-    || '&background=' || replace(c.team_color, '#', '')
-    || '&color=fff&bold=true&size=256' AS logo_url
+  pg_temp.placeholder_svg(c.short_name, c.team_color) AS logo_url
 FROM _mega_club_defs c
 JOIN _mega_division_shows d USING (show_name);
 
@@ -490,8 +529,7 @@ INSERT INTO public.wc_teams (id, name, logo_url, group_name, abbreviation)
 SELECT
   id,
   team_name,
-  'https://ui-avatars.com/api/?name=' || abbreviation
-    || '&background=343A40&color=fff&bold=true&size=256',
+  pg_temp.placeholder_svg(abbreviation, '#343A40'),
   group_name,
   abbreviation
 FROM _mega_wc_clubs
