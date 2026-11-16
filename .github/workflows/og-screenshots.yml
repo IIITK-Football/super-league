@@ -14,18 +14,23 @@ jobs:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: 📦 Install Dependencies
         working-directory: ./frontend
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: 🎭 Install Playwright
         working-directory: ./frontend
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: 📸 Take Screenshots
         working-directory: ./frontend

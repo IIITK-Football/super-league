@@ -1,6 +1,18 @@
 {
-  "dependencies": {
-    "psql": "^0.0.1"
+  "name": "super-league",
+  "private": true,
+  "packageManager": "pnpm@10.30.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "install:all": "pnpm install --frozen-lockfile",
+    "dev:frontend": "pnpm --filter ./frontend dev",
+    "dev:backend": "pnpm --filter ./backend dev",
+    "build:frontend": "pnpm --filter ./frontend build",
+    "build:backend": "pnpm --filter ./backend build",
+    "lint": "pnpm -r lint"
   },
   "devDependencies": {
     "supabase": "^2.119.0"
