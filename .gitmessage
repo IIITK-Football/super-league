@@ -1,0 +1,6 @@
+# type(scope): SL-0xx short subject   (72 characters max)
+#
+# Types: feat fix docs style refactor perf test build ci chore revert
+# Example: feat(db): SL-011 deterministic local seed
+#
+# Body (optional): what changed and why. Lines starting with # are ignored.
