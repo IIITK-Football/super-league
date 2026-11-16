@@ -38,6 +38,11 @@ check_config() {
 # credentials the CLI still needs values, so pass harmless placeholders (email/password sign-in
 # keeps working; the Google button then reports that Google is not set up). Real credentials come
 # from the process environment or the git-ignored backend/supabase/.env and are never overridden.
+#
+# config.toml also enables Cloudflare Turnstile for password sign-in. Locally it defaults to
+# Cloudflare's published always-pass TEST secret (a public documentation value, not a secret), so
+# the stack works out of the box with the matching test site key. A real secret is read from the
+# environment or backend/supabase/.env and is never overridden.
 google_env_defaults() {
   local var envfile="$BACKEND_DIR/supabase/.env"
   for var in SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET; do
@@ -45,6 +50,10 @@ google_env_defaults() {
     if [ -f "$envfile" ] && grep -Eq "^${var}=.+" "$envfile"; then continue; fi
     export "$var=google-not-configured"
   done
+  var=SUPABASE_AUTH_CAPTCHA_SECRET
+  if [ -z "${!var:-}" ] && ! { [ -f "$envfile" ] && grep -Eq "^${var}=.+" "$envfile"; }; then
+    export "$var=1x0000000000000000000000000000000AA"
+  fi
 }
 
 # Prints the verified database URL (password hidden) or exits non-zero.

@@ -25,7 +25,18 @@ Code: `frontend/src/lib/authApi.js` (actions), `authRules.js` (domain and passwo
 - Local email (confirmation and reset) goes only to the local Mailpit at <http://127.0.0.1:54324>. No SMTP is configured locally, so nothing leaves your machine.
 - New password accounts must confirm their email (click the link in Mailpit). Minimum password length is 8.
 - **Google locally (optional):** create a Web OAuth client in Google Cloud with the authorised redirect URI `http://127.0.0.1:54321/auth/v1/callback`, copy `backend/supabase/.env.example` to `backend/supabase/.env` (git-ignored) and fill in the client ID and secret, then restart with `pnpm db:stop && pnpm db:start`. Without credentials `pnpm db:start` passes placeholders so the stack still starts; the Google button then shows that Google is not set up.
-- Config changes in `backend/supabase/config.toml` (confirmations, redirect URLs, Google provider, rate limit) take effect when the local stack is restarted.
+- **Turnstile locally:** `pnpm db:start` supplies Cloudflare's published always-pass *test* secret and `frontend/.env.example` has the matching *test* site key, so the widget works out of the box and always passes. To try a real widget, put a real secret in `backend/supabase/.env` (`SUPABASE_AUTH_CAPTCHA_SECRET`) and a real site key in `frontend/.env.local`. Never commit real values.
+- Config changes in `backend/supabase/config.toml` (confirmations, redirect URLs, Google provider, Turnstile, rate limit) take effect when the local stack is restarted.
+
+## Bot protection (Cloudflare Turnstile)
+
+Password sign-in, sign-up and reset requests (and the headquarters login) require a Turnstile check. **Supabase Auth verifies the token server-side**, so the secret lives only in Supabase Auth settings and the app never holds it:
+
+- The browser widget (`components/TurnstileWidget.jsx`) appears only when `VITE_TURNSTILE_SITE_KEY` (a public value) is set, and asks for a fresh token after every attempt.
+- `authApi.js` sends the token as `captchaToken`. The backend login route (`/api/auth/login`) forwards it. When that route moves to a Cloudflare Worker, the contract is the same and the Worker needs no Turnstile secret.
+- **Not covered by this check:** Google sign-in, and changing a password while already signed in.
+- Future custom endpoints (for example registration forms) verify a token with Cloudflare's siteverify using a Worker secret (`wrangler secret`, with `.dev.vars` kept out of Git). That is not built yet.
+- Without a site key nothing extra is sent, which only works while CAPTCHA is off in Supabase. To roll back: turn CAPTCHA off in Supabase, then remove the site key.
 
 Tests: `pnpm test:group auth-identity` (unit tests for the rules, and integration tests against the local Auth service for same-user password setup, recovery, duplicate sign-up, domain rejection, and Mailpit delivery).
 
@@ -56,6 +67,13 @@ select id, email from auth.users where email is null or email !~* '^[^@[:space:]
 
 Also confirm the Cloudflare Pages build (production and previews) defines `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; the app now stops with a clear message if either is missing instead of using dummy values.
 
+### Turnstile: settings for the owner to prepare (nothing here is done by the repository)
+
+1. In Cloudflare, create a Turnstile widget whose allowed hostnames include the production site and any preview domains. Keep the **secret key** for step 3; the **site key** is public.
+2. In Cloudflare Pages, add `VITE_TURNSTILE_SITE_KEY` (the site key) for production and previews. Add it **together with** step 3, not before: a site key without CAPTCHA enabled does no harm, but CAPTCHA enabled without a site key blocks every password sign-in.
+3. In Supabase (Authentication → Attack Protection), enable CAPTCHA with provider Turnstile and paste the secret key.
+4. The headquarters login and the password pages are covered; Google sign-in is not affected.
+
 ## Release order and rollback
 
 Order (each step needs your approval; nothing here is automated yet):
@@ -63,7 +81,7 @@ Order (each step needs your approval; nothing here is automated yet):
 1. Record a backup or point-in-time-recovery point, and save the hosted function and trigger definitions from the checks above.
 2. Apply the dashboard settings above (Confirm email, SMTP, URLs, password length).
 3. Apply migration `20261117000000_auth_college_domain_and_new_user_triggers.sql` through the approved release process.
-4. Deploy the frontend and backend.
+4. Add the Turnstile site key to Pages and enable CAPTCHA with the secret in Supabase together (see the Turnstile steps above), then deploy the frontend and backend.
 5. Verify with a college test account in an isolated Auth environment (password sign-up and confirmation, reset, Google sign-in linking). Never use production as the test target.
 
 Rollback:

@@ -14,12 +14,53 @@ export function localKeys(): Keys {
   return { url: out.API_URL, anon: out.ANON_KEY, service: out.SERVICE_ROLE_KEY };
 }
 
-export function clients(keys: Keys): { anon: () => SupabaseClient; admin: SupabaseClient } {
+// Dummy token Cloudflare documents for its always-pass TEST secret (the local default). It is
+// ignored when CAPTCHA is not enabled, so existing tests behave the same either way.
+export const CAPTCHA_TEST_TOKEN = 'XXXX.DUMMY.TOKEN.XXXX';
+
+export function clients(keys: Keys): {
+  anon: () => SupabaseClient;
+  anonWithoutCaptcha: () => SupabaseClient;
+  admin: SupabaseClient;
+} {
   const opts = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
+  const plain = () => createClient(keys.url, keys.anon, opts);
   return {
-    anon: () => createClient(keys.url, keys.anon, opts),
+    // Adds the test token to the three password endpoints, like the real app does.
+    anon: () => {
+      const c = plain();
+      const auth = c.auth as any;
+      const withToken = (o: any = {}) => ({ ...o, options: { ...(o.options ?? {}), captchaToken: CAPTCHA_TEST_TOKEN } });
+      const signIn = auth.signInWithPassword.bind(auth);
+      const signUp = auth.signUp.bind(auth);
+      const reset = auth.resetPasswordForEmail.bind(auth);
+      auth.signInWithPassword = (cred: any) => signIn(withToken(cred));
+      auth.signUp = (cred: any) => signUp(withToken(cred));
+      auth.resetPasswordForEmail = (email: string, o: any = {}) => reset(email, { ...o, captchaToken: CAPTCHA_TEST_TOKEN });
+      return c;
+    },
+    anonWithoutCaptcha: plain,
     admin: createClient(keys.url, keys.service, opts),
   };
+}
+
+// True when the running local Auth service rejects a password sign-in that has no token.
+export async function captchaEnabled(client: SupabaseClient): Promise<boolean> {
+  const { error } = await client.auth.signInWithPassword({ email: 'probe@iiitkottayam.ac.in', password: 'probe-password-1' });
+  return /captcha/i.test(error?.message ?? '');
+}
+
+// Cloudflare's siteverify must be reachable for a token to pass; skip those checks when offline.
+export async function cloudflareReachable(): Promise<boolean> {
+  try {
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      signal: AbortSignal.timeout(4000),
+    });
+    return res.status < 500;
+  } catch {
+    return false;
+  }
 }
 
 export const uniqueEmail = (label: string, domain = 'iiitkottayam.ac.in') =>
