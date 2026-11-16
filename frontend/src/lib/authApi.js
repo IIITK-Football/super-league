@@ -59,13 +59,33 @@ export function createAuthApi(supabase, { origin }) {
     return error ? fail(friendly(error)) : { error: null };
   }
 
-  async function setPassword(password) {
+  // Changing a password on an older session needs an emailed one-time code (Supabase "Secure
+  // password change"). `needsReauth` tells the caller to ask for the code and retry with it.
+  async function setPassword(password, code) {
     const { data } = await auth.getSession();
     if (!data?.session) return fail('Please sign in first.');
     const bad = validateNewPassword(password, data.session.user?.email);
     if (bad) return fail(bad);
-    const { error } = await auth.updateUser({ password });
-    return error ? fail(friendly(error)) : { error: null };
+    const payload = { password };
+    if (code && String(code).trim()) payload.nonce = String(code).trim();
+    const { error } = await auth.updateUser(payload);
+    if (!error) return { error: null };
+    const msg = error.message || '';
+    if (/nonce/i.test(msg)) {
+      return { error: 'That code is incorrect or has expired. Send a new code and try again.', needsReauth: true };
+    }
+    if (/reauthentication/i.test(msg)) {
+      return { error: 'For your security, enter the code we email you to change your password.', needsReauth: true };
+    }
+    return fail(friendly(error));
+  }
+
+  async function requestPasswordChangeCode() {
+    const { data } = await auth.getSession();
+    if (!data?.session) return fail('Please sign in first.');
+    const { error } = await auth.reauthenticate();
+    if (error) return fail(friendly(error));
+    return { error: null, message: 'We emailed a code to your college address. Enter it below to finish.' };
   }
 
   async function linkGoogle() {
@@ -95,5 +115,14 @@ export function createAuthApi(supabase, { origin }) {
     return error ? fail(friendly(error)) : { error: null };
   }
 
-  return { signInWithPassword, signUpWithPassword, signInWithGoogle, setPassword, linkGoogle, requestPasswordReset, completePasswordReset };
+  return {
+    signInWithPassword,
+    signUpWithPassword,
+    signInWithGoogle,
+    setPassword,
+    requestPasswordChangeCode,
+    linkGoogle,
+    requestPasswordReset,
+    completePasswordReset,
+  };
 }

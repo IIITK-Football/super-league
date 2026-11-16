@@ -123,6 +123,7 @@
             "src/lib/__tests__/authRules.test.js",
             "src/lib/__tests__/authApi.test.js",
             "src/lib/__tests__/authApi.captcha.test.js",
+            "src/lib/__tests__/authApi.reauth.test.js",
             "src/pages/__tests__",
             "src/components/__tests__"
           ]
