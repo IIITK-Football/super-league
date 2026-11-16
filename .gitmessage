@@ -1,6 +1,7 @@
-# type(scope): SL-0xx short subject   (72 characters max)
+# type(scope): short subject in plain language   (72 characters max)
 #
 # Types: feat fix docs style refactor perf test build ci chore revert
-# Example: feat(db): SL-011 deterministic local seed
+# Example: feat(auth): support password login for Google accounts
+# Keep backlog numbers and ticket IDs out of commit messages.
 #
-# Body (optional): what changed and why. Lines starting with # are ignored.
+# Body (optional): what changed and why, in normal sentences. Lines starting with # are ignored.
