@@ -96,7 +96,8 @@
         "frontend/src/components/GlobalAuthRedirect.jsx",
         "frontend/src/pages/__tests__/**",
         "frontend/src/components/__tests__/**",
-        "frontend/src/App.jsx"
+        "frontend/src/App.jsx",
+        "docs/rollback/**"
       ],
       "run": [
         {

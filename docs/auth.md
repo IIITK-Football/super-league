@@ -41,3 +41,33 @@ This repository does not change hosted Supabase. Please check or apply these in 
 6. **Database**: the migration above is idempotent. Production already has `ensure_domain_lock`, `on_auth_user_created` and `on_auth_user_role_created`; the migration replaces them with the same names and a stricter (case-insensitive, exact-domain) check. Apply it only through the approved release process.
 
 Existing users are not touched by any of this. Nothing here deletes or recreates a user.
+
+### Read-only checks to run on the hosted project first (Supabase SQL editor)
+
+```sql
+-- Triggers currently on auth.users (names and definitions)
+select tgname, pg_get_triggerdef(oid) from pg_trigger where tgrelid = 'auth.users'::regclass and not tgisinternal;
+-- Existing definitions, to restore exactly if they differ from the baseline versions
+select pg_get_functiondef('public.enforce_college_domain()'::regprocedure);
+select pg_get_functiondef('public.handle_new_user()'::regprocedure);
+-- Accounts outside the college domain (these could not use the HQ login after this change)
+select id, email from auth.users where email is null or email !~* '^[^@[:space:]]+@iiitkottayam\.ac\.in$';
+```
+
+Also confirm the Cloudflare Pages build (production and previews) defines `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; the app now stops with a clear message if either is missing instead of using dummy values.
+
+## Release order and rollback
+
+Order (each step needs your approval; nothing here is automated yet):
+
+1. Record a backup or point-in-time-recovery point, and save the hosted function and trigger definitions from the checks above.
+2. Apply the dashboard settings above (Confirm email, SMTP, URLs, password length).
+3. Apply migration `20261117000000_auth_college_domain_and_new_user_triggers.sql` through the approved release process.
+4. Deploy the frontend and backend.
+5. Verify with a college test account in an isolated Auth environment (password sign-up and confirmation, reset, Google sign-in linking). Never use production as the test target.
+
+Rollback:
+
+- **Database:** forward-fix only. `docs/rollback/auth-college-domain-rollback.sql` restores the previous domain check and profile function and drops only the new email-change guard; it deliberately keeps the domain, profile and role triggers. It changes no rows, and a test applies it to the local database inside a transaction that is rolled back. If the hosted definitions differ from the baseline, restore the ones you saved in step 1 instead.
+- **Frontend and backend:** redeploy the previous build. The previous build still works with the new triggers.
+- **Dashboard settings:** revert them individually. Accounts created while Confirm email was on stay valid.
