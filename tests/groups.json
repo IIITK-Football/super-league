@@ -1,0 +1,75 @@
+{
+  "$comment": "Test groups (SL-014). `paths` are repo-relative globs (* = within a segment, ** = across segments) that select the group when a changed file matches. `owner` is the responsible area. A group with `\"status\": \"pending\"` has no tests yet; it is reported (not failed) until the backlog item named in `pendingFor` adds them.",
+  "groups": {
+    "database": {
+      "description": "Schema, migrations, seed, RLS policies (pgTAP against the local Supabase DB on 54322)",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": ["backend/supabase/**"],
+      "run": [{ "cwd": ".", "cmd": ["bash", "scripts/local-db.sh", "test"] }]
+    },
+    "config": {
+      "description": "Environment examples and startup validation for frontend and backend",
+      "owner": "platform",
+      "paths": ["**/.env.example", "backend/lib/env.ts", "backend/instrumentation.ts", "frontend/src/lib/env.js", "frontend/src/lib/supabase.js"],
+      "run": [
+        { "cwd": "backend", "cmd": ["pnpm", "exec", "vitest", "run", "tests/config"] },
+        { "cwd": "frontend", "cmd": ["pnpm", "exec", "vitest", "run", "src/lib"] }
+      ]
+    },
+    "tooling": {
+      "description": "Repository scripts, test-group runner, commit hooks, workspace config",
+      "owner": "platform",
+      "paths": ["scripts/**", "tests/groups.json", ".githooks/**", ".pre-commit-config.yaml", "pnpm-workspace.yaml", ".github/workflows/**"],
+      "run": [{ "cwd": "backend", "cmd": ["pnpm", "exec", "vitest", "run", "tests/tooling"] }]
+    },
+    "auth-roles": {
+      "description": "Five-role authorization: API checks and RLS (user, captain, scorer, editor, dictator)",
+      "owner": "backend",
+      "status": "pending",
+      "pendingFor": "SL-024/SL-025",
+      "paths": ["backend/lib/auth/**", "backend/supabase/migrations/**", "backend/app/api/admin/**", "backend/app/api/captain/**"],
+      "run": []
+    },
+    "api-services": {
+      "description": "Backend API services and contracts",
+      "owner": "backend",
+      "status": "pending",
+      "pendingFor": "SL-026/SL-030",
+      "paths": ["backend/app/api/**", "backend/lib/**"],
+      "run": []
+    },
+    "match-operations": {
+      "description": "Scorer workspace, match events, cards, lineups, brackets, statistics",
+      "owner": "backend",
+      "status": "pending",
+      "pendingFor": "SL-050..SL-055",
+      "paths": ["backend/app/api/matches/**", "backend/app/api/admin/matches/**", "backend/app/api/standings/**"],
+      "run": []
+    },
+    "fantasy": {
+      "description": "Division fantasy and World Cup fantasy scoring and predictions",
+      "owner": "backend",
+      "status": "pending",
+      "pendingFor": "SL-043/SL-055",
+      "paths": ["backend/app/api/predictions/**", "backend/app/api/wc/**", "backend/app/api/leaderboard/**"],
+      "run": []
+    },
+    "frontend-components": {
+      "description": "React components, hooks and pages (Vitest)",
+      "owner": "frontend",
+      "paths": ["frontend/src/**", "frontend/index.html", "frontend/vite.config.js"],
+      "run": [{ "cwd": "frontend", "cmd": ["pnpm", "exec", "vitest", "run", "--passWithNoTests"] }]
+    },
+    "e2e": {
+      "description": "Browser end-to-end flows (Playwright); scheduled/release runs only",
+      "owner": "frontend",
+      "status": "pending",
+      "pendingFor": "SL-100",
+      "scheduledOnly": true,
+      "paths": ["frontend/**", "backend/app/**"],
+      "run": []
+    }
+  },
+  "allGroupsTriggers": ["package.json", "pnpm-lock.yaml", "frontend/pnpm-lock.yaml", "backend/pnpm-lock.yaml", "pnpm-workspace.yaml", ".nvmrc", ".npmrc"]
+}

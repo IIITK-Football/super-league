@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 2 * * *'   # full run every night
+  workflow_dispatch:      # full run on demand (release checks)
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            frontend/pnpm-lock.yaml
+            backend/pnpm-lock.yaml
+
+      - name: Install (frozen lockfiles)
+        run: pnpm install --frozen-lockfile
+
+      - name: Select groups
+        id: select
+        run: |
+          set -euo pipefail
+          ARGS="$(if [ '${{ github.event_name }}' = 'schedule' ] || [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then echo all; elif [ '${{ github.event_name }}' = 'pull_request' ]; then echo "affected --base origin/${{ github.base_ref }}"; else echo "affected --base ${{ github.event.before }}"; fi)"
+          echo "args=$ARGS" >> "$GITHUB_OUTPUT"
+          node scripts/test-groups.mjs $ARGS --dry-run | tee plan.txt
+          if [ "$ARGS" = "all" ] || grep -qE "affected groups:.*database" plan.txt; then
+            echo "needs_db=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_db=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Start local Supabase (database groups only)
+        if: steps.select.outputs.needs_db == 'true'
+        run: pnpm db:start
+
+      - name: Run selected groups
+        run: node scripts/test-groups.mjs ${{ steps.select.outputs.args }}
