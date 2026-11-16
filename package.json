@@ -18,7 +18,11 @@
     "db:stop": "bash scripts/local-db.sh stop",
     "db:reset": "bash scripts/local-db.sh reset",
     "db:test": "bash scripts/local-db.sh test",
-    "db:psql": "bash scripts/local-db.sh psql"
+    "db:psql": "bash scripts/local-db.sh psql",
+    "test": "node scripts/test-groups.mjs affected",
+    "test:all": "node scripts/test-groups.mjs all",
+    "test:group": "node scripts/test-groups.mjs run",
+    "test:groups": "node scripts/test-groups.mjs list"
   },
   "devDependencies": {
     "supabase": "^2.119.0"
