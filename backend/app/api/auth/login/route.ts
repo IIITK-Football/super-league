@@ -7,6 +7,10 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { email, password } = body;
+    // Turnstile token from the browser. Supabase Auth verifies it (the secret lives in Auth
+    // settings), so this route only forwards it.
+    const captchaToken =
+      typeof body.captchaToken === 'string' && body.captchaToken.length > 0 ? body.captchaToken : undefined;
 
     // Trusted-side domain rule: reject before contacting Supabase Auth.
     if (!isCollegeEmail(email) || typeof password !== 'string' || password.length === 0) {
@@ -38,6 +42,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
     });
 
     if (error) throw error;
