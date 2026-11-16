@@ -4,6 +4,7 @@ import { GlassPanel } from '../components/GlassPanel';
 import { ArrowLeft, LogIn, Mail } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
+import { TurnstileWidget, turnstileSiteKey } from '../components/TurnstileWidget';
 
 export function Login() {
   const { signInWithGoogle, signInWithPassword, signUpWithPassword, requestPasswordReset, role, loading, user } = useAuth();
@@ -13,6 +14,8 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -54,21 +57,29 @@ export function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setBusy(true);
     setError(null);
     setNotice(null);
+    // Turnstile is checked by Supabase Auth; here we only make sure the user completed it.
+    if (turnstileSiteKey() && !captchaToken) {
+      setError('Please complete the verification first.');
+      return;
+    }
+    setBusy(true);
     if (mode === 'signin') {
-      const { error: err } = await signInWithPassword(email, password);
+      const { error: err } = await signInWithPassword(email, password, captchaToken);
       if (err) setError(err);
     } else if (mode === 'signup') {
-      const { error: err, needsConfirmation } = await signUpWithPassword(email, password);
+      const { error: err, needsConfirmation } = await signUpWithPassword(email, password, captchaToken);
       if (err) setError(err);
       else if (needsConfirmation) setNotice('Check your college inbox for a confirmation link, then sign in. Already use Google with this email? No email will arrive: sign in with Google and add a password from your profile, or use Forgot password.');
     } else {
-      const { error: err, message } = await requestPasswordReset(email);
+      const { error: err, message } = await requestPasswordReset(email, captchaToken);
       if (err) setError(err);
       else setNotice(message);
     }
+    // Tokens are single-use: ask for a fresh one after every attempt.
+    setCaptchaToken(null);
+    setCaptchaReset((n) => n + 1);
     setBusy(false);
   };
 
@@ -105,6 +116,7 @@ export function Login() {
               <input id="login-password" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} required />
             </>
           )}
+          <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
           {error && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs font-bold text-red-400">{error}</p>}
           {notice && <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs font-bold text-emerald-300">{notice}</p>}
           <button type="submit" disabled={busy || loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-sm font-black uppercase tracking-widest text-black transition-colors hover:bg-zinc-200 disabled:opacity-50">

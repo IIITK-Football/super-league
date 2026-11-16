@@ -7,6 +7,7 @@ function friendly(error) {
   if (/invalid login credentials/i.test(msg)) return 'Incorrect email or password.';
   if (/email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox for the confirmation link.';
   if (/rate limit|too many/i.test(msg)) return 'Too many attempts. Please wait a few minutes and try again.';
+  if (/captcha/i.test(msg)) return 'The verification did not complete. Please try the verification again.';
   if (/provider is not enabled|unsupported provider/i.test(msg)) {
     return 'Google sign-in is not set up in this environment. Use your college email and password instead.';
   }
@@ -21,20 +22,26 @@ function friendly(error) {
 export function createAuthApi(supabase, { origin }) {
   const auth = supabase.auth;
 
-  async function signInWithPassword(email, password) {
+  // Turnstile tokens are verified by Supabase Auth (the secret lives in Auth settings, never here).
+  // When verification is not enabled there is no token and nothing extra is sent.
+  const withCaptcha = (options, captchaToken) => (captchaToken ? { ...options, captchaToken } : options);
+
+  async function signInWithPassword(email, password, captchaToken) {
     if (!isCollegeEmail(email)) return fail(COLLEGE_EMAIL_MESSAGE);
-    const { error } = await auth.signInWithPassword({ email: email.trim(), password });
+    const credentials = { email: email.trim(), password };
+    if (captchaToken) credentials.options = { captchaToken };
+    const { error } = await auth.signInWithPassword(credentials);
     return error ? fail(friendly(error)) : { error: null };
   }
 
-  async function signUpWithPassword(email, password) {
+  async function signUpWithPassword(email, password, captchaToken) {
     if (!isCollegeEmail(email)) return fail(COLLEGE_EMAIL_MESSAGE);
     const bad = validateNewPassword(password, email);
     if (bad) return fail(bad);
     const { data, error } = await auth.signUp({
       email: email.trim(),
       password,
-      options: { emailRedirectTo: `${origin}/login` },
+      options: withCaptcha({ emailRedirectTo: `${origin}/login` }, captchaToken),
     });
     if (error) return fail(friendly(error));
     return { error: null, needsConfirmation: !data?.session };
@@ -66,10 +73,13 @@ export function createAuthApi(supabase, { origin }) {
     return error ? fail(friendly(error)) : { error: null };
   }
 
-  async function requestPasswordReset(email) {
+  async function requestPasswordReset(email, captchaToken) {
     if (!isCollegeEmail(email)) return fail(COLLEGE_EMAIL_MESSAGE);
-    const { error } = await auth.resetPasswordForEmail(email.trim(), { redirectTo: `${origin}/reset-password` });
-    if (error && /rate limit|too many/i.test(error.message || '')) return fail(friendly(error));
+    const { error } = await auth.resetPasswordForEmail(
+      email.trim(),
+      withCaptcha({ redirectTo: `${origin}/reset-password` }, captchaToken),
+    );
+    if (error && /rate limit|too many|captcha/i.test(error.message || '')) return fail(friendly(error));
     // Same answer whether or not an account exists (no account enumeration).
     return { error: null, message: 'If an account exists for that email, a reset link is on its way.' };
   }
