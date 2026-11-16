@@ -2,7 +2,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { affectedGroups, globToRegExp, loadGroups, validateGroups } from '../../../scripts/test-groups.mjs';
+import { affectedGroups, globToRegExp, loadGroups, needsLocalDatabase, validateGroups } from '../../../scripts/test-groups.mjs';
 
 const root = join(__dirname, '../../..');
 const config = loadGroups(join(root, 'tests/groups.json'));
@@ -42,6 +42,24 @@ describe('affectedGroups', () => {
   it('excludes scheduled-only groups from change-based selection', () => {
     expect(affectedGroups(['frontend/src/App.jsx'], config)).not.toContain('e2e');
     expect(affectedGroups([], config, { all: true })).toContain('e2e');
+  });
+});
+
+describe('needsLocalDatabase', () => {
+  it('is true when any selected group needs the local database', () => {
+    expect(needsLocalDatabase(['database'], config)).toBe(true);
+    expect(needsLocalDatabase(['config', 'auth-identity'], config)).toBe(true);
+  });
+
+  it('is false when none do', () => {
+    expect(needsLocalDatabase(['config', 'frontend-components'], config)).toBe(false);
+    expect(needsLocalDatabase([], config)).toBe(false);
+  });
+
+  it('follows the auth files into a database-backed group', () => {
+    const groups = affectedGroups(['backend/lib/auth/collegeEmail.ts'], config);
+    expect(groups).toContain('auth-identity');
+    expect(needsLocalDatabase(groups, config)).toBe(true);
   });
 });
 

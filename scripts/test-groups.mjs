@@ -65,6 +65,11 @@ export function affectedGroups(files, config, { all = false } = {}) {
     .map(([n]) => n);
 }
 
+// True when any selected group will actually run against the local Supabase stack.
+export function needsLocalDatabase(selected, config) {
+  return selected.some((n) => config.groups[n]?.requiresLocalDb && config.groups[n].status !== 'pending');
+}
+
 function git(args) {
   const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${r.stderr}`);
@@ -149,6 +154,7 @@ function main(argv) {
     return 2;
   }
 
+  console.log(`needs local database: ${needsLocalDatabase(selected, config)}`);
   const results = selected.map((n) => (dryRun ? { name: n, state: 'selected', note: '' } : runGroup(n, config.groups[n])));
   report(selected, names, results, dryRun);
   return results.some((r) => r.state === 'failed') ? 1 : 0;
