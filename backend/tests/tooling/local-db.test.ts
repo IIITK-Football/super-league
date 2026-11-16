@@ -16,6 +16,13 @@ function fakeCli(statusUrl: string | null) {
     cli,
     `#!/usr/bin/env bash
 echo "$@" >> "${log}"
+if [ "$1" = "start" ]; then
+  echo "google-client-id=$SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID google-secret=$SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET" >> "${log}"
+  touch "${dir}/started"
+fi
+if [ "$1" = "status" ] && [ -n "$STATUS_AFTER_START" ] && [ ! -f "${dir}/started" ]; then
+  echo "not running" >&2; exit 1
+fi
 if [ "$1" = "status" ]; then
   ${statusUrl ? `printf '{\\n  "API_URL": "http://127.0.0.1:54321",\\n  "DB_URL": "${statusUrl}"\\n}\\n'` : 'echo "docker not running" >&2; exit 1'}
 fi
@@ -33,16 +40,19 @@ function backendDir(port = '54322', project = 'backend') {
   return b;
 }
 
-function run(args: string[], opts: { url?: string | null; port?: string; project?: string } = {}) {
+function run(args: string[], opts: { url?: string | null; port?: string; project?: string; env?: Record<string, string>; supabaseEnvFile?: string } = {}) {
   const url = opts.url === undefined ? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' : opts.url;
+  const backend = backendDir(opts.port, opts.project);
+  if (opts.supabaseEnvFile !== undefined) writeFileSync(join(backend, 'supabase/.env'), opts.supabaseEnvFile);
   return spawnSync('bash', [script, ...args], {
     encoding: 'utf8',
     input: '',
     env: {
       PATH: process.env.PATH,
       LOCAL_DB_SUPABASE_CMD: fakeCli(url),
-      LOCAL_DB_BACKEND_DIR: backendDir(opts.port, opts.project),
+      LOCAL_DB_BACKEND_DIR: backend,
       LOCAL_DB_SKIP_PORT_CHECK: '1',
+      ...opts.env,
     } as unknown as NodeJS.ProcessEnv,
   });
 }
@@ -96,6 +106,30 @@ describe('local-db.sh', () => {
     expect(r.status).toBe(0);
     expect(calls()).toContain('db reset --local');
     expect(calls()).not.toContain('--linked');
+  });
+
+  it('start works without Google credentials by passing placeholders to the CLI', () => {
+    const r = run(['start'], { env: { STATUS_AFTER_START: '1' } });
+    expect(r.status).toBe(0);
+    expect(calls()).toMatch(/google-client-id=\S+ google-secret=\S+/);
+    expect(calls()).toContain('start');
+  });
+
+  it('start keeps real Google credentials from the environment', () => {
+    const r = run(['start'], {
+      env: { STATUS_AFTER_START: '1', SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: 'real-id', SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: 'real-secret' },
+    });
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('google-client-id=real-id google-secret=real-secret');
+  });
+
+  it('start does not override credentials defined in supabase/.env', () => {
+    const r = run(['start'], {
+      env: { STATUS_AFTER_START: '1' },
+      supabaseEnvFile: 'SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=from-file\nSUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=from-file-secret\n',
+    });
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('google-client-id= google-secret=');
   });
 
   it('rejects unknown commands and forwarded flags', () => {

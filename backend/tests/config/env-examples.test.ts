@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = join(__dirname, '../../..');
-const files = ['frontend/.env.example', 'backend/.env.example'];
+const files = ['frontend/.env.example', 'backend/.env.example', 'backend/supabase/.env.example'];
 
 describe.each(files)('%s', (rel) => {
   const path = join(root, rel);

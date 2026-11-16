@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { COLLEGE_EMAIL_MESSAGE, isCollegeEmail } from '@/lib/auth/collegeEmail';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { email, password } = body;
+
+    // Trusted-side domain rule: reject before contacting Supabase Auth.
+    if (!isCollegeEmail(email) || typeof password !== 'string' || password.length === 0) {
+      return NextResponse.json(
+        { success: false, message: isCollegeEmail(email) ? 'Invalid login credentials' : COLLEGE_EMAIL_MESSAGE },
+        { status: 400 }
+      );
+    }
 
     const cookieStore = await cookies();
 
@@ -27,7 +36,7 @@ export async function POST(request: Request) {
     );
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 

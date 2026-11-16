@@ -34,6 +34,19 @@ check_config() {
   [ "$port" = "$EXPECTED_PORT" ] || die "config [db] port is '$port', expected $EXPECTED_PORT"
 }
 
+# config.toml enables Google sign-in with credentials read from the environment. Without real
+# credentials the CLI still needs values, so pass harmless placeholders (email/password sign-in
+# keeps working; the Google button then reports that Google is not set up). Real credentials come
+# from the process environment or the git-ignored backend/supabase/.env and are never overridden.
+google_env_defaults() {
+  local var envfile="$BACKEND_DIR/supabase/.env"
+  for var in SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET; do
+    if [ -n "${!var:-}" ]; then continue; fi
+    if [ -f "$envfile" ] && grep -Eq "^${var}=.+" "$envfile"; then continue; fi
+    export "$var=google-not-configured"
+  done
+}
+
 # Prints the verified database URL (password hidden) or exits non-zero.
 verify_target() {
   check_config
@@ -78,6 +91,7 @@ case "$cmd" in
         && lsof -nP -iTCP:"$EXPECTED_PORT" -sTCP:LISTEN > /dev/null; then
         die "port $EXPECTED_PORT is already in use by another process; stop it yourself. Not starting."
       fi
+      google_env_defaults
       (cd "$BACKEND_DIR" && "${SB[@]}" start)
       verify_target
     fi ;;
