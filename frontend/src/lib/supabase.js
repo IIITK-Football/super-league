@@ -1,10 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { readPublicEnv } from './env';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://dummy-project.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'dummy-anon-key';
-
-if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-  console.warn("⚠️ Missing Supabase environment variables. Using dummy values to prevent UI crash. Please create .env.local with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
-}
+// Fails with the names of missing/unsafe variables instead of using dummy fallbacks.
+const { supabaseUrl, supabaseAnonKey } = readPublicEnv();
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
