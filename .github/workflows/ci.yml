@@ -41,13 +41,14 @@ jobs:
           ARGS="$(if [ '${{ github.event_name }}' = 'schedule' ] || [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then echo all; elif [ '${{ github.event_name }}' = 'pull_request' ]; then echo "affected --base origin/${{ github.base_ref }}"; else echo "affected --base ${{ github.event.before }}"; fi)"
           echo "args=$ARGS" >> "$GITHUB_OUTPUT"
           node scripts/test-groups.mjs $ARGS --dry-run | tee plan.txt
-          if [ "$ARGS" = "all" ] || grep -qE "affected groups:.*database" plan.txt; then
+          # The runner reports whether any selected group needs the local Supabase stack.
+          if grep -qx "needs local database: true" plan.txt; then
             echo "needs_db=true" >> "$GITHUB_OUTPUT"
           else
             echo "needs_db=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Start local Supabase (database groups only)
+      - name: Start local Supabase (only when a selected group needs it)
         if: steps.select.outputs.needs_db == 'true'
         run: pnpm db:start
 
