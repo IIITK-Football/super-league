@@ -84,6 +84,37 @@ Also confirm the Cloudflare Pages build (production and previews) defines `VITE_
 
 The headquarters login and the password pages are covered; Google sign-in is not affected.
 
+## Verifying the release safely (staging first)
+
+There is one hosted Supabase project and Pages previews use it, and (as far as we know) the free plan has no backup to restore from. Rehearse the risky steps on a separate staging project, then do only a small smoke check in production. Everything here is an owner action; the repository never touches hosted services.
+
+**What staging can prove that local tests cannot:** the migration runs with hosted permissions, real Turnstile verification (local uses Cloudflare's always-pass test secret), real email delivery, secure password change with a real emailed code, and the CAPTCHA on/off and rollback rehearsals, all with no real user affected. **What it cannot prove:** production's own current settings and data, which the read-only checks and the production smoke cover.
+
+### Staging runbook
+1. Create a new free Supabase project and name it clearly as staging.
+2. Apply `backend/supabase/migrations/20261106000000_baseline.sql`, then `20261117000000_auth_college_domain_and_new_user_triggers.sql`, to **staging only** (SQL editor, or the CLI with an explicit staging connection string). **Do not run `supabase link`**: this checkout is linked to production.
+3. Mirror the Auth settings above: Confirm email on, minimum password length 8, Secure password change on, redirect URLs including `http://127.0.0.1:5173/**`, SMTP (or the default sender to your own team address), Google not needed.
+4. Add `localhost` and `127.0.0.1` to a Turnstile widget's hostnames. Enter its secret only in staging's Supabase CAPTCHA setting, and put its site key in your git-ignored `frontend/.env.local`.
+5. Run the app locally against staging (`pnpm dev` in `frontend/`). The app refuses a non-local Supabase URL unless you opt in with `VITE_ALLOW_REMOTE_SUPABASE=true` in `frontend/.env.local` (and `ALLOW_REMOTE_SUPABASE=true` in `backend/.env.local` if the backend is used). Keep these only in ignored local files.
+6. Work through the checks below. When they pass, delete or pause the staging project.
+
+### Checks on staging (expected result in brackets)
+| Check | Expected |
+|---|---|
+| Triggers on `auth.users` after the migration | Four: `ensure_domain_lock`, `ensure_domain_lock_on_email_change`, `on_auth_user_created`, `on_auth_user_role_created` |
+| Sign up with a non-college email | Rejected |
+| Sign up with a college address | Needs the emailed confirmation; a profile and the default role appear after it |
+| Password sign-in with the widget | Succeeds |
+| Password sign-in with no token (for example by blocking the widget script) | "The verification did not complete" |
+| Forgot password | Email arrives; its link opens `/reset-password`; the new password works |
+| Set a password from the profile on a fresh session | Saves directly |
+| Same, on a session older than 24 hours | Emails a code, then saves with the code |
+| Turn CAPTCHA off, then on again in staging | Password sign-in works while off, and with a token while on |
+| Apply `docs/rollback/auth-college-domain-rollback.sql` | Domain check relaxed to the previous version; new accounts still get a profile and role |
+
+### Production smoke test afterwards (no new accounts)
+After the approved release steps: the widget is visible on `/login` and `/hq-login`; one password sign-in with an existing account of yours works; one reset email to your own address arrives from your sender and its link lands on the production site; Google sign-in still opens. These cover what staging cannot: the production SMTP sender, redirect lists and the Pages variable. If you prefer a dedicated production test account, create it only at this point with the default (non-privileged) role, and delete it afterwards.
+
 ## Release order and rollback
 
 Order (each step needs your approval; nothing here is automated yet):
