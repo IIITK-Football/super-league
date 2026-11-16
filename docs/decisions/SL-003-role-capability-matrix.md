@@ -52,7 +52,7 @@ Legend: **R** read, **C** create, **U** update, **D** delete, **own** own rows o
 - Baseline RLS has `USING (true)`/`WITH CHECK (true)` insert/update/delete for any `authenticated` user on `matches`, `goals`, `teams`, `players`, `newsletter` — so any signed-in user can write today.
 - Policy "Admin and Captain all access players" gives captains full player CRUD.
 - Overloaded `captain_update_team_member` (7 args) is SECURITY DEFINER with no ownership check.
-- `admin`/`editor` string checks appear in 20+ backend/frontend files (e.g. `backend/app/api/admin/*`, `players/*`, `AdminDashboard.jsx`, `RoleWorkspace.jsx`, `ManageRoles.jsx`).
+- `admin`/`editor` string checks appear in 11 backend/frontend source files (e.g. `backend/app/api/admin/*`, `players/*`, `AdminDashboard.jsx`, `RoleWorkspace.jsx`, `ManageRoles.jsx`).
 
 ## Open question carried to Phase 2 (not blocking)
 
