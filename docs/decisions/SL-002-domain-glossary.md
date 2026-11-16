@@ -1,6 +1,6 @@
 # SL-002 — Domain glossary and relationship model
 
-**Status:** Revised draft for review (Phase 0 decision record). Names here are normative for new schema, APIs, UI, routes, tests, and docs.
+**Status:** Approved by owner 2026-11-16 (Phase 0 decision record). Names here are normative for new schema, APIs, UI, routes, tests, and docs.
 
 ## Domain requirement: division-agnostic (owner decision 2026-11-16)
 

@@ -1,12 +1,12 @@
 # SL-004 — Migration map and cutover strategy
 
-**Status:** Revised draft for review (Phase 0 decision record). Must be approved before the first domain-model migration (SL-020).
+**Status:** Approved by owner 2026-11-16 (Phase 0 decision record). Must be approved before the first domain-model migration (SL-020).
 
 ## 1. Baseline facts
 
 - Active chain: `backend/supabase/migrations/20261106000000_baseline.sql` (20 tables, 3 views, 10 functions, 44 policies); `20261106180125_harden_roles_and_rpc.sql` is empty (placeholder for SL-024/025). Archive: `migrations_legacy/001–035` (reference only, not applied). Local seed: `backend/supabase/seed.sql`.
 - Supabase stays DB + auth behind Workers.
-- `freshers_fixtures` exists only in archived `030`. Owner checked the hosted Supabase dashboard and found **no such table**; it is treated as absent from the hosted schema and **nothing is migrated from it**. The frontend (`RoadToFinal.jsx`, `ManageRoadToFinal.jsx`) still queries it; that runtime dependency is removed in the later backlog work that replaces it with the canonical fixture/match model (SL-054 / SL-091; final retirement check in SL-102). No hosted re-check is made.
+- `freshers_fixtures` exists only in archived `030`. Owner checked the hosted Supabase dashboard and found **no such table**; it is treated as absent from the hosted schema and **nothing is migrated from it**. The frontend (`RoadToFinal.jsx`, `ManageRoadToFinal.jsx`) still queries it; that runtime dependency is removed during registration/frontend consolidation (SL-045 registration, SL-091 division/season frontend), not in SL-054 bracket logic; final retirement check in SL-102. No hosted re-check is made.
 
 ## 2. Data to retain and mapping
 
@@ -22,7 +22,7 @@
 | `goals` | `match_events` (goal/own_goal + assist) | Canonical source. |
 | `matches.scorers/assists/own_goals` JSON | `match_events` | **Parallel duplicate** of `goals`. Reconcile per match: where JSON and `goals` disagree, produce a discrepancy report; owner picks winner (default: `goals` rows, JSON used to fill missing attribution). Keep JSON columns until verified, then retire (SL-102). |
 | `matches.home_score/away_score/penalties/status/minute/timer_*` | retained on match | Authority rule when score ≠ events is a Phase 2 open item (backlog §5). |
-| `user_roles` (`default/editor/captain/dictator/admin`) | five roles + assignments | `default→user`, `captain→captain` (+ assignment from `team_registrations`), `dictator→dictator`, **`editor→editor` (newsletter-only, preserved)**. **`admin` → user with no elevated access**, recorded for explicit review; never auto-mapped to scorer or dictator (see §3a and SL-003). |
+| `user_roles` (`default/editor/captain/dictator/admin`) | five roles + assignments | `default→user`, `captain→captain` (+ assignment from `team_registrations`), `dictator→dictator`, **`editor→editor` (newsletter-only, preserved)**. **`admin` → user with no elevated access** unless a reviewed per-person assignment is recorded **before** migration; never auto-mapped to scorer or dictator (see §3a and SL-003). |
 | `user_profiles` (`mens_team_flair`, `womens_team_flair`, `wc_team_flair`, `points`) | profile + per-division fantasy profile + WC profile | `points` is derived; recompute and compare. |
 | `predictions` | prediction scoped to season via match | Retained as-is; FK to match unchanged. |
 | `wc_*` (10 tables) | unchanged | Separate domain; no division/season columns. |
@@ -51,7 +51,7 @@ WHERE ur.role = 'admin'
 ORDER BY up.email;
 ```
 
-The output stays local (git-ignored), is never committed, and is never run against hosted. A dictator assigns scorer, dictator, or nothing per person after the migration. A local list file is kept at `.claude/superpowers/legacy-admin-review.md`.
+The output stays local (git-ignored), is never committed, and is never run against hosted. The owner reviews the list and records scorer, dictator, or nothing per person **before** the role migration runs (the migration reads that reviewed mapping; unlisted admins become user). A local list file is kept at `.claude/superpowers/legacy-admin-review.md`.
 
 ## 4. Environments and release targets
 
@@ -79,6 +79,6 @@ The only hosted project is the one currently linked (`Super League`). Until a de
 
 - Whether to create a separate hosted develop Supabase project (currently unconfigured).
 - Whether to supply a sanitized production-shaped dump for local rehearsal.
-- Per-person decision for each legacy `admin` (from the local-only review list), made by a dictator after migration.
+- Per-person decision for each legacy `admin` (from the local-only review list), recorded before the role migration runs. This is a gate for the SL-024 role migration.
 
 Resolved 2026-11-16: `inter` (no data, no division created), `editor` (preserved as editor), `freshers_fixtures` (absent on hosted).

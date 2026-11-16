@@ -1,8 +1,8 @@
 # SL-003 — Capability matrix for the five roles
 
-**Status:** Revised draft, awaiting owner approval (Phase 0 decision record). Source for API authorization, RLS, and dashboard access tests (SL-024/025, SL-092).
+**Status:** Approved by owner 2026-11-16 (Phase 0 decision record). Source for API authorization, RLS, and dashboard access tests (SL-024/025, SL-092).
 
-> **Supersedes "four roles" in `CLAUDE.md`/backlog.** Owner decision (2026-11-16): five distinct roles — **user**, **captain**, **scorer**, **editor**, **dictator**. `CLAUDE.md` is git-ignored; the owner should update its "four roles" wording.
+> Five distinct roles — **user**, **captain**, **scorer**, **editor**, **dictator** — as approved by the owner. `CLAUDE.md` has been updated to match (it is git-ignored).
 
 ## Roles
 
@@ -83,7 +83,7 @@ Legend: **R** read, **C** create, **U** update, **D** delete, **P** publish, **o
 | `captain` | captain | direct; assignment from `team_registrations` |
 | `dictator` | dictator | direct |
 | `editor` | **editor** | preserved; **newsletter-only**, no other rights |
-| `admin` | **user (no elevated access)** until reviewed | The UI label "Scorer" and the broad access are *not* evidence of intent. Each legacy admin appears on a local-only review list; a dictator explicitly assigns scorer, dictator, or nothing per person. **Never automatic.** |
+| `admin` | **user (no elevated access)** unless a reviewed per-person assignment exists **before** the migration runs | The UI label "Scorer" and the broad access are *not* evidence of intent. Each legacy admin appears on a local-only review list; the owner reviews it and records scorer, dictator, or nothing per person *before* migration. Unreviewed admins become user. **Never automatic.** |
 
 The legacy-admin review list is generated only against the **local** database (see SL-004 §3a). The local seed currently contains no `admin` users (roles: dictator, captain, editor, default).
 
@@ -95,6 +95,7 @@ The legacy-admin review list is generated only against the **local** database (s
 - The 7-argument `captain_update_team_member` is SECURITY DEFINER with no ownership check and writes `email`, a protected identity field.
 - `admin`/`editor` string checks appear in 11 backend/frontend source files (e.g. `backend/app/api/admin/*`, `players/*`, `AdminDashboard.jsx`, `RoleWorkspace.jsx`, `ManageRoles.jsx`); `editor` currently gets newsletter routes alongside others and must be narrowed.
 
-## Residual question
+## Owner clarifications (2026-11-16)
 
-The FUT **overall rating** and **attributes** are in the captain allow-list because the current RPC and Team Builder let captains set them. Drop them from the list if only dictators should control ratings.
+- Captain allow-list includes FUT **overall rating** and **attributes** for existing players. Protected identity fields (roll number, email, name, account link) remain off-limits.
+- Editor is newsletter create/edit/publish only; scorer is match data only; dictator manages everything.
