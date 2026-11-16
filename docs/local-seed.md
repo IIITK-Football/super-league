@@ -30,6 +30,8 @@ IDs are fixed or derived with `md5()` from stable keys, and statistics use `hash
 
 Seed accounts have **no password** (`encrypted_password = ''`), so they cannot sign in. This is the documented non-login fixture approach; no credentials are in the browser bundle. To act as a fixture user locally, create a real local sign-in through Supabase Studio (`http://127.0.0.1:54323`) or Inbucket mail (`http://127.0.0.1:54324`), then adjust that user's role locally.
 
+Accounts you create locally (for example by signing in) are not part of the seed. The database tests identify seed accounts by their addresses (`lamb@`, `river@`, `diana@`, `sydney@`, `fanNN@`), so your own accounts do not make them fail. A `db reset` removes them, since it rebuilds the local database from the migrations and seed.
+
 ## Media
 
 All images (team logos, player portraits, news, World Cup logos) are generated offline SVG data URIs (`pg_temp.placeholder_svg`). No third-party image host or production R2 bucket is used.
