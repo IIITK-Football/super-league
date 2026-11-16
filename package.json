@@ -12,7 +12,13 @@
     "dev:backend": "pnpm --filter ./backend dev",
     "build:frontend": "pnpm --filter ./frontend build",
     "build:backend": "pnpm --filter ./backend build",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "db:check": "bash scripts/local-db.sh check",
+    "db:start": "bash scripts/local-db.sh start",
+    "db:stop": "bash scripts/local-db.sh stop",
+    "db:reset": "bash scripts/local-db.sh reset",
+    "db:test": "bash scripts/local-db.sh test",
+    "db:psql": "bash scripts/local-db.sh psql"
   },
   "devDependencies": {
     "supabase": "^2.119.0"

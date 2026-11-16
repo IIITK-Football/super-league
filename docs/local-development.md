@@ -48,6 +48,28 @@ Stop immediately if `status` is not reachable, shows a port other than 54322, or
 - `backend/.env.local` and `frontend/.env.local` are git-ignored. Their Supabase URLs must be `http://127.0.0.1:54321`. A hosted `*.supabase.co` URL in either file is a mistake for local work.
 - Only the frontend `.env.example` is tracked today; a backend example and config validation are SL-012. Private keys (service role, R2) must never be placed in `VITE_*` variables.
 
-## What is not yet automated
+## Guarded helper (SL-013)
 
-Wrapper scripts, config validation, and a guard that refuses non-local targets are **SL-013** (Phase 1). Until then, the explicit flags above are the safeguard.
+`scripts/local-db.sh` wraps the commands above with checks. From the repository root:
+
+```bash
+pnpm db:check        # read-only: config + running target must be project "backend" on 127.0.0.1:54322
+pnpm db:start        # inspects first: refuses if 54322 is held by another process
+pnpm db:reset        # DESTRUCTIVE: prints the target, asks you to type "reset 54322" (or pass --yes)
+pnpm db:test         # pgTAP tests (supabase/tests/database)
+pnpm db:psql         # psql on the verified local URL
+pnpm db:stop
+```
+
+Guarantees (covered by `backend/tests/tooling/local-db.test.ts`):
+- `set -euo pipefail`; errors are never suppressed, and a failed status check is never reported as success.
+- The config must say `project_id = "backend"` and `[db] port = 54322`, and `supabase status` must report a DB at `127.0.0.1:54322`. Any other port (including the separate backup stack on 55322) or host aborts before anything runs.
+- Only a fixed set of commands is accepted; arbitrary arguments, hosted-project flags, and Docker container/network/volume commands are not available.
+
+## Inspect-before-start workflow (port collisions)
+
+Local Supabase containers are named `supabase_*_backend` (the project id). Docker/Colima can leave another stack holding a port, so before starting:
+
+1. `pnpm db:check`. If it succeeds the stack is already running; do not start another.
+2. If it fails, `pnpm db:start`. It refuses when something else listens on 54322 and tells you to stop that yourself.
+3. Never remove, stop, or prune containers, networks, or volumes that you did not create for this project. Other projects on this machine (for example a backup Supabase on 55322) are out of scope.
