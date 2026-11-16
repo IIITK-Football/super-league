@@ -9,8 +9,8 @@ import { checkStagedFiles, scanAddedLines, validateCommitMessage } from '../../.
 const root = join(__dirname, '../../..');
 
 describe('validateCommitMessage', () => {
-  it('accepts conventional messages with scope and backlog id', () => {
-    expect(validateCommitMessage('feat(db): SL-011 deterministic local seed\n\nbody').ok).toBe(true);
+  it('accepts readable conventional messages', () => {
+    expect(validateCommitMessage('feat(db): add deterministic local seed data\n\nbody').ok).toBe(true);
     expect(validateCommitMessage('fix: handle empty roster').ok).toBe(true);
     expect(validateCommitMessage('chore(repo)!: drop npm lockfiles').ok).toBe(true);
   });
@@ -34,10 +34,28 @@ describe('validateCommitMessage', () => {
     expect(validateCommitMessage('fixup! feat: add thing').ok).toBe(true);
   });
 
-  it('only hints (does not fail) when no SL id is present', () => {
+  it('does not ask for a backlog id', () => {
     const r = validateCommitMessage('feat(ui): add thing');
     expect(r.ok).toBe(true);
-    expect(r.hints.join(' ')).toMatch(/SL-0/);
+    expect(r.hints).toEqual([]);
+  });
+
+  it('rejects backlog references anywhere in the message', () => {
+    for (const m of [
+      'feat(db): SL-011 deterministic local seed',
+      'feat(db): add seed\n\nImplements SL-011.',
+      'feat(db): add seed\n\nBacklog item: SL-011',
+      'feat(db): add seed\n\nBacklog item 11',
+      'feat(db): add seed\n\nRefs: sl-012',
+    ]) {
+      const r = validateCommitMessage(m);
+      expect(r.ok, m).toBe(false);
+      expect(r.errors.join(' ')).toMatch(/backlog/i);
+    }
+  });
+
+  it('still allows the word backlog in ordinary sentences', () => {
+    expect(validateCommitMessage('fix(api): clear the retry backlog after a timeout').ok).toBe(true);
   });
 });
 

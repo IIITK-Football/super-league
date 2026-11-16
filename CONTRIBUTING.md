@@ -65,7 +65,7 @@ pnpm lint                        # lint both workspaces
 
 Each package keeps its own `pnpm-lock.yaml` (`shared-workspace-lockfile=false`). Commit lockfile changes with the dependency change; never add `package-lock.json`. Local database setup is in [`docs/local-development.md`](docs/local-development.md).
 
-**Optional commit helper** (recommended): `pnpm hooks:install` turns on a pre-commit hook (blocks `.env` files and secret-looking additions, then runs only the test groups affected by your staged files) and a commit-message check (Conventional Commits, e.g. `feat(db): SL-011 deterministic local seed`). It never creates commits or edits files. Remove it with `pnpm hooks:uninstall`. In a genuine emergency use `SKIP_HOOKS="reason" git commit ...` (logged to `.git/hooks-bypass.log`); CI remains the final authority. Test groups are described in [`docs/testing.md`](docs/testing.md).
+**Optional commit helper** (recommended): `pnpm hooks:install` turns on a pre-commit hook (blocks `.env` files and secret-looking additions, then runs only the test groups affected by your staged files) and a commit-message check (Conventional Commits written in plain language, e.g. `feat(auth): support password login for Google accounts`; backlog numbers belong in the backlog file, not in commit messages). It never creates commits or edits files. Remove it with `pnpm hooks:uninstall`. In a genuine emergency use `SKIP_HOOKS="reason" git commit ...` (logged to `.git/hooks-bypass.log`); CI remains the final authority. Test groups are described in [`docs/testing.md`](docs/testing.md).
 
 ### 4. Sync with upstream before pushing
 

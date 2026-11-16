@@ -12,7 +12,7 @@ export function validateCommitMessage(raw) {
   const m = first.match(/^([a-z]+)(\([a-z0-9._/-]+\))?(!)?: (.+)$/);
   if (!m) {
     errors.push(
-      `First line must follow Conventional Commits: type(scope): subject — e.g. "feat(db): SL-011 deterministic local seed". ` +
+      `First line must follow Conventional Commits: type(scope): subject — e.g. "feat(auth): support password login for Google accounts". ` +
         `Types: ${TYPES.join(', ')}.`,
     );
   } else {
@@ -20,8 +20,9 @@ export function validateCommitMessage(raw) {
     if (!m[4].trim()) errors.push('Subject is empty.');
   }
   if (first.length > 72) errors.push(`First line is ${first.length} characters; keep it to 72 or fewer.`);
-  if (errors.length === 0 && !/\bSL-\d{3}\b/.test(first)) {
-    hints.push('Tip: tie the commit to its backlog item, e.g. "feat(db): SL-011 ...".');
+  // Backlog numbers live in the backlog file only, never in commit messages.
+  if (/\bSL-\d+\b/i.test(raw) || /\bbacklog item\b/i.test(raw)) {
+    errors.push('Remove backlog references (SL-numbers, "Backlog item") and describe the change in plain language.');
   }
   return { ok: errors.length === 0, errors, hints };
 }
