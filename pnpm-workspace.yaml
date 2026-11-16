@@ -1,0 +1,4 @@
+# pnpm workspace: each package keeps its own pnpm-lock.yaml (see .npmrc).
+packages:
+  - frontend
+  - backend

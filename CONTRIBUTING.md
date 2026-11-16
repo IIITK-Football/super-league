@@ -52,13 +52,18 @@ git checkout -b feature/your-feature-name
 
 ### 3. Install dependencies and run locally
 
-Navigate to the relevant workspace before installing:
+Prerequisites: Node.js 20 or newer (see `.nvmrc`) and pnpm 10 (`corepack enable` picks the version pinned in the root `package.json`). **Use `pnpm` only; do not use `npm` or `yarn`.**
+
+From the repository root (a pnpm workspace with `frontend/` and `backend/`):
 
 ```bash
-cd frontend  # or: cd backend
-pnpm install
-pnpm run dev
+pnpm install --frozen-lockfile   # installs root, frontend and backend
+pnpm dev:frontend                # Vite dev server
+pnpm dev:backend                 # Next.js API (until the Workers migration)
+pnpm lint                        # lint both workspaces
 ```
+
+Each package keeps its own `pnpm-lock.yaml` (`shared-workspace-lockfile=false`). Commit lockfile changes with the dependency change; never add `package-lock.json`. Local database setup is in [`docs/local-development.md`](docs/local-development.md).
 
 ### 4. Sync with upstream before pushing
 
