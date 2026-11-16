@@ -40,6 +40,10 @@ Password sign-in, sign-up and reset requests (and the headquarters login) requir
 
 Tests: `pnpm test:group auth-identity` (unit tests for the rules, and integration tests against the local Auth service for same-user password setup, recovery, duplicate sign-up, domain rejection, and Mailpit delivery).
 
+## Changing a password needs reauthentication (older sessions)
+
+Supabase's *Secure password change* is on locally (`secure_password_change = true`). A signed-in user whose session is under 24 hours old can set or change a password directly. On an older session, saving a password emails a one-time code to their college address; they enter it in the same form (`components/PasswordSettings.jsx`, `authApi.setPassword(password, code)` and `requestPasswordChangeCode()`), and it is sent to Supabase as the `nonce`. A reset link counts as a fresh sign-in and needs no code. This protects against a stolen or left-open session silently setting a password.
+
 ## Production: dashboard changes for the owner to apply
 
 This repository does not change hosted Supabase. Please check or apply these in the Supabase dashboard (Authentication) yourself:
@@ -50,6 +54,8 @@ This repository does not change hosted Supabase. Please check or apply these in 
 4. **Email delivery**: keep the existing hosted SMTP/email configuration; confirm the *Confirm signup* and *Reset password* templates link to the Site URL.
 5. **Providers → Google**: already configured; no change needed. Optionally enable *Allow manual linking* if you later expose the "connect Google" button.
 6. **Database**: the migration above is idempotent. Production already has `ensure_domain_lock`, `on_auth_user_created` and `on_auth_user_role_created`; the migration replaces them with the same names and a stricter (case-insensitive, exact-domain) check. Apply it only through the approved release process.
+
+7. **Secure password change**: turn it **on** (Authentication → Providers → Email). The app already handles the emailed code, but if the setting stays off in production the code step is simply never requested.
 
 Existing users are not touched by any of this. Nothing here deletes or recreates a user.
 

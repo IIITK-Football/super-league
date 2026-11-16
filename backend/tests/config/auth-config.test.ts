@@ -23,6 +23,10 @@ describe('supabase/config.toml auth settings', () => {
     expect(config).not.toMatch(/^\s*(secret|client_id)\s*=\s*"(?!env\()[^"]+"/m);
   });
 
+  it('requires an emailed code to change the password on an older session', () => {
+    expect(section('auth.email')).toMatch(/^secure_password_change = true$/m);
+  });
+
   it('requires verified email and a minimum password length of 8', () => {
     expect(section('auth.email')).toMatch(/^enable_confirmations = true$/m);
     expect(config).toMatch(/^minimum_password_length = 8$/m);
