@@ -75,10 +75,14 @@ Also confirm the Cloudflare Pages build (production and previews) defines `VITE_
 
 ### Turnstile: settings for the owner to prepare (nothing here is done by the repository)
 
-1. In Cloudflare, create a Turnstile widget whose allowed hostnames include the production site and any preview domains. Keep the **secret key** for step 3; the **site key** is public.
-2. In Cloudflare Pages, add `VITE_TURNSTILE_SITE_KEY` (the site key) for production and previews. Add it **together with** step 3, not before: a site key without CAPTCHA enabled does no harm, but CAPTCHA enabled without a site key blocks every password sign-in.
-3. In Supabase (Authentication → Attack Protection), enable CAPTCHA with provider Turnstile and paste the secret key.
-4. The headquarters login and the password pages are covered; Google sign-in is not affected.
+1. In Cloudflare, create a Turnstile widget whose allowed hostnames include the production site and any preview domains. Keep the **secret key** private for step 4; the **site key** is public.
+2. In Cloudflare Pages, add `VITE_TURNSTILE_SITE_KEY` (the site key) for production and previews, then **redeploy**. `VITE_*` values are baked in at build time, so the key only takes effect in a new deployment.
+3. Confirm the widget is visible on `/login` and `/hq-login` in production. A site key without CAPTCHA enabled does no harm; sign-in keeps working.
+4. **Only then**, in Supabase (Authentication → Attack Protection), enable CAPTCHA with provider Turnstile and enter the secret key. Supabase needs the secret to enable it, so "secret configured" and "CAPTCHA enabled" are one action.
+
+**CAPTCHA must not be enabled in production until both the Supabase secret and the deployed Pages site key are in place.** Enabling it earlier rejects every password sign-in that has no token, including the headquarters login on the current production build. Emergency rollback: switch CAPTCHA off in Supabase first (instant); the site key can stay.
+
+The headquarters login and the password pages are covered; Google sign-in is not affected.
 
 ## Release order and rollback
 
@@ -87,8 +91,9 @@ Order (each step needs your approval; nothing here is automated yet):
 1. Record a backup or point-in-time-recovery point, and save the hosted function and trigger definitions from the checks above.
 2. Apply the dashboard settings above (Confirm email, SMTP, URLs, password length).
 3. Apply migration `20261117000000_auth_college_domain_and_new_user_triggers.sql` through the approved release process.
-4. Add the Turnstile site key to Pages and enable CAPTCHA with the secret in Supabase together (see the Turnstile steps above), then deploy the frontend and backend.
-5. Verify with a college test account in an isolated Auth environment (password sign-up and confirmation, reset, Google sign-in linking). Never use production as the test target.
+4. Add the Turnstile site key to Pages, deploy the frontend and backend, and confirm the widget is visible (see the Turnstile steps above). CAPTCHA stays **off** in Supabase until this is confirmed.
+5. Enable CAPTCHA in Supabase with the Turnstile secret (the only step that can block password sign-ins; switch it off first if anything goes wrong).
+6. Verify with a college test account (password sign-up and confirmation, reset, setting a password from the profile, and the emailed code on an older session). Note: there is currently **one** hosted Supabase project and Pages previews use it too, so no isolated Auth environment exists. Either create a separate Supabase staging project for this verification, or use a single dedicated test account you control in production; Google sign-in is already live and is not retested.
 
 Rollback:
 
