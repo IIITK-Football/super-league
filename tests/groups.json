@@ -5,30 +5,130 @@
       "description": "Schema, migrations, seed, RLS policies (pgTAP against the local Supabase DB on 54322)",
       "owner": "backend",
       "requiresLocalDb": true,
-      "paths": ["backend/supabase/**"],
-      "run": [{ "cwd": ".", "cmd": ["bash", "scripts/local-db.sh", "test"] }]
+      "paths": [
+        "backend/supabase/**"
+      ],
+      "run": [
+        {
+          "cwd": ".",
+          "cmd": [
+            "bash",
+            "scripts/local-db.sh",
+            "test"
+          ]
+        }
+      ]
     },
     "config": {
       "description": "Environment examples and startup validation for frontend and backend",
       "owner": "platform",
-      "paths": ["**/.env.example", "backend/lib/env.ts", "backend/instrumentation.ts", "frontend/src/lib/env.js", "frontend/src/lib/supabase.js"],
+      "paths": [
+        "**/.env.example",
+        "backend/lib/env.ts",
+        "backend/instrumentation.ts",
+        "frontend/src/lib/env.js",
+        "frontend/src/lib/supabase.js"
+      ],
       "run": [
-        { "cwd": "backend", "cmd": ["pnpm", "exec", "vitest", "run", "tests/config"] },
-        { "cwd": "frontend", "cmd": ["pnpm", "exec", "vitest", "run", "src/lib"] }
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "tests/config"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "src/lib"
+          ]
+        }
       ]
     },
     "tooling": {
       "description": "Repository scripts, test-group runner, commit hooks, workspace config",
       "owner": "platform",
-      "paths": ["scripts/**", "tests/groups.json", ".githooks/**", ".pre-commit-config.yaml", "pnpm-workspace.yaml", ".github/workflows/**"],
-      "run": [{ "cwd": "backend", "cmd": ["pnpm", "exec", "vitest", "run", "tests/tooling"] }]
+      "paths": [
+        "scripts/**",
+        "tests/groups.json",
+        ".githooks/**",
+        ".pre-commit-config.yaml",
+        "pnpm-workspace.yaml",
+        ".github/workflows/**"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "tests/tooling"
+          ]
+        }
+      ]
+    },
+    "auth-identity": {
+      "description": "College email rule, password/Google same-user behavior, reset flow (unit + local Auth integration tests)",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": [
+        "backend/lib/auth/**",
+        "backend/tests/auth/**",
+        "backend/app/api/auth/**",
+        "backend/supabase/config.toml",
+        "backend/supabase/migrations/*auth*",
+        "frontend/src/lib/authApi.js",
+        "frontend/src/lib/authRules.js",
+        "frontend/src/lib/__tests__/auth*",
+        "frontend/src/context/AuthContext.jsx",
+        "frontend/src/pages/Login.jsx",
+        "frontend/src/pages/ResetPassword.jsx",
+        "frontend/src/components/PasswordSettings.jsx"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "tests/auth"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "src/lib/__tests__/authRules.test.js",
+            "src/lib/__tests__/authApi.test.js"
+          ]
+        }
+      ]
     },
     "auth-roles": {
       "description": "Five-role authorization: API checks and RLS (user, captain, scorer, editor, dictator)",
       "owner": "backend",
       "status": "pending",
       "pendingFor": "SL-024/SL-025",
-      "paths": ["backend/lib/auth/**", "backend/supabase/migrations/**", "backend/app/api/admin/**", "backend/app/api/captain/**"],
+      "paths": [
+        "backend/lib/auth/**",
+        "backend/supabase/migrations/**",
+        "backend/app/api/admin/**",
+        "backend/app/api/captain/**"
+      ],
       "run": []
     },
     "api-services": {
@@ -36,7 +136,10 @@
       "owner": "backend",
       "status": "pending",
       "pendingFor": "SL-026/SL-030",
-      "paths": ["backend/app/api/**", "backend/lib/**"],
+      "paths": [
+        "backend/app/api/**",
+        "backend/lib/**"
+      ],
       "run": []
     },
     "match-operations": {
@@ -44,7 +147,11 @@
       "owner": "backend",
       "status": "pending",
       "pendingFor": "SL-050..SL-055",
-      "paths": ["backend/app/api/matches/**", "backend/app/api/admin/matches/**", "backend/app/api/standings/**"],
+      "paths": [
+        "backend/app/api/matches/**",
+        "backend/app/api/admin/matches/**",
+        "backend/app/api/standings/**"
+      ],
       "run": []
     },
     "fantasy": {
@@ -52,14 +159,33 @@
       "owner": "backend",
       "status": "pending",
       "pendingFor": "SL-043/SL-055",
-      "paths": ["backend/app/api/predictions/**", "backend/app/api/wc/**", "backend/app/api/leaderboard/**"],
+      "paths": [
+        "backend/app/api/predictions/**",
+        "backend/app/api/wc/**",
+        "backend/app/api/leaderboard/**"
+      ],
       "run": []
     },
     "frontend-components": {
       "description": "React components, hooks and pages (Vitest)",
       "owner": "frontend",
-      "paths": ["frontend/src/**", "frontend/index.html", "frontend/vite.config.js"],
-      "run": [{ "cwd": "frontend", "cmd": ["pnpm", "exec", "vitest", "run", "--passWithNoTests"] }]
+      "paths": [
+        "frontend/src/**",
+        "frontend/index.html",
+        "frontend/vite.config.js"
+      ],
+      "run": [
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--passWithNoTests"
+          ]
+        }
+      ]
     },
     "e2e": {
       "description": "Browser end-to-end flows (Playwright); scheduled/release runs only",
@@ -67,9 +193,20 @@
       "status": "pending",
       "pendingFor": "SL-100",
       "scheduledOnly": true,
-      "paths": ["frontend/**", "backend/app/**"],
+      "paths": [
+        "frontend/**",
+        "backend/app/**"
+      ],
       "run": []
     }
   },
-  "allGroupsTriggers": ["package.json", "pnpm-lock.yaml", "frontend/pnpm-lock.yaml", "backend/pnpm-lock.yaml", "pnpm-workspace.yaml", ".nvmrc", ".npmrc"]
+  "allGroupsTriggers": [
+    "package.json",
+    "pnpm-lock.yaml",
+    "frontend/pnpm-lock.yaml",
+    "backend/pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    ".nvmrc",
+    ".npmrc"
+  ]
 }

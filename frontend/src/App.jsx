@@ -5,6 +5,7 @@ import { TopNavbar } from './components/TopNavbar';
 import { Loader } from './components/Loader';
 import { useLocation } from 'react-router-dom';
 import { Login } from './pages/Login';
+import { ResetPassword } from './pages/ResetPassword';
 
 // Pages
 import { Home } from './pages/Home';
@@ -116,6 +117,7 @@ function App() {
           <Routes>
             {/* Admin Routes (No Standard Navbar) */}
             <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/hq-login" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminDashboard />} />
 

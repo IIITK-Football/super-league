@@ -1,5 +1,7 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { createAuthApi } from '../lib/authApi';
+import { COLLEGE_EMAIL_MESSAGE, isCollegeEmail } from '../lib/authRules';
 
 const AuthContext = createContext({});
 
@@ -8,6 +10,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const authApi = useMemo(() => createAuthApi(supabase, { origin: window.location.origin }), []);
 
   // Helper to fetch user's public profile strictly
   const fetchProfile = async (userId) => {
@@ -55,13 +58,13 @@ export function AuthProvider({ children }) {
     const { user } = session;
 
     // Domain Lock Check
-    if (!user.email?.endsWith('@iiitkottayam.ac.in')) {
+    if (!isCollegeEmail(user.email)) {
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
       setRole(null);
       setLoading(false);
-      alert("Access Denied: You must use your @iiitkottayam.ac.in college email to access the Super League App.");
+      alert(`Access Denied: ${COLLEGE_EMAIL_MESSAGE}`);
       return;
     }
 
@@ -78,40 +81,6 @@ export function AuthProvider({ children }) {
     setLoading(false);
   };
 
-  const signInWithPassword = async (email, password) => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    setLoading(false);
-    return { error };
-  };
-
-  const signInWithGoogle = async () => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/login`,
-        queryParams: { prompt: 'select_account' },
-      },
-    });
-    if (error) setLoading(false);
-    return { error };
-  };
-
-  const signUpWithPassword = async (email, password) => {
-    setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { emailRedirectTo: window.location.origin + '/login' },
-    });
-    setLoading(false);
-    return { data, error };
-  };
-
   const signOut = async () => {
     setLoading(true);
     await supabase.auth.signOut();
@@ -122,7 +91,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, role, loading, signInWithGoogle, signInWithPassword, signUpWithPassword, signOut, setProfile }}>
+    <AuthContext.Provider value={{ user, profile, role, loading, ...authApi, signOut, setProfile }}>
       {children}
     </AuthContext.Provider>
   );

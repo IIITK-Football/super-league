@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Shield, Key } from 'lucide-react';
 import { GlassPanel } from '../components/GlassPanel';
 import { supabase } from '../lib/supabase'; // Or use your API route!
+import { COLLEGE_EMAIL_MESSAGE, isCollegeEmail } from '../lib/authRules';
 
 export function AdminLogin() {
   const [email, setEmail] = useState('');
@@ -14,9 +15,15 @@ export function AdminLogin() {
     setLoading(true);
     setError(null);
 
+    if (!isCollegeEmail(email)) {
+      setError(COLLEGE_EMAIL_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
     // Using Supabase client directly to instantly update your AuthContext session
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 

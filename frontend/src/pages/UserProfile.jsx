@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { PasswordSettings } from '../components/PasswordSettings';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom'; // IMPORT NAVIGATE
 import { useApi } from '../hooks/useApi';
@@ -263,6 +264,10 @@ export function UserProfile() {
                         {hasChanges && !saving && <Send className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
                     </button>
                 </form>
+
+                <div className="mt-8 pt-8 border-t border-white/5">
+                    <PasswordSettings />
+                </div>
 
                 <div className="mt-8 pt-8 border-t border-white/5 text-center">
                     <button

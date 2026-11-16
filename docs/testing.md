@@ -7,6 +7,7 @@ Tests are organised by domain so a change runs only the groups it can affect. Th
 | `database` | backend | schema, migrations, seed, RLS (pgTAP on local Supabase 54322) | active |
 | `config` | platform | env examples and startup validation | active |
 | `tooling` | platform | scripts, group runner, hooks, workflows | active |
+| `auth-identity` | backend | college email rule, password and Google same-user behavior, reset (local Auth) | active |
 | `frontend-components` | frontend | React components/pages (Vitest) | active (no tests yet beyond config) |
 | `auth-roles` | backend | five-role API checks and RLS | pending (SL-024/025) |
 | `api-services` | backend | API services and contracts | pending (SL-026/030) |
