@@ -36,7 +36,8 @@ export function envStatus(root = resolve(dirname(), '..')) {
     const path = join(root, t.file);
     const exists = existsSync(path);
     const defined = exists ? parse(readFileSync(path, 'utf8')) : new Map();
-    return { scope: t.scope, file: t.file, purpose: t.purpose, exists, vars: t.vars.map((name) => ({ name, state: defined.get(name) ?? 'missing' })) };
+    const others = [...defined.keys()].filter((n) => !t.vars.includes(n));
+    return { scope: t.scope, file: t.file, purpose: t.purpose, exists, others, vars: t.vars.map((name) => ({ name, state: defined.get(name) ?? 'missing' })) };
   });
 }
 
@@ -51,6 +52,7 @@ export function formatStatus(status) {
     for (const t of status.filter((s) => s.scope === scope)) {
       lines.push(`${t.file}  (${t.exists ? 'file exists' : 'FILE MISSING'}): ${t.purpose}`);
       for (const v of t.vars) lines.push(`    ${v.state.padEnd(8)} ${v.name}`);
+      if (t.others.length) lines.push(`    other names: ${t.others.join(', ')}`);
     }
     lines.push('');
   }

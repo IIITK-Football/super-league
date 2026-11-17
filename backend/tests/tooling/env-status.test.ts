@@ -47,6 +47,14 @@ describe('envStatus', () => {
     expect(by.VITE_TURNSTILE_SITE_KEY).toBe('empty');
   });
 
+  it('lists the names of other variables a file defines (never their values), to spot a naming mix-up', () => {
+    write('backend/.env.staging.local', `STAGING_SUPABASE_URL=https://example.test\nSTAGING_SECRET=${SECRET}\nSUPABASE_URL=x\n`);
+    const r = envStatus(root).find((t: { file: string }) => t.file === 'backend/.env.staging.local');
+    expect(r.others.sort()).toEqual(['STAGING_SECRET', 'STAGING_SUPABASE_URL']);
+    expect(formatStatus(envStatus(root))).toMatch(/other names: .*STAGING_SECRET/);
+    expect(formatStatus(envStatus(root))).not.toContain(SECRET);
+  });
+
   it('never returns or prints a value, in the data or in the formatted report', () => {
     write('backend/.env.local', `SUPABASE_SECRET_KEY=${SECRET}\nSUPABASE_PUBLISHABLE_KEY=${KEY}\n`);
     write('backend/.env.staging.local', `SUPABASE_SECRET_KEY=${SECRET}\n`);
