@@ -93,8 +93,8 @@ describe('the GitHub ruleset template', () => {
     expect(checks.map((c: { context: string }) => c.context)).toEqual(['gate']);
   });
 
-  it('covers develop and main and has an EMPTY bypass list, so it binds administrators too', () => {
-    expect(template.conditions.ref_name.include.sort()).toEqual(['refs/heads/develop', 'refs/heads/main']);
+  it('covers main (the production branch) only, with an EMPTY bypass list so it binds administrators too', () => {
+    expect(template.conditions.ref_name.include).toEqual(['refs/heads/main']);
     expect(template.bypass_actors).toEqual([]);
     expect(template.enforcement).toBe('active');
   });
@@ -125,9 +125,14 @@ describe('audit (remote, read-only)', () => {
     expect(failed(auditRemote({ gh: (p: string) => (p.endsWith('/rulesets') ? [{ id: 1, name: 'r', enforcement: 'evaluate' }] : gh(template)(p)) }))).toMatch(/active/i);
   });
 
-  it('fails when develop or main is not covered', () => {
+  it('fails when main is not covered', () => {
     const onlyDevelop = { ...template, conditions: { ref_name: { include: ['refs/heads/develop'], exclude: [] } } };
     expect(failed(auditRemote({ gh: gh(onlyDevelop) }))).toMatch(/main/);
+  });
+
+  it('does not require anything of develop: it is the working branch', () => {
+    const results = auditRemote({ gh: gh(template) });
+    expect(results.map((r: { name: string }) => r.name).join('\n')).not.toMatch(/develop/);
   });
 
   it('fails when the production environment has no required reviewer', () => {

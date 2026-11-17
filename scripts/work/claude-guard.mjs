@@ -90,7 +90,7 @@ function gitTokens(seg) {
   return { sub: t[i] ?? '', args: t.slice(i + 1) };
 }
 
-const PROTECTED_BRANCH = /^(?:refs\/heads\/)?(?:main|develop)$/;
+const PROTECTED_BRANCH = /^(?:refs\/heads\/)?main$/;
 
 function judgeGit(seg) {
   const { sub, args } = gitTokens(seg);
@@ -110,7 +110,7 @@ function judgeGit(seg) {
     for (const a of plain.slice(1)) {
       const dst = a.includes(':') ? a.split(':')[1] : a;
       if (a.startsWith(':') || a.startsWith('+')) return deny('Deleting or force-pushing a ref is not done from here.');
-      if (PROTECTED_BRANCH.test(dst)) return deny('develop and main are reached by pull request: push a ready/<name> branch and open a pull request.');
+      if (PROTECTED_BRANCH.test(dst)) return deny('main is reached by pull request (the phase-completion gate): push develop and open a pull request into main.');
     }
   }
   if (sub === 'reset' && has('--hard')) return deny('git reset --hard would discard work. It is not run from here.');
@@ -150,6 +150,10 @@ function judgeGh(seg, ctx) {
   }
   if (sub === 'pr' && sub2 === 'review') return deny('Approving or reviewing pull requests is the owner\'s decision.');
   if (sub === 'api') {
+    // Changing an EXISTING ruleset is put to the owner as a confirmation; creating or deleting one stays denied.
+    if (/(?:-X\s*|--method[= ]\s*)PUT\b/i.test(seg) && /\/rulesets\/\d+(?:\s|$)/.test(seg)) {
+      return ask('This changes a GitHub ruleset on the repository. Confirm with the owner.');
+    }
     const method = seg.match(/(?:-X\s*|--method[= ]\s*)(\w+)/i);
     if (method && /^(POST|PUT|PATCH|DELETE)$/i.test(method[1])) return deny('Changing GitHub settings through the API is the owner\'s step (read-only gh api calls are fine).');
     if (/(?:^|\s)(?:-f|-F|--field|--raw-field|--input)\b/.test(seg)) return deny('gh api with a body is a write (it implies POST). GitHub settings are the owner\'s step.');

@@ -1,13 +1,14 @@
 name: CI
 
-# One required check, named `gate`, judges every pull request. It succeeds only if every sub-job SUCCEEDED (a skipped
-# or cancelled job fails it), so nothing can pass by being skipped. The GitHub ruleset (docs/process/ruleset-gate.json)
-# makes `gate` required for develop and main, with no bypass.
+# One check, named `gate`. It succeeds only if every sub-job SUCCEEDED (a skipped or cancelled job fails it), so nothing
+# can pass by being skipped. The GitHub ruleset (docs/process/ruleset-gate.json) makes it REQUIRED for pull requests
+# into main, with no bypass. Work happens directly on develop, where pushes run a light pass of the same jobs for
+# visibility (not a merge requirement).
 #
 #   hygiene  Git hygiene of the commits being merged (the same code as the local hooks)
 #   records  backlog validity, every status change since the base, walkthroughs of finished items
-#   tests    the strict test rules; pull requests into develop get only the cheap mapped-and-covered rules, while
-#            main (phase completion), the nightly run and manual runs get the full rules and every test group
+#   tests    the strict test rules; develop gets only the cheap mapped-and-covered rules, while main (phase
+#            completion), the nightly run and manual runs get the full rules and every test group
 #   audit    the repository half of the enforcement audit
 #
 # No secrets are used here, so the gate works for every pull request.

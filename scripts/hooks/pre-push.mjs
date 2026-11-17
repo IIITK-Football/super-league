@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// pre-push: only ready/<name> branches may be pushed (develop and main are reached by pull request), and the outgoing
-// commits must pass Git hygiene (the same code CI uses). Fast: no tests run here; they run at phase completion and in
+// pre-push: work happens directly on develop, so develop may be pushed; only main (reached by pull request) and branch
+// deletion are refused, and the outgoing commits must pass Git hygiene (the same code CI uses). Fast: no tests run here; they run at phase completion and in
 // CI for pull requests into main. Read-only: never stages, edits or commits anything.
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';

@@ -29,8 +29,6 @@ describe('Bash: bypasses and unsafe Git are denied', () => {
     'git push -f origin ready/x',
     'git push --force-with-lease',
     'git push origin main',
-    'git push origin develop',
-    'git push origin HEAD:develop',
     'git push origin :ready/old',
     'git push --delete origin ready/old',
     'git reset --hard HEAD~3',
@@ -52,7 +50,6 @@ describe('Bash: GitHub changes belong to the owner', () => {
   const denied = [
     'gh pr merge 12 --squash',
     'gh pr review 12 --approve',
-    'gh api repos/o/r/rulesets/1 -X PUT -f enforcement=disabled',
     'gh api repos/o/r/rulesets --method POST --input r.json',
     'gh api repos/o/r/actions/secrets/X -X DELETE',
     'gh api -f name=x repos/o/r/environments/e',
@@ -65,6 +62,13 @@ describe('Bash: GitHub changes belong to the owner', () => {
   ];
   for (const c of denied) it(`denies: ${c}`, () => expect(bash(c)).toBe('deny'));
   it('asks before triggering a workflow (a hosted action)', () => expect(bash('gh workflow run db-deploy.yml')).toBe('ask'));
+
+  it('puts a change to an existing ruleset to the owner as a confirmation, and still denies creating or deleting rulesets', () => {
+    expect(bash('gh api repos/o/r/rulesets/27461038 -X PUT --input r.json')).toBe('ask');
+    expect(bash('gh api --method PUT repos/o/r/rulesets/27461038 --input r.json')).toBe('ask');
+    expect(bash('gh api repos/o/r/rulesets --method POST --input r.json')).toBe('deny');
+    expect(bash('gh api repos/o/r/rulesets/27461038 -X DELETE')).toBe('deny');
+  });
 });
 
 describe('Bash: merging pull requests', () => {
@@ -176,6 +180,9 @@ describe('Bash: ordinary work stays allowed', () => {
     'git add scripts/work backend/tests/tooling/x.test.ts',
     'git commit -m "feat(core): add a thing" -m "Co-Authored-By: Claude <noreply@anthropic.com>"',
     'git commit -q -m "fix(core): handle n and -n in text"',
+    'git push origin develop',
+    'git push origin HEAD:develop',
+    'git push',
     'git push origin ready/seed-refresh',
     'git push -u origin ready/seed-refresh',
     'git checkout -b ready/seed-refresh',
