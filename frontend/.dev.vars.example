@@ -1,0 +1,7 @@
+# Cloudflare Pages Functions runtime variables (frontend/functions/_middleware.js builds share previews
+# for newsletter articles). Copy to .dev.vars (git-ignored) for `wrangler pages dev`; in Cloudflare Pages
+# set the same names under Settings -> Variables and Secrets for Production and Preview.
+#
+# These are SERVER-side but low privilege: the publishable key only. Never add a secret key here.
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_PUBLISHABLE_KEY=

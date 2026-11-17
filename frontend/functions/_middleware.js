@@ -117,14 +117,16 @@ export async function onRequest(context) {
         image: `${IMAGE_BASE}/home.png`
     };
 
-    if (articleId) {
+    // The lookup needs the project URL and the publishable key. Without them the default share tags are
+    // served instead of sending a request that cannot succeed.
+    if (articleId && env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY) {
         try {
+            // Publishable keys are not JWTs: send them as `apikey` only, never as an Authorization Bearer token.
             const supabaseResponse = await fetch(
                 `${env.SUPABASE_URL}/rest/v1/newsletter?id=eq.${articleId}&select=title,summary,image_url`,
                 {
                     headers: {
-                        apikey: env.SUPABASE_ANON_KEY,
-                        Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`
+                        apikey: env.SUPABASE_PUBLISHABLE_KEY
                     }
                 }
             );
