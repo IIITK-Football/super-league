@@ -1,0 +1,11 @@
+{
+  "id": "SL-019",
+  "attestations": [
+    {
+      "checkId": "C10",
+      "by": "oreoruuser",
+      "at": "2026-11-17T13:33:55.777Z",
+      "note": "ruleset applied; pnpm work audit passes"
+    }
+  ]
+}
