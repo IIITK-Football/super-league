@@ -54,6 +54,19 @@ describe('db-deploy workflow', () => {
     expect(j.verify).not.toMatch(/supabase link|db push|environment:/);
   });
 
+  it('verify also proves a seed rerun adds no duplicates and passes the Preview checks, on the local database only', () => {
+    expect(j.verify).toMatch(/seed\.sql/);
+    expect(j.verify).toMatch(/verify-preview\.sql/);
+    expect(j.verify).toMatch(/127\.0\.0\.1:54322/);
+    expect(j.verify).not.toMatch(/PREVIEW_|SUPABASE_DB_PASSWORD|secrets\./);
+  });
+
+  it('runs when the seed, the Preview scripts or the checks change', () => {
+    for (const p of ['backend/supabase/seed.sql', 'scripts/preview-seed.sh', 'scripts/sql/verify-preview.sql']) {
+      expect(header, p).toContain(p);
+    }
+  });
+
   describe('staging', () => {
     const s = j.staging ?? '';
     it('runs only for develop, behind the Database Preview environment and after verify', () => {
@@ -63,8 +76,39 @@ describe('db-deploy workflow', () => {
       expect(s).not.toMatch(/refs\/heads\/main/);
     });
 
-    it('applies the synthetic seed', () => {
-      expect(s).toMatch(/db push[^\n]*--include-seed/);
+    it('pushes migrations only, then seeds and verifies through the guarded script, in that order', () => {
+      expect(s).not.toMatch(/--include-seed/); // one seeding mechanism, with guards and a report
+      const dryRun = s.indexOf('db push --dry-run');
+      const push = s.search(/pnpm exec supabase db push\s*$/m);
+      const seed = s.indexOf('scripts/preview-seed.sh seed');
+      const verify = s.indexOf('scripts/preview-seed.sh verify');
+      expect(dryRun).toBeGreaterThan(-1);
+      expect(push).toBeGreaterThan(dryRun);
+      expect(seed).toBeGreaterThan(push);
+      expect(verify).toBeGreaterThan(seed);
+    });
+
+    it('seeds and verifies only when migrations are applied for real, never on a dry run', () => {
+      for (const marker of ['scripts/preview-seed.sh seed', 'scripts/preview-seed.sh verify']) {
+        const step = s.slice(s.lastIndexOf('- name:', s.indexOf(marker)), s.indexOf(marker));
+        expect(step, marker).toMatch(/if: github\.event_name == 'push' \|\| inputs\.dry_run == false/);
+      }
+    });
+
+    it('gives the seed script only the staging environment values it needs', () => {
+      const step = s.slice(s.lastIndexOf('- name:', s.indexOf('scripts/preview-seed.sh seed')));
+      expect(s).toMatch(/SUPABASE_DB_PASSWORD: \$\{\{ secrets\.SUPABASE_DB_PASSWORD \}\}/);
+      expect(step).not.toMatch(/--password|PGPASSWORD=|set -x/);
+    });
+
+    it('reports the seed and verification in the job summary', () => {
+      expect(readFileSync(join(__dirname, '../../../scripts/preview-seed.sh'), 'utf8')).toMatch(/GITHUB_STEP_SUMMARY/);
+    });
+
+    it('probes the public API only when the staging publishable key is configured, and says so when skipped', () => {
+      expect(s).toMatch(/PREVIEW_PUBLISHABLE_KEY/);
+      expect(s).toMatch(/verify-rpc-closed\.mjs/);
+      expect(s).toMatch(/skipped/i);
     });
 
     it('refuses the production project and checks the linked ref', () => {
@@ -109,6 +153,7 @@ describe('db-deploy workflow', () => {
 
     it('is never seeded and never forces out-of-order or config changes', () => {
       expect(p).not.toMatch(/--include-seed/);
+      expect(p).not.toMatch(/preview-seed|seed\.sql|verify-preview|PREVIEW_|psql/);
       expect(p).not.toMatch(/--include-all/);
       expect(p).not.toMatch(/config push/);
       expect(p).not.toMatch(/db reset|--db-url|--linked/);

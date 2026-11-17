@@ -1,6 +1,7 @@
 name: Database deploy
 
-# develop -> staging project, GitHub environment "Database Preview" (migrations + the synthetic seed)
+# develop -> staging project, GitHub environment "Database Preview" (migrations, then the synthetic seed
+#            and its verification through scripts/preview-seed.sh; rerunning refreshes the fixtures)
 # main    -> production project, GitHub environment "Database Production" (migrations only; never
 #            seeded; waits for a required reviewer)
 #
@@ -18,6 +19,9 @@ on:
     paths:
       - 'backend/supabase/migrations/**'
       - 'backend/supabase/seed.sql'
+      - 'scripts/preview-seed.sh'
+      - 'scripts/sql/verify-preview.sql'
+      - 'scripts/sql/verify-captain-rpc.sql'
       - '.github/workflows/db-deploy.yml'
   workflow_dispatch:
     inputs:
@@ -55,6 +59,25 @@ jobs:
 
       - name: Prove the migrations and seed on an empty local database
         run: node scripts/test-groups.mjs run database
+
+      - name: Prove a seed rerun adds no duplicates and the Preview checks pass (local database only)
+        run: |
+          set -euo pipefail
+          URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          counts() {
+            psql "$URL" -X -Atc "SELECT (SELECT count(*) FROM public.matches) || ',' || (SELECT count(*) FROM public.teams) || ',' || (SELECT count(*) FROM public.players) || ',' || (SELECT count(*) FROM public.goals) || ',' || (SELECT count(*) FROM public.predictions) || ',' || (SELECT count(*) FROM public.wc_predictions) || ',' || (SELECT count(*) FROM auth.users)"
+          }
+          before="$(counts)"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -f backend/supabase/seed.sql
+          after="$(counts)"
+          echo "before the rerun: $before"
+          echo "after the rerun:  $after"
+          [ "$before" = "$after" ] || { echo "A seed rerun changed the row counts"; exit 1; }
+          psql "$URL" -X -q --csv -v ON_ERROR_STOP=1 -f scripts/sql/verify-preview.sql > verify-preview.csv
+          cat verify-preview.csv
+          [ "$(wc -l < verify-preview.csv)" -gt 10 ] || { echo "The Preview checks returned too few rows"; exit 1; }
+          if grep -q ',f$' verify-preview.csv; then echo "A Preview check failed"; exit 1; fi
+          { echo '### Seed rerun and Preview checks (local, in CI)'; echo "Row counts before and after a rerun are identical: \`$after\`"; echo 'Preview checks: all passed'; } >> "$GITHUB_STEP_SUMMARY"
 
   staging:
     needs: verify
@@ -113,10 +136,35 @@ jobs:
           pnpm exec supabase db push --dry-run 2>&1 | tee dry-run.txt
           { echo '### Staging: pending migrations'; echo '```'; cat dry-run.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Apply migrations and the synthetic seed
+      - name: Apply migrations
         if: github.event_name == 'push' || inputs.dry_run == false
         working-directory: backend
-        run: pnpm exec supabase db push --include-seed
+        run: pnpm exec supabase db push
+
+      # The synthetic seed is applied by a guarded script, not by a flag on the migration push: it re-checks
+      # the project reference, runs the existing seed.sql once and reports. A rerun refreshes fixtures
+      # without duplicating them. This step exists only in this job, so production is never seeded.
+      - name: Apply the synthetic seed
+        if: github.event_name == 'push' || inputs.dry_run == false
+        run: bash scripts/preview-seed.sh seed
+
+      - name: Verify the seeded project
+        if: github.event_name == 'push' || inputs.dry_run == false
+        run: bash scripts/preview-seed.sh verify
+
+      - name: Probe the public API (anonymous callers must be refused)
+        if: github.event_name == 'push' || inputs.dry_run == false
+        env:
+          PREVIEW_PUBLISHABLE_KEY: ${{ vars.PREVIEW_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PREVIEW_PUBLISHABLE_KEY" ]; then
+            echo "Public API probe: skipped (PREVIEW_PUBLISHABLE_KEY is not set in the Database Preview environment)"
+            { echo '### Preview: public API probe'; echo 'Skipped: PREVIEW_PUBLISHABLE_KEY is not set in the Database Preview environment.'; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          node scripts/verify-rpc-closed.mjs "https://${SUPABASE_PROJECT_REF}.supabase.co" "$PREVIEW_PUBLISHABLE_KEY" | tee probe.txt
+          { echo '### Preview: public API probe'; echo '```'; cat probe.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
   production:
     needs: verify

@@ -4,12 +4,12 @@ Database changes reach the hosted projects only through GitHub Actions (`.github
 
 | Branch | Supabase project | GitHub environment | What runs | Seed |
 |---|---|---|---|---|
-| `develop` | staging (`super-league-staging`) | `Database Preview` | migrations (`db push`) | **yes**, the synthetic seed (`--include-seed`) |
+| `develop` | staging (`super-league-staging`) | `Database Preview` | migrations (`db push`), then the seed and its checks (`scripts/preview-seed.sh`) | **yes**, the existing synthetic seed, refreshed on every run |
 | `main` | production (the original project) | `Database Production` | migrations only, after a required reviewer approves | **never** |
 
 The GitHub environments named `Preview` and `Production` are owned by the Vercel integration and are deliberately **not** used here, so Vercel's deployment tracking and this workflow's secrets and protection rules never mix. Do not create an environment called `staging`.
 
-Both jobs first prove the migrations and seed on an empty **local** database (the `database` test group). Each environment has its own project reference and secrets. The workflow only runs when migrations, the seed or the workflow itself change, and never on pull requests.
+Both jobs first prove the migrations and seed on an empty **local** database (the `database` test group). The `verify` job also runs the seed a **second time** and fails if any row count changes, then runs the Preview checks, all on that local database. Each environment has its own project reference and secrets. The workflow only runs when migrations, the seed or the workflow itself change, and never on pull requests.
 
 ## One-time setup (owner)
 
@@ -120,6 +120,14 @@ The repository work is finished and tested locally. The steps below need you (Gi
 
 ## Manual runs
 Actions → *Database deploy* → Run workflow on `develop` or `main`. It defaults to a **dry run** that only prints pending migrations; untick the box to apply.
+
+## Preview seed, refresh and reports
+After the migrations, the `staging` job runs, in order: `scripts/preview-seed.sh seed` (the existing `backend/supabase/seed.sql`, in its own transaction), `scripts/preview-seed.sh verify` (read-only checks: `scripts/sql/verify-preview.sql` and `scripts/sql/verify-captain-rpc.sql`, any `false` fails the job), and a public API probe (`scripts/verify-rpc-closed.mjs`, skipped and reported as skipped unless the `PREVIEW_PUBLISHABLE_KEY` variable is set in `Database Preview`; the publishable key is public by design). The script refuses unless the project reference differs from production's, equals the linked project, and the connection address is that project's pooler. The database password only reaches `psql` as `PGPASSWORD`.
+
+- **Reading the result:** the run's summary shows `Seed: PASSED`, a row count per table, every check as PASS or FAIL, `Verification: PASSED (n checks)` and the probe result.
+- **Refreshing fixtures:** run the workflow again on `develop` (push, or Run workflow with dry run unticked). Rows are never duplicated (fixed ids). Time-dependent match state is refreshed: the live matches and upcoming fixtures re-anchor to the run time, and fixture match scores are restored. Everything else keeps `ON CONFLICT DO NOTHING`, so a tester's edits to teams, players and so on survive. The local seed behaves the same way.
+- **Production:** the `production` job contains no seed, `psql` or Preview step, and a test asserts that. Never use `supabase db reset --linked`: it would wipe the project.
+- **Fixture accounts cannot sign in** (no password), so Preview tests that need a signed-in role use real accounts you create and assign yourself.
 
 ## If something fails
 - **Staging job fails:** nothing in production is affected. Fix forward with a new migration. A paused project (resume it) or a network error from the runner (free-plan direct connections can be IPv6-only; tell the assistant to add the pooler connection) are the usual causes.
