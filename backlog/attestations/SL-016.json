@@ -1,0 +1,11 @@
+{
+  "id": "SL-016",
+  "attestations": [
+    {
+      "checkId": "C5",
+      "by": "oreoruuser",
+      "at": "2026-11-17T18:27:59.191Z",
+      "note": "Owner-reported: Production Auth settings applied; password with Turnstile, Google and recovery verified on Production; password with Turnstile and Google verified on staging. Independent: Google config READY on both projects; staging rejects token-less password sign-in."
+    }
+  ]
+}
