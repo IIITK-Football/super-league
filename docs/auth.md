@@ -44,6 +44,25 @@ Tests: `pnpm test:group auth-identity` (unit tests for the rules, and integratio
 
 Supabase's *Secure password change* is on locally (`secure_password_change = true`). A signed-in user whose session is under 24 hours old can set or change a password directly. On an older session, saving a password emails a one-time code to their college address; they enter it in the same form (`components/PasswordSettings.jsx`, `authApi.setPassword(password, code)` and `requestPasswordChangeCode()`), and it is sent to Supabase as the `nonce`. A reset link counts as a fresh sign-in and needs no code. This protects against a stolen or left-open session silently setting a password.
 
+## Google sign-in settings per environment
+
+Google sign-in is a browser-to-Supabase flow: the browser calls the project's Auth, Auth sends it to Google, Google returns to the **project's** `/auth/v1/callback`, and Auth then redirects to the app. The Vercel backend is not involved. Each environment has its **own** Supabase project, Google OAuth client, Site URL and redirect list; never share or reuse one across environments.
+
+| | Local | Staging (develop) | Production |
+|---|---|---|---|
+| Supabase project | local stack, `http://127.0.0.1:54321` | `super-league-staging` | the original project |
+| App address | `http://127.0.0.1:5173` | `https://develop.super-league.pages.dev` | `https://super-league.pages.dev` |
+| Site URL and redirect URLs | `config.toml` (`site_url`, `additional_redirect_urls`) | Dashboard → Authentication → URL Configuration: Site URL and `https://develop.super-league.pages.dev/**` | Dashboard, as in the section below |
+| Google client | a local-only client; id and secret in git-ignored `backend/supabase/.env` | a separate non-production client, set in Dashboard → Providers → Google | the production client (unchanged) |
+| Google "Authorised redirect URI" | `http://127.0.0.1:54321/auth/v1/callback` | `https://<staging-ref>.supabase.co/auth/v1/callback` | `https://<production-ref>.supabase.co/auth/v1/callback` |
+| Frontend points at it via | `frontend/.env.local` | Cloudflare Pages **Preview** build variables | Cloudflare Pages **Production** build variables |
+
+`node scripts/check-google-oauth.mjs <project-url>` shows, read-only and without printing any credential, whether Google is enabled on a project, the *shape* of its client id, and whether the callback belongs to that project.
+
+### Troubleshooting Google sign-in
+- **Google shows `Error 401: invalid_client` ("OAuth client was not found")**: the project sent Google a client id Google does not know. Locally this means `backend/supabase/.env` has no real `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` / `_SECRET`. `pnpm db:start` now switches Google off in that case (the button says it is not set up); add both values to enable it. On a hosted project, check Providers → Google has that environment's own client id and secret.
+- **After Google you land on `http://localhost:3000/?error=invalid_request&error_code=bad_oauth_state`**: Auth could not find the sign-in attempt (it was already used, expired, or handled by another project), so it fell back to the project's **Site URL**, which is still the default `http://localhost:3000`. Set the project's Site URL and redirect URLs (above), make sure the frontend build points at that same project, and retry once in a fresh tab without using back, refresh or a second click. Supabase dashboard → Logs → Auth shows the `bad_oauth_state` entry.
+
 ## Production: dashboard changes for the owner to apply
 
 This repository does not change hosted Supabase. Please check or apply these in the Supabase dashboard (Authentication) yourself:
