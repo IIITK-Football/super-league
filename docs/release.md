@@ -73,15 +73,49 @@ Also confirm migration `20261117000000` is safe against production's real `enfor
 | Migration | What it does | Rollback |
 |---|---|---|
 | `20261117000000_auth_college_domain_and_new_user_triggers` | Stricter case-insensitive college-domain check, an email-change guard, profile and default-role triggers on `auth.users` | `docs/rollback/auth-college-domain-rollback.sql` |
-| `20261118000000_restrict_captain_update_team_member` | Closes an exposure found in production: the 7-argument `captain_update_team_member` ran as its owner, checked nothing about the caller, had no pinned `search_path`, and was executable by `anon` and `PUBLIC`, so anyone with the publishable key could overwrite any registration member (including the email). Afterwards only the team's captain or a dictator can call it, captains cannot change the email, the `search_path` is pinned, and `anon`/`PUBLIC` lose EXECUTE on both overloads | **Forward-only.** Do not restore the old definition, which reopens the exposure. If captains report problems, fix forward or revert the frontend change, not the function |
+| `20261118000000_restrict_captain_update_team_member` | Closes an exposure found in production: the 7-argument `captain_update_team_member` ran as its owner, checked nothing about the caller, had no pinned `search_path`, and was executable by `anon` and `PUBLIC`, so anyone with the publishable key could overwrite any registration member (including the email). Afterwards a captain must be **assigned to the player's team and hold the captain role**, a dictator may update any team, everyone else is refused; captains cannot change the email, the `search_path` is pinned, and `anon`/`PUBLIC` lose EXECUTE on both overloads. **Safety guard:** the migration stops without changing anything if any assigned captain lacks the captain role (see below) | **Forward-only.** Do not restore the old definition, which reopens the exposure. If captains report problems, fix forward or revert the frontend change, not the function |
 
 Until `20261118000000` reaches production, production is still exposed. The same merge deploys the matching frontend change (the team builder no longer sends or edits an email and no longer hides a rejected save behind a silent fallback), which also works with the old database function.
+
+## Closing the team member function exposure: exact steps
+
+The repository work is finished and tested locally. The steps below need you (GitHub settings, secrets, a file export, a production approval). Do them in order; each is a gate.
+
+**Before anything: GitHub settings**
+1. Environment `Database Production` → **Required reviewers**: add yourself. (Today it has branch restriction `main` and the right secrets, but no reviewer, so a push to `main` would apply to production unattended.)
+2. `Database Preview` and `Database Production` already have the right branch rules, secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`) and variable (`SUPABASE_PROJECT_REF`), and `PRODUCTION_PROJECT_REF` is set.
+
+**Staging rehearsal (no production involved)**
+3. Push `develop`. The workflow's `verify` job proves the migrations on an empty local database; the `Database Preview` job applies all four migrations and the seed to the staging project.
+4. In the **staging** SQL Editor run `scripts/sql/verify-captain-rpc.sql` (read-only): every row must say `t`.
+5. From any terminal: `node scripts/verify-rpc-closed.mjs <staging project URL> <staging publishable key>` (Project Settings → API; the publishable key is public) must print `RESULT: CLOSED`.
+6. Optional, in the staging app: sign in as the seeded captain and save a player (works); the team builder shows the stored email read-only.
+
+**Production: before the merge**
+7. **See the exposure for yourself, harmlessly:** `node scripts/verify-rpc-closed.mjs <production URL> <production publishable key>`. It uses a random player id, so it changes nothing. Before the fix it should print `OPEN` for the 7-argument overload.
+8. **Captain role audit (read-only):** run `scripts/sql/captain-role-audit.sql` in the **production** SQL Editor. It lists team entries whose assigned captain does not hold the captain role. Share only the count and the role values. If it returns **no rows**, go on to step 10.
+9. **If it returns rows, resolve them deliberately** (the migration refuses to run otherwise, rather than locking a real captain out or granting roles automatically). For each person who really is the captain, assign the role, then re-run the audit until it is empty. Run this only after reviewing the list (one person per uuid; only a `default` role is changed, any other role needs a separate decision):
+   ```sql
+   UPDATE public.user_roles SET role = 'captain'
+   WHERE user_id IN ('<captain_id from the audit>', '<another>') AND role = 'default';
+   -- a person with no role row at all:
+   -- INSERT INTO public.user_roles (user_id, role) VALUES ('<captain_id>', 'captain') ON CONFLICT (user_id) DO UPDATE SET role = 'captain' WHERE public.user_roles.role = 'default';
+   ```
+10. **Manual export, then the migration history repair**, exactly as in "Before production runs for the first time" above.
+11. **Merge `develop` into `main`** through a pull request and approve the `Database Production` job. It prints a dry run (it must list `20261117000000` and `20261118000000` only; if it lists the baseline, the stop-guard fails the job and the history repair was not done).
+
+**Production: verify the fix**
+12. In the production SQL Editor run `scripts/sql/verify-captain-rpc.sql`: every row `t`.
+13. Run the probe again: `node scripts/verify-rpc-closed.mjs <production URL> <production publishable key>` must now print `RESULT: CLOSED` (it said `OPEN` in step 7).
+14. Sign in to the production app as a real captain and save a player (works); as a different user you cannot change another team's player.
+
+**If the migration stops at the guard:** it changed nothing. The message gives a count; return to steps 8 and 9, then run the `Database deploy` workflow again.
 
 ## First run, in order (each step needs your approval)
 1. Staging created empty, GitHub environments and secrets set, laptop relinked to staging.
 2. **Push `develop`.** The `staging` job applies all four migrations and the seed. Check staging: `supabase_migrations.schema_migrations` lists four versions and the fixture rows exist.
 3. Work through the staging checks in `docs/auth.md`.
-4. Complete "Before production runs for the first time".
+4. Complete "Before production runs for the first time", and the captain role audit in "Closing the team member function exposure".
 5. **Merge `develop` into `main`** through a pull request. The `production` job waits for your approval, prints a dry run in its summary, then applies only `20261117000000` and `20261118000000`. The same merge also triggers the Pages production build: the new frontend works with the old database triggers, and CAPTCHA stays off until you enable it, so set the Pages site key before enabling CAPTCHA (see `docs/auth.md`).
 
 ## Manual runs
