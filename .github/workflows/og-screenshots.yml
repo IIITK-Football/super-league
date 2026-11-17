@@ -1,16 +1,22 @@
 name: Update OG Screenshots to R2
 
+# The job screenshots the PRODUCTION site and syncs the images to R2, so a push to develop changes nothing it would
+# capture. It refreshes when main is pushed (a production deploy), nightly, and on demand.
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
+# Two runs must never upload at once (the last writer would win at random); a run that is already uploading is not cancelled.
+concurrency:
+  group: og-screenshots
+  cancel-in-progress: false
+
 jobs:
   snapshot-and-sync:
-    # Pinned: the moving latest tag now means Ubuntu 26.04, which Playwright does not support yet. Move this deliberately.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4

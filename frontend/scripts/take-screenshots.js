@@ -30,6 +30,18 @@ const routes = ['', 'fantasy', 'wc', 'matches', 'standings', 'statistics', 'lege
             await page.goto(url, { waitUntil: 'load', timeout: 30000 });
             await page.waitForTimeout(3000); // Allow animations to settle
 
+            // The home page is a rotating video carousel, so a plain screenshot is a random slide and video frame, and
+            // this image is the default share preview for the whole site. Show the Super League slide and pause it.
+            if (route === '') {
+                try {
+                    await page.getByRole('button', { name: 'Show Super League' }).click({ timeout: 5000 });
+                    await page.getByRole('button', { name: 'Pause carousel video' }).click({ timeout: 5000 });
+                    await page.waitForTimeout(1500);
+                } catch {
+                    console.warn('  ⚠️ Carousel controls not found; capturing the home page as it is.');
+                }
+            }
+
             // Native Playwright PNG output — no sharp dependency needed
             await page.screenshot({ path: outputPath });
 
