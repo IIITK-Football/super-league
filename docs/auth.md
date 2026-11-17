@@ -86,17 +86,17 @@ The headquarters login and the password pages are covered; Google sign-in is not
 
 ## Verifying the release safely (staging first)
 
-There is one hosted Supabase project and Pages previews use it, and (as far as we know) the free plan has no backup to restore from. Rehearse the risky steps on a separate staging project, then do only a small smoke check in production. Everything here is an owner action; the repository never touches hosted services.
+Production is the original hosted Supabase project, and (as far as we know) the free plan has no backup to restore from. Rehearse the risky steps on a separate staging project, then do only a small smoke check in production. Everything here is an owner action; the repository never touches hosted services except through the GitHub Actions workflow described in [`release.md`](release.md).
 
 **What staging can prove that local tests cannot:** the migration runs with hosted permissions, real Turnstile verification (local uses Cloudflare's always-pass test secret), real email delivery, secure password change with a real emailed code, and the CAPTCHA on/off and rollback rehearsals, all with no real user affected. **What it cannot prove:** production's own current settings and data, which the read-only checks and the production smoke cover.
 
 ### Staging runbook
-1. Create a new free Supabase project and name it clearly as staging.
-2. Apply `backend/supabase/migrations/20261106000000_baseline.sql`, then `20261117000000_auth_college_domain_and_new_user_triggers.sql`, to **staging only** (SQL editor, or the CLI with an explicit staging connection string). **Do not run `supabase link`**: this checkout is linked to production.
-3. Mirror the Auth settings above: Confirm email on, minimum password length 8, Secure password change on, redirect URLs including `http://127.0.0.1:5173/**`, SMTP (or the default sender to your own team address), Google not needed.
-4. Add `localhost` and `127.0.0.1` to a Turnstile widget's hostnames. Enter its secret only in staging's Supabase CAPTCHA setting, and put its site key in your git-ignored `frontend/.env.local`.
-5. Run the app locally against staging (`pnpm dev` in `frontend/`). The app refuses a non-local Supabase URL unless you opt in with `VITE_ALLOW_REMOTE_SUPABASE=true` in `frontend/.env.local` (and `ALLOW_REMOTE_SUPABASE=true` in `backend/.env.local` if the backend is used). Keep these only in ignored local files.
-6. Work through the checks below. When they pass, delete or pause the staging project.
+1. Create a new free Supabase project, name it clearly as staging, and **leave it empty**.
+2. Set up the GitHub environments and secrets from [`release.md`](release.md) and push `develop`. The workflow applies the baseline and `20261117000000_auth_college_domain_and_new_user_triggers.sql` to staging, plus the synthetic seed; you do not paste SQL. (If you already applied SQL to staging by hand, say so before pushing: the migration history must then be repaired first.) Move your CLI link to staging as described there; never link to production.
+3. Set the Auth settings above on staging by hand (CI deploys the database, not Auth settings): Confirm email on, minimum password length 8, Secure password change on, redirect URLs including `http://127.0.0.1:5173/**`, SMTP (or the default sender to your own team address), Google not needed.
+4. Add `localhost` and `127.0.0.1` to a Turnstile widget's hostnames. Enter its secret only in staging's Supabase CAPTCHA setting, and put its site key in `frontend/.env.staging.local` (git-ignored, so your `.env.local` for the local stack stays unchanged).
+5. Put the staging URL and anon key in `frontend/.env.staging.local` too, with `VITE_ALLOW_REMOTE_SUPABASE=true` (the app refuses a non-local Supabase URL in development without this opt-in), and run the app with `pnpm exec vite --mode staging` from `frontend/`. Keep these only in ignored local files, and never put the database password or service role key there.
+6. Work through the checks below. When they pass, delete `.env.staging.local`. Keep the staging project: CI deploys to it from `develop` (resume it if it pauses).
 
 ### Checks on staging (expected result in brackets)
 | Check | Expected |
@@ -117,14 +117,14 @@ After the approved release steps: the widget is visible on `/login` and `/hq-log
 
 ## Release order and rollback
 
-Order (each step needs your approval; nothing here is automated yet):
+Order (each step needs your approval; database changes go through GitHub Actions, see [`release.md`](release.md)):
 
-1. Record a backup or point-in-time-recovery point, and save the hosted function and trigger definitions from the checks above.
+1. The free plan has no backup to restore from, so take the **manual production export** (and save the hosted function and trigger definitions from the checks above) immediately before the first production run, then repair the migration history as described in `release.md`.
 2. Apply the dashboard settings above (Confirm email, SMTP, URLs, password length).
-3. Apply migration `20261117000000_auth_college_domain_and_new_user_triggers.sql` through the approved release process.
+3. Merge `develop` into `main`: the `production` job applies migration `20261117000000_auth_college_domain_and_new_user_triggers.sql` after you approve it in GitHub (it was already applied to staging from `develop`).
 4. Add the Turnstile site key to Pages, deploy the frontend and backend, and confirm the widget is visible (see the Turnstile steps above). CAPTCHA stays **off** in Supabase until this is confirmed.
 5. Enable CAPTCHA in Supabase with the Turnstile secret (the only step that can block password sign-ins; switch it off first if anything goes wrong).
-6. Verify with a college test account (password sign-up and confirmation, reset, setting a password from the profile, and the emailed code on an older session). Note: there is currently **one** hosted Supabase project and Pages previews use it too, so no isolated Auth environment exists. Either create a separate Supabase staging project for this verification, or use a single dedicated test account you control in production; Google sign-in is already live and is not retested.
+6. Verify with a college test account (password sign-up and confirmation, reset, setting a password from the profile, and the emailed code on an older session). Do the full rehearsal on the staging project first (see above). In production only the small smoke test remains: Pages previews use the production project, so use an existing account of yours rather than creating new ones. Google sign-in is already live and is not retested.
 
 Rollback:
 
