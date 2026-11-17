@@ -4,7 +4,9 @@
   "enforcement": "active",
   "conditions": {
     "ref_name": {
-      "include": ["refs/heads/develop", "refs/heads/main"],
+      "include": [
+        "refs/heads/main"
+      ],
       "exclude": []
     }
   },
@@ -24,11 +26,21 @@
       "type": "required_status_checks",
       "parameters": {
         "strict_required_status_checks_policy": true,
-        "required_status_checks": [{ "context": "gate" }]
+        "required_status_checks": [
+          {
+            "context": "gate"
+          }
+        ]
       }
     },
-    { "type": "required_linear_history" },
-    { "type": "non_fast_forward" },
-    { "type": "deletion" }
+    {
+      "type": "required_linear_history"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "deletion"
+    }
   ]
 }

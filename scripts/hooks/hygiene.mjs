@@ -34,7 +34,9 @@ export function checkRange(base, head, { cwd = process.cwd() } = {}) {
 }
 
 // Lines come from Git's pre-push hook: "<local ref> <local sha> <remote ref> <remote sha>".
-// Everything is published through a ready/<name> branch and a pull request, so the same required checks judge it.
+// Work happens directly on develop, so pushing develop (or any other branch) is fine. Only two things are refused:
+// a direct push to main (the production branch is reached by pull request, which runs the phase-completion gate)
+// and deleting a remote branch.
 export function checkPushRefs(lines) {
   const problems = [];
   for (const line of lines) {
@@ -42,10 +44,8 @@ export function checkPushRefs(lines) {
     if (!remoteRef) continue;
     if (localRef === '(delete)' || ZERO.test(localSha ?? '')) {
       problems.push(`${remoteRef}: deleting remote branches is not done from here.`);
-    } else if (!/^refs\/heads\/ready\/[A-Za-z0-9._-]+$/.test(remoteRef)) {
-      problems.push(
-        `${remoteRef}: not allowed. Changes reach develop and main by pull request. Push a branch named ready/<short-name> and open a pull request; the required "gate" check judges it.`,
-      );
+    } else if (remoteRef === 'refs/heads/main') {
+      problems.push('refs/heads/main: main is reached by pull request, which runs the full phase-completion gate. Push develop and open a pull request into main.');
     }
   }
   return problems;

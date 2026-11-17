@@ -57,9 +57,9 @@ There is no per-change opt-out. `tests/gate-exemptions.json` lists whole categor
 
 - **pre-commit:** blocks `.env` and key files and secret-looking additions. It takes well under a second and runs no tests.
 - **commit-msg:** Conventional Commits, 72 characters, no backlog references.
-- **pre-push:** only `ready/<name>` branches may be pushed (`develop` and `main` are reached by pull request), and the outgoing commits must pass Git hygiene (conventional messages, no fixup/squash/WIP commits, no merge commits, no env or key files, no secrets). No tests run here.
+- **pre-push:** `develop` may be pushed directly; a direct push to `main` and deleting a remote branch are refused, and the outgoing commits must pass Git hygiene (conventional messages, no fixup/squash/WIP commits, no merge commits, no env or key files, no secrets). No tests run here.
 
-The strict rules and the test groups run at **phase completion** (`pnpm work phase N --base <ref>`) and in CI for pull requests into `main`, the nightly run and manual runs. Pull requests into `develop` get only the cheap rules (every changed file mapped and covered by an active group).
+The strict rules and the test groups run at **phase completion** (`pnpm work phase N --base <ref>`) and in CI for pull requests into `main`, the nightly run and manual runs. A push to `develop` gets a light CI pass with only the cheap rules (every changed file mapped and covered by an active group).
 
 There is no bypass variable or flag. A person can still run `git commit --no-verify` or `git push --no-verify` by hand, which only skips the local copy: CI applies the same rules and cannot be skipped.
 

@@ -6,7 +6,7 @@
 //   --repo    repository files: strict test mapping, backlog validity, workflow files tracked and not ignored,
 //             the Claude guard wiring, the CI gate, no bypass switch.   (what CI runs)
 //   --local   this clone: Git hooks installed and executable.
-//   --remote  GitHub, through read-only `gh api` GET calls: a ruleset on develop and main that needs a pull request and
+//   --remote  GitHub, through read-only `gh api` GET calls: a ruleset on main that needs a pull request and
 //             the `gate` check, forbids force pushes and deletion, has NO bypass actors; the production environment has
 //             a required reviewer.
 import { spawnSync } from 'node:child_process';
@@ -149,7 +149,8 @@ export function auditRemote({ gh }) {
       results.push(fail(`ruleset ${entry.id} can be read`, e.message));
     }
   }
-  for (const branch of ['develop', 'main']) {
+  // main is the protected branch; develop is the working branch and is deliberately not required to have these rules.
+  for (const branch of ['main']) {
     const covering = details.filter(({ rs }) => covers(rs, branch));
     results.push(covering.length ? pass(`a ruleset covers ${branch}`) : fail(`a ruleset covers ${branch}`, `no ruleset includes refs/heads/${branch}; import docs/process/ruleset-gate.json`));
     const active = covering.filter(({ entry }) => entry.enforcement === 'active');

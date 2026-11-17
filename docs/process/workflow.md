@@ -4,16 +4,16 @@ The rules below are **enforced by scripts, hooks and CI**, not by instructions. 
 
 ## The principle
 
-**Everyday work is fast. Validation is rigid, once, when a phase is completed.** A commit or push takes seconds; the slow, thorough checks run at phase completion and for pull requests into `main`.
+**Everyday work is fast. Validation is rigid, once, when a phase is completed.** You work directly on `develop`: a commit or push takes seconds, with no branch or pull request. The two real hurdles are `main` (protected, reached only by pull request) and the phase-completion gate.
 
 | When | What runs | Enforced by |
 |---|---|---|
 | Every commit | Staged-file safety (env files, key files, secrets), Conventional Commit message (72 characters, no backlog references) | `pre-commit` and `commit-msg` hooks |
-| Every push | Only `ready/<name>` branches; Git hygiene of the outgoing commits (no fixup/WIP/merge commits, no env or key files, no secrets) | `pre-push` hook (same code as CI); the GitHub ruleset |
+| Every push to `develop` | Git hygiene of the outgoing commits (no fixup/WIP/merge commits, no env or key files, no secrets); no direct push to `main`; no branch deletion. No branch or pull request needed | `pre-push` hook (same code as CI) |
 | Starting an item | Order only: dependencies done, open decisions resolved, no earlier phase still open. No plan approval, groups or checks needed | `pnpm work start`; CI re-checks status changes |
-| Pull request into `develop` | `gate`: hygiene, backlog records, repository audit, and the cheap rule that every changed file is mapped to a group with real tests. **No test suite** | CI `gate` (required by the ruleset) |
+| After a push to `develop` | A light CI pass for visibility: hygiene, backlog records, repository audit, and the cheap mapped-and-covered rule. **No test suite**, and not a merge requirement | CI |
 | **Completing a phase** | Prerequisites of every item together (groups and acceptance checks defined, test files exist, the owner's attestations of manual checks); the strict test rules over everything the phase changed (every file mapped, covered by an active group, with a changed test); **every test group once**; evidence and a walkthrough per item, validated against the evidence | `pnpm work phase N --base <ref>` |
-| Pull request into `main` | The full strict rules and the whole test suite, plus the same hygiene, records and audit | CI `gate`; nightly and manual runs use the whole suite too |
+| Pull request into `main` | The full strict rules and the whole test suite, plus the same hygiene, records and audit | CI `gate` (required by the GitHub ruleset on `main`, with no bypass); nightly and manual runs use the whole suite too |
 | Always | The safety boundaries (no hosted Supabase commands, no Docker removal, nothing touching the backup project, no reading `.env` files, no hook bypass, no GitHub settings changes, no merging into `main`) | The Claude Code guard (`.claude/settings.json`, `scripts/work/claude-guard.mjs`) |
 
 A finished item still needs, at phase completion: test groups that pass on a **clean tree** (evidence records the commit, tree and each command's exit code), each manual check **attested by the owner**, all ten cross-cutting rules marked `pass` or `n/a: <reason>`, and a complete walkthrough (`docs/walkthroughs/SL-xxx.md`: generated facts plus the author's Summary, Hosted actions, Assumptions and deviations, Risks and follow-ups, Rollback; no `TODO`, no stale evidence).
@@ -23,7 +23,7 @@ A finished item still needs, at phase completion: test groups that pass on a **c
 ```
 pnpm work status                     what is open
 pnpm work start SL-020               begin (order is checked; nothing else)
-# implement, commit freely, push a ready/<name> branch, open a PR into develop, merge when `gate` is green
+# implement, commit and push directly on develop (no branch, no pull request)
 pnpm work attest SL-020 C5 "note"    OWNER: attest a manual check (a hosted step)
 pnpm work phase 2 --base <ref>       complete the phase: all the rigid validation, once
 # fill in every TODO in the walkthroughs, commit, run `pnpm work phase 2 --base <ref>` again
@@ -34,15 +34,15 @@ Item status is changed only by these commands. `pnpm work approve` and `pnpm wor
 
 ## Publishing
 
-`develop` and `main` are reached by pull request. Push a branch named `ready/<short-name>`, open a pull request into `develop`. When `gate` is green the owner merges it (rebase merge, to keep history linear) in the GitHub web page, using "Merge without waiting for requirements" because the organisation's `update` rule only lets bypass-capable people update `develop`; afterwards `git rebase origin/develop` drops the already-merged local commits. Pull requests into `main` start the production workflow and stay the owner's decision.
+Commit and push directly on `develop`. Only `main` needs a pull request: open one from `develop` when a phase is complete; the required `gate` runs the full rules and the whole suite, and the owner merges it and approves the `Database Production` job. A push to `develop` also runs the staging database deploy (migrations and the synthetic seed) through the approved workflow when migrations, the seed or the workflow files changed.
 
 ## What the Claude Code guard does
 
-Before every Bash, Edit and Write call it decides deterministically: **deny** (the bypasses, the safety boundaries and the owner-only steps), **ask** (only the files that define the gates: `.claude/settings.json`, the hook wrappers, the guard itself, `tests/gate-exemptions.json` and `ci.yml`; and triggering or re-running a workflow, which is a hosted action), or allow. It judges what a command actually writes and runs, not words that appear in a commit message or a heredoc. Merging a pull request is allowed into `develop` and denied into `main`. Approvals, attestations and evidence cannot be written by hand. `tests` in `backend/tests/tooling/claude-guard.test.ts` pin each case, including what must stay allowed. At session start it reports the backlog and whether the hooks are installed.
+Before every Bash, Edit and Write call it decides deterministically: **deny** (the bypasses, the safety boundaries and the owner-only steps), **ask** (changing an existing GitHub ruleset; only the files that define the gates: `.claude/settings.json`, the hook wrappers, the guard itself, `tests/gate-exemptions.json` and `ci.yml`; and triggering or re-running a workflow, which is a hosted action), or allow. It judges what a command actually writes and runs, not words that appear in a commit message or a heredoc. Merging a pull request is allowed into `develop` and denied into `main`; a direct push to `main` is denied. Approvals, attestations and evidence cannot be written by hand. `tests` in `backend/tests/tooling/claude-guard.test.ts` pin each case, including what must stay allowed. At session start it reports the backlog and whether the hooks are installed.
 
 ## Owner setup (once)
 
-1. **Import the ruleset.** GitHub → Settings → Rules → Rulesets → New ruleset → *Import a ruleset* → choose `docs/process/ruleset-gate.json`. It covers `develop` and `main`, requires a pull request and the `gate` check, forbids force pushes and deletion, requires linear history, and has **no bypass actors**, so it binds administrators too. The first pull request must pass `gate` before the check can be selected; if the import cannot find it yet, open one pull request first. The organisation's existing "Global Fork Enforcement" ruleset is unaffected.
+1. **The GitHub rulesets (Settings, Rules, Rulesets).** `docs/process/ruleset-gate.json` ("Workflow gate") covers **`main` only**: a pull request, the `gate` check, linear history, no force pushes or deletion, and **no bypass actors**, so it binds administrators too. The older "Global Fork Enforcement" ruleset must not stop pushes to `develop`: it should keep `deletion` and `non_fast_forward` (no force pushes, no deletion) but drop its `update` and `creation` rules, which required a bypass for every push.
 2. **Run the audit:** `pnpm work audit`. Every line must say PASS. It reads GitHub with read-only calls (needs `gh auth login` for a user who can read the repository settings).
 3. **Optional hardening.** Project settings cannot stop a person on the same machine from editing `.claude/settings.json`. A root-owned managed settings file (macOS: `/Library/Application Support/ClaudeCode/managed-settings.json`) holding the same `permissions.deny` rules cannot be weakened by project or user settings.
 

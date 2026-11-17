@@ -107,25 +107,20 @@ describe('checkPushRefs', () => {
   const A = 'a'.repeat(40);
   const B = 'b'.repeat(40);
 
-  it('allows ready/ branches', () => {
+  it('allows pushing develop (the working branch) and any other branch', () => {
+    expect(checkPushRefs([`refs/heads/develop ${A} refs/heads/develop ${B}`])).toEqual([]);
     expect(checkPushRefs([`refs/heads/develop ${A} refs/heads/ready/seed-refresh ${Z}`])).toEqual([]);
+    expect(checkPushRefs([`refs/heads/foo ${A} refs/heads/foo ${Z}`])).toEqual([]);
   });
 
-  it('rejects direct pushes to main and develop, pointing at the pull request route', () => {
-    for (const ref of ['main', 'develop']) {
-      const out = checkPushRefs([`refs/heads/${ref} ${A} refs/heads/${ref} ${B}`]).join('\n');
-      expect(out, ref).toMatch(/pull request/i);
-      expect(out, ref).toMatch(/ready\//);
-    }
+  it('rejects a direct push to main, pointing at the pull request route', () => {
+    const out = checkPushRefs([`refs/heads/develop ${A} refs/heads/main ${B}`]).join('\n');
+    expect(out).toMatch(/main/);
+    expect(out).toMatch(/pull request/i);
   });
 
   it('rejects deleting any remote branch', () => {
     expect(checkPushRefs([`(delete) ${Z} refs/heads/ready/x ${A}`]).join('\n')).toMatch(/delet/i);
-  });
-
-  it('rejects other branch names and tags, so every publish goes through the same gate', () => {
-    expect(checkPushRefs([`refs/heads/foo ${A} refs/heads/foo ${Z}`]).length).toBe(1);
-    expect(checkPushRefs([`refs/tags/v1 ${A} refs/tags/v1 ${Z}`]).length).toBe(1);
   });
 });
 
