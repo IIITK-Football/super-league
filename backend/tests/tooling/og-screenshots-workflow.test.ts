@@ -40,6 +40,18 @@ describe('og-screenshots workflow', () => {
     // the check lists every route the script captures ("" is home)
     const routes = [...script.match(/const routes = \[([^\]]*)\]/)![1].matchAll(/'([^']*)'/g)].map((m) => m[1] || 'home');
     for (const r of routes) expect(step('Check every screenshot was captured'), r).toMatch(new RegExp(`\\b${r}\\b`));
+    // ...and lists exactly those routes, so a page the script no longer captures cannot fail the job
+    const listed = step('Check every screenshot was captured').match(/for name in ([^;]*); do/)![1].trim().split(/\s+/);
+    expect(listed.sort()).toEqual([...routes].sort());
+  });
+
+  it('does not capture /clubs (it is not a real route: the site redirects it to the home page)', () => {
+    expect(script).not.toMatch(/'clubs'/);
+  });
+
+  it('waits for a normal page load, not network idle (the home page keeps streaming a video, so network idle times out)', () => {
+    expect(script).not.toMatch(/networkidle/);
+    expect(script).toMatch(/waitUntil: 'load'/);
   });
 
   it('only adds or overwrites images in R2: it never deletes (no --delete)', () => {

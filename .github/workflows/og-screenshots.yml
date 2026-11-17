@@ -42,10 +42,10 @@ jobs:
         run: |
           set -euo pipefail
           # The script logs a failed page and carries on, so verify the whole set before anything is uploaded.
-          for name in home fantasy wc matches standings clubs statistics legends rules; do
+          for name in home fantasy wc matches standings statistics legends rules; do
             [ -s "screenshots/$name.png" ] || { echo "Missing or empty screenshot: $name.png"; exit 1; }
           done
-          echo "All 9 screenshots captured."
+          echo "All 8 screenshots captured."
 
       - name: ☁️ Upload to R2
         working-directory: ./frontend
