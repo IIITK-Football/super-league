@@ -47,7 +47,7 @@ describe('analyze', () => {
 describe('checkGoogle', () => {
   it('asks /authorize without following the redirect and without any key', async () => {
     const fetchImpl = vi.fn(async () => ({ status: 302, headers: { get: () => googleRedirect(REAL_ID) }, text: async () => '' }));
-    const r = await checkGoogle(PROJECT, fetchImpl);
+    const r = await checkGoogle(PROJECT, fetchImpl as unknown as typeof fetch);
     expect(r.verdict).toBe('ready');
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain('/auth/v1/authorize?provider=google');
@@ -56,7 +56,7 @@ describe('checkGoogle', () => {
   });
 
   it('is inconclusive when the request throws', async () => {
-    const r = await checkGoogle(PROJECT, vi.fn(async () => { throw new Error('offline'); }));
+    const r = await checkGoogle(PROJECT, vi.fn(async () => { throw new Error('offline'); }) as unknown as typeof fetch);
     expect(r.verdict).toBe('inconclusive');
   });
 });
