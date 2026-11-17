@@ -41,6 +41,16 @@ Database tests use the deterministic local seed (`backend/supabase/seed.sql`, se
 - Backend/Workers unit tests: `backend/tests/<group>/*.test.ts` (Vitest). Frontend: `frontend/src/**/__tests__/*.test.js`. Database: `backend/supabase/tests/database/*.test.sql` (pgTAP).
 - If a new area needs its own group, add it to `tests/groups.json` with an owner and path triggers; `tests/groups.json` is validated by the `tooling` group.
 
+## Strict rules (no change can go untested)
+
+`node scripts/test-groups.mjs check` (staged files by default, or `--base <ref>` for a whole range, or `--files …`) applies three rules to every changed file that is not an approved exemption. It runs no tests; `affected --strict` applies it first and then runs the affected groups.
+
+1. **Mapped:** some group's `paths`, `covers` or `testPaths` must match it, otherwise nothing would run for it.
+2. **Covered:** an **active** group's `covers` must match it. A pending group has no tests, so it covers nothing; a file only a pending group maps is rejected until tests exist (the message names the backlog item that adds them).
+3. **Tested:** the change set must contain a changed or added test file (a group's `testPaths`) from a group that covers it. This rule runs over the whole outgoing range at push and in CI; the commit hook defers just this rule (`--commit-stage`) so a small follow-up commit is not blocked.
+
+There is no per-change opt-out. `tests/gate-exemptions.json` lists whole categories that need no tests (documentation, lockfiles, assets, vendored tools), each with a reason; changing it needs the owner's explicit confirmation. A group's `covers` and `testPaths` are what a reviewer reads to learn what its tests really verify, so declare them honestly. `--evidence <file>` records the commit, the tree and each command's exit code as JSON, which the completion walkthrough uses.
+
 ## Commit-time hook
 
 `pnpm hooks:install` runs `node scripts/test-groups.mjs affected --staged` before each commit (after staged-file safety checks), so only the groups your staged paths select run; no unrelated suites. Failures print the group and the command to re-run it. See `CONTRIBUTING.md` for the logged emergency bypass.

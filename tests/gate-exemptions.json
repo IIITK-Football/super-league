@@ -1,0 +1,109 @@
+{
+  "$comment": "Categories of files that need no tests of their own. Every entry states why. This file is protected: changing it needs the owner's explicit confirmation, because an exemption is how a gap would be hidden.",
+  "exemptions": [
+    {
+      "glob": "**/*.md",
+      "reason": "documentation"
+    },
+    {
+      "glob": "docs/**",
+      "reason": "documentation and decision records"
+    },
+    {
+      "glob": "**/pnpm-lock.yaml",
+      "reason": "lockfile; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "pnpm-lock.yaml",
+      "reason": "lockfile; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "**/package.json",
+      "reason": "manifest; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "package.json",
+      "reason": "manifest; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": ".npmrc",
+      "reason": "package manager settings; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "backend/tsconfig.json",
+      "reason": "build configuration; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "backend/next.config.ts",
+      "reason": "build configuration; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "backend/postcss.config.mjs",
+      "reason": "build configuration; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "backend/eslint.config.mjs",
+      "reason": "lint configuration; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "frontend/eslint.config.js",
+      "reason": "lint configuration; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "backend/vitest.config.ts",
+      "reason": "test runner configuration; any change runs every group (allGroupsTriggers)"
+    },
+    {
+      "glob": "**/.gitignore",
+      "reason": "Git ignore rules"
+    },
+    {
+      "glob": ".vscode/**",
+      "reason": "editor settings"
+    },
+    {
+      "glob": "backend/public/**",
+      "reason": "static assets"
+    },
+    {
+      "glob": "frontend/public/**",
+      "reason": "static assets"
+    },
+    {
+      "glob": "frontend/src/assets/**",
+      "reason": "static assets"
+    },
+    {
+      "glob": "backend/supabase/migrations_legacy/**",
+      "reason": "frozen legacy migration history, never executed (the baseline replaced it)"
+    },
+    {
+      "glob": "schema.sql",
+      "reason": "empty placeholder file; stray, to be removed in repository cleanup"
+    },
+    {
+      "glob": ".lsp/**",
+      "reason": "editor cache accidentally tracked; stray, to be removed in repository cleanup"
+    },
+    {
+      "glob": "frontend/index.html.orig",
+      "reason": "merge leftover accidentally tracked; stray, to be removed in repository cleanup"
+    },
+    {
+      "glob": "frontend/vite.config.js.timestamp-*.mjs",
+      "reason": "Vite temporary files accidentally tracked; stray, to be removed in repository cleanup"
+    },
+    {
+      "glob": ".github/agents/**",
+      "reason": "vendored Impeccable design-tool files, verified by their own checksums; not project code"
+    },
+    {
+      "glob": ".github/hooks/**",
+      "reason": "vendored Impeccable design-tool hook configuration; not project code"
+    },
+    {
+      "glob": ".github/skills/**",
+      "reason": "vendored Impeccable design-tool skill files, verified by their own checksums; not project code"
+    }
+  ]
+}
