@@ -1,5 +1,5 @@
 {
-  "$comment": "Test groups (SL-014). `paths` are repo-relative globs (* = within a segment, ** = across segments) that select the group when a changed file matches. `owner` is the responsible area. A group with `\"status\": \"pending\"` has no tests yet; it is reported (not failed) until the backlog item named in `pendingFor` adds them.",
+  "$comment": "Test groups. `paths` select a group to RUN when a changed file matches (* = within a segment, ** = across segments). `covers` is the source a group's tests really verify; `testPaths` are its test files. An active group must declare both. A group with \"status\": \"pending\" has no tests yet: it covers nothing, so changing a path that only pending groups map is rejected (see `node scripts/test-groups.mjs check`) until tests exist; `pendingFor` names the backlog item that adds them. Files that need no tests are listed by category, with a reason, in tests/gate-exemptions.json.",
   "groups": {
     "database": {
       "description": "Schema, migrations, seed, RLS policies (pgTAP against the local Supabase DB on 54322)",
@@ -17,6 +17,13 @@
             "test"
           ]
         }
+      ],
+      "covers": [
+        "backend/supabase/migrations/**",
+        "backend/supabase/seed.sql"
+      ],
+      "testPaths": [
+        "backend/supabase/tests/**"
       ]
     },
     "config": {
@@ -24,16 +31,17 @@
       "owner": "platform",
       "paths": [
         "**/.env.example",
-        "backend/lib/env.ts",
-        "backend/instrumentation.ts",
-        "frontend/src/lib/env.js",
-        "frontend/src/lib/supabase.js",
-        "backend/supabase/config.toml",
-        "frontend/functions/**",
-        "frontend/.dev.vars.example",
-        "backend/lib/supabase/**",
         "backend/app/**",
-        "backend/middleware.ts"
+        "backend/instrumentation.ts",
+        "backend/lib/env.ts",
+        "backend/lib/supabase/**",
+        "backend/middleware.ts",
+        "backend/supabase/config.toml",
+        "frontend/.dev.vars.example",
+        "frontend/functions/**",
+        "frontend/scripts/check-bundle.mjs",
+        "frontend/src/lib/env.js",
+        "frontend/src/lib/supabase.js"
       ],
       "run": [
         {
@@ -56,18 +64,38 @@
             "src/lib"
           ]
         }
+      ],
+      "covers": [
+        "**/.env.example",
+        "backend/lib/env.ts",
+        "backend/instrumentation.ts",
+        "frontend/src/lib/env.js",
+        "frontend/src/lib/supabase.js",
+        "backend/supabase/config.toml",
+        "frontend/functions/**",
+        "frontend/.dev.vars.example",
+        "backend/lib/supabase/**",
+        "backend/middleware.ts",
+        "frontend/scripts/check-bundle.mjs"
+      ],
+      "testPaths": [
+        "backend/tests/config/**",
+        "frontend/src/lib/__tests__/**"
       ]
     },
     "tooling": {
       "description": "Repository scripts, test-group runner, commit hooks, workspace config",
       "owner": "platform",
       "paths": [
-        "scripts/**",
-        "tests/groups.json",
         ".githooks/**",
+        ".github/workflows/**",
+        ".gitmessage",
+        ".nvmrc",
         ".pre-commit-config.yaml",
         "pnpm-workspace.yaml",
-        ".github/workflows/**"
+        "scripts/**",
+        "tests/gate-exemptions.json",
+        "tests/groups.json"
       ],
       "run": [
         {
@@ -80,6 +108,19 @@
             "tests/tooling"
           ]
         }
+      ],
+      "covers": [
+        "scripts/**",
+        "tests/groups.json",
+        "tests/gate-exemptions.json",
+        ".githooks/**",
+        ".gitmessage",
+        "pnpm-workspace.yaml",
+        ".github/workflows/**",
+        ".nvmrc"
+      ],
+      "testPaths": [
+        "backend/tests/tooling/**"
       ]
     },
     "auth-identity": {
@@ -133,6 +174,27 @@
             "src/components/__tests__"
           ]
         }
+      ],
+      "covers": [
+        "backend/lib/auth/**",
+        "backend/app/api/auth/**",
+        "backend/app/api/admin/team-registrations/**",
+        "backend/supabase/migrations/*auth*",
+        "frontend/src/lib/authApi.js",
+        "frontend/src/lib/authRules.js",
+        "frontend/src/context/AuthContext.jsx",
+        "frontend/src/pages/Login.jsx",
+        "frontend/src/pages/ResetPassword.jsx",
+        "frontend/src/components/PasswordSettings.jsx",
+        "frontend/src/components/GlobalAuthRedirect.jsx",
+        "frontend/src/components/TurnstileWidget.jsx",
+        "frontend/src/pages/AdminLogin.jsx"
+      ],
+      "testPaths": [
+        "backend/tests/auth/**",
+        "frontend/src/lib/__tests__/auth*",
+        "frontend/src/pages/__tests__/**",
+        "frontend/src/components/__tests__/**"
       ]
     },
     "auth-roles": {
@@ -155,6 +217,7 @@
       "pendingFor": "SL-026/SL-030",
       "paths": [
         "backend/app/api/**",
+        "backend/index.js",
         "backend/lib/**"
       ],
       "run": []
@@ -177,9 +240,10 @@
       "status": "pending",
       "pendingFor": "SL-043/SL-055",
       "paths": [
+        "backend/app/api/leaderboard/**",
         "backend/app/api/predictions/**",
         "backend/app/api/wc/**",
-        "backend/app/api/leaderboard/**"
+        "worldcup2026_current_group_standings.json"
       ],
       "run": []
     },
@@ -202,6 +266,15 @@
             "--passWithNoTests"
           ]
         }
+      ],
+      "covers": [
+        "frontend/src/**",
+        "frontend/index.html",
+        "frontend/vite.config.js"
+      ],
+      "testPaths": [
+        "frontend/src/**/__tests__/**",
+        "frontend/src/**/*.test.*"
       ]
     },
     "e2e": {
@@ -211,19 +284,28 @@
       "pendingFor": "SL-100",
       "scheduledOnly": true,
       "paths": [
+        "backend/app/**",
         "frontend/**",
-        "backend/app/**"
+        "frontend/scripts/take-screenshots.js"
       ],
       "run": []
     }
   },
   "allGroupsTriggers": [
+    ".npmrc",
+    ".nvmrc",
+    "backend/eslint.config.mjs",
+    "backend/next.config.ts",
+    "backend/package.json",
+    "backend/pnpm-lock.yaml",
+    "backend/postcss.config.mjs",
+    "backend/tsconfig.json",
+    "backend/vitest.config.ts",
+    "frontend/eslint.config.js",
+    "frontend/package.json",
+    "frontend/pnpm-lock.yaml",
     "package.json",
     "pnpm-lock.yaml",
-    "frontend/pnpm-lock.yaml",
-    "backend/pnpm-lock.yaml",
-    "pnpm-workspace.yaml",
-    ".nvmrc",
-    ".npmrc"
+    "pnpm-workspace.yaml"
   ]
 }
