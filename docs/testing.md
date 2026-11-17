@@ -56,7 +56,7 @@ There is no per-change opt-out. `tests/gate-exemptions.json` lists whole categor
 `pnpm install` installs the hooks (the root `prepare` script runs `scripts/install-hooks.sh --auto`; it never fails an install and never overrides a hooks path you configured yourself). They share their logic with CI (`scripts/hooks/lib.mjs`, `scripts/hooks/hygiene.mjs`), so a local result and the CI result cannot disagree.
 
 - **pre-commit:** blocks `.env` and key files and secret-looking additions. It takes well under a second and runs no tests.
-- **commit-msg:** Conventional Commits, 72 characters, no backlog references.
+- **commit-msg:** Conventional Commits, 72 characters, no backlog references, and no AI attribution (an assistant co-author trailer or a "generated with" line). CI hygiene also rejects a commit whose author or committer is an AI identity, so the history shows the owner as the only author.
 - **pre-push:** `develop` may be pushed directly; a direct push to `main` and deleting a remote branch are refused, and the outgoing commits must pass Git hygiene (conventional messages, no fixup/squash/WIP commits, no merge commits, no env or key files, no secrets). No tests run here.
 
 The strict rules and the test groups run at **phase completion** (`pnpm work phase N --base <ref>`) and in CI for pull requests into `main`, the nightly run and manual runs. A push to `develop` gets a light CI pass with only the cheap rules (every changed file mapped and covered by an active group).

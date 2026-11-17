@@ -197,3 +197,61 @@ describe('everyday commits and pushes stay fast (rigid validation happens at pha
     expect(src).toMatch(/checkPushRefs/);
   });
 });
+
+describe('no AI attribution in commits (the repository history shows the owner as the only author)', () => {
+  const trailer = (t: string) => `feat(core): add a thing\n\nA plain-language body.\n\n${t}`;
+
+  it('the commit-msg check rejects an AI co-author trailer in any wording', () => {
+    for (const t of [
+      'Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>',
+      'Co-authored-by: Claude <noreply@anthropic.com>',
+      'Co-Authored-By: Some Assistant <bot@anthropic.com>',
+      'co-authored-by: Anthropic Claude Opus <x@example.com>',
+    ]) {
+      const r = validateCommitMessage(trailer(t));
+      expect(r.ok, t).toBe(false);
+      expect(r.errors.join(' '), t).toMatch(/attribution/i);
+    }
+  });
+
+  it('rejects a generated-with line', () => {
+    const r = validateCommitMessage(trailer('Generated with [Claude Code](https://claude.com/claude-code)'));
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/attribution/i);
+  });
+
+  it('does not reject a message that merely mentions the tool or a human co-author', () => {
+    expect(validateCommitMessage('feat(tooling): add a Claude Code guard for the gates').ok).toBe(true);
+    expect(validateCommitMessage(trailer('Co-Authored-By: Jane Roe <jane@example.com>')).ok).toBe(true);
+    expect(validateCommitMessage('docs(process): explain why CLAUDE.md is tracked').ok).toBe(true);
+  });
+
+  it('the same rule applies to every commit in a range (CI)', () => {
+    const base = git('rev-parse', 'HEAD');
+    commit('a.txt', 'a\n', trailer('Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>'));
+    expect(checkRange(base, 'HEAD', { cwd: repo }).join('\n')).toMatch(/attribution/i);
+  });
+
+  it('rejects a commit whose author or committer is an AI identity', () => {
+    const base = git('rev-parse', 'HEAD');
+    writeFileSync(join(repo, 'b.txt'), 'b\n');
+    git('add', 'b.txt');
+    git('-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'feat(core): by an assistant', '--author', 'Claude <noreply@anthropic.com>');
+    expect(checkRange(base, 'HEAD', { cwd: repo }).join('\n')).toMatch(/AI author/i);
+
+    const base2 = git('rev-parse', 'HEAD');
+    writeFileSync(join(repo, 'c.txt'), 'c\n');
+    git('add', 'c.txt');
+    execFileSync('git', ['-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'feat(core): committed by an assistant'], {
+      cwd: repo,
+      env: { ...process.env, GIT_COMMITTER_NAME: 'Claude', GIT_COMMITTER_EMAIL: 'noreply@anthropic.com' },
+    });
+    expect(checkRange(base2, 'HEAD', { cwd: repo }).join('\n')).toMatch(/AI committer/i);
+  });
+
+  it('an ordinary human author and committer pass', () => {
+    const base = git('rev-parse', 'HEAD');
+    commit('d.txt', 'd\n', 'feat(core): ordinary');
+    expect(checkRange(base, 'HEAD', { cwd: repo })).toEqual([]);
+  });
+});

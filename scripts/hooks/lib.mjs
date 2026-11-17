@@ -3,7 +3,21 @@ export const TYPES = ['feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test'
 
 // strict = judging what may be PUBLISHED: work-in-progress commits (fixup!, squash!, amend!, WIP) must be tidied first.
 // The local commit-msg hook is not strict so rebasing with fixup commits still works.
+// The repository history shows the owner as the only author: no AI co-author trailers and no "generated with" lines.
+// A message that merely MENTIONS the tool (for example "add a Claude Code guard") is fine.
+export const AI_NAME = /claude|anthropic/i;
+function attributionErrors(raw) {
+  const errors = [];
+  for (const l of raw.split('\n')) {
+    if (/^\s*co-authored-by:/i.test(l) && AI_NAME.test(l)) errors.push('Remove the AI co-author trailer: commits carry no AI attribution (the owner is the only author).');
+    if (/^\W*generated (?:with|by)\b/i.test(l) && AI_NAME.test(l)) errors.push('Remove the "generated with" line: commits carry no AI attribution (the owner is the only author).');
+  }
+  return [...new Set(errors)];
+}
+
 export function validateCommitMessage(raw, { strict = false } = {}) {
+  const attribution = attributionErrors(raw);
+  if (attribution.length) return { ok: false, errors: attribution, hints: [] };
   const lines = raw.split('\n').filter((l) => !l.startsWith('#'));
   const first = (lines.find((l) => l.trim() !== '') ?? '').trim();
   const errors = [];

@@ -340,6 +340,10 @@ describe('.claude/settings.json (tracked)', () => {
     expect(existsSync(join(root, 'scripts/work/claude-guard.mjs'))).toBe(true);
   });
 
+  it('adds no AI attribution to commits or pull requests', () => {
+    expect(settings.attribution).toEqual({ commit: '', pr: '' });
+  });
+
   it('reports workflow state at the start of a session', () => {
     expect(JSON.stringify(settings.hooks?.SessionStart)).toMatch(/claude-guard\.mjs session-start/);
   });

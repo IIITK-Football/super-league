@@ -95,7 +95,9 @@ export function doneItemProblems(item, bl, root) {
     else if (ran.state !== 'passed') problems.push(`${id}: required group ${g} did not pass in the evidence`);
   }
   const ancestor = spawnSync('git', ['merge-base', '--is-ancestor', evidence.head ?? '', 'HEAD'], { cwd: root });
-  if (ancestor.status !== 0) problems.push(`${id}: the evidence commit ${String(evidence.head).slice(0, 7)} is not part of this history`);
+  // If history was rewritten the commit hash is gone but the tree (the content the tests ran on) is still in the history.
+  const treeKnown = evidence.tree && gitLines(root, ['log', '--format=%T', 'HEAD']).includes(evidence.tree);
+  if (ancestor.status !== 0 && !treeKnown) problems.push(`${id}: the evidence commit ${String(evidence.head).slice(0, 7)} is not part of this history`);
   problems.push(...walkthroughProblems(readFileSync(walkthroughPath, 'utf8'), { item, bl, evidence, attestations }).map((p) => `${id}: ${p}`));
   return problems;
 }

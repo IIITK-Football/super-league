@@ -234,3 +234,38 @@ describe('work done', () => {
     expect(said()).toMatch(/evidence was not recorded on a clean tree/);
   });
 });
+
+describe('evidence after history was rewritten', () => {
+  function finishedItem() {
+    const base = git('rev-parse', 'HEAD~1');
+    cli('done', 'SL-100', '--base', base);
+    commit('feat: evidence and skeleton');
+    fillNarrative('SL-100');
+    cli('done', 'SL-100', '--base', base);
+    commit('feat: done');
+    return base;
+  }
+
+  it('still accepts evidence whose commit hash is gone when a commit with the same tree is in the history', () => {
+    const base = finishedItem();
+    const ev = JSON.parse(read('backlog/evidence/SL-100.json'));
+    // simulate a rewrite: the evidence names a hash that no longer exists, but its tree (the content) does
+    write('backlog/evidence/SL-100.json', JSON.stringify({ ...ev, head: '1'.repeat(40) }));
+    write('docs/walkthroughs/SL-100.md', read('docs/walkthroughs/SL-100.md').replace(ev.head, '1'.repeat(40)));
+    commit('chore: simulate a rewritten hash');
+    out = [];
+    err = [];
+    expect(cli('check', '--base', base)).toBe(0);
+  });
+
+  it('rejects evidence whose commit hash AND tree are both unknown to this history', () => {
+    const base = finishedItem();
+    const ev = JSON.parse(read('backlog/evidence/SL-100.json'));
+    write('backlog/evidence/SL-100.json', JSON.stringify({ ...ev, head: '1'.repeat(40), tree: '2'.repeat(40) }));
+    commit('chore: unknown evidence');
+    out = [];
+    err = [];
+    expect(cli('check', '--base', base)).toBe(1);
+    expect(said()).toMatch(/evidence commit/);
+  });
+});

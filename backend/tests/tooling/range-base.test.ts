@@ -60,10 +60,35 @@ describe('rangeBase', () => {
   });
 });
 
+describe('rangeBase when history was rewritten (the commit hash is gone but its tree is not)', () => {
+  const adoptTree = (sha: string, tree: string) => {
+    mkdirSync(join(root, 'tests'), { recursive: true });
+    writeFileSync(join(root, 'tests/gate-baseline.json'), JSON.stringify({ adoptedAt: sha, tree, note: 'test' }));
+  };
+
+  it('finds the adoption commit by its tree when the recorded hash is not in this history', () => {
+    adoptTree('0'.repeat(40), git('rev-parse', `${b}^{tree}`));
+    expect(rangeBase(a, { root })).toBe(b);
+  });
+
+  it('still prefers the recorded hash when it is part of the history', () => {
+    adoptTree(b, git('rev-parse', `${b}^{tree}`));
+    expect(rangeBase(a, { root })).toBe(b);
+  });
+
+  it('ignores a baseline whose hash and tree are both unknown', () => {
+    adoptTree('0'.repeat(40), '1'.repeat(40));
+    expect(rangeBase(a, { root })).toBe(a);
+  });
+});
+
 describe('this repository', () => {
   it('has an adoption point that is an ancestor of HEAD', () => {
     const adoptedAt = JSON.parse(readFileSync(join(real, 'tests/gate-baseline.json'), 'utf8')).adoptedAt;
     expect(adoptedAt).toMatch(/^[0-9a-f]{40}$/);
     expect(spawnSync('git', ['merge-base', '--is-ancestor', adoptedAt, 'HEAD'], { cwd: real }).status).toBe(0);
+    // the recorded tree is the adoption commit's tree, so the baseline survives a rewrite of commit hashes
+    const tree = JSON.parse(readFileSync(join(real, 'tests/gate-baseline.json'), 'utf8')).tree;
+    expect(execFileSync('git', ['rev-parse', `${adoptedAt}^{tree}`], { cwd: real, encoding: 'utf8' }).trim()).toBe(tree);
   });
 });
