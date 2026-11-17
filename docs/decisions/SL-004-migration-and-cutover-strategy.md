@@ -51,7 +51,7 @@ WHERE ur.role = 'admin'
 ORDER BY up.email;
 ```
 
-The output stays local (git-ignored), is never committed, and is never run against hosted. The owner reviews the list and records scorer, dictator, or nothing per person **before** the role migration runs (the migration reads that reviewed mapping; unlisted admins become user). A local list file is kept at `.claude/superpowers/legacy-admin-review.md`.
+The output stays local (git-ignored), is never committed, and is never run against hosted. The owner reviews the list and records scorer, dictator, or nothing per person **before** the role migration runs (the migration reads that reviewed mapping; unlisted admins become user). The reviewed list is kept only on the owner's machine, outside the repository.
 
 ## 4. Environments and release targets
 

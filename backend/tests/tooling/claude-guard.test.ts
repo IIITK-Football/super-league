@@ -349,9 +349,9 @@ describe('.claude/settings.json (tracked)', () => {
   const file = join(root, '.claude/settings.json');
   const settings = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
 
-  it('keeps the model choice and enables no workflow plugins', () => {
+  it('keeps the model choice and never enables the Superpowers plugin', () => {
     expect(settings.model).toBe('opus');
-    expect(settings.enabledPlugins?.['superpowers@claude-plugins-official']).toBeUndefined();
+    expect(Object.keys(settings.enabledPlugins ?? {}).filter((k) => /superpowers/i.test(k))).toEqual([]);
   });
 
   it('runs the guard before every Bash, Edit and Write call', () => {
