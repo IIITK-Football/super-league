@@ -245,7 +245,7 @@ describe('runChecks detects a broken staging', () => {
 
 describe('loadEnvText', () => {
   it('reads values for the script only, never exposing them in an error', () => {
-    const env: Record<string, string> = loadEnvText(`# c\nSUPABASE_URL=https://${STAGING}.supabase.co\nexport SUPABASE_SECRET_KEY="${SECRET}"\nALLOW_REMOTE_SUPABASE='true'\n`);
+    const env = loadEnvText(`# c\nSUPABASE_URL=https://${STAGING}.supabase.co\nexport SUPABASE_SECRET_KEY="${SECRET}"\nALLOW_REMOTE_SUPABASE='true'\n`) as Record<string, string>;
     expect(env.SUPABASE_SECRET_KEY).toBe(SECRET);
     expect(env.ALLOW_REMOTE_SUPABASE).toBe('true');
   });
