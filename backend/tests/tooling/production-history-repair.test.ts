@@ -41,6 +41,14 @@ function fakeCli(listOut: string) {
 args=()
 for a in "$@"; do args+=("\${a//${PASSWORD}/<pw>}"); done
 echo "\${args[*]}" >> "${log}"
+for a in "$@"; do
+  case "$a" in
+    postgres*://*)
+      u="\${a#*://}"; ui="\${u%@*}"; pw="\${ui#*:}"
+      case "$pw" in *[!A-Za-z0-9%._~-]*) echo "pwsafe=no" >> "${log}";; *) echo "pwsafe=yes" >> "${log}";; esac
+      echo "url-host=\${u##*@}" >> "${log}" ;;
+  esac
+done
 case "$*" in
   *"migration list"*) cat "${listFile}" ;;
 esac
@@ -51,11 +59,11 @@ exit 0
   return cli;
 }
 
-function run(url: string, listOut = LIST_GOOD) {
+function run(url: string, listOut = LIST_GOOD, extraInput = '') {
   const cli = fakeCli(listOut);
   return spawnSync('bash', [script], {
     cwd: root,
-    input: `${url}\n`,
+    input: `${url}\n${extraInput}`,
     encoding: 'utf8',
     env: { PATH: process.env.PATH, PRODUCTION_REPAIR_SUPABASE_CMD: cli } as unknown as NodeJS.ProcessEnv,
   });
@@ -144,6 +152,65 @@ describe('the repair', () => {
     expect(r.status).not.toBe(0);
     expect(everything(r)).toMatch(/20250101000000/);
     expect(everything(r)).toMatch(/no local file|remote-only/i);
+  });
+});
+
+describe('connection string problems are fixed or explained BEFORE anything connects', () => {
+  const RAW = 'p@ss:w/rd#1?x';
+
+  it('percent-encodes a password that contains characters which break a connection string', () => {
+    const r = run(`postgresql://postgres.${PROD}:${RAW}@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres`);
+    expect(r.status).toBe(0);
+    expect(calls()).toMatch(/pwsafe=yes/);
+    expect(calls()).not.toMatch(/pwsafe=no/);
+    expect(everything(r)).not.toContain(RAW);
+  });
+
+  it('asks for the password separately (hidden) when the string has none, and encodes it', () => {
+    const r = run(`postgresql://postgres.${PROD}@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres`, LIST_GOOD, `${RAW}\n`);
+    expect(r.status).toBe(0);
+    expect(calls()).toMatch(/pwsafe=yes/);
+    expect(everything(r)).not.toContain(RAW);
+  });
+
+  it('treats the dashboard placeholder as "no password yet" instead of sending it', () => {
+    const r = run(`postgresql://postgres.${PROD}:[YOUR-PASSWORD]@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres`, LIST_GOOD, `${RAW}\n`);
+    expect(r.status).toBe(0);
+    expect(calls()).not.toContain('YOUR-PASSWORD');
+    expect(calls()).toMatch(/pwsafe=yes/);
+  });
+
+  it('removes quotes, spaces and carriage returns picked up when pasting', () => {
+    const r = run(`  "${POOLER}"\r  `);
+    expect(r.status).toBe(0);
+    expect(calls()).toMatch(/migration repair/);
+  });
+
+  it('refuses the transaction-mode pooler port (6543), which cannot run migration commands', () => {
+    const r = run(POOLER.replace(':5432', ':6543'));
+    expect(r.status).not.toBe(0);
+    expect(everything(r)).toMatch(/6543/);
+    expect(everything(r)).toMatch(/5432/);
+    expect(calls()).toBe('');
+  });
+
+  it('uses the session port 5432 when none is given', () => {
+    const r = run(`postgresql://postgres.${PROD}:${PASSWORD}@aws-1-ap-southeast-2.pooler.supabase.com/postgres`);
+    expect(r.status).toBe(0);
+    expect(calls()).toMatch(/url-host=aws-1-ap-southeast-2\.pooler\.supabase\.com:5432\/postgres/);
+  });
+
+  it('says exactly what is wrong with the string, without echoing it', () => {
+    const r = run(`postgresql://postgres.${PROD}:${PASSWORD}@/postgres`);
+    expect(r.status).not.toBe(0);
+    expect(everything(r)).not.toContain(PASSWORD);
+    expect(calls()).toBe('');
+  });
+
+  it('states the backup evidence is the existing backup files and that the script never connects to that project', () => {
+    const out = everything(run(POOLER));
+    expect(out).toMatch(/existing backup files/i);
+    expect(out).toMatch(/never connects/i);
   });
 });
 
