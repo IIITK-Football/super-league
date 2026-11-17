@@ -2,7 +2,8 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 
 const BASE_URL = 'https://super-league.pages.dev';
-const routes = ['', 'fantasy', 'wc', 'matches', 'standings', 'statistics', 'legends', 'rules'];
+// Only routes that exist in the app (a test checks this): an unknown route redirects to the home page.
+const routes = ['', 'fantasy', 'wc', 'matches', 'standings', 'rules'];
 
 (async () => {
     console.log('🚀 Starting native screenshot automation (1200x630)...');
