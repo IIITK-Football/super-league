@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = join(__dirname, '../../..');
-const files = ['frontend/.env.example', 'backend/.env.example', 'backend/supabase/.env.example'];
+const files = ['frontend/.env.example', 'frontend/.dev.vars.example', 'backend/.env.example', 'backend/supabase/.env.example'];
 
 describe.each(files)('%s', (rel) => {
   const path = join(root, rel);
@@ -36,5 +36,37 @@ describe.each(files)('%s', (rel) => {
     for (const v of vars.filter((x) => /SUPABASE_URL$/.test(x.name))) {
       expect(v.value).toMatch(/^http:\/\/(127\.0\.0\.1|localhost):54321$/);
     }
+  });
+
+  it('uses the current key names and none of the deprecated ones', () => {
+    expect(text).not.toMatch(/ANON_KEY|SERVICE_ROLE|ADMIN_SECRET_KEY/);
+    // placeholders only: any Supabase key value must be empty
+    for (const v of vars.filter((x) => /SUPABASE_(PUBLISHABLE|SECRET)_KEY$/.test(x.name))) {
+      expect(v.value).toBe('');
+    }
+  });
+});
+
+describe('where each Supabase key may be configured', () => {
+  const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+
+  it('the browser and Pages Function examples hold the publishable key and never a secret key', () => {
+    for (const rel of ['frontend/.env.example', 'frontend/.dev.vars.example']) {
+      expect(read(rel), rel).not.toMatch(/SUPABASE_SECRET_KEY|sb_secret_/);
+    }
+    expect(read('frontend/.env.example')).toMatch(/^VITE_SUPABASE_PUBLISHABLE_KEY=$/m);
+    expect(read('frontend/.dev.vars.example')).toMatch(/^SUPABASE_PUBLISHABLE_KEY=$/m);
+  });
+
+  it('only the backend example holds the secret key, and without a public prefix', () => {
+    const backend = read('backend/.env.example');
+    expect(backend).toMatch(/^SUPABASE_PUBLISHABLE_KEY=$/m);
+    expect(backend).toMatch(/^SUPABASE_SECRET_KEY=$/m);
+    expect(backend).not.toMatch(/^(NEXT_PUBLIC|VITE)_[A-Z_]*SECRET/m);
+  });
+
+  it('the Pages Function example keeps its variables separate from the browser ones', () => {
+    expect(read('frontend/.dev.vars.example')).not.toMatch(/^VITE_/m);
+    expect(read('frontend/.env.example')).not.toMatch(/^SUPABASE_(URL|PUBLISHABLE_KEY)=/m);
   });
 });
