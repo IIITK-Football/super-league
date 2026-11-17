@@ -1,6 +1,6 @@
 // Group: tooling. .github/workflows/og-screenshots.yml takes screenshots of the production site and syncs them to R2.
 // These checks keep it runnable (a runner Playwright supports) and keep the R2 upload safe (never a partial set).
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -16,9 +16,34 @@ const step = (name: string) => {
 };
 
 describe('og-screenshots workflow', () => {
-  it('runs on a pinned Ubuntu release that Playwright supports, not the moving ubuntu-latest', () => {
-    expect(text).toMatch(/runs-on: ubuntu-24\.04\b/);
-    expect(text).not.toMatch(/ubuntu-latest/);
+  it('runs on ubuntu-latest, with a Playwright that supports the Ubuntu release that tag currently means (26.04)', () => {
+    expect(text).toMatch(/runs-on: ubuntu-latest\b/);
+    expect(text).not.toMatch(/ubuntu-2\d\.04/);
+    // The installed Playwright must know Ubuntu 26.04, otherwise the install step fails exactly as it did before.
+    const store = join(root, 'frontend/node_modules/.pnpm');
+    const dirs = existsSync(store) ? readdirSync(store).filter((d) => d.startsWith('playwright-core@')) : [];
+    const declared = String(pkg.devDependencies?.playwright ?? pkg.dependencies?.playwright).replace(/^[^\d]*/, '');
+    const installed = dirs.find((d) => d.startsWith(`playwright-core@${declared.split('.').slice(0, 2).join('.')}`));
+    expect(installed, `playwright-core for ${declared} is installed`).toBeTruthy();
+    const bundle = readFileSync(join(store, installed!, 'node_modules/playwright-core/lib/coreBundle.js'), 'utf8');
+    expect(bundle).toContain('ubuntu26.04');
+  });
+
+  it('never lets two runs upload at once, and does not cancel one that is uploading', () => {
+    expect(text).toMatch(/concurrency:\s*\n\s+group: og-screenshots\s*\n\s+cancel-in-progress: false/);
+  });
+
+  it('refreshes on a push to main, nightly and on demand, not on every develop push (it screenshots the production site)', () => {
+    const on = text.slice(text.indexOf('on:'), text.indexOf('jobs:'));
+    expect(on).toMatch(/push:\s*\n\s+branches: \[main\]/);
+    expect(on).not.toMatch(/develop/);
+    expect(on).toMatch(/schedule:/);
+    expect(on).toMatch(/workflow_dispatch:/);
+  });
+
+  it('captures the home page deterministically: the Super League slide, with the carousel paused', () => {
+    expect(script).toMatch(/Show Super League/);
+    expect(script).toMatch(/Pause carousel video/);
   });
 
   it('installs Chromium with its system dependencies before taking screenshots', () => {
