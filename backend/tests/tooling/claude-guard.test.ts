@@ -350,7 +350,7 @@ describe('.claude/settings.json (tracked)', () => {
   const settings = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
 
   it('keeps the model and plugin choices', () => {
-    expect(settings.model).toBe('opusplan');
+    expect(settings.model).toBe('opus');
     expect(settings.enabledPlugins?.['superpowers@claude-plugins-official']).toBe(true);
   });
 
