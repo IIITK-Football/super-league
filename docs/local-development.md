@@ -46,8 +46,9 @@ Stop immediately if `status` is not reachable, shows a port other than 54322, or
 
 ## Environment files
 
-- `backend/.env.local` and `frontend/.env.local` are git-ignored. Their Supabase URLs must be `http://127.0.0.1:54321`. A hosted `*.supabase.co` URL in either file is a mistake for local work.
-- Only the frontend `.env.example` is tracked today; a backend example and config validation are SL-012. Private keys (service role, R2) must never be placed in `VITE_*` variables.
+- `backend/.env.local`, `frontend/.env.local` and `frontend/.dev.vars` are git-ignored. Their Supabase URLs must be `http://127.0.0.1:54321`. A hosted `*.supabase.co` URL in any of them is a mistake for local work.
+- Copy the examples (`frontend/.env.example`, `frontend/.dev.vars.example`, `backend/.env.example`) and fill them from `pnpm exec supabase status`, which prints the local **publishable** and **secret** keys. Every variable, where it belongs and which key may be used where is in [`environment.md`](environment.md). The secret key is backend-only; startup validation and the frontend build refuse it under a public prefix.
+- If you still have the old names (`SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_ANON_KEY`), rename them; startup tells you what each was renamed to.
 
 ## Guarded helper (SL-013)
 

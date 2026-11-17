@@ -71,7 +71,7 @@ select pg_get_functiondef('public.handle_new_user()'::regprocedure);
 select id, email from auth.users where email is null or email !~* '^[^@[:space:]]+@iiitkottayam\.ac\.in$';
 ```
 
-Also confirm the Cloudflare Pages build (production and previews) defines `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; the app now stops with a clear message if either is missing instead of using dummy values.
+Also confirm the Cloudflare Pages build (production and previews) defines `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (see [`environment.md`](environment.md)); the app now stops with a clear message if either is missing instead of using dummy values.
 
 ### Turnstile: settings for the owner to prepare (nothing here is done by the repository)
 
@@ -95,7 +95,7 @@ Production is the original hosted Supabase project, and (as far as we know) the 
 2. Set up the GitHub environments and secrets from [`release.md`](release.md) and push `develop`. The workflow applies the baseline and `20261117000000_auth_college_domain_and_new_user_triggers.sql` to staging, plus the synthetic seed; you do not paste SQL. (If you already applied SQL to staging by hand, say so before pushing: the migration history must then be repaired first.) Move your CLI link to staging as described there; never link to production.
 3. Set the Auth settings above on staging by hand (CI deploys the database, not Auth settings): Confirm email on, minimum password length 8, Secure password change on, redirect URLs including `http://127.0.0.1:5173/**`, SMTP (or the default sender to your own team address), Google not needed.
 4. Add `localhost` and `127.0.0.1` to a Turnstile widget's hostnames. Enter its secret only in staging's Supabase CAPTCHA setting, and put its site key in `frontend/.env.staging.local` (git-ignored, so your `.env.local` for the local stack stays unchanged).
-5. Put the staging URL and anon key in `frontend/.env.staging.local` too, with `VITE_ALLOW_REMOTE_SUPABASE=true` (the app refuses a non-local Supabase URL in development without this opt-in), and run the app with `pnpm exec vite --mode staging` from `frontend/`. Keep these only in ignored local files, and never put the database password or service role key there.
+5. Put the staging URL and **publishable** key in `frontend/.env.staging.local` too (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`), with `VITE_ALLOW_REMOTE_SUPABASE=true` (the app refuses a non-local Supabase URL in development without this opt-in), and run the app with `pnpm exec vite --mode staging` from `frontend/`. Keep these only in ignored local files, and never put the database password or a secret key there.
 6. Work through the checks below. When they pass, delete `.env.staging.local`. Keep the staging project: CI deploys to it from `develop` (resume it if it pauses).
 
 ### Checks on staging (expected result in brackets)
