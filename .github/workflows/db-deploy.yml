@@ -1,0 +1,175 @@
+name: Database deploy
+
+# develop -> staging (migrations + the synthetic seed)
+# main    -> production (migrations only; never seeded; waits for a required reviewer)
+#
+# Each environment has its own project reference and secrets, stored as GitHub Environment
+# secrets/variables named identically (SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD secrets;
+# SUPABASE_PROJECT_REF variable). PRODUCTION_PROJECT_REF is a repository variable (not a secret)
+# that lets the staging job refuse to run against production. See docs/release.md.
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'backend/supabase/migrations/**'
+      - 'backend/supabase/seed.sql'
+      - '.github/workflows/db-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only print the migrations that would be applied'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            frontend/pnpm-lock.yaml
+            backend/pnpm-lock.yaml
+
+      - name: Install (frozen lockfiles)
+        run: pnpm install --frozen-lockfile
+
+      - name: Start local Supabase
+        run: pnpm db:start
+
+      - name: Prove the migrations and seed on an empty local database
+        run: node scripts/test-groups.mjs run database
+
+  staging:
+    needs: verify
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    concurrency:
+      group: db-deploy-staging
+      cancel-in-progress: false
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      PRODUCTION_PROJECT_REF: ${{ vars.PRODUCTION_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            frontend/pnpm-lock.yaml
+            backend/pnpm-lock.yaml
+
+      - name: Install (frozen lockfiles)
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against the production project
+        run: |
+          set -euo pipefail
+          [ -n "$SUPABASE_PROJECT_REF" ] || { echo "The staging environment has no SUPABASE_PROJECT_REF variable"; exit 1; }
+          [ -n "$PRODUCTION_PROJECT_REF" ] || { echo "The PRODUCTION_PROJECT_REF repository variable is not set; refusing to continue"; exit 1; }
+          [ "$SUPABASE_PROJECT_REF" != "$PRODUCTION_PROJECT_REF" ] || { echo "The staging reference equals the production reference; refusing to continue"; exit 1; }
+
+      - name: Link to the staging project
+        working-directory: backend
+        run: pnpm exec supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Verify the linked project
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          linked="$(cat supabase/.temp/project-ref)"
+          [ "$linked" = "$SUPABASE_PROJECT_REF" ] || { echo "The linked project does not match this environment's reference"; exit 1; }
+          [ "$linked" != "$PRODUCTION_PROJECT_REF" ] || { echo "Linked to production from the staging job; refusing to continue"; exit 1; }
+
+      - name: Preview pending migrations
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          pnpm exec supabase db push --dry-run 2>&1 | tee dry-run.txt
+          { echo '### Staging: pending migrations'; echo '```'; cat dry-run.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply migrations and the synthetic seed
+        if: github.event_name == 'push' || inputs.dry_run == false
+        working-directory: backend
+        run: pnpm exec supabase db push --include-seed
+
+  production:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    concurrency:
+      group: db-deploy-production
+      cancel-in-progress: false
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      PRODUCTION_PROJECT_REF: ${{ vars.PRODUCTION_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            frontend/pnpm-lock.yaml
+            backend/pnpm-lock.yaml
+
+      - name: Install (frozen lockfiles)
+        run: pnpm install --frozen-lockfile
+
+      - name: Check the environment points at the production project
+        run: |
+          set -euo pipefail
+          [ -n "$PRODUCTION_PROJECT_REF" ] || { echo "The PRODUCTION_PROJECT_REF repository variable is not set; refusing to continue"; exit 1; }
+          [ "$SUPABASE_PROJECT_REF" = "$PRODUCTION_PROJECT_REF" ] || { echo "The production environment's reference does not match PRODUCTION_PROJECT_REF; refusing to continue"; exit 1; }
+
+      - name: Link to the production project
+        working-directory: backend
+        run: pnpm exec supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Verify the linked project
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          linked="$(cat supabase/.temp/project-ref)"
+          [ "$linked" = "$PRODUCTION_PROJECT_REF" ] || { echo "The linked project is not the production project; refusing to continue"; exit 1; }
+
+      - name: Preview pending migrations
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          pnpm exec supabase db push --dry-run 2>&1 | tee dry-run.txt
+          { echo '### Production: pending migrations'; echo '```'; cat dry-run.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply migrations (no seed, no out-of-order migrations)
+        if: github.event_name == 'push' || inputs.dry_run == false
+        working-directory: backend
+        run: pnpm exec supabase db push
