@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
+import { publishableKey, secretKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+const supabase = createClient(process.env.SUPABASE_URL!, secretKey());
 
 async function getDictator(request: Request) {
   const cookieStore = await cookies();
   const authHeader = request.headers.get('Authorization') || '';
-  const authClient = createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
+  const authClient = createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
     cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} },
     global: { headers: { Authorization: authHeader } },
   });

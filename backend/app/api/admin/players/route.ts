@@ -1,5 +1,6 @@
 
 import { NextResponse } from 'next/server';
+import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import {
@@ -27,7 +28,7 @@ async function getSupabaseClient(request: Request) {
 
   return createServerClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!,
+    publishableKey(),
     {
       cookies: {
         getAll() {

@@ -13,7 +13,7 @@ const call = (body: unknown) =>
 beforeEach(() => {
   signInWithPassword.mockReset();
   process.env.SUPABASE_URL = 'http://127.0.0.1:54321';
-  process.env.SUPABASE_ANON_KEY = 'test-anon';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-publishable';
 });
 
 describe('POST /api/auth/login', () => {

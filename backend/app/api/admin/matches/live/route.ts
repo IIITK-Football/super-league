@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../../lib/errorHandler'; // Adjust path if needed
@@ -11,7 +12,7 @@ async function getSupabaseClient(request: Request) {
   return createServerClient(
     // FIX 2: Explicitly cast env variables as strings
     process.env.SUPABASE_URL as string, 
-    process.env.SUPABASE_ANON_KEY as string, 
+    publishableKey(), 
     {
       cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
       global: {

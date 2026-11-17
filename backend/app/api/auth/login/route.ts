@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { COLLEGE_EMAIL_MESSAGE, isCollegeEmail } from '@/lib/auth/collegeEmail';
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
 
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!,
+      publishableKey(),
       {
         cookies: {
           getAll() {

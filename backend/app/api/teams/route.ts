@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../lib/errorHandler';
 
@@ -6,7 +7,7 @@ export const revalidate = 0;
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
+  publishableKey()
 );
 
 export async function GET(request: Request) {

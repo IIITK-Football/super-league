@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { publishableKey } from '@/lib/supabase/keys';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { checkRateLimit } from './lib/rate-limit'; // Adjust path if using '@/lib/rate-limit'
@@ -85,7 +86,7 @@ export async function middleware(request: NextRequest) {
 
   const supabase = createServerClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!,
+    publishableKey(),
     {
       cookies: {
         getAll() {
