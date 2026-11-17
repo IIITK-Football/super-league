@@ -109,7 +109,7 @@ describe('checkPushRefs', () => {
 
   it('allows pushing develop (the working branch) and any other branch', () => {
     expect(checkPushRefs([`refs/heads/develop ${A} refs/heads/develop ${B}`])).toEqual([]);
-    expect(checkPushRefs([`refs/heads/develop ${A} refs/heads/ready/seed-refresh ${Z}`])).toEqual([]);
+    expect(checkPushRefs([`refs/heads/develop ${A} refs/heads/topic-branch ${Z}`])).toEqual([]);
     expect(checkPushRefs([`refs/heads/foo ${A} refs/heads/foo ${Z}`])).toEqual([]);
   });
 
@@ -120,7 +120,7 @@ describe('checkPushRefs', () => {
   });
 
   it('rejects deleting any remote branch', () => {
-    expect(checkPushRefs([`(delete) ${Z} refs/heads/ready/x ${A}`]).join('\n')).toMatch(/delet/i);
+    expect(checkPushRefs([`(delete) ${Z} refs/heads/topic-branch ${A}`]).join('\n')).toMatch(/delet/i);
   });
 });
 
