@@ -27,6 +27,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Team and captain are required.' }, { status: 400 });
     }
 
+    // Captain access needs the assignment AND the captain role, but assigning a captain must never silently
+    // replace another role ("no role implies another"). Decide before writing anything:
+    //   no role / default -> becomes captain;  captain -> unchanged;  dictator -> stays dictator (manages every team);
+    //   editor / legacy admin -> refused, because changing those is a deliberate decision.
+    const { data: existing } = await supabase.from('user_roles').select('role').eq('user_id', body.captain_id).maybeSingle();
+    const currentRole: string | null = existing?.role ?? null;
+    if (currentRole && !['default', 'captain', 'dictator'].includes(currentRole)) {
+      return NextResponse.json(
+        { success: false, message: `This account holds the "${currentRole}" role, which is not changed automatically. Change it deliberately before assigning it as a team captain.` },
+        { status: 409 },
+      );
+    }
+
     let leagueTeamId = body.team_id;
     if (!leagueTeamId) {
       const { data: leagueTeam, error: leagueTeamError } = await supabase.from('teams').insert({
@@ -47,8 +60,10 @@ export async function POST(request: Request) {
     }, { onConflict: 'captain_id' }).select('id').single();
     if (registrationError) throw registrationError;
 
-    const { error: roleError } = await supabase.from('user_roles').upsert({ user_id: body.captain_id, role: 'captain' }, { onConflict: 'user_id' });
-    if (roleError) throw roleError;
+    if (currentRole !== 'captain' && currentRole !== 'dictator') {
+      const { error: roleError } = await supabase.from('user_roles').upsert({ user_id: body.captain_id, role: 'captain' }, { onConflict: 'user_id' });
+      if (roleError) throw roleError;
+    }
 
     const members = (body.members || []).map((member: any) => ({
       id: member.id || crypto.randomUUID(),
