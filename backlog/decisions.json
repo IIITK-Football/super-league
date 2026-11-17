@@ -1,0 +1,95 @@
+{
+  "intro": "These are not blockers to inventory or local hardening, but must be answered before the dependent work starts:",
+  "decisions": [
+    {
+      "id": "D-01",
+      "question": "How the division/season schema maps existing division values and historical data without loss.",
+      "status": "open",
+      "items": [
+        "SL-020"
+      ]
+    },
+    {
+      "id": "D-02",
+      "question": "How World Cup's separate page/domain shares account and UI primitives without coupling its fantasy rules to division fantasy.",
+      "status": "open",
+      "items": [
+        "SL-043"
+      ]
+    },
+    {
+      "id": "D-03",
+      "question": "How a person may hold multiple roles and how scorer/captain assignments are scoped; preserve the capability boundaries already fixed in SL-003.",
+      "status": "open",
+      "items": [
+        "SL-024"
+      ]
+    },
+    {
+      "id": "D-04",
+      "question": "Whether the future Workers access Supabase through its Data API, another supported connection strategy, or a hybrid; this must be checked against Cloudflare runtime constraints and transaction needs.",
+      "status": "open",
+      "items": [
+        "SL-033"
+      ]
+    },
+    {
+      "id": "D-05",
+      "question": "The number of Workers and which domains deserve independent deployments, based on the route inventory and operational boundaries.",
+      "status": "open",
+      "items": [
+        "SL-030"
+      ]
+    },
+    {
+      "id": "D-06",
+      "question": "The final public R2 domain, the Auth subdomain (SL-075) and final bucket names; keep the user's requested bucket purposes in the inventory until names are chosen.",
+      "status": "open",
+      "items": [
+        "SL-073",
+        "SL-075"
+      ]
+    },
+    {
+      "id": "D-07",
+      "question": "HLS chapter/segment authoring, timestamp rotation rules, mobile video behavior, and what “resume” means when a visitor changes division selection.",
+      "status": "open",
+      "items": [
+        "SL-093"
+      ]
+    },
+    {
+      "id": "D-08",
+      "question": "The authoritative scoreboard rule when a scorer manually sets a score that does not equal the currently attributed goal events.",
+      "status": "open",
+      "items": [
+        "SL-051"
+      ]
+    },
+    {
+      "id": "D-09",
+      "question": "Which provider, if any, is approved for external fixture and score imports and which source wins conflicts with a scorer's manual edit.",
+      "status": "open",
+      "items": [
+        "SL-063"
+      ]
+    },
+    {
+      "id": "D-10",
+      "question": "How overlapping GitHub ownership rules satisfy “Kevin for everything, Ebin for backend, Abhinav for frontend” under the chosen branch protection configuration.",
+      "status": "open",
+      "items": [
+        "SL-081"
+      ]
+    },
+    {
+      "id": "D-11",
+      "question": "What homepage carousel sections follow the current division, since the user said those can be finalized later.",
+      "status": "open",
+      "items": [
+        "SL-093",
+        "SL-060"
+      ]
+    }
+  ]
+}

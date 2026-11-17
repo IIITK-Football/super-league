@@ -10,6 +10,10 @@
       "reason": "documentation and decision records"
     },
     {
+      "glob": "backlog/**",
+      "reason": "backlog records (items, approvals, attestations, evidence) are validated by `pnpm work check` in CI, not by unit tests"
+    },
+    {
       "glob": "**/pnpm-lock.yaml",
       "reason": "lockfile; any change runs every group (allGroupsTriggers)"
     },
