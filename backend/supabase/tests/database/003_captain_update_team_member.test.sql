@@ -1,29 +1,36 @@
--- Group: database. The 7-argument captain_update_team_member RPC may be used only by the captain of the team
--- entry that owns the player, or by a dictator; captains may change only the approved presentation fields
--- (never the email); the function pins its search_path; anonymous callers and PUBLIC cannot execute it.
--- Roles follow docs/decisions/SL-003-role-capability-matrix.md. Scorer is not a stored role yet, so it cannot be
--- tested here; editor, normal user and legacy admin are.
+-- Group: database. The 7-argument captain_update_team_member RPC may be used only by
+--   * a captain: assigned to the team entry that owns the player AND holding the captain role, or
+--   * a dictator (any team).
+-- Captains may change only the approved presentation fields (never the email); the function pins its
+-- search_path; anonymous callers and PUBLIC cannot execute it. Roles follow
+-- docs/decisions/SL-003-role-capability-matrix.md. Scorer is not a stored role yet, so it cannot be tested
+-- here; editor, normal user and legacy admin are.
 BEGIN;
-SELECT plan(31);
+SELECT plan(37);
 
 -- Fixtures -------------------------------------------------------------------------------------------------
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('c0000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
-       (ARRAY['captain.a','captain.b','dictator','normal','editor','legacyadmin'])[n] || '@iiitkottayam.ac.in', '', now(), now()
-FROM generate_series(1, 6) AS n;
+       (ARRAY['captain.a','captain.b','dictator','normal','editor','legacyadmin','assigned.norole','unassigned.captain'])[n]
+         || '@iiitkottayam.ac.in', '', now(), now()
+FROM generate_series(1, 8) AS n;
 
-UPDATE public.user_roles SET role = 'captain'  WHERE user_id IN ('c0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000002');
+UPDATE public.user_roles SET role = 'captain'  WHERE user_id IN ('c0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000002',
+                                                                 'c0000000-0000-4000-8000-000000000008');
 UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'c0000000-0000-4000-8000-000000000003';
 UPDATE public.user_roles SET role = 'editor'   WHERE user_id = 'c0000000-0000-4000-8000-000000000005';
 UPDATE public.user_roles SET role = 'admin'    WHERE user_id = 'c0000000-0000-4000-8000-000000000006';
+-- user 4 (normal) and user 7 (assigned.norole) keep the default role
 
 INSERT INTO public.team_registrations (id, captain_id, team_name, division) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'RPC Team A', 'freshers'),
-  ('d0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000002', 'RPC Team B', 'freshers');
+  ('d0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000002', 'RPC Team B', 'freshers'),
+  ('d0000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000007', 'RPC Team C', 'freshers');
 
 INSERT INTO public.team_members (id, registration_id, name, email, position, jersey_number, overall_rating, attributes, image_url) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'Player A', 'player.a@iiitkottayam.ac.in', 'CM', 7, 60, '{}', 'old-a'),
-  ('e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', 'Player B', 'player.b@iiitkottayam.ac.in', 'CB', 4, 55, '{}', 'old-b');
+  ('e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', 'Player B', 'player.b@iiitkottayam.ac.in', 'CB', 4, 55, '{}', 'old-b'),
+  ('e0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000003', 'Player C', 'player.c@iiitkottayam.ac.in', 'GK', 1, 50, '{}', 'old-c');
 
 -- Calls the RPC the way the API does: switch to an API role and set the JWT claims, then switch back.
 CREATE FUNCTION pg_temp.call_as(p_role text, p_uid uuid, p_member uuid, p_position text, p_jersey integer,
@@ -56,7 +63,7 @@ SELECT ok(
    FROM pg_proc p WHERE p.oid = 'public.captain_update_team_member(uuid,text,integer,integer,jsonb)'::regprocedure),
   '5-argument RPC: PUBLIC has no EXECUTE');
 SELECT ok(has_function_privilege('authenticated', 'public.captain_update_team_member(uuid,text,integer,integer,jsonb,text,text)', 'EXECUTE'),
-  '7-argument RPC: signed-in users can execute (the function then checks ownership)');
+  '7-argument RPC: signed-in users can execute (the function then checks assignment and role)');
 SELECT ok(has_function_privilege('service_role', 'public.captain_update_team_member(uuid,text,integer,integer,jsonb,text,text)', 'EXECUTE'),
   '7-argument RPC: service_role can execute');
 SELECT ok((SELECT p.prosecdef FROM pg_proc p WHERE p.oid = 'public.captain_update_team_member(uuid,text,integer,integer,jsonb,text,text)'::regprocedure),
@@ -73,7 +80,7 @@ SELECT throws_ok($$SELECT pg_temp.call_as('anon', NULL, 'e0000000-0000-4000-8000
 SELECT is((SELECT image_url FROM public.team_members WHERE id = 'e0000000-0000-4000-8000-000000000001'), 'old-a',
   'the anonymous attempt changed nothing');
 
--- The captain of the team entry ----------------------------------------------------------------------------
+-- A captain: assigned to the team AND holding the captain role ---------------------------------------------
 SELECT lives_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001',
   'ST', 9, 80, '{"playStyles":[{"name":"Finisher"}]}'::jsonb, NULL, 'new-a')$$,
   'the captain can update an existing player of their own team');
@@ -107,13 +114,35 @@ SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8
   'P0001', 'Player is not part of your assigned roster', 'a normal user is refused');
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000005', 'e0000000-0000-4000-8000-000000000001',
   'GK', 1, 99, '{}'::jsonb, NULL, 'x')$$,
-  'P0001', 'Player is not part of your assigned roster', 'an editor is refused (editor is newsletter-only)');
+  'P0001', 'Player is not part of your assigned roster', 'an editor who is not assigned is refused (editor is newsletter-only)');
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000006', 'e0000000-0000-4000-8000-000000000001',
   'GK', 1, 99, '{}'::jsonb, NULL, 'x')$$,
   'P0001', 'Player is not part of your assigned roster', 'a legacy admin is not treated as a dictator or captain');
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-0000000000ff',
   'ST', 9, 80, '{}'::jsonb, NULL, NULL)$$,
   'P0001', 'Player is not part of your assigned roster', 'an unknown player gives the same error (no information about which players exist)');
+SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000008', 'e0000000-0000-4000-8000-000000000001',
+  'GK', 1, 99, '{}'::jsonb, NULL, 'x')$$,
+  'P0001', 'Player is not part of your assigned roster', 'the captain role without an assignment to this team is refused');
+
+-- Assigned to the team but WITHOUT the captain role: refused, never silently allowed -------------------------
+SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'e0000000-0000-4000-8000-000000000003',
+  'ST', 9, 80, '{}'::jsonb, NULL, 'new-c')$$,
+  'P0001', 'Captain access is required to update players', 'a user assigned to the team but holding only the default role is refused');
+SELECT is((SELECT image_url FROM public.team_members WHERE id = 'e0000000-0000-4000-8000-000000000003'), 'old-c',
+  'nothing changed for the assigned user without the captain role');
+UPDATE public.user_roles SET role = 'editor' WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
+SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'e0000000-0000-4000-8000-000000000003',
+  'ST', 9, 80, '{}'::jsonb, NULL, 'new-c')$$,
+  'P0001', 'Captain access is required to update players', 'an assigned editor is refused: no role implies another');
+UPDATE public.user_roles SET role = 'admin' WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
+SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'e0000000-0000-4000-8000-000000000003',
+  'ST', 9, 80, '{}'::jsonb, NULL, 'new-c')$$,
+  'P0001', 'Captain access is required to update players', 'an assigned legacy admin is refused');
+UPDATE public.user_roles SET role = 'captain' WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
+SELECT lives_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'e0000000-0000-4000-8000-000000000003',
+  'ST', 9, 80, '{}'::jsonb, NULL, 'new-c')$$,
+  'once the captain role is assigned deliberately, the same user can update their team''s player');
 
 -- Dictators -------------------------------------------------------------------------------------------------
 SELECT lives_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000003', 'e0000000-0000-4000-8000-000000000002',
