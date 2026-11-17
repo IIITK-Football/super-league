@@ -104,8 +104,18 @@ function judgeGit(seg) {
     return deny('git commit -n is --no-verify: skipping the Git hooks is not allowed.');
   }
   if (sub === 'push') {
-    if (has('--force', '-f', '--delete', '-d', '--mirror', '--prune') || flags.some((f) => f.startsWith('--force-with-lease'))) {
-      return deny('Force pushes and remote deletions are not done from here.');
+    const leases = flags.filter((f) => f.startsWith('--force-with-lease'));
+    const plainForce = has('--force', '-f', '--delete', '-d', '--mirror', '--prune');
+    // An EXPLICITLY leased force push (--force-with-lease=<ref>:<expected sha>) of a branch other than main is how the
+    // owner authorizes rewriting published history: it fails if the remote moved, and it is put to the owner as a
+    // confirmation. A bare lease, a plain force, main, deletions and mirrors stay denied.
+    const explicitLease = leases.length > 0 && leases.every((f) => /^--force-with-lease=[^:=\s]+:[0-9a-f]{7,40}$/.test(f));
+    if (plainForce || (leases.length > 0 && !explicitLease)) return deny('Force pushes and remote deletions are not done from here.');
+    if (explicitLease) {
+      const targets = plain.slice(1);
+      const touchesMain = targets.some((a) => PROTECTED_BRANCH.test(a.includes(':') ? a.split(':')[1] : a)) || leases.some((f) => PROTECTED_BRANCH.test(f.slice('--force-with-lease='.length).split(':')[0]));
+      if (touchesMain || targets.length === 0 || targets.some((a) => a.startsWith(':') || a.startsWith('+'))) return deny('A leased force push may only update a branch other than main.');
+      return ask('This rewrites published history on the remote (a leased force push, which fails if the remote moved). Confirm with the owner.');
     }
     for (const a of plain.slice(1)) {
       const dst = a.includes(':') ? a.split(':')[1] : a;

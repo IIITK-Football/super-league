@@ -71,6 +71,27 @@ describe('Bash: GitHub changes belong to the owner', () => {
   });
 });
 
+describe('Bash: rewriting published history', () => {
+  const SHA = 'a'.repeat(40);
+
+  it('puts an explicitly leased force push of a non-main branch to the owner as a confirmation', () => {
+    expect(bash(`git push --force-with-lease=develop:${SHA} origin develop`)).toBe('ask');
+    expect(bash(`git push --force-with-lease=ready/phase-1:${SHA} origin develop:ready/phase-1`)).toBe('ask');
+  });
+
+  it('still denies every other force push: a bare lease, a plain force, main, deletions and mirrors', () => {
+    expect(bash('git push --force-with-lease origin develop')).toBe('deny');
+    expect(bash(`git push --force-with-lease=develop origin develop`)).toBe('deny'); // a lease with no expected value protects nothing
+    expect(bash(`git push --force origin develop`)).toBe('deny');
+    expect(bash(`git push -f origin develop`)).toBe('deny');
+    expect(bash(`git push --force-with-lease=main:${SHA} origin develop:main`)).toBe('deny');
+    expect(bash(`git push --force-with-lease=main:${SHA} origin main`)).toBe('deny');
+    expect(bash(`git push --force-with-lease=develop:${SHA} origin :develop`)).toBe('deny');
+    expect(bash(`git push --force-with-lease=develop:${SHA} --mirror origin`)).toBe('deny');
+    expect(bash(`git push --force-with-lease=develop:${SHA} --force origin develop`)).toBe('deny');
+  });
+});
+
 describe('Bash: merging pull requests', () => {
   it('is allowed into develop (the integration branch the required gate already protects)', () => {
     expect(bash('gh pr merge 12 --rebase', () => 'develop')).toBe('allow');
@@ -350,6 +371,9 @@ describe('.claude/settings.json (tracked)', () => {
 
   it('also denies the clearest bypasses through permission rules the harness enforces itself', () => {
     const deny = (settings.permissions?.deny ?? []).join('\n');
+    // an explicitly leased push is put to the owner by the guard, so the permission rules must not deny it outright
+    expect(deny).not.toMatch(/git push --force-with-lease/);
+    expect(deny).not.toMatch(/git push --force\*/);
     for (const needle of ['git push --force', 'work approve', 'work attest', '--no-verify', 'supabase link', '--linked']) {
       expect(deny, needle).toContain(needle);
     }

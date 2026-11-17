@@ -37,9 +37,9 @@
     "deny": [
       "Bash(git commit --no-verify*)",
       "Bash(git push --no-verify*)",
-      "Bash(git push --force*)",
+      "Bash(git push --force)",
+      "Bash(git push --force *)",
       "Bash(git push -f *)",
-      "Bash(git push --force-with-lease*)",
       "Bash(git reset --hard*)",
       "Bash(pnpm work approve*)",
       "Bash(pnpm work attest*)",
