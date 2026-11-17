@@ -24,7 +24,7 @@ A finished item still needs, at phase completion: test groups that pass on a **c
 pnpm work status                     what is open
 pnpm work start SL-020               begin (order is checked; nothing else)
 # implement, commit and push directly on develop (no branch, no pull request)
-pnpm work attest SL-020 C5 "note"    OWNER: attest a manual check (a hosted step)
+pnpm work attest SL-020 C5 "note"    OWNER: attest a manual check (a hosted step); if the agent runs it, the owner confirms
 pnpm work phase 2 --base <ref>       complete the phase: all the rigid validation, once
 # fill in every TODO in the walkthroughs, commit, run `pnpm work phase 2 --base <ref>` again
 pnpm work done SL-020 --base <ref>   (one item only; `phase` does this for all of them)

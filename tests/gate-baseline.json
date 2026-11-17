@@ -1,5 +1,5 @@
 {
-  "adoptedAt": "785395b2f10ac344fc7697d010548ae8a6ebae05",
+  "adoptedAt": "32f28b41d5baea6f43220fcbbe9bcd967e6d4d69",
   "tree": "166e281066967c9aa630aef5c6958a6e828a6efc",
   "note": "The enforced workflow (strict test groups, hygiene rules, backlog records) was adopted after this commit. The gate for main judges only what came after it: earlier history cannot be rewritten and predates the rules. Changing this file needs the owner's confirmation. The tree is recorded too, so the baseline still resolves if commit hashes are ever rewritten."
 }

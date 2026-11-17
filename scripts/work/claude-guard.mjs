@@ -252,8 +252,13 @@ function judgeSegment(seg, whole, ctx) {
   if (r) return r;
   if (/(?:^|\s)supabase(?:\s|$)/.test(s) && /^(?:supabase|npx|pnpm|yarn|npm|bunx)\b/.test(s)) r = judgeSupabase(s);
   if (r) return r;
-  if (/^(?:pnpm|npm|yarn)\b(?:\s+-\S+)*(?:\s+run)?\s+work\s+(?:approve|attest)\b/.test(s) || /\bcli\.mjs\s+(?:approve|attest)\b/.test(s)) {
-    return deny('`work approve` and `work attest` are the owner\'s decisions. The owner runs them (type ! pnpm work approve SL-xxx in the session).');
+  if (/^(?:pnpm|npm|yarn)\b(?:\s+-\S+)*(?:\s+run)?\s+work\s+approve\b/.test(s) || /\bcli\.mjs\s+approve\b/.test(s)) {
+    return deny('`work approve` is the owner\'s decision. The owner runs it (type ! pnpm work approve SL-xxx in the session).');
+  }
+  // An attestation is the OWNER's statement that a manual check is true. When the owner delegates one, the plain command is
+  // put to the owner as a confirmation, so it is still their decision; any disguised form (inline code) stays denied.
+  if (/^(?:pnpm|npm|yarn)\b(?:\s+-\S+)*(?:\s+run)?\s+work\s+attest\b/.test(s) || /\bcli\.mjs\s+attest\b/.test(s)) {
+    return ask('This records the OWNER\'s attestation that a manual check is true. Confirm only if the evidence supports it.');
   }
   return judgeReads(s) ?? judgeNetwork(s, whole);
 }

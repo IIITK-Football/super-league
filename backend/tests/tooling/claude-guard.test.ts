@@ -135,10 +135,10 @@ describe('Bash: what a command really writes, not the words in it', () => {
 describe('Bash: the owner-only workflow steps', () => {
   const denied = [
     'pnpm work approve SL-019',
-    'pnpm -s work attest SL-018 C6 done',
     'pnpm run work approve SL-019',
     'node scripts/work/cli.mjs approve SL-019',
-    'node scripts/work/cli.mjs attest SL-018 C6',
+    // an attestation disguised as inline code is never accepted, only the plain command is put to the owner
+    'node -e "import(\'./scripts/work/cli.mjs\').then(m=>m.run([\'attest\',\'SL-018\',\'C6\']))"',
     'node -e "import(\'./scripts/work/cli.mjs\').then(m=>m.run([\'approve\',\'SL-019\']))"',
     'echo \'{"id":"SL-019"}\' > backlog/approvals/SL-019.json',
     'cp x.json backlog/attestations/SL-018.json',
@@ -146,6 +146,11 @@ describe('Bash: the owner-only workflow steps', () => {
     'sed -i s/false/true/ backlog/evidence/SL-018.json',
   ];
   for (const c of denied) it(`denies: ${c}`, () => expect(bash(c)).toBe('deny'));
+
+  // An attestation is the OWNER's statement that a manual check is true. When the owner delegates it, the plain command is put
+  // to the owner as a confirmation instead of being denied, so it is still the owner's decision.
+  const asks = ['pnpm work attest SL-018 C6 "applied and verified"', 'pnpm -s work attest SL-018 C6 done', 'pnpm run work attest SL-018 C6', 'node scripts/work/cli.mjs attest SL-018 C6 note'];
+  for (const c of asks) it(`asks the owner: ${c}`, () => expect(bash(c)).toBe('ask'));
 });
 
 describe('Bash: the safety boundaries from CLAUDE.md', () => {
@@ -374,7 +379,7 @@ describe('.claude/settings.json (tracked)', () => {
     // an explicitly leased push is put to the owner by the guard, so the permission rules must not deny it outright
     expect(deny).not.toMatch(/git push --force-with-lease/);
     expect(deny).not.toMatch(/git push --force\*/);
-    for (const needle of ['git push --force', 'work approve', 'work attest', '--no-verify', 'supabase link', '--linked']) {
+    for (const needle of ['git push --force', 'work approve', '--no-verify', 'supabase link', '--linked']) {
       expect(deny, needle).toContain(needle);
     }
   });
