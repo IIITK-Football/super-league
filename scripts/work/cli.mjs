@@ -9,6 +9,7 @@
 //   work done SL-xxx [--base <ref>] Definition of Done: runs the item's groups and checks, records evidence, writes the
 //                                   walkthrough skeleton, and marks the item done only when the walkthrough is complete
 //   work check [--base <ref>]       what CI runs: validate the backlog and every status change since <ref>
+//   work audit [--repo|--local|--remote]  verify the enforcement is really in place (read-only)
 //
 // `approve` and `attest` are the owner's decisions. The Claude Code guard denies them to the agent's shell; the owner
 // runs them with `!` in a session or in a terminal. Status values are changed only by these commands.
@@ -31,6 +32,7 @@ import {
   validateBacklog,
 } from './backlog.mjs';
 import { parseItem } from './frontmatter.mjs';
+import { runAudit } from './audit.mjs';
 import { buildSkeleton, refreshGenerated, walkthroughProblems } from './walkthrough.mjs';
 import { globToRegExp } from '../test-groups.mjs';
 
@@ -262,6 +264,8 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
     return 0;
   }
 
+  if (cmd === 'audit') return runAudit(argv.slice(1), { root, out, gh: undefined });
+
   if (cmd === 'check') {
     const problems = validateBacklog(bl);
     for (const item of bl.items.values()) if (item.meta.status === 'done') problems.push(...doneItemProblems(item, bl, root));
@@ -292,7 +296,7 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
     return 0;
   }
 
-  return fail('usage: work {status [id] | approve id | ready id | start id | attest id check [note] | done id [--base ref] | check [--base ref]}');
+  return fail('usage: work {status [id] | approve id | ready id | start id | attest id check [note] | done id [--base ref] | check [--base ref] | audit}');
 }
 
 if (process.argv[1] && join(process.argv[1]) === fileURLToPath(import.meta.url)) {
