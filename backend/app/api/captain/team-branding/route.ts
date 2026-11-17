@@ -39,8 +39,8 @@ export async function POST(request: Request) {
       process.env.R2_LOGO_PUBLIC_URL ||
       'https://pub-faaac762b0254fb88c3967f021ced499.r2.dev';
     const supabaseUrl = process.env.SUPABASE_URL;
-    const anonKey = process.env.SUPABASE_ANON_KEY;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const publishable = process.env.SUPABASE_PUBLISHABLE_KEY;
+    const secret = process.env.SUPABASE_SECRET_KEY;
 
     if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
       return NextResponse.json({ error: 'Team logo storage is not configured on the server.' }, { status: 503 });
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     if (!publicLogoBaseUrl) {
       return NextResponse.json({ error: 'The public team logo URL is not configured on the server.' }, { status: 503 });
     }
-    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    if (!supabaseUrl || !publishable || !secret) {
       return NextResponse.json({ error: 'Team setup is not configured on the server.' }, { status: 503 });
     }
 
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     });
     const authHeader = request.headers.get('Authorization') || '';
     const cookieStore = await cookies();
-    const authClient = createServerClient(supabaseUrl, anonKey, {
+    const authClient = createServerClient(supabaseUrl, publishable, {
       cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} },
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
     }
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = createClient(supabaseUrl, secret);
     const { data: registration, error: registrationError } = await adminClient
       .from('team_registrations')
       .select('id, team_id, team_name, division, teams!inner(id, name, logo_url, team_color)')

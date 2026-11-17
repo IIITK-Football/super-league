@@ -4,14 +4,15 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const MAILPIT = 'http://127.0.0.1:54324';
 
-type Keys = { url: string; anon: string; service: string };
+type Keys = { url: string; publishable: string; secret: string };
 
 export function localKeys(): Keys {
   const r = spawnSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { encoding: 'utf8', cwd: `${__dirname}/../..` });
   if (r.status !== 0) throw new Error('Local Supabase is not running. Start it with: pnpm db:start');
   const out = JSON.parse(r.stdout.slice(r.stdout.indexOf('{')));
   if (out.API_URL !== 'http://127.0.0.1:54321') throw new Error('Refusing to run: API is not the local stack on 127.0.0.1:54321');
-  return { url: out.API_URL, anon: out.ANON_KEY, service: out.SERVICE_ROLE_KEY };
+  if (!out.PUBLISHABLE_KEY || !out.SECRET_KEY) throw new Error('This Supabase CLI does not report publishable/secret keys; upgrade it.');
+  return { url: out.API_URL, publishable: out.PUBLISHABLE_KEY, secret: out.SECRET_KEY };
 }
 
 // Dummy token Cloudflare documents for its always-pass TEST secret (the local default). It is
@@ -24,7 +25,7 @@ export function clients(keys: Keys): {
   admin: SupabaseClient;
 } {
   const opts = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
-  const plain = () => createClient(keys.url, keys.anon, opts);
+  const plain = () => createClient(keys.url, keys.publishable, opts);
   return {
     // Adds the test token to the three password endpoints, like the real app does.
     anon: () => {
@@ -40,7 +41,7 @@ export function clients(keys: Keys): {
       return c;
     },
     anonWithoutCaptcha: plain,
-    admin: createClient(keys.url, keys.service, opts),
+    admin: createClient(keys.url, keys.secret, opts),
   };
 }
 

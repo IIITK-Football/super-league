@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { getOpponent } from '../../../lib/roundOf32';
 
 export const dynamic = 'force-dynamic';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseKey = process.env.SUPABASE_ANON_KEY as string;
+const supabaseKey = publishableKey();
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // The 16 "Home" slots based on the 48-team World Cup matrix

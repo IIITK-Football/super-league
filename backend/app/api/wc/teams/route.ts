@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
+import { secretKey } from '@/lib/supabase/keys';
 import { NextResponse } from 'next/server';
 import { handleError } from '../../../../lib/errorHandler';
 
 export const dynamic = 'force-dynamic';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) as string;
+const supabaseKey = secretKey();
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET() {

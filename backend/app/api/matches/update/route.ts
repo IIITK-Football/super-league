@@ -1,3 +1,4 @@
+import { publishableKey } from '@/lib/supabase/keys';
   import { NextResponse } from 'next/server';
   import { createServerClient } from '@supabase/ssr';
   import { cookies } from 'next/headers';
@@ -9,7 +10,7 @@
 
       const supabase = createServerClient(
         process.env.SUPABASE_URL!,
-        process.env.SUPABASE_ANON_KEY!,
+        publishableKey(),
         {
           cookies: {
             getAll() { return cookieStore.getAll() },

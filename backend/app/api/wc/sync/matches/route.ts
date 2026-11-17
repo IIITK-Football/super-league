@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
+import { secretKey } from '@/lib/supabase/keys';
 import { NextResponse, NextRequest } from 'next/server'; // Added NextRequest
 
 // Added 'as string' to assure TypeScript these exist
 const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string; 
+const supabaseServiceKey = secretKey(); 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Added the type to the request parameter

@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
+import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
@@ -11,7 +12,7 @@ export async function GET() {
     
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!,
+      publishableKey(),
       {
         cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
       }

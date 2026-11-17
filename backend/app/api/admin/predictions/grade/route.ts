@@ -10,7 +10,7 @@ async function getSupabaseClient(request: Request) {
     const cookieStore = await cookies();
     const authHeader = request.headers.get('Authorization'); 
 
-    return createServerClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_ANON_KEY as string, {
+    return createServerClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_PUBLISHABLE_KEY as string, {
       cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
       global: {
         headers: { Authorization: authHeader || '' },
@@ -18,7 +18,7 @@ async function getSupabaseClient(request: Request) {
     });
   } catch (err) {
     // Fallback for environments where cookies() might throw or fail
-    return createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_ANON_KEY as string);
+    return createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_PUBLISHABLE_KEY as string);
   }
 }
 
@@ -53,11 +53,11 @@ export async function POST(request: Request) {
     if (!body.match_id) throw { status: 400, message: "match_id is required for grading." };
 
     console.log(`\n--- STARTING GRADING RUN FOR MATCH: ${body.match_id} ---`);
-    console.log("Service Role Key Present:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+    console.log("Service Role Key Present:", !!process.env.SUPABASE_SECRET_KEY);
 
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("❌ CRITICAL ERROR: SUPABASE_SERVICE_ROLE_KEY is missing from environment variables!");
-      return NextResponse.json({ success: false, message: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is missing." }, { status: 500 });
+    if (!process.env.SUPABASE_SECRET_KEY) {
+      console.error("❌ CRITICAL ERROR: SUPABASE_SECRET_KEY is missing from environment variables!");
+      return NextResponse.json({ success: false, message: "Server configuration error: SUPABASE_SECRET_KEY is missing." }, { status: 500 });
     }
 
     const supabase = await getSupabaseClient(request);
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     // 2. MAGIC FIX 2: Create a totally isolated God Mode client (ignores all cookies/headers)
     const supabaseAdmin = createClient(
       process.env.SUPABASE_URL as string, 
-      process.env.SUPABASE_SERVICE_ROLE_KEY as string, 
+      process.env.SUPABASE_SECRET_KEY as string, 
       {
         auth: {
           autoRefreshToken: false,

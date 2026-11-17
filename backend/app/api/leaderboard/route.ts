@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
       {
         cookies: {
           getAll() { return cookieStore.getAll() },
@@ -28,9 +28,9 @@ export async function GET(request: Request) {
     );
 
     if (division === 'freshers') {
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (!serviceRoleKey) {
-        throw new Error('SUPABASE_SERVICE_ROLE_KEY is required to fetch Freshers player stats.');
+      const secret = process.env.SUPABASE_SECRET_KEY;
+      if (!secret) {
+        throw new Error('SUPABASE_SECRET_KEY is required to fetch Freshers player stats.');
       }
 
       type PlayerStats = {
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
         assists: number;
       };
 
-      const adminSupabase = createClient(process.env.SUPABASE_URL!, serviceRoleKey);
+      const adminSupabase = createClient(process.env.SUPABASE_URL!, secret);
       const [{ data: members, error: membersErr }, { data: matches, error: matchesErr }] = await Promise.all([
         adminSupabase
           .from('team_members')

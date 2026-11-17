@@ -1,4 +1,5 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
     const authHeader = request.headers.get('Authorization') || '';
-    const authClient = createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
+    const authClient = createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
       cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} },
       global: { headers: { Authorization: authHeader } },
     });

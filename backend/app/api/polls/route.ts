@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../lib/errorHandler';
@@ -8,7 +9,7 @@ export const revalidate = 0;
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const supabase = createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
+    const supabase = createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
       cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
     });
 

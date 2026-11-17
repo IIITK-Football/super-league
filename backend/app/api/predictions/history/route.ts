@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
+import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
@@ -9,7 +10,7 @@ async function getSupabaseClient(request: Request) {
   const cookieStore = await cookies();
   const authHeader = request.headers.get('Authorization');
 
-  return createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
+  return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
     cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
     global: {
       headers: { Authorization: authHeader || '' },
