@@ -50,13 +50,18 @@ describe('ci.yml: one required check called gate', () => {
     expect(ci).not.toMatch(/if: false/);
   });
 
-  it('judges commits with the same hygiene code as the hooks, over the whole range', () => {
+  it('judges commits with the same hygiene code as the hooks, from the adoption point (not the history before the workflow)', () => {
     expect(j.hygiene).toMatch(/scripts\/hooks\/hygiene\.mjs/);
+    expect(j.hygiene).toMatch(/scripts\/work\/range-base\.mjs/);
     expect(j.hygiene).toMatch(/fetch-depth: 0/);
   });
 
   it('checks every backlog status change since the base, and walkthroughs of done items', () => {
     expect(j.records).toMatch(/scripts\/work\/cli\.mjs check --base/);
+  });
+
+  it('applies the strict rules from the adoption point too', () => {
+    expect(j.tests).toMatch(/scripts\/work\/range-base\.mjs/);
   });
 
   it('is light for pull requests into develop: only the cheap mapped-and-covered rules, no test groups', () => {
