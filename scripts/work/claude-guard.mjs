@@ -298,7 +298,7 @@ function sessionStart(root) {
     for (const l of status.stdout.split('\n').filter(Boolean)) lines.push(`  ${l}`);
   }
   lines.push('- An item must pass `pnpm work ready SL-xxx` (Definition of Ready) before work starts and `pnpm work done SL-xxx` (Definition of Done) before it is finished. Status is never edited by hand.');
-  lines.push('- `pnpm work approve` and `pnpm work attest` are the owner\'s; publishing is by pull request from a ready/<name> branch.');
+  lines.push('- `pnpm work approve` and `pnpm work attest` are the owner\'s; work happens directly on develop; only main is reached by pull request.');
   return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: lines.join('\n') } };
 }
 

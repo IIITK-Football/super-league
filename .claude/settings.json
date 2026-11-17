@@ -20,8 +20,6 @@
       "Bash(git checkout -b *)",
       "Bash(git push)",
       "Bash(git push origin develop*)",
-      "Bash(git push origin ready/*)",
-      "Bash(git push -u origin ready/*)",
       "Bash(gh pr create*)",
       "Bash(gh pr view*)",
       "Bash(gh pr checks*)",
