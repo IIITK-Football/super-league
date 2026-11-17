@@ -1,6 +1,8 @@
 // Git hygiene for a range of commits and for push targets. Shared by the pre-push hook and CI so the two judge
 // identically. Read-only: it never edits, stages or commits anything.
 import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { checkStagedFiles, scanAddedLines, validateCommitMessage } from './lib.mjs';
 
 const ZERO = /^0+$/;
@@ -47,4 +49,19 @@ export function checkPushRefs(lines) {
     }
   }
   return problems;
+}
+
+// Command line, used by CI: node scripts/hooks/hygiene.mjs <base> <head>
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [base, head] = process.argv.slice(2);
+  if (!base || !head) {
+    console.error('usage: node scripts/hooks/hygiene.mjs <base> <head>');
+    process.exit(2);
+  }
+  const problems = checkRange(base, head);
+  if (problems.length) {
+    console.error(`Git hygiene failed (${problems.length}):\n- ${problems.join('\n- ')}`);
+    process.exit(1);
+  }
+  console.log(`Git hygiene passed for ${base}..${head}`);
 }
