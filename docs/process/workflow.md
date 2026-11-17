@@ -34,7 +34,7 @@ Item status is changed only by these commands. `pnpm work approve` and `pnpm wor
 
 ## Publishing
 
-`develop` and `main` are reached by pull request. Push a branch named `ready/<short-name>`, open a pull request into `develop`, and merge it (rebase merge, to keep history linear) once `gate` is green; afterwards `git rebase origin/develop` drops the already-merged local commits. The owner has pre-authorized this for `develop`. Pull requests into `main` start the production workflow and stay the owner's decision.
+`develop` and `main` are reached by pull request. Push a branch named `ready/<short-name>`, open a pull request into `develop`. When `gate` is green the owner merges it (rebase merge, to keep history linear) in the GitHub web page, using "Merge without waiting for requirements" because the organisation's `update` rule only lets bypass-capable people update `develop`; afterwards `git rebase origin/develop` drops the already-merged local commits. Pull requests into `main` start the production workflow and stay the owner's decision.
 
 ## What the Claude Code guard does
 
