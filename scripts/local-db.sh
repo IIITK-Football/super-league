@@ -12,6 +12,7 @@
 #   scripts/local-db.sh reset [--yes]    DESTRUCTIVE: rebuild local DB from migrations + seed
 #   scripts/local-db.sh test             run pgTAP tests against the local DB
 #   scripts/local-db.sh psql             open psql on the verified local DB
+#   scripts/local-db.sh inventory [file] read-only schema inventory (CSV) of the local DB
 set -euo pipefail
 
 EXPECTED_PROJECT="backend"
@@ -81,7 +82,7 @@ confirm_reset() {
 }
 
 cmd="${1:-}"
-[ -n "$cmd" ] || die "usage: local-db.sh {check|status|start|stop|reset [--yes]|test|psql}"
+[ -n "$cmd" ] || die "usage: local-db.sh {check|status|start|stop|reset [--yes]|test|psql|inventory [file]}"
 shift
 
 case "$cmd" in
@@ -121,6 +122,20 @@ case "$cmd" in
     [ "$#" -eq 0 ] || die "unexpected arguments"
     verify_target
     exec psql "postgresql://postgres:postgres@$EXPECTED_HOST:$EXPECTED_PORT/postgres" ;;
+  inventory)
+    # Read-only schema inventory of the local database (CSV), for comparing with another database.
+    [ "$#" -le 1 ] || die "unexpected arguments"
+    verify_target >&2
+    read -r -a PSQL <<< "${LOCAL_DB_PSQL:-psql}"
+    sql="$ROOT/scripts/sql/schema-inventory.sql"
+    [ -f "$sql" ] || die "missing $sql"
+    url="postgresql://postgres:postgres@$EXPECTED_HOST:$EXPECTED_PORT/postgres"
+    if [ -n "${1:-}" ]; then
+      "${PSQL[@]}" "$url" -q --csv -v ON_ERROR_STOP=1 -f "$sql" > "$1"
+      echo "inventory written to $1" >&2
+    else
+      "${PSQL[@]}" "$url" -q --csv -v ON_ERROR_STOP=1 -f "$sql"
+    fi ;;
   *)
     die "unknown command '$cmd'" ;;
 esac

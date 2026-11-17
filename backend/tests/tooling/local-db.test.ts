@@ -167,3 +167,44 @@ describe('local-db.sh', () => {
     expect(src).not.toMatch(/docker (rm|stop|kill|volume|system|network)/);
   });
 });
+
+describe('local-db.sh inventory', () => {
+  // A fake psql records how it was called; no database is contacted.
+  const withFakePsql = (extra: Record<string, string> = {}) => {
+    const psql = join(dir, 'fake-psql');
+    writeFileSync(psql, `#!/usr/bin/env bash\necho "psql $@" >> "${log}"\necho "category,object,detail,definition,md5"\n`);
+    chmodSync(psql, 0o755);
+    return { LOCAL_DB_PSQL: psql, ...extra };
+  };
+
+  it('runs the read-only inventory file against the verified local database and writes the CSV to the given file', () => {
+    const out = join(dir, 'inventory.csv');
+    const r = run(['inventory', out], { env: withFakePsql() });
+    expect(r.status).toBe(0);
+    const c = calls();
+    expect(c).toContain('postgresql://postgres:postgres@127.0.0.1:54322/postgres');
+    expect(c).toMatch(/--csv/);
+    expect(c).toMatch(/-f \S*scripts\/sql\/schema-inventory\.sql/);
+    expect(readFileSync(out, 'utf8')).toContain('category,object,detail,definition,md5');
+    expect(r.stdout).not.toContain('category,object'); // the CSV went to the file, not the terminal
+  });
+
+  it('prints the CSV to stdout when no file is given, keeping status messages on stderr', () => {
+    const r = run(['inventory'], { env: withFakePsql() });
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim()).toBe('category,object,detail,definition,md5');
+    expect(r.stderr).toContain('54322');
+  });
+
+  it('refuses a database that is not the local project on 54322 and never starts psql', () => {
+    const r = run(['inventory'], { url: 'postgresql://postgres:postgres@127.0.0.1:55322/postgres', env: withFakePsql() });
+    expect(r.status).not.toBe(0);
+    expect(calls()).not.toContain('psql');
+  });
+
+  it('refuses extra arguments and an unreachable stack', () => {
+    expect(run(['inventory', 'a.csv', 'b.csv'], { env: withFakePsql() }).status).not.toBe(0);
+    expect(run(['inventory'], { url: null, env: withFakePsql() }).status).not.toBe(0);
+    expect(calls()).not.toContain('psql');
+  });
+});
