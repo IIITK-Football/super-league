@@ -1,9 +1,9 @@
 {
-  "head": "b5a5566957f60c24786e55bdcc7837d42c21a13e",
-  "tree": "15d6d68e08704feb824ebc7244726105a31ce100",
+  "head": "503c3981ce61214b503e63a79eb77c5ce2993e50",
+  "tree": "bc29833a53d8a33f17cf1502df5a6fe34d0704ec",
   "clean": true,
   "dryRun": false,
-  "at": "2026-11-17T13:35:09.229Z",
+  "at": "2026-11-17T13:36:14.333Z",
   "groups": [
     {
       "name": "tooling",
@@ -14,7 +14,7 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/tooling",
           "exit": 0,
-          "ms": 8445
+          "ms": 10230
         }
       ]
     }
