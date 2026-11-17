@@ -51,9 +51,15 @@ Database tests use the deterministic local seed (`backend/supabase/seed.sql`, se
 
 There is no per-change opt-out. `tests/gate-exemptions.json` lists whole categories that need no tests (documentation, lockfiles, assets, vendored tools), each with a reason; changing it needs the owner's explicit confirmation. A group's `covers` and `testPaths` are what a reviewer reads to learn what its tests really verify, so declare them honestly. `--evidence <file>` records the commit, the tree and each command's exit code as JSON, which the completion walkthrough uses.
 
-## Commit-time hook
+## Git hooks
 
-`pnpm hooks:install` runs `node scripts/test-groups.mjs affected --staged` before each commit (after staged-file safety checks), so only the groups your staged paths select run; no unrelated suites. Failures print the group and the command to re-run it. See `CONTRIBUTING.md` for the logged emergency bypass.
+`pnpm install` installs the hooks (the root `prepare` script runs `scripts/install-hooks.sh --auto`; it never fails an install and never overrides a hooks path you configured yourself). They share their logic with CI (`scripts/hooks/lib.mjs`, `scripts/hooks/hygiene.mjs`), so a local result and the CI result cannot disagree.
+
+- **pre-commit:** blocks `.env` and key files and secret-looking additions, then `affected --staged --strict --commit-stage`: the strict rules except "changed source needs a changed test", then only the groups the staged paths select.
+- **commit-msg:** Conventional Commits, 72 characters, no backlog references.
+- **pre-push:** only `ready/<name>` branches may be pushed (`develop` and `main` are reached by pull request). Over the whole outgoing range it checks hygiene (conventional messages, no fixup/squash/WIP commits, no merge commits, no env or key files, no secrets), the full strict rules, and runs the affected groups. The pushed commit must be the one checked out, so the tests run against what is published.
+
+There is no bypass variable or flag. A person can still run `git commit --no-verify` or `git push --no-verify` by hand, which only skips the local copy: CI applies the same rules and cannot be skipped.
 
 ## CI
 

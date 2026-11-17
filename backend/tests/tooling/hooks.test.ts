@@ -104,25 +104,26 @@ describe('commit-msg hook (executable)', () => {
   });
 });
 
-describe('escape hatch', () => {
-  it('logs a bypass with its reason and exits 0 without running checks', () => {
+describe('no bypass switch', () => {
+  it('SKIP_HOOKS has no effect: a staged environment file is still blocked', () => {
     const repo = mkdtempSync(join(tmpdir(), 'repo-'));
     spawnSync('git', ['init', '-q'], { cwd: repo });
+    writeFileSync(join(repo, '.env'), 'X=1\n');
+    spawnSync('git', ['add', '.env'], { cwd: repo });
     const r = spawnSync('node', [join(root, 'scripts/hooks/pre-commit.mjs')], {
       cwd: repo,
       encoding: 'utf8',
       env: { ...process.env, SKIP_HOOKS: 'production outage hotfix' },
     });
-    expect(r.status).toBe(0);
-    const log = join(repo, '.git', 'hooks-bypass.log');
-    expect(existsSync(log)).toBe(true);
-    expect(readFileSync(log, 'utf8')).toMatch(/pre-commit.*production outage hotfix/);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/environment files must not be committed/);
+    expect(existsSync(join(repo, '.git', 'hooks-bypass.log'))).toBe(false);
   });
 });
 
 describe('wiring', () => {
   it('hook wrappers exist and only delegate; they never commit or add files', () => {
-    for (const h of ['pre-commit', 'commit-msg']) {
+    for (const h of ['pre-commit', 'commit-msg', 'pre-push']) {
       const src = readFileSync(join(root, '.githooks', h), 'utf8');
       expect(src).toMatch(/scripts\/hooks\//);
       expect(src).not.toMatch(/git (add|commit|checkout|reset|stash)/);

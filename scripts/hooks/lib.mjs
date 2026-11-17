@@ -1,12 +1,17 @@
 // Pure helpers for the commit-time hooks (SL-015). No hook here edits files or creates commits.
 export const TYPES = ['feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore', 'revert'];
 
-export function validateCommitMessage(raw) {
+// strict = judging what may be PUBLISHED: work-in-progress commits (fixup!, squash!, amend!, WIP) must be tidied first.
+// The local commit-msg hook is not strict so rebasing with fixup commits still works.
+export function validateCommitMessage(raw, { strict = false } = {}) {
   const lines = raw.split('\n').filter((l) => !l.startsWith('#'));
   const first = (lines.find((l) => l.trim() !== '') ?? '').trim();
   const errors = [];
   const hints = [];
 
+  if (strict && /^(fixup! |squash! |amend! |wip\b)/i.test(first)) {
+    return { ok: false, errors: ['Work-in-progress commits (fixup!, squash!, amend!, WIP) must be tidied before publishing: squash or reword them.'], hints };
+  }
   if (/^(Merge |Revert "|fixup! |squash! |amend! )/.test(first)) return { ok: true, errors, hints };
 
   const m = first.match(/^([a-z]+)(\([a-z0-9._/-]+\))?(!)?: (.+)$/);

@@ -25,7 +25,8 @@
     "test:groups": "node scripts/test-groups.mjs list",
     "hooks:install": "bash scripts/install-hooks.sh",
     "hooks:uninstall": "bash scripts/install-hooks.sh --remove",
-    "db:inventory": "bash scripts/local-db.sh inventory"
+    "db:inventory": "bash scripts/local-db.sh inventory",
+    "prepare": "bash scripts/install-hooks.sh --auto"
   },
   "devDependencies": {
     "supabase": "^2.119.0"
