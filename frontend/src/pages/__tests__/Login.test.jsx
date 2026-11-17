@@ -41,11 +41,18 @@ const fill = (label, value) => fireEvent.change(screen.getByLabelText(label), { 
 const submit = () => fireEvent.click(document.querySelector('form button[type="submit"]'));
 
 beforeEach(() => {
+  // These tests cover the page WITHOUT bot protection. Pin that, so a developer's own
+  // frontend/.env.local (which may define VITE_TURNSTILE_SITE_KEY) cannot change the result.
+  // The Turnstile behaviour is covered by Login.captcha.test.jsx.
+  vi.stubEnv('VITE_TURNSTILE_SITE_KEY', '');
   sessionStorage.clear();
   state.user = null;
   state.role = null;
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 describe('Login page', () => {
   it('shows the college-email message for another domain without calling Supabase', async () => {
