@@ -11,13 +11,14 @@
 | Studio | 54323 |
 | Inbucket (mail) | 54324 |
 
-## Known hazard: this checkout is linked to a hosted project
+## Known hazard: the CLI link points at a hosted project
 
-`backend/supabase/.temp/linked-project.json` exists (git-ignored CLI state). Supabase CLI commands such as `db push`, `db pull`, `migration up --linked`, and `link` act on that **hosted** project when `--local` is not given. Therefore:
+`backend/supabase/.temp/linked-project.json` (git-ignored CLI state) records a **hosted** project. Supabase CLI commands such as `db push`, `db pull`, `migration up --linked`, and `link` act on it when `--local` is not given. The link is meant to point at the **staging** project, never production: production changes go only through GitHub Actions (see [`release.md`](release.md), which also shows how to move the link). Therefore:
 
-1. Never run `supabase link`, `--linked`, `db push`, `db pull`, `branches`, `secrets`, or `functions deploy` during development.
+1. Do not run `supabase link`, `--linked`, `db push`, `db pull`, `branches`, `secrets`, or `functions deploy` during development unless you have deliberately chosen to act on staging.
 2. Always pass an explicit local target, shown below.
-3. Do not edit or delete `.temp/`; just never use the link.
+3. Check where the link points with `cat backend/supabase/.temp/project-ref`. If it is the production reference, relink to staging as described in `release.md`.
+4. Assistants and scripts in this repository never run these commands without your explicit approval.
 
 ## Explicit local commands
 

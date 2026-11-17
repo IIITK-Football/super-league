@@ -58,10 +58,10 @@ The output stays local (git-ignored), is never committed, and is never run again
 | Target | Database | Who may mutate | How |
 |---|---|---|---|
 | **local** | local Supabase, 127.0.0.1:54322 | developer | `supabase db reset --local` / `migration up --local` (see `docs/local-development.md`) |
-| **develop** | **Not configured.** No separate hosted develop Supabase project exists. `develop.super-league.pages.dev` is a frontend preview only. | nobody | No develop migration target is assumed. To be created (and recorded here) before SL-080 can automate any develop deployment. |
-| **production** | the hosted project currently linked in this checkout | CI only on approved release, by a dictator/owner | protected environment + manual approval (SL-080/101) |
+| **staging** (for the `develop` branch) | a separate hosted Supabase project, **being created by the owner** (not yet confirmed); synthetic data only | GitHub Actions on push to `develop`, environment `staging` | `db push --include-seed` through `.github/workflows/db-deploy.yml`; see `docs/release.md` |
+| **production** | the original hosted project (`Super League`) | GitHub Actions on push to `main`, environment `production`, required reviewer | `db push` only, never seeded; history must be repaired first (see `docs/release.md`) |
 
-The only hosted project is the one currently linked (`Super League`). Until a develop project is created, staged verification is **local only** (fresh reset plus a sanitized production-shaped dump if the owner supplies one), and **no hosted migration is run by anyone from a laptop**. Nothing in this plan connects to hosted.
+Staging is created **empty** and filled by CI. No hosted migration is run by anyone from a laptop, and the local CLI link points at staging, not production. Staged verification of the auth work uses the staging project, with the production export gate before the first production run.
 
 ## 5. Rollback and forward-repair policy
 
@@ -73,11 +73,11 @@ The only hosted project is the one currently linked (`Super League`). Until a de
 
 ## 6. Staged release order
 
-1. Local proof (reset + seed + tests green). 2. (Develop deploy only if a develop project is later created.) 3. Production expand migration + backfill during a quiet window. 4. Parity verification queries. 5. Switch consumers (Workers, then frontend). 6. Hold window. 7. Contract/retire (SL-102). Each stage needs explicit owner approval; nothing is deployed by Claude.
+1. Local proof (reset + seed + tests green). 2. Staging deploy from `develop` (CI) and parity checks. 3. Production expand migration + backfill during a quiet window. 4. Parity verification queries. 5. Switch consumers (Workers, then frontend). 6. Hold window. 7. Contract/retire (SL-102). Each stage needs explicit owner approval; nothing is deployed by Claude.
 
 ## 7. Open items for the owner
 
-- Whether to create a separate hosted develop Supabase project (currently unconfigured).
+- Creating the staging Supabase project and the GitHub environments (steps in `docs/release.md`); this record should then be updated to confirm they exist.
 - Whether to supply a sanitized production-shaped dump for local rehearsal.
 - Per-person decision for each legacy `admin` (from the local-only review list), recorded before the role migration runs. This is a gate for the SL-024 role migration.
 
