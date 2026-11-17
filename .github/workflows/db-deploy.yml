@@ -1,7 +1,11 @@
 name: Database deploy
 
-# develop -> staging (migrations + the synthetic seed)
-# main    -> production (migrations only; never seeded; waits for a required reviewer)
+# develop -> staging project, GitHub environment "Database Preview" (migrations + the synthetic seed)
+# main    -> production project, GitHub environment "Database Production" (migrations only; never
+#            seeded; waits for a required reviewer)
+#
+# These two environments are dedicated to this workflow. The environments named "Preview" and
+# "Production" belong to the Vercel integration and are deliberately not used here.
 #
 # Each environment has its own project reference and secrets, stored as GitHub Environment
 # secrets/variables named identically (SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD secrets;
@@ -57,7 +61,7 @@ jobs:
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: staging
+    environment: Database Preview
     concurrency:
       group: db-deploy-staging
       cancel-in-progress: false
@@ -119,7 +123,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: production
+    environment: Database Production
     concurrency:
       group: db-deploy-production
       cancel-in-progress: false
@@ -168,6 +172,19 @@ jobs:
           set -euo pipefail
           pnpm exec supabase db push --dry-run 2>&1 | tee dry-run.txt
           { echo '### Production: pending migrations'; echo '```'; cat dry-run.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refuse to replay the baseline migration
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          # The production database was built by hand and had no migration history, so the baseline
+          # must be marked as applied, never run. If it is still listed as pending, the history was
+          # not repaired yet: stop before anything is applied.
+          if grep -qE '20261106000000|20261106180125' dry-run.txt; then
+            echo "The baseline migration is listed as pending for production."
+            echo "Production has no migration history recording it. Mark it as applied (never run it) as described in docs/release.md, then run this workflow again."
+            exit 1
+          fi
 
       - name: Apply migrations (no seed, no out-of-order migrations)
         if: github.event_name == 'push' || inputs.dry_run == false

@@ -58,8 +58,8 @@ The output stays local (git-ignored), is never committed, and is never run again
 | Target | Database | Who may mutate | How |
 |---|---|---|---|
 | **local** | local Supabase, 127.0.0.1:54322 | developer | `supabase db reset --local` / `migration up --local` (see `docs/local-development.md`) |
-| **staging** (for the `develop` branch) | a separate hosted Supabase project, **being created by the owner** (not yet confirmed); synthetic data only | GitHub Actions on push to `develop`, environment `staging` | `db push --include-seed` through `.github/workflows/db-deploy.yml`; see `docs/release.md` |
-| **production** | the original hosted project (`Super League`) | GitHub Actions on push to `main`, environment `production`, required reviewer | `db push` only, never seeded; history must be repaired first (see `docs/release.md`) |
+| **staging** (for the `develop` branch) | a separate hosted Supabase project, **being created by the owner** (not yet confirmed); synthetic data only | GitHub Actions on push to `develop`, environment `Database Preview` | `db push --include-seed` through `.github/workflows/db-deploy.yml`; see `docs/release.md` |
+| **production** | the original hosted project (`Super League`) | GitHub Actions on push to `main`, environment `Database Production`, required reviewer | `db push` only, never seeded. Production has **no migration history** (`schema_migrations` does not exist): the baseline is marked applied, never run, after a schema comparison (see `docs/release.md`) |
 
 Staging is created **empty** and filled by CI. No hosted migration is run by anyone from a laptop, and the local CLI link points at staging, not production. Staged verification of the auth work uses the staging project, with the production export gate before the first production run.
 
