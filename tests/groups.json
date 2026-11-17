@@ -104,6 +104,7 @@
         ".gitmessage",
         ".nvmrc",
         ".pre-commit-config.yaml",
+        "frontend/scripts/take-screenshots.js",
         "pnpm-workspace.yaml",
         "scripts/**",
         "tests/gate-baseline.json",
@@ -128,6 +129,7 @@
         ".github/workflows/**",
         ".gitmessage",
         ".nvmrc",
+        "frontend/scripts/take-screenshots.js",
         "pnpm-workspace.yaml",
         "scripts/**",
         "tests/gate-baseline.json",
@@ -300,8 +302,7 @@
       "scheduledOnly": true,
       "paths": [
         "backend/app/**",
-        "frontend/**",
-        "frontend/scripts/take-screenshots.js"
+        "frontend/**"
       ],
       "run": []
     }

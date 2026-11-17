@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 
 const BASE_URL = 'https://super-league.pages.dev';
-const routes = ['', 'fantasy', 'wc', 'matches', 'standings', 'clubs', 'statistics', 'legends', 'rules'];
+const routes = ['', 'fantasy', 'wc', 'matches', 'standings', 'statistics', 'legends', 'rules'];
 
 (async () => {
     console.log('🚀 Starting native screenshot automation (1200x630)...');
@@ -26,8 +26,9 @@ const routes = ['', 'fantasy', 'wc', 'matches', 'standings', 'clubs', 'statistic
         console.log(`📸 Capturing ${url}`);
 
         try {
-            await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-            await page.waitForTimeout(2000); // Allow animations to settle
+            // A normal page load, not a wait for idle network: the home page keeps streaming a video, so the network never goes idle.
+            await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+            await page.waitForTimeout(3000); // Allow animations to settle
 
             // Native Playwright PNG output — no sharp dependency needed
             await page.screenshot({ path: outputPath });
