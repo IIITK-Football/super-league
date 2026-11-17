@@ -1,7 +1,7 @@
 -- Group: database. Verifies the deterministic local seed (supabase/seed.sql).
 -- Run: pnpm exec supabase test db --local   (from backend/, local stack only)
 BEGIN;
-SELECT plan(24);
+SELECT plan(25);
 
 -- Row volumes (documented in docs/local-seed.md)
 SELECT is((SELECT count(*) FROM public.teams)::int, 24, 'teams: 8 per division x 3');
@@ -34,8 +34,12 @@ SELECT results_eq(
 -- Roles: legacy role values present for the current schema (see SL-003 mapping)
 SELECT results_eq(
   $$SELECT r.role, count(*)::int FROM public.user_roles r JOIN seed_users s ON s.id = r.user_id GROUP BY r.role ORDER BY r.role$$,
-  $$VALUES ('captain', 1), ('default', 47), ('dictator', 1), ('editor', 1)$$,
+  $$VALUES ('captain', 2), ('default', 46), ('dictator', 1), ('editor', 1)$$,
   'role distribution, and no legacy admin in seed');
+
+-- every assigned captain in the seed holds the captain role (the captain function requires both)
+SELECT is((SELECT count(*) FROM public.team_registrations r JOIN public.user_roles ur ON ur.user_id = r.captain_id
+           WHERE ur.role NOT IN ('captain', 'dictator'))::int, 0, 'seed team assignments all have the captain role');
 
 -- Fixture accounts cannot sign in (no password); seeded ids are stable
 SELECT is((SELECT count(*) FROM auth.users u JOIN seed_users s ON s.id = u.id WHERE u.encrypted_password <> '')::int, 0, 'seed accounts have no password');

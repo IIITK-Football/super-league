@@ -6,14 +6,35 @@
 --
 -- After this migration:
 --   * anon and PUBLIC cannot execute either overload (signed-in users and service_role still can);
---   * the caller must be the captain of the team entry that owns the player, or a dictator
---     (legacy "admin", editor and normal users get nothing: no role implies another);
+--   * a CAPTAIN must be assigned to the team entry that owns the player AND hold the captain role; a
+--     DICTATOR may update any team's players. Editor, normal users and the legacy "admin" label get nothing:
+--     no role implies another;
 --   * captains may change only the approved presentation fields (position, jersey number, overall rating,
 --     attributes including the play style, and the card portrait); the email is a protected identity field,
 --     so a captain who supplies a DIFFERENT email is refused (the stored value, or NULL, means "no change");
 --   * the search_path is pinned and every object is schema-qualified.
 --
 -- This migration is forward-only. Do not restore the previous definition: it reopens the exposure.
+
+-- captain-role-guard:start
+-- Safety check before tightening access: every assigned captain must already hold the captain role (or be a
+-- dictator). Otherwise a real captain would be locked out the moment this is applied. If any assignment lacks the
+-- role, stop here (the whole migration is rolled back) and say how to find and resolve them, rather than weakening
+-- the access check or granting roles automatically. Only a count is reported, never names or emails.
+DO $$
+DECLARE
+  unresolved integer;
+BEGIN
+  SELECT count(*) INTO unresolved
+  FROM public.team_registrations r
+  LEFT JOIN public.user_roles ur ON ur.user_id = r.captain_id
+  WHERE ur.role IS DISTINCT FROM 'captain' AND ur.role IS DISTINCT FROM 'dictator';
+
+  IF unresolved > 0 THEN
+    RAISE EXCEPTION '% team entry(ies) have an assigned captain without the captain role. Nothing was changed. Run scripts/sql/captain-role-audit.sql (read-only) to list them, assign the role deliberately for each person who should be a captain, then apply this migration again (see docs/release.md).', unresolved;
+  END IF;
+END $$;
+-- captain-role-guard:end
 
 CREATE OR REPLACE FUNCTION public.captain_update_team_member(
   p_member_id uuid,
@@ -32,6 +53,8 @@ AS $$
 DECLARE
   v_uid uuid := auth.uid();
   v_is_dictator boolean;
+  v_is_captain boolean;
+  v_owner uuid;
   v_current_email text;
 BEGIN
   IF v_uid IS NULL THEN
@@ -54,20 +77,24 @@ BEGIN
     RAISE EXCEPTION 'Player attributes must be an object';
   END IF;
 
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_roles ur WHERE ur.user_id = v_uid AND ur.role = 'dictator'
-  ) INTO v_is_dictator;
+  SELECT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = v_uid AND ur.role = 'dictator'),
+         EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = v_uid AND ur.role = 'captain')
+  INTO v_is_dictator, v_is_captain;
 
-  -- The player must belong to the caller's own team entry (or the caller is a dictator). A missing player and
+  -- The player must belong to the caller's own team entry (a dictator may use any). A missing player and
   -- someone else's player give the same error, so callers cannot discover which players exist.
-  SELECT m.email INTO v_current_email
+  SELECT r.captain_id, m.email INTO v_owner, v_current_email
   FROM public.team_members m
   JOIN public.team_registrations r ON r.id = m.registration_id
-  WHERE m.id = p_member_id
-    AND (r.captain_id = v_uid OR v_is_dictator);
+  WHERE m.id = p_member_id;
 
-  IF NOT FOUND THEN
+  IF NOT FOUND OR (v_owner IS DISTINCT FROM v_uid AND NOT v_is_dictator) THEN
     RAISE EXCEPTION 'Player is not part of your assigned roster';
+  END IF;
+
+  -- Assigned to this team, but the assignment alone is not access: the captain role is required as well.
+  IF NOT v_is_dictator AND NOT v_is_captain THEN
+    RAISE EXCEPTION 'Captain access is required to update players';
   END IF;
 
   IF p_email IS NOT NULL AND p_email IS DISTINCT FROM v_current_email AND NOT v_is_dictator THEN

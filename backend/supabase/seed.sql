@@ -68,7 +68,8 @@ INSERT INTO _mega_users VALUES
   ('60000000-0000-4000-8000-000000000001', 'lamb@iiitkottayam.ac.in', 'Jackson Lamb', 'Lamb', 'dictator', 48),
   ('60000000-0000-4000-8000-000000000002', 'river@iiitkottayam.ac.in', 'River Cartwright', 'River', 'captain', 36),
   ('60000000-0000-4000-8000-000000000003', 'diana@iiitkottayam.ac.in', 'Diana Taverner', 'Taverner', 'editor', 29),
-  ('60000000-0000-4000-8000-000000000004', 'sydney@iiitkottayam.ac.in', 'Sydney Adamu', 'Sydney', 'default', 21);
+  -- sydney is assigned as captain of a team entry below, so she holds the captain role (assignment alone is not access)
+  ('60000000-0000-4000-8000-000000000004', 'sydney@iiitkottayam.ac.in', 'Sydney Adamu', 'Sydney', 'captain', 21);
 
 -- 46 additional plain fixture accounts so leaderboards and pagination have volume.
 CREATE TEMP TABLE _mega_fans ON COMMIT DROP AS
