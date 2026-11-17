@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPlayStyle, PLAY_STYLES } from '../data/playStyles';
 import { API_BASE_URL } from '../lib/api';
+import { teamMemberRpcArgs } from '../lib/teamMemberUpdate';
 import './TeamBuilder.css';
 import './TeamBranding.css';
 
@@ -270,7 +271,7 @@ export function TeamBuilder() {
         if (!file) return;
         
         if (!currentPlayer?.email?.trim() || !currentPlayer.email.includes('@')) {
-            setError(`Please enter a valid email for ${currentPlayer?.fullName || 'the player'} before uploading an image.`);
+            setError(`${currentPlayer?.fullName || 'This player'} has no email on record. Ask a dictator to add it before uploading an image.`);
             return;
         }
 
@@ -341,39 +342,13 @@ export function TeamBuilder() {
                     stats: Object.fromEntries(statKeys.map((stat) => [stat[0].toUpperCase() + stat.slice(1), { total: Number(player.stats[stat]) || getRandomStat() }])),
                 };
 
-                let rpcError = null;
-                try {
-                    const { error } = await supabase.rpc('captain_update_team_member', {
-                        p_member_id: player.id,
-                        p_position: player.position || null,
-                        p_jersey_number: Number(player.jerseyNumber) || null,
-                        p_overall_rating: Number(player.overallRating) || getRandomStat(),
-                        p_attributes: attributes,
-                        p_email: player.email ? player.email.trim() : null,
-                        p_image_url: player.imageUrl || null,
-                    });
-                    rpcError = error;
-                } catch (e) {
-                    rpcError = e;
-                }
-
-                if (rpcError) {
-                    // Fallback to direct update if RPC fails
-                    const { error: directError } = await supabase
-                        .from('team_members')
-                        .update({
-                            position: player.position || null,
-                            jersey_number: Number(player.jerseyNumber) || null,
-                            overall_rating: Number(player.overallRating) || getRandomStat(),
-                            attributes: attributes,
-                            email: player.email ? player.email.trim() : null,
-                            image_url: player.imageUrl || null,
-                        })
-                        .eq('id', player.id);
-                    if (directError) throw directError;
-                }
+                // The database decides who may change what. There is deliberately no direct-update fallback:
+                // captains have no UPDATE access to team_members, so a fallback would change nothing yet still
+                // report success.
+                const { error: rpcError } = await supabase.rpc('captain_update_team_member', teamMemberRpcArgs(player, attributes, getRandomStat));
+                if (rpcError) throw rpcError;
             }
-            setSuccess('Player profiles, mandatory emails, and Cloudflare images saved successfully.');
+            setSuccess('Player profiles and images saved successfully.');
         } catch (saveError) {
             setError(saveError.message || 'Could not save player profiles.');
         } finally {
@@ -446,7 +421,7 @@ export function TeamBuilder() {
                 <Users size={28} />
                 <p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'} / {registration.division}</p>
                 <h1>Set your<br /><em>lineup.</em></h1>
-                <span>Assign roles, mandatory emails, and images for {registration.team_name}.</span>
+                <span>Set positions, ratings, and images for {registration.team_name}.</span>
 
                 <div className="team-builder-identity-badge" style={{ borderLeftColor: registration.team?.team_color || '#d9ff4a' }}>
                     {registration.team?.logo_url ? (
@@ -485,7 +460,7 @@ export function TeamBuilder() {
                     {activeTab === 'basic' && <div className="team-builder-grid team-builder-basic">
                         <label>Player<select value={activePlayer} onChange={(event) => setActivePlayer(Number(event.target.value))}>{players.map((player, index) => <option key={player.id} value={index}>{player.fullName}</option>)}</select></label>
                         <label>Position (Mandatory)<select value={currentPlayer.position} onChange={(event) => updatePlayer('position', event.target.value)}><option value="">Choose position</option>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
-                        <label className="col-span-2">Player email (Mandatory for Captain)<input type="email" value={currentPlayer.email || ''} onChange={(event) => updatePlayer('email', event.target.value)} placeholder="e.g. ebinthomas24bcs99@iiitkottayam.ac.in" /></label>
+                        <label className="col-span-2">Player email (set by a dictator, read-only)<input type="email" value={currentPlayer.email || ''} readOnly placeholder="No email on record: ask a dictator to add it" /></label>
                         <label>Jersey number<input type="number" min="1" max="99" value={currentPlayer.jerseyNumber} onChange={(event) => updatePlayer('jerseyNumber', event.target.value)} /></label>
                         <label>Overall rating<input type="number" min="1" max="99" value={currentPlayer.overallRating} onChange={(event) => updatePlayer('overallRating', event.target.value)} /></label>
                         
