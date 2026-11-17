@@ -26,6 +26,10 @@ Every table in the current schema receives rows. Tables for the target model (di
 
 IDs are fixed or derived with `md5()` from stable keys, and statistics use `hashtext()` rather than `random()`. Only timestamps are relative to `now()` (so there is always a live match and upcoming fixtures). Two consecutive resets produce identical rows apart from those timestamps.
 
+## Running the seed again (refresh)
+
+The seed is safe to run again on a database that already has it, locally or on the Preview project: fixed ids and `ON CONFLICT` mean no row is ever duplicated. A rerun also refreshes the time-dependent `matches` columns (status, date, score, minute, timer) so the live match and upcoming fixtures are current again; every other table keeps `DO NOTHING`, so your edits to teams, players and so on are kept. The deploy workflow proves this on every run (`verify` job), and `scripts/sql/verify-preview.sql` is the read-only check of the result.
+
 ## Accounts and sign-in
 
 Seed accounts have **no password** (`encrypted_password = ''`), so they cannot sign in. This is the documented non-login fixture approach; no credentials are in the browser bundle. To act as a fixture user locally, create a real local sign-in through Supabase Studio (`http://127.0.0.1:54323`) or Inbucket mail (`http://127.0.0.1:54324`), then adjust that user's role locally.

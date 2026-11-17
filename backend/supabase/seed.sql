@@ -334,7 +334,18 @@ SELECT
   CASE WHEN m.status = 'live' THEN now() - interval '67 minutes' ELSE NULL END,
   0
 FROM _mega_match_defs m
-ON CONFLICT (id) DO NOTHING;
+-- A rerun refreshes the time-dependent match state (the live match and the upcoming fixtures are
+-- relative to "now") and restores fixture scores, without ever inserting a second row. Everything
+-- else in this seed stays DO NOTHING, so edits made by testers to teams, players and so on survive.
+ON CONFLICT (id) DO UPDATE SET
+  home_score = EXCLUDED.home_score,
+  away_score = EXCLUDED.away_score,
+  status = EXCLUDED.status,
+  date = EXCLUDED.date,
+  minute = EXCLUDED.minute,
+  is_graded = EXCLUDED.is_graded,
+  timer_start_time = EXCLUDED.timer_start_time,
+  timer_calibration = EXCLUDED.timer_calibration;
 
 -- Normalized goals for completed and live matches.
 INSERT INTO public.goals (
