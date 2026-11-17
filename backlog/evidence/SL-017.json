@@ -1,0 +1,40 @@
+{
+  "head": "b8369b3d68e4d0646ba1ea99d0d83b60fc9c72fd",
+  "tree": "b484ed6ed9763e6e3d854d2b9506e430a77b629d",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-17T18:35:19.643Z",
+  "groups": [
+    {
+      "name": "config",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/config",
+          "exit": 0,
+          "ms": 1402
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run src/lib",
+          "exit": 0,
+          "ms": 1324
+        },
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec tsc --noEmit",
+          "exit": 0,
+          "ms": 1766
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "config"
+  ],
+  "commandChecks": {},
+  "id": "SL-017",
+  "base": "9f23cfb"
+}
