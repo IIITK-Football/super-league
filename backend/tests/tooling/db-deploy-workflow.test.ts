@@ -56,10 +56,10 @@ describe('db-deploy workflow', () => {
 
   describe('staging', () => {
     const s = j.staging ?? '';
-    it('runs only for develop, behind the staging environment and after verify', () => {
+    it('runs only for develop, behind the Database Preview environment and after verify', () => {
       expect(s).toMatch(/needs: verify/);
       expect(s).toMatch(/if:.*refs\/heads\/develop/);
-      expect(s).toMatch(/environment: staging\b/);
+      expect(s).toMatch(/^\s*environment: Database Preview\s*$/m);
       expect(s).not.toMatch(/refs\/heads\/main/);
     });
 
@@ -82,11 +82,29 @@ describe('db-deploy workflow', () => {
 
   describe('production', () => {
     const p = j.production ?? '';
-    it('runs only for main, behind the production environment and after verify', () => {
+    it('runs only for main, behind the Database Production environment and after verify', () => {
       expect(p).toMatch(/needs: verify/);
       expect(p).toMatch(/if:.*refs\/heads\/main/);
-      expect(p).toMatch(/environment: production\b/);
+      expect(p).toMatch(/^\s*environment: Database Production\s*$/m);
       expect(p).not.toMatch(/refs\/heads\/develop/);
+    });
+
+    it('refuses to replay the baseline: production has no migration history yet, so the baseline must be marked applied, never run', () => {
+      // the guard reads the dry-run output and must come before the real push
+      const guard = p.search(/20261106000000/);
+      const real = p.search(/db push(?! --dry-run)/);
+      expect(guard).toBeGreaterThan(-1);
+      expect(real).toBeGreaterThan(guard);
+      expect(p).toMatch(/grep[^\n]*20261106000000[^\n]*dry-run\.txt/);
+      expect(p).toMatch(/exit 1/);
+      expect(p).toMatch(/docs\/release\.md/);
+    });
+
+    it('applies only when the guard step has passed (it is an earlier step of the same job)', () => {
+      const guardStep = p.indexOf('Refuse to replay the baseline');
+      const applyStep = p.indexOf('Apply migrations');
+      expect(guardStep).toBeGreaterThan(-1);
+      expect(applyStep).toBeGreaterThan(guardStep);
     });
 
     it('is never seeded and never forces out-of-order or config changes', () => {
@@ -123,5 +141,14 @@ describe('db-deploy workflow', () => {
 
   it('manual runs default to a dry run', () => {
     expect(header).toMatch(/dry_run:[\s\S]*default: true/);
+  });
+
+  it('uses dedicated database environments and never the ones the Vercel integration owns', () => {
+    const names = [...text.matchAll(/^\s*environment:\s*(.+?)\s*$/gm)].map((m) => m[1]);
+    expect(names.sort()).toEqual(['Database Preview', 'Database Production']);
+    // `Preview` and `Production` belong to the Vercel integration; `staging` was never created.
+    for (const forbidden of ['Preview', 'Production', 'preview', 'production', 'staging']) {
+      expect(names).not.toContain(forbidden);
+    }
   });
 });

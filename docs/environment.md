@@ -31,7 +31,7 @@ Examples: [`frontend/.env.example`](../frontend/.env.example) (browser), [`front
 
 ## Not API keys: migration credentials (GitHub Actions only)
 
-`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` (secrets) and `SUPABASE_PROJECT_REF` (variable) are **Supabase CLI** credentials used only by `.github/workflows/db-deploy.yml`, scoped to the `staging` and `production` GitHub Environments (see [`release.md`](release.md)). They are unrelated to the publishable and secret keys. Application code never reads them, and the deploy workflow never uses an API key.
+`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` (secrets) and `SUPABASE_PROJECT_REF` (variable) are **Supabase CLI** credentials used only by `.github/workflows/db-deploy.yml`, scoped to the `Database Preview` (staging project) and `Database Production` (production project) GitHub Environments (see [`release.md`](release.md)); the environments `Preview` and `Production` belong to the Vercel integration and are not used. They are unrelated to the publishable and secret keys. Application code never reads them, and the deploy workflow never uses an API key. Whether a Supabase access token can be limited to one project is **unverified**: check it in Supabase and treat the token as able to reach every project until you have.
 
 ## Per environment
 
