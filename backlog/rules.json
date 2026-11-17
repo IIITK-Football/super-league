@@ -1,0 +1,54 @@
+{
+  "rules": [
+    {
+      "id": "R1",
+      "text": "Every feature has a documented issue, a bounded commit, and a relevant test group.",
+      "enforcement": "auto: strict test groups, Definition of Ready and Done"
+    },
+    {
+      "id": "R2",
+      "text": "All Supabase schema changes are ordered CLI migrations and are reproducible from an empty local database plus seed.",
+      "enforcement": "auto: the database deploy workflow proves migrations on an empty local database"
+    },
+    {
+      "id": "R3",
+      "text": "Every role check is enforced server-side and, where direct database access is possible, by RLS. Hiding a button is not authorization.",
+      "enforcement": "attest"
+    },
+    {
+      "id": "R4",
+      "text": "No development command silently reaches hosted production.",
+      "enforcement": "auto: Claude Code guard rules and local-db safety tests"
+    },
+    {
+      "id": "R5",
+      "text": "No frontend environment value contains a private service or R2 credential.",
+      "enforcement": "auto: frontend bundle guard test"
+    },
+    {
+      "id": "R6",
+      "text": "Data updates are idempotent where retried; score/event corrections recalculate dependent standings and fantasy points safely.",
+      "enforcement": "attest"
+    },
+    {
+      "id": "R7",
+      "text": "User-facing errors, empty states, loading states, and responsive behavior are acceptance criteria, not optional polish.",
+      "enforcement": "attest"
+    },
+    {
+      "id": "R8",
+      "text": "No production media URL, key, team name, division ordering, bracket label, or match-share text remains hard-coded where the requirement says it is dictator-configurable.",
+      "enforcement": "attest"
+    },
+    {
+      "id": "R9",
+      "text": "Current behavior stays available until its replacement passes parity and the cutover is approved.",
+      "enforcement": "attest"
+    },
+    {
+      "id": "R10",
+      "text": "Frontend implementation remains last; backend/API tasks should preserve a compatibility surface until then.",
+      "enforcement": "attest: phase ordering is enforced by phase gating"
+    }
+  ]
+}

@@ -26,7 +26,8 @@
     "hooks:install": "bash scripts/install-hooks.sh",
     "hooks:uninstall": "bash scripts/install-hooks.sh --remove",
     "db:inventory": "bash scripts/local-db.sh inventory",
-    "prepare": "bash scripts/install-hooks.sh --auto"
+    "prepare": "bash scripts/install-hooks.sh --auto",
+    "work": "node scripts/work/cli.mjs"
   },
   "devDependencies": {
     "supabase": "^2.119.0"
