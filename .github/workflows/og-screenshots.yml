@@ -9,7 +9,8 @@ on:
 
 jobs:
   snapshot-and-sync:
-    runs-on: ubuntu-latest
+    # Pinned: the moving latest tag now means Ubuntu 26.04, which Playwright does not support yet. Move this deliberately.
+    runs-on: ubuntu-24.04
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
@@ -35,6 +36,16 @@ jobs:
       - name: 📸 Take Screenshots
         working-directory: ./frontend
         run: node scripts/take-screenshots.js
+
+      - name: ✅ Check every screenshot was captured
+        working-directory: ./frontend
+        run: |
+          set -euo pipefail
+          # The script logs a failed page and carries on, so verify the whole set before anything is uploaded.
+          for name in home fantasy wc matches standings clubs statistics legends rules; do
+            [ -s "screenshots/$name.png" ] || { echo "Missing or empty screenshot: $name.png"; exit 1; }
+          done
+          echo "All 9 screenshots captured."
 
       - name: ☁️ Upload to R2
         working-directory: ./frontend
