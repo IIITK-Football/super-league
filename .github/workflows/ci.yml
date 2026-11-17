@@ -5,7 +5,8 @@ name: CI
 # into main, with no bypass. Work happens directly on develop, where pushes run a light pass of the same jobs for
 # visibility (not a merge requirement).
 #
-#   hygiene  Git hygiene of the commits being merged (the same code as the local hooks)
+#   hygiene  Git hygiene of the commits being merged (the same code as the local hooks), counted from the point the
+#            workflow was adopted (tests/gate-baseline.json); earlier history cannot be rewritten and is not judged
 #   records  backlog validity, every status change since the base, walkthroughs of finished items
 #   tests    the strict test rules; develop gets only the cheap mapped-and-covered rules, while main (phase
 #            completion), the nightly run and manual runs get the full rules and every test group
@@ -42,9 +43,11 @@ jobs:
           set -euo pipefail
           EVENT='${{ github.event_name }}'
           if [ "$EVENT" = 'pull_request' ]; then
-            node scripts/hooks/hygiene.mjs "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}"
+            BASE="$(node scripts/work/range-base.mjs "origin/${{ github.base_ref }}")"
+            node scripts/hooks/hygiene.mjs "$BASE" "${{ github.event.pull_request.head.sha }}"
           elif [ "$EVENT" = 'push' ] && [ -n '${{ github.event.before }}' ] && [ '${{ github.event.before }}' != '0000000000000000000000000000000000000000' ]; then
-            node scripts/hooks/hygiene.mjs '${{ github.event.before }}' '${{ github.sha }}'
+            BASE="$(node scripts/work/range-base.mjs '${{ github.event.before }}')"
+            node scripts/hooks/hygiene.mjs "$BASE" '${{ github.sha }}'
           else
             echo "No commit range to judge for a $EVENT run."
           fi
@@ -99,10 +102,10 @@ jobs:
           EVENT='${{ github.event_name }}'
           if [ "$EVENT" = 'pull_request' ]; then
             TARGET='${{ github.base_ref }}'
-            BASE="origin/$TARGET"
+            BASE="$(node scripts/work/range-base.mjs "origin/$TARGET")"
           elif [ "$EVENT" = 'push' ] && [ -n '${{ github.event.before }}' ] && [ '${{ github.event.before }}' != '0000000000000000000000000000000000000000' ]; then
             TARGET='${{ github.ref_name }}'
-            BASE='${{ github.event.before }}'
+            BASE="$(node scripts/work/range-base.mjs '${{ github.event.before }}')"
           else
             echo "Full run: the strict file rules apply to a range of changes, so there is nothing to check here."
             exit 0
