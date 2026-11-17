@@ -9,7 +9,7 @@
 //       text: "..."
 //   ---
 //   free Markdown body, kept byte for byte
-const KEY_ORDER = ['id', 'title', 'phase', 'status', 'legacy', 'dependsOn', 'decisions', 'groups', 'plan', 'walkthrough', 'checks'];
+const KEY_ORDER = ['id', 'title', 'phase', 'status', 'legacy', 'startCommit', 'dependsOn', 'decisions', 'groups', 'plan', 'walkthrough', 'checks'];
 
 function parseScalar(raw) {
   const v = raw.trim();

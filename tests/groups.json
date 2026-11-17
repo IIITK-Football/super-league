@@ -27,16 +27,18 @@
       ]
     },
     "config": {
-      "description": "Environment examples and startup validation for frontend and backend",
+      "description": "Environment examples and startup validation for frontend and backend; type check of the backend",
       "owner": "platform",
       "paths": [
         "**/.env.example",
+        "backend/**/*.ts",
         "backend/app/**",
         "backend/instrumentation.ts",
         "backend/lib/env.ts",
         "backend/lib/supabase/**",
         "backend/middleware.ts",
         "backend/supabase/config.toml",
+        "backend/tsconfig.json",
         "frontend/.dev.vars.example",
         "frontend/functions/**",
         "frontend/scripts/check-bundle.mjs",
@@ -62,6 +64,15 @@
             "vitest",
             "run",
             "src/lib"
+          ]
+        },
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "tsc",
+            "--noEmit"
           ]
         }
       ],

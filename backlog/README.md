@@ -18,6 +18,8 @@ pnpm work approve SL-xxx           OWNER: approve the plan (docs/plans/SL-xxx.md
 pnpm work ready SL-xxx             Definition of Ready, then ready
 pnpm work start SL-xxx             ready -> in-progress
 pnpm work attest SL-xxx C2 [note]  OWNER: attest a manual check
+pnpm work done SL-xxx [--base <ref>]  Definition of Done: runs the item's groups and checks, records
+                                   evidence, writes docs/walkthroughs/SL-xxx.md, marks it done when complete
 pnpm work check [--base <ref>]     what CI runs
 ```
 
