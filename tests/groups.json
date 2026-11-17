@@ -98,6 +98,7 @@
       "description": "Repository scripts, test-group runner, commit hooks, workspace config",
       "owner": "platform",
       "paths": [
+        ".claude/settings.json",
         ".githooks/**",
         ".github/workflows/**",
         ".gitmessage",
@@ -121,14 +122,15 @@
         }
       ],
       "covers": [
-        "scripts/**",
-        "tests/groups.json",
-        "tests/gate-exemptions.json",
+        ".claude/settings.json",
         ".githooks/**",
-        ".gitmessage",
-        "pnpm-workspace.yaml",
         ".github/workflows/**",
-        ".nvmrc"
+        ".gitmessage",
+        ".nvmrc",
+        "pnpm-workspace.yaml",
+        "scripts/**",
+        "tests/gate-exemptions.json",
+        "tests/groups.json"
       ],
       "testPaths": [
         "backend/tests/tooling/**"
