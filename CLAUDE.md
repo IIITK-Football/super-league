@@ -2,9 +2,9 @@
 
 ## Purpose and working mandate
 
-This is the concise operating brief for Claude Code. The ordered work and acceptance criteria live in [`backlog.md`](./backlog.md); read the active item and only the directly relevant code before each task. The repository is a functioning but fragmented product that needs a broad architectural and product redesign.
+This is the concise operating brief for Claude Code. The ordered work and acceptance criteria live in the tracked backlog under [`backlog/`](./backlog/README.md) (one file per item; run `pnpm work status`); read the active item and only the directly relevant code before each task. The repository is a functioning but fragmented product that needs a broad architectural and product redesign.
 
-The user wants Claude to implement the entire backlog autonomously with broad engineering freedom, using Claude Code's `opusplan` mode: Opus plans and Sonnet executes. Work sequentially through the dependency-ordered issues and phases, then continue to the next issue without waiting for a new prompt. Iterate until each item's acceptance checks are satisfied. Use tests first where practical, run the relevant grouped tests, inspect the result, fix failures, and repeat. Do not stop after only producing a plan or completing one phase when more authorized work remains. Do not ask for confirmation on routine reversible implementation choices; record reasonable assumptions and continue. If a session or context limit interrupts the work, leave a precise progress checkpoint and resume from it next session. Keep changes reviewable and make a focused atomic local commit on the existing `develop` branch for each completed feature or independently reviewable backlog item (with its tests/docs) after its checks pass, using a readable Conventional Commit message with no backlog or `SL` references (those live in the backlog file only); do not use per-phase branches and do not batch a phase into one commit. Summarize the phase's commits at each phase boundary. Never push, merge, or deploy without explicit approval.
+The user wants Claude to implement the entire backlog autonomously with broad engineering freedom, using Claude Code's `opusplan` mode: Opus plans and Sonnet executes. Work sequentially through the dependency-ordered issues and phases, then continue to the next issue without waiting for a new prompt. Iterate until each item's acceptance checks are satisfied. Use tests first where practical, run the relevant grouped tests, inspect the result, fix failures, and repeat. Do not stop after only producing a plan or completing one phase when more authorized work remains. Do not ask for confirmation on routine reversible implementation choices; record reasonable assumptions and continue. If a session or context limit interrupts the work, leave a precise progress checkpoint and resume from it next session. Keep changes reviewable and make a focused atomic local commit on the existing `develop` branch for each completed feature or independently reviewable backlog item (with its tests/docs) after its checks pass, using a readable Conventional Commit message with no backlog or `SL` references (those live under `backlog/` only); do not use per-phase branches and do not batch a phase into one commit. Summarize the phase's commits at each phase boundary. Never push, merge, or deploy without explicit approval. Publishing is by pull request from a `ready/<name>` branch (see "Workflow gates").
 
 ## Product vocabulary and fixed decisions
 
@@ -40,8 +40,8 @@ Enforce these boundaries in server authorization and Supabase RLS wherever direc
 - Current role values include legacy `default`, `editor`, `captain`, `dictator`, and `admin`; the UI labels `admin` as “Scorer” even though its permissions are broad. Replace these safely with the five-role model: `editor` stays editor (newsletter-only); legacy `admin` is never auto-promoted and needs a reviewed per-person assignment before migration.
 - There are no first-class card events, lineups, editable bracket mapping, or reusable account-linked player identity in the baseline.
 - R2 configuration is scattered across API routes, media helpers, frontend, middleware, and docs. There is no Wrangler Worker project or local R2 emulation yet.
-- The checked-in frontend environment example is the only `.env.example`; `pnpm` is the user's package manager, though npm lockfiles also exist.
-- `.github/workflows/og-screenshots.yml` is the only workflow. There is no tracked application test suite, migration workflow, pre-commit setup, or CODEOWNERS file.
+- `pnpm` is the package manager (each package keeps its own lockfile); environment examples exist for the frontend, backend and Pages Functions.
+- Workflows: `ci.yml` (the required `gate` check), `db-deploy.yml` (the only path to hosted databases), and `og-screenshots.yml` (currently failing on the Ubuntu 26.04 / Playwright mismatch, tracked as SL-100; never a required check). The tracked test suite is organised in test groups (`tests/groups.json`). CODEOWNERS is still absent (SL-081).
 - The user reports the tablet navigation issue and poor visual quality. Reproduce and verify these during the final frontend phase rather than claiming the repo-only review verified them visually.
 
 ## Main product outcomes
@@ -56,7 +56,7 @@ Enforce these boundaries in server authorization and Supabase RLS wherever direc
 
 ## Required sequence
 
-Follow [`backlog.md`](./backlog.md) in order. The key dependencies are:
+Follow the backlog in order. The key dependencies are:
 
 1. Reliable local Supabase setup, deterministic seed, and test foundation.
 2. Formal division/season/player/match model and the five-role authorization policy.
@@ -69,9 +69,13 @@ Follow [`backlog.md`](./backlog.md) in order. The key dependencies are:
 9. Frontend consolidation, design system, responsive fixes, and product redesign. Frontend product work remains last.
 10. Separately reviewed production cutover and legacy retirement.
 
+The order is enforced: no item in a later phase can become ready while an earlier phase still has unfinished items (`pnpm work` phase gating).
+
 Do not perform a giant rewrite. Preserve compatibility until replacement behavior passes parity checks. Use grouped tests relevant to the change; add or update tests for every behavior. Continue iterating until acceptance checks pass and inspect the UI in relevant viewports when the active work is frontend. Report concrete evidence and any remaining blocker.
 
 ## Safety boundaries
+
+These are also enforced by the Claude Code guard (`.claude/settings.json`, `scripts/work/claude-guard.mjs`) and by CI. If a command is blocked, report it instead of looking for another way to run it.
 
 - All local Supabase development and validation must target this repository's local project on port **54322**. Never use linked/remote Supabase commands during implementation, and never connect to or mutate hosted production.
 - Never reset, seed, migrate, or otherwise destructively alter a database unless the target is verified as this project's local database. Do not delete user data or media as a shortcut.
@@ -80,12 +84,17 @@ Do not perform a giant rewrite. Preserve compatibility until replacement behavio
 - Do not print or commit secrets from `.env*`, Supabase state, CI, or Cloudflare. Private R2 credentials must remain server-side and out of `VITE_*` variables.
 - Do not remove existing R2 URLs or media access until replacements and a verified migration/cutover are ready.
 - Use `pnpm`; do not suggest `npm` or `nano`.
-- Do not mark a backlog item complete until its acceptance checks pass and the relevant tests/checks have been run.
 
-## Session workflow
+## Workflow gates
 
-At the start of each work session, read this file, the active backlog item, and only the code directly related to that item. State the issue, evidence, narrow scope, and acceptance checks before editing. Then implement and iterate without waiting for routine approval. If a genuinely blocking product choice remains, make independent progress elsewhere and ask one focused question. Update the backlog with verified evidence as work completes; keep the backlog ordered and do not start frontend product redesign before its phase.
+The gates are enforced by tooling, not by this file: [`docs/process/workflow.md`](./docs/process/workflow.md) describes them. In short:
+
+- **Definition of Ready** (`pnpm work ready SL-xxx`): dependencies and open decisions resolved, test groups and acceptance checks defined, a plan in `docs/plans/SL-xxx.md` that the owner approved, and no earlier phase still open. **Definition of Done** (`pnpm work done SL-xxx`): the item's groups and checks run on a clean tree, manual checks attested by the owner, and a completed walkthrough in `docs/walkthroughs/`. Item status is changed only by these commands.
+- **Tests**: every changed file must be mapped, covered by an active test group, and come with a changed test (`node scripts/test-groups.mjs check`). Git hooks (installed by `pnpm install`) and CI apply the same rules; there is no bypass switch, flag or variable. Do not decide for yourself that a check can be skipped.
+- **Owner-only**: `pnpm work approve` and `pnpm work attest` are the owner's decisions; merging pull requests and GitHub settings are the owner's too.
+- **Publishing**: push a `ready/<name>` branch and open a pull request; the required `gate` check must pass.
+- At the start of a session, read this file, the active item (`pnpm work status`), and only the code directly related to it. State the issue, evidence, narrow scope, and acceptance checks before editing. If a genuinely blocking product choice remains, make independent progress elsewhere and ask one focused question. Do not start frontend product redesign before its phase.
 
 ## Superpowers
 
-Superpowers skills are used for process; project preferences that adapt them: @.claude/superpowers-workflow.md
+Superpowers skills (brainstorming, test-driven development, debugging, code review) are used for method only; they enforce nothing, and the gates above do. Plans and walkthroughs are tracked in `docs/plans/` and `docs/walkthroughs/`, not in git-ignored folders.
