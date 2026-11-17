@@ -70,8 +70,12 @@ describe('og-screenshots workflow', () => {
     expect(listed.sort()).toEqual([...routes].sort());
   });
 
-  it('does not capture /clubs (it is not a real route: the site redirects it to the home page)', () => {
-    expect(script).not.toMatch(/'clubs'/);
+  it('only captures routes that exist in the app: a route the router does not know redirects to the home page and would overwrite R2 with a copy of it', () => {
+    const app = readFileSync(join(root, 'frontend/src/App.jsx'), 'utf8');
+    const known = new Set([...app.matchAll(/path="\/([^"]*)"/g)].map((m) => m[1].replace(/\/:.*$/, '')));
+    const routes = [...script.match(/const routes = \[([^\]]*)\]/)![1].matchAll(/'([^']*)'/g)].map((m) => m[1]);
+    for (const r of routes) expect(known.has(r), `/${r} is a route in App.jsx`).toBe(true);
+    for (const gone of ['clubs', 'statistics', 'legends']) expect(routes).not.toContain(gone);
   });
 
   it('waits for a normal page load, not network idle (the home page keeps streaming a video, so network idle times out)', () => {
