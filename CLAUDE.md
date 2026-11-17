@@ -96,6 +96,6 @@ These are also enforced by the Claude Code guard (`.claude/settings.json`, `scri
 - **Owner-only:** `pnpm work attest` records the owner's attestation of a manual check (a hosted step). It is the owner's statement, so when the agent runs it the owner gets a confirmation prompt, and the agent attests only what the recorded evidence supports; `pnpm work approve` is optional and stays the owner's. Anything touching `main`, production or GitHub and Supabase settings is the owner's.
 - There is no bypass flag, variable or switch for any of this, and the safety boundaries above are enforced by the guard in `.claude/settings.json`. At the start of a session read this file and `pnpm work status`; state the issue, narrow scope and acceptance checks before editing. If a genuinely blocking product choice remains, make independent progress elsewhere and ask one focused question. Do not start frontend product redesign before its phase.
 
-## Superpowers
+## Plans and walkthroughs
 
-Superpowers skills (brainstorming, test-driven development, debugging, code review) are used for method only; they enforce nothing, and the gates above do. Plans and walkthroughs are tracked in `docs/plans/` and `docs/walkthroughs/`, not in git-ignored folders.
+Plans and walkthroughs are tracked in `docs/plans/` and `docs/walkthroughs/`, not in git-ignored folders.
