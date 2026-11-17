@@ -63,4 +63,4 @@ There is no bypass variable or flag. A person can still run `git commit --no-ver
 
 ## CI
 
-`.github/workflows/ci.yml` installs with `pnpm install --frozen-lockfile` (same lockfiles and package manager as local), picks groups with the runner (`affected --base <ref>` on pull requests and pushes, `all` nightly and on manual dispatch), starts local Supabase only when `database` is selected, and writes a per-group summary (ran / pending / not affected) to the job summary. CI is the final authority.
+`.github/workflows/ci.yml` ends in one required check named `gate` that succeeds only if the `hygiene`, `records`, `tests` and `audit` jobs all succeeded (a skipped job fails it). `tests` installs with `pnpm install --frozen-lockfile`, applies the strict rules to the pull request's changed files, then runs the affected groups (`all` groups for pull requests into `main`, nightly and on manual dispatch), starts local Supabase only when a selected group needs it, and writes a per-group summary. CI is the final authority; see [`docs/process/workflow.md`](process/workflow.md) for every gate.
