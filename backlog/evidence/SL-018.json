@@ -1,0 +1,88 @@
+{
+  "head": "17b8a3cf552c723c51964b4d2d7e57ccc3827482",
+  "tree": "ab6d2af872a3037c3785f012e7b2c3b1f3fb2387",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-17T18:16:07.196Z",
+  "groups": [
+    {
+      "name": "database",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": ".",
+          "cmd": "bash scripts/local-db.sh test",
+          "exit": 0,
+          "ms": 3231
+        }
+      ]
+    },
+    {
+      "name": "auth-identity",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/auth",
+          "exit": 0,
+          "ms": 5131
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run src/lib/__tests__/authRules.test.js src/lib/__tests__/authApi.test.js src/lib/__tests__/authApi.captcha.test.js src/lib/__tests__/authApi.reauth.test.js src/pages/__tests__ src/components/__tests__",
+          "exit": 0,
+          "ms": 2678
+        }
+      ]
+    },
+    {
+      "name": "config",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/config",
+          "exit": 0,
+          "ms": 998
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run src/lib",
+          "exit": 0,
+          "ms": 1148
+        },
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec tsc --noEmit",
+          "exit": 0,
+          "ms": 1314
+        }
+      ]
+    },
+    {
+      "name": "tooling",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/tooling",
+          "exit": 0,
+          "ms": 9016
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "database",
+    "auth-identity",
+    "config",
+    "tooling"
+  ],
+  "commandChecks": {},
+  "id": "SL-018",
+  "base": "9f23cfb"
+}

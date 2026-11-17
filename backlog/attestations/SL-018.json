@@ -1,0 +1,11 @@
+{
+  "id": "SL-018",
+  "attestations": [
+    {
+      "checkId": "C6",
+      "by": "oreoruuser",
+      "at": "2026-11-17T18:13:05.922Z",
+      "note": "Applied via the workflow to staging (run 44082090922, 28 checks plus 11 synthetic-account checks passed) and to production (run 44135595058, exactly 20261117000000 and 20261118000000). Production verification: verify-captain-rpc.sql 11 of 11 (owner-reported) and anonymous probe CLOSED on both overloads (independent). A real captain save on production was not tested."
+    }
+  ]
+}
