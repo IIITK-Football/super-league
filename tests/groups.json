@@ -106,6 +106,7 @@
         ".pre-commit-config.yaml",
         "pnpm-workspace.yaml",
         "scripts/**",
+        "tests/gate-baseline.json",
         "tests/gate-exemptions.json",
         "tests/groups.json"
       ],
@@ -129,6 +130,7 @@
         ".nvmrc",
         "pnpm-workspace.yaml",
         "scripts/**",
+        "tests/gate-baseline.json",
         "tests/gate-exemptions.json",
         "tests/groups.json"
       ],
