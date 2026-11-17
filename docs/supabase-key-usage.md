@@ -1,0 +1,42 @@
+# Supabase key usage audit
+
+Where each Supabase API key is used and why. The list of files using the **secret key** is enforced by `backend/tests/config/supabase-key-usage.test.ts`: adding a file there is a deliberate, reviewed step. Moving to publishable and secret keys changes **no privilege**; Row Level Security still decides what the publishable key can do.
+
+## Publishable key (low privilege)
+- **Browser** (`frontend/src/lib/supabase.js`): the only Supabase client in the frontend. Safe to expose; protected by RLS.
+- **Pages Function** (`frontend/functions/_middleware.js`): reads one newsletter row for share previews. Sends the key as `apikey` only.
+- **Backend** (about 45 route files, `middleware.ts`, the login route): user-level clients that use the caller's session or run public reads.
+
+## Secret key (bypasses RLS): 30 backend route files
+| Group | Files | Why it needs the secret key |
+|---|---|---|
+| Cron sync, protected by `CRON_SECRET` | `wc/sync/{groups,matches,players,single,teams}` | Server-to-server, no user |
+| Cron grading, protected by `CRON_SECRET` | `wc/grade/{awards,champion,finals,groups,quarter-finals,round-of-16,semi-finals}` | Grades every user's predictions |
+| Admin grading | `admin/predictions/{grade,regrade-all}` | Writes other users' rows |
+| Role-checked writes | `admin/team-registrations`, `captain/team-branding`, `players`, `players/[player_id]` | Verify the caller, then write with elevated access. **To downscope** once RLS and role policies are redesigned |
+| User-facing routes | `leaderboard`, `wc/{leaderboard,teams,players,champion-predictors,flair}`, `wc/predictions/{awards,groups,knockouts,knockouts/submit}` | Use elevated access today although most could run as the user under RLS. **Candidates to downscope** |
+| **Unauthenticated today** | `wc/sync/manual`, `wc/sync/brazil` | Use elevated access with **no authentication check** |
+
+The secret key is never used by `middleware.ts`, shared `lib` code, or anything in the frontend (tested).
+
+## Findings to fix in the authorization work (not changed by the key migration)
+1. `wc/sync/manual` and `wc/sync/brazil` run with elevated access and no authentication.
+2. `wc/predictions/groups`, `wc/predictions/knockouts/submit` and `wc/flair` trust a **client-supplied `user_id`** while using elevated access, so any caller could write for any user.
+3. Fourteen routes used to fall back to the publishable (formerly anon) key when the elevated key was missing, silently changing their behaviour. They now fail with a clear error naming the variable. Make sure each hosted environment has the secret key set before deploying.
+
+## Removed variables
+- `SUPABASE_ANON_KEY` -> `SUPABASE_PUBLISHABLE_KEY`; `SUPABASE_SERVICE_ROLE_KEY` -> `SUPABASE_SECRET_KEY`; `VITE_SUPABASE_ANON_KEY` -> `VITE_SUPABASE_PUBLISHABLE_KEY`.
+- `ADMIN_SECRET_KEY`: no code referenced it; remove it from your local env files and any host settings.
+
+## Rollout (owner actions; legacy and new keys work side by side until the legacy keys are disabled)
+1. **Local**: rename the variables in your git-ignored env files and use the keys printed by `pnpm exec supabase status`. Verify with `pnpm test:all`.
+2. **Staging**: in the staging dashboard (Project Settings -> API Keys) confirm the publishable key and create a **named secret key**; configure your local staging env files; run the checks below.
+3. **Production**, in this order, each step your approval:
+   1. Dashboard: confirm the publishable key and create a **named secret key**. Legacy keys keep working.
+   2. Add the **new** variables to Vercel (backend) and Cloudflare Pages (build variables and Functions variables) while **keeping the old ones**.
+   3. Deploy the new code. Rollback is "redeploy the previous build", which still uses the old variables.
+   4. Verify (below).
+   5. Remove the old variables from Vercel, Pages and your local files.
+   6. Only then check whether the legacy keys still show recent use in the dashboard and **disable them last**. Check whether your dashboard lets you re-enable them; if not, treat this step as irreversible.
+
+**Checks with the new keys before disabling legacy keys:** public pages load data and live scores update; password and Google sign-in work; a newsletter share preview resolves (Pages Function); one role-checked write (captain branding or an admin match update) and one cron-style route with `CRON_SECRET` succeed (backend secret key); an admin grading call works on staging. The Supabase API logs show no new 401 responses. Any 401 after deploying means a variable is missing: fix it before removing anything.

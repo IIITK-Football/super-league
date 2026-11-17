@@ -14,7 +14,7 @@ Both jobs first prove the migrations and seed on an empty **local** database (th
 ### Supabase dashboard
 1. Create the staging project **and leave it empty**: do not paste SQL or run migrations in it. The workflow's first run applies all three migrations and the seed. (Same region as production; keep the database password in your password manager.)
 2. Note each project's **Reference ID** (Project Settings → General). They are identifiers, not secrets.
-3. Create two access tokens (Account → Access Tokens): one for staging, one for production, each copied once straight into GitHub. A token carries your account's access, so treat it as highly sensitive; use scoped tokens if your dashboard offers them.
+3. Create two access tokens (Account → Access Tokens): one for staging, one for production, each copied once straight into GitHub. A token carries your account's access, so treat it as highly sensitive; use scoped tokens if your dashboard offers them. These are **CLI/migration credentials**, not Supabase API keys: the application's publishable and secret keys are separate and are listed in [`environment.md`](environment.md).
 4. Set staging's Auth settings by hand (Confirm email, minimum password 8, Secure password change, redirect URLs, SMTP, Turnstile): the workflow deploys the database only, never Auth settings (`config push` is deliberately not used because it would overwrite dashboard settings).
 5. Free projects pause when idle. A paused staging project makes the staging job fail until you resume it.
 
