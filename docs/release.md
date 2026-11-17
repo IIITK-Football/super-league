@@ -123,6 +123,8 @@ Actions → *Database deploy* → Run workflow on `develop` or `main`. It defaul
 
 ## If something fails
 - **Staging job fails:** nothing in production is affected. Fix forward with a new migration. A paused project (resume it) or a network error from the runner (free-plan direct connections can be IPv6-only; tell the assistant to add the pooler connection) are the usual causes.
+- **`FATAL: password authentication failed` at "Preview pending migrations" (or the production equivalent):** the *Link* and *Verify the linked project* steps passed, so the access token and project reference are right; the `SUPABASE_DB_PASSWORD` secret in that GitHub environment does not match the project's database password. Reset the database password in Supabase (Project Settings → Database), use a long alphanumeric one so no character needs URL-encoding, update the secret in the **same** environment (`Database Preview` for staging, `Database Production` for production), then re-run the failed job. Never paste the password anywhere else.
+- **CI frontend tests crash on the runner but pass locally:** compare `.nvmrc` with your local Node. The tooling test `node-version.test.ts` checks that `.nvmrc` satisfies every installed dependency's Node requirement.
 - **Production job fails:** each migration runs in a transaction, so a failing one changes nothing. Read the job log, fix forward with a new migration, and use `docs/rollback/` for the auth triggers if needed.
 - **Seed refuses to run:** the seed aborts if the database has more than 20 accounts outside its own fixtures. That is the safeguard against seeding real data; it should never trigger on staging.
 - **Rolling back:** database changes are forward-fix only, backed by your manual export. There is no automatic revert.
