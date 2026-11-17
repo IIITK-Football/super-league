@@ -196,6 +196,12 @@ describe('everyday commits and pushes stay fast (rigid validation happens at pha
     expect(src).toMatch(/checkRange/);
     expect(src).toMatch(/checkPushRefs/);
   });
+
+  it('pre-push judges only what came after the workflow was adopted, exactly as CI does (older history cannot be rewritten)', () => {
+    const src = read('scripts/hooks/pre-push.mjs');
+    expect(src).toMatch(/rangeBase/);
+    expect(src).toMatch(/range-base\.mjs/);
+  });
 });
 
 describe('no AI attribution in commits (the repository history shows the owner as the only author)', () => {

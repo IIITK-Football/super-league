@@ -5,6 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { checkPushRefs, checkRange } from './hygiene.mjs';
+import { rangeBase } from '../work/range-base.mjs';
 
 const top = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).stdout.trim();
 const git = (args) => spawnSync('git', args, { cwd: top, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
@@ -21,8 +22,15 @@ for (const line of lines) {
   const [, localSha, , remoteSha] = line.trim().split(/\s+/);
   // A new branch is judged against develop on the remote; an update against what the remote already has.
   const isNew = /^0+$/.test(remoteSha);
-  const base = isNew ? git(['merge-base', localSha, 'origin/develop']).stdout.trim() : remoteSha;
-  if (!base) fail(['cannot find where this branch starts (fetch origin first).']);
+  const start = isNew ? git(['merge-base', localSha, 'origin/develop']).stdout.trim() : remoteSha;
+  if (!start) fail(['cannot find where this branch starts (fetch origin first).']);
+  // Judge only what came after the workflow was adopted, exactly as CI does: older history cannot be rewritten.
+  let base;
+  try {
+    base = rangeBase(start, { root: top });
+  } catch {
+    fail([`cannot find ${start.slice(0, 7)} locally (fetch origin first).`]);
+  }
   const problems = checkRange(base, localSha, { cwd: top });
   if (problems.length) fail(problems);
 }
