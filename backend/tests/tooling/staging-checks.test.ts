@@ -151,7 +151,7 @@ describe('verifyTarget', () => {
 describe('runChecks refuses a wrong target before any request', () => {
   it('makes no request at all for production', async () => {
     const s = fakeStaging();
-    await expect(runChecks({ env: { ...goodEnv(), SUPABASE_URL: `https://${PROD}.supabase.co` }, fetchImpl: s.fetchImpl, log })).rejects.toThrow(/refus/i);
+    await expect(runChecks({ env: { ...goodEnv(), SUPABASE_URL: `https://${PROD}.supabase.co` }, fetchImpl: s.fetchImpl as unknown as typeof fetch, log })).rejects.toThrow(/refus/i);
     expect(s.calls).toEqual([]);
   });
 });
@@ -159,7 +159,7 @@ describe('runChecks refuses a wrong target before any request', () => {
 describe('runChecks against a healthy staging', () => {
   it('passes every check, and leaves nothing behind', async () => {
     const s = fakeStaging();
-    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl, log });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(results.filter((r: { status: string }) => r.status === 'FAIL')).toEqual([]);
     for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /email/i, /dictator/i, /recovery/i, /clean/i]) {
       expect(by(results, re)?.status, String(re)).toBe('PASS');
@@ -172,14 +172,14 @@ describe('runChecks against a healthy staging', () => {
 
   it('only ever talks to the staging host', async () => {
     const s = fakeStaging();
-    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl, log });
+    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(s.calls.length).toBeGreaterThan(10);
     for (const c of s.calls) expect(new URL(c.url).host).toBe(`${STAGING}.supabase.co`);
   });
 
   it('creates only synthetic accounts, never sends mail (confirmed on creation), and removes them', async () => {
     const s = fakeStaging();
-    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl, log });
+    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     const creates = s.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/auth/v1/admin/users'));
     expect(creates.length).toBeGreaterThanOrEqual(5);
     for (const c of creates) {
@@ -191,7 +191,7 @@ describe('runChecks against a healthy staging', () => {
 
   it('uses the secret key only for administration, and a user token with the publishable key for user-level calls', async () => {
     const s = fakeStaging();
-    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl, log });
+    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     for (const c of s.calls.filter((x) => x.url.includes('/rpc/captain_update_team_member') && x.headers.authorization)) {
       expect(c.headers.apikey).toBe(PUBLISHABLE);
       expect(c.headers.authorization).not.toContain(SECRET);
@@ -201,7 +201,7 @@ describe('runChecks against a healthy staging', () => {
 
   it('never prints a key or a password', async () => {
     const s = fakeStaging();
-    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl, log });
+    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(output()).not.toContain(SECRET);
     expect(output()).not.toContain(PUBLISHABLE);
     expect(output()).not.toMatch(/password[^\n]*[:=]\s*\S{8,}/i);
@@ -211,7 +211,7 @@ describe('runChecks against a healthy staging', () => {
 describe('runChecks detects a broken staging', () => {
   it('fails the captain checks when the function is open to anyone', async () => {
     const s = fakeStaging({ openRpc: true });
-    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl, log });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(by(results, /other team/i)?.status).toBe('FAIL');
     expect(by(results, /normal user/i)?.status).toBe('FAIL');
     expect(by(results, /without the captain role/i)?.status).toBe('FAIL');
@@ -221,13 +221,13 @@ describe('runChecks detects a broken staging', () => {
 
   it('fails the CAPTCHA check when password sign-in works without a token', async () => {
     const s = fakeStaging({ captchaEnforced: false });
-    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl, log });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(by(results, /captcha/i)?.status).toBe('FAIL');
   });
 
   it('cleans up even when a request throws part-way through, and reports the failure', async () => {
     const s = fakeStaging({ failAtRpc: true });
-    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl, log });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(results.some((r: { status: string }) => r.status === 'FAIL')).toBe(true);
     expect(s.users.size).toBe(0);
     expect(s.regs.size).toBe(0);
@@ -237,7 +237,7 @@ describe('runChecks detects a broken staging', () => {
     const s = fakeStaging();
     await s.fetchImpl(`https://${STAGING}.supabase.co/auth/v1/admin/users`, { method: 'POST', headers: { apikey: SECRET }, body: JSON.stringify({ email: 'sl-check-old@iiitkottayam.ac.in', password: 'x', email_confirm: true }) });
     await s.fetchImpl(`https://${STAGING}.supabase.co/auth/v1/admin/users`, { method: 'POST', headers: { apikey: SECRET }, body: JSON.stringify({ email: 'lamb@iiitkottayam.ac.in', password: 'x', email_confirm: true }) });
-    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl, log });
+    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     const left = [...s.users.values()].map((u) => u.email);
     expect(left).toEqual(['lamb@iiitkottayam.ac.in']); // seeded and real accounts are never touched
   });
@@ -245,7 +245,7 @@ describe('runChecks detects a broken staging', () => {
 
 describe('loadEnvText', () => {
   it('reads values for the script only, never exposing them in an error', () => {
-    const env = loadEnvText(`# c\nSUPABASE_URL=https://${STAGING}.supabase.co\nexport SUPABASE_SECRET_KEY="${SECRET}"\nALLOW_REMOTE_SUPABASE='true'\n`);
+    const env: Record<string, string> = loadEnvText(`# c\nSUPABASE_URL=https://${STAGING}.supabase.co\nexport SUPABASE_SECRET_KEY="${SECRET}"\nALLOW_REMOTE_SUPABASE='true'\n`);
     expect(env.SUPABASE_SECRET_KEY).toBe(SECRET);
     expect(env.ALLOW_REMOTE_SUPABASE).toBe('true');
   });

@@ -24,7 +24,7 @@ beforeEach(() => {
 describe('envStatus', () => {
   it('reports set, empty and missing by name', () => {
     write('backend/.env.local', `SUPABASE_URL=http://127.0.0.1:54321\nSUPABASE_PUBLISHABLE_KEY=${KEY}\nSUPABASE_SECRET_KEY=\n`);
-    const r = envStatus(root).find((t: { file: string }) => t.file === 'backend/.env.local');
+    const r = (envStatus(root) as any[]).find((t: { file: string }) => t.file === 'backend/.env.local');
     const by = Object.fromEntries(r.vars.map((v: { name: string; state: string }) => [v.name, v.state]));
     expect(r.exists).toBe(true);
     expect(by.SUPABASE_URL).toBe('set');
@@ -33,14 +33,14 @@ describe('envStatus', () => {
   });
 
   it('reports a file that does not exist, with every variable missing', () => {
-    const r = envStatus(root).find((t: { file: string }) => t.file === 'frontend/.env.staging.local');
+    const r = (envStatus(root) as any[]).find((t: { file: string }) => t.file === 'frontend/.env.staging.local');
     expect(r.exists).toBe(false);
     expect(r.vars.every((v: { state: string }) => v.state === 'missing')).toBe(true);
   });
 
   it('understands quotes, export, comments and spaces', () => {
     write('frontend/.env.local', `# comment\nexport VITE_SUPABASE_URL="http://127.0.0.1:54321"\nVITE_API_URL = 'x'\nVITE_TURNSTILE_SITE_KEY=''\n`);
-    const r = envStatus(root).find((t: { file: string }) => t.file === 'frontend/.env.local');
+    const r = (envStatus(root) as any[]).find((t: { file: string }) => t.file === 'frontend/.env.local');
     const by = Object.fromEntries(r.vars.map((v: { name: string; state: string }) => [v.name, v.state]));
     expect(by.VITE_SUPABASE_URL).toBe('set');
     expect(by.VITE_API_URL).toBe('set');
@@ -49,7 +49,7 @@ describe('envStatus', () => {
 
   it('lists the names of other variables a file defines (never their values), to spot a naming mix-up', () => {
     write('backend/.env.staging.local', `STAGING_SUPABASE_URL=https://example.test\nSTAGING_SECRET=${SECRET}\nSUPABASE_URL=x\n`);
-    const r = envStatus(root).find((t: { file: string }) => t.file === 'backend/.env.staging.local');
+    const r = (envStatus(root) as any[]).find((t: { file: string }) => t.file === 'backend/.env.staging.local');
     expect(r.others.sort()).toEqual(['STAGING_SECRET', 'STAGING_SUPABASE_URL']);
     expect(formatStatus(envStatus(root))).toMatch(/other names: .*STAGING_SECRET/);
     expect(formatStatus(envStatus(root))).not.toContain(SECRET);
