@@ -23,6 +23,7 @@ The secret key is never used by `middleware.ts`, shared `lib` code, or anything 
 1. `wc/sync/manual` and `wc/sync/brazil` run with elevated access and no authentication.
 2. `wc/predictions/groups`, `wc/predictions/knockouts/submit` and `wc/flair` trust a **client-supplied `user_id`** while using elevated access, so any caller could write for any user.
 3. Fourteen routes used to fall back to the publishable (formerly anon) key when the elevated key was missing, silently changing their behaviour. They now fail with a clear error naming the variable. Make sure each hosted environment has the secret key set before deploying.
+4. `captain_update_team_member` (7-argument) was executable by anonymous callers and checked nothing about the caller. Fixed by migration `20261118000000` (see `release.md`). Related, also fixed: `admin/team-registrations` used to upsert the `captain` role for the assigned user, silently replacing a dictator's or editor's role. It now upgrades only a default or missing role, keeps a dictator as a dictator, and refuses (409, before writing anything) to change an editor or legacy admin. Its caller check still accepts the legacy `admin` label as a dictator; that belongs to the reviewed role migration.
 
 ## Removed variables
 - `SUPABASE_ANON_KEY` -> `SUPABASE_PUBLISHABLE_KEY`; `SUPABASE_SERVICE_ROLE_KEY` -> `SUPABASE_SECRET_KEY`; `VITE_SUPABASE_ANON_KEY` -> `VITE_SUPABASE_PUBLISHABLE_KEY`.

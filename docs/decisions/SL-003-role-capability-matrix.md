@@ -70,7 +70,7 @@ Legend: **R** read, **C** create, **U** update, **D** delete, **P** publish, **o
 
 1. Scorer: no write on teams, players, rosters, accounts, roles, division/season config, editorial, or management.
 2. Editor: write only newsletter content; no other table, no match, team, player, or role access. Editor cannot delete newsletter items.
-3. Captain: no insert/delete on players or roster rows and no write to protected identity fields on any path; writes limited to the allow-list and the assigned team.
+3. Captain: no insert/delete on players or roster rows and no write to protected identity fields on any path; writes limited to the allow-list and the assigned team. **Captain access needs both:** the assignment to the team entry **and** the `captain` role. An assignment alone grants nothing, and the role alone grants nothing outside an assigned team. A dictator may act on any team. Implemented and tested for the player update function (`20261118000000_restrict_captain_update_team_member`); other captain paths must follow the same rule.
 4. Scorer/captain writes outside assignment fail.
 5. Configuration, assignments, and role changes require dictator.
 6. A hidden UI control is never authorization.
