@@ -92,11 +92,13 @@ describe('validateBacklog', () => {
     expect(backlog.validateBacklog(backlog.loadBacklog(root)).join('\n')).toMatch(/legacy-done is only for items closed before the workflow/);
   });
 
-  it('a ready or in-progress item needs groups and checks', () => {
+  it('only a finished item must have groups and checks: starting work needs neither', () => {
     item('SL-100', { status: 'in-progress' });
+    expect(backlog.validateBacklog(backlog.loadBacklog(root))).toEqual([]);
+    item('SL-101', { status: 'done' });
     const out = backlog.validateBacklog(backlog.loadBacklog(root)).join('\n');
-    expect(out).toMatch(/SL-100: in-progress items need at least one test group/);
-    expect(out).toMatch(/SL-100: in-progress items need acceptance checks/);
+    expect(out).toMatch(/SL-101: done items need at least one test group/);
+    expect(out).toMatch(/SL-101: done items need acceptance checks/);
   });
 
   it('checks need unique ids and a recognised verification', () => {
@@ -194,12 +196,32 @@ describe('Definition of Ready', () => {
   });
 });
 
+describe('starting work (light: order only)', () => {
+  it('needs no plan, approval, groups or checks', () => {
+    item('SL-100');
+    const bl = backlog.loadBacklog(root);
+    expect(backlog.startProblems(bl.items.get('SL-100'), bl)).toEqual([]);
+  });
+
+  it('still protects the order: dependencies, open decisions and earlier phases', () => {
+    item('SL-100', { phase: 1, status: 'in-progress', legacy: true });
+    item('SL-101', { phase: 1 });
+    item('SL-200', { phase: 2, dependsOn: ['SL-101'], decisions: ['D-01'] });
+    const bl = backlog.loadBacklog(root);
+    const out = backlog.startProblems(bl.items.get('SL-200'), bl).join('\n');
+    expect(out).toMatch(/depends on SL-101, which is not done/);
+    expect(out).toMatch(/decision D-01 is still open/);
+    expect(out).toMatch(/phase 1 is still open/);
+  });
+});
+
 describe('transitions', () => {
   const t = (from: string | null, to: string, extra: object = {}) =>
     backlog.transitionProblems(from, to, { bootstrap: false, ...extra });
 
   it('allows the normal path and a block', () => {
     expect(t('not-started', 'ready')).toEqual([]);
+    expect(t('not-started', 'in-progress')).toEqual([]);
     expect(t('ready', 'in-progress')).toEqual([]);
     expect(t('in-progress', 'done')).toEqual([]);
     expect(t('in-progress', 'blocked')).toEqual([]);
@@ -208,7 +230,6 @@ describe('transitions', () => {
   });
 
   it('refuses to skip steps, to reopen a finished item, or to invent legacy-done', () => {
-    expect(t('not-started', 'in-progress').join()).toMatch(/not-started to in-progress/);
     expect(t('not-started', 'done').join()).toMatch(/not-started to done/);
     expect(t('done', 'in-progress').join()).toMatch(/done to in-progress/);
     expect(t('legacy-done', 'in-progress').join()).toMatch(/legacy-done to in-progress/);

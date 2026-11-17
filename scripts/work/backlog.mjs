@@ -14,7 +14,7 @@ export const COMPLETE = ['done', 'legacy-done'];
 const PLAN_SECTIONS = ['Issue', 'Evidence', 'Scope', 'Acceptance checks', 'Tests', 'Rollback'];
 
 const EDGES = {
-  'not-started': ['ready'],
+  'not-started': ['ready', 'in-progress'],
   ready: ['in-progress', 'not-started'],
   'in-progress': ['done', 'blocked'],
   blocked: ['in-progress'],
@@ -91,9 +91,10 @@ export function validateBacklog(bl) {
     for (const d of meta.decisions ?? []) if (!decisionIds.has(d)) problems.push(`${id}: unknown decision ${d}`);
     for (const g of meta.groups ?? []) if (!bl.groups[g]) problems.push(`${id}: unknown group "${g}"`);
     problems.push(...checkProblems(id, meta.checks));
-    if (['ready', 'in-progress', 'done'].includes(meta.status)) {
-      if ((meta.groups ?? []).length === 0) problems.push(`${id}: ${meta.status} items need at least one test group`);
-      if ((meta.checks ?? []).length === 0) problems.push(`${id}: ${meta.status} items need acceptance checks`);
+    // Starting work is light; what proves an item is finished is demanded when it is finished (and at phase completion).
+    if (meta.status === 'done') {
+      if ((meta.groups ?? []).length === 0) problems.push(`${id}: done items need at least one test group`);
+      if ((meta.checks ?? []).length === 0) problems.push(`${id}: done items need acceptance checks`);
     }
   }
   for (const d of bl.decisions) {
@@ -110,6 +111,23 @@ export function phaseGateProblems(item, bl) {
   const byPhase = new Map();
   for (const o of open) byPhase.set(o.meta.phase, [...(byPhase.get(o.meta.phase) ?? []), o.meta.id]);
   return [...byPhase.entries()].map(([p, ids]) => `${item.meta.id}: phase ${p} is still open: ${ids.join(', ')}. Finish the current phase before starting the next.`);
+}
+
+// Starting work: only what protects the ORDER of the work. No plan, approval, test groups or checks are needed to
+// begin; those are demanded when the item (and its phase) is completed.
+export function startProblems(item, bl) {
+  const { meta } = item;
+  const problems = [];
+  for (const dep of meta.dependsOn ?? []) {
+    const d = bl.items.get(dep);
+    if (d && !COMPLETE.includes(d.meta.status)) problems.push(`${meta.id}: depends on ${dep}, which is not done`);
+  }
+  problems.push(...phaseGateProblems(item, bl));
+  for (const did of meta.decisions ?? []) {
+    const d = bl.decisions.find((x) => x.id === did);
+    if (d && d.status !== 'resolved') problems.push(`${meta.id}: decision ${did} is still open: ${d.question}`);
+  }
+  return problems;
 }
 
 export function planProblems(text) {

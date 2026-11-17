@@ -23,26 +23,61 @@ const splitSegments = (s) => s.split(/&&|\|\||[;|\n]|\$\(|`|\(|\)/).map((x) => x
 const PREFIXES = /^(?:(?:sudo|command|time|nohup|exec|builtin)\s+|[A-Za-z_][A-Za-z0-9_]*=\S*\s+|env\s+(?=[A-Za-z_]\w*=))+/;
 const norm = (seg) => seg.replace(PREFIXES, '').trim();
 
-const WRITE_VERB = new RegExp(
-  [
-    String.raw`(?:^|[^0-9&>])>{1,2}\s*[^&\s]`,
-    String.raw`\btee\b`,
-    String.raw`\bcp\b`,
-    String.raw`\bmv\b`,
-    String.raw`\brm\b`,
-    String.raw`\bsed\s+(?:-[A-Za-z]*i|--in-place)`,
-    String.raw`\btruncate\b`,
-    String.raw`\binstall\b`,
-    String.raw`\bdd\b`,
-    String.raw`\bpython3?\b[^\n]*(?:\s-c\b|\s-\s|<<)`,
-    String.raw`\bnode\b[^\n]*(?:\s-e\b|\s--eval\b|\s-p\b|\s--input-type|<<)`,
-    String.raw`\bperl\b[^\n]*\s-[A-Za-z]*[ie]`,
-    String.raw`\bruby\b[^\n]*\s-e\b`,
-    String.raw`\bgit\s+(?:-\S+\s+)*(?:checkout|restore|apply|rm|mv)\b`,
-  ].join('|'),
-);
+// A command is judged by what it WRITES to and what CODE it runs, not by words that merely appear in it (a commit message,
+// the data of a heredoc, an echo). `analyze` separates the command text from heredoc bodies and finds inline interpreter code.
+const INTERPRETERS = new Set(['python', 'python3', 'node', 'perl', 'ruby', 'bash', 'sh', 'zsh']);
+const WRITERS = new Set(['cp', 'mv', 'rm', 'tee', 'install', 'truncate', 'dd', 'ln']);
 const RECORDS = /backlog\/(?:approvals|attestations|evidence)\//;
-const PROTECTED_IN_COMMAND = /(?:\.claude\/(?:settings(?:\.local)?\.json|hooks\/)|\.githooks\/|scripts\/hooks\/|scripts\/work\/|scripts\/test-groups\.mjs|tests\/(?:gate-exemptions|groups)\.json|\.github\/workflows\/ci\.yml|CLAUDE\.md)/;
+// Only the files that DEFINE the gates need the owner's confirmation to change; everyday scripts, tests and docs are ordinary.
+const PROTECTED_PATH = /(?:\.claude\/(?:settings(?:\.local)?\.json|hooks\/)|\.githooks\/|scripts\/work\/claude-guard\.mjs|tests\/gate-exemptions\.json|\.github\/workflows\/ci\.yml)/;
+
+function analyze(command) {
+  let lines = command;
+  let code = '';
+  let nodeCode = '';
+  const heredoc = /<<-?\s*(['"]?)([A-Za-z_]\w*)\1[^\n]*\n/;
+  for (let guard = 0; guard < 20; guard++) {
+    const m = heredoc.exec(lines);
+    if (!m) break;
+    const consumer = norm(lines.slice(0, m.index).split(/&&|\|\||[;|\n]/).pop().trim()).split(/\s+/)[0] ?? '';
+    const bodyStart = m.index + m[0].length;
+    const rest = lines.slice(bodyStart);
+    const end = new RegExp(`^\\s*${m[2]}\\s*$`, 'm').exec(rest);
+    const body = end ? rest.slice(0, end.index) : rest;
+    if (INTERPRETERS.has(consumer)) {
+      code += `\n${body}`;
+      if (consumer === 'node') nodeCode += `\n${body}`;
+    }
+    lines = lines.slice(0, bodyStart) + (end ? rest.slice(end.index + end[0].length) : '');
+  }
+  const inline = /\b(python3?|node|perl|ruby)\b[^\n]*?\s(?:-c|-e|--eval|-p)\s+("(?:[^"\\]|\\.)*"|'[^']*')/g;
+  for (const m of lines.matchAll(inline)) {
+    code += `\n${m[2]}`;
+    if (m[1] === 'node') nodeCode += `\n${m[2]}`;
+  }
+  return { lines, code, nodeCode };
+}
+
+const unquote = (t) => t.replace(/^["']|["']$/g, '');
+
+// Every file this command writes to: redirect targets and the arguments of writing commands.
+function writeTargets(lines) {
+  const targets = [];
+  for (const m of lines.matchAll(/(?:^|[^0-9&>])>{1,2}\s*([^\s&|;<>()]+)/g)) {
+    const t = unquote(m[1]);
+    if (t && t !== '/dev/null') targets.push(t);
+  }
+  for (const seg of splitSegments(lines)) {
+    const tokens = norm(seg).split(/\s+/);
+    const head = tokens[0];
+    const writes =
+      WRITERS.has(head) ||
+      (head === 'sed' && tokens.some((t) => /^-[A-Za-z]*i/.test(t) || t === '--in-place')) ||
+      (head === 'git' && ['checkout', 'restore', 'apply', 'rm', 'mv'].includes(gitTokens(norm(seg)).sub));
+    if (writes) targets.push(...tokens.slice(1).filter((t) => !t.startsWith('-')).map(unquote));
+  }
+  return targets;
+}
 
 const ENFORCEMENT_ASK = 'This file is part of the enforced workflow itself (the gates). Changing it needs the owner\'s explicit confirmation.';
 
@@ -96,11 +131,24 @@ function judgeGit(seg) {
   return null;
 }
 
-function judgeGh(seg) {
+// The base branch of the pull request being merged, looked up with a read-only gh call.
+function defaultPrBase(seg) {
+  const ref = seg.split(/\s+/).slice(3).find((x) => !x.startsWith('-')) ?? '';
+  const r = spawnSync('gh', ['pr', 'view', ...(ref ? [ref] : []), '--json', 'baseRefName', '--jq', '.baseRefName'], { encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trim() || null : null;
+}
+
+function judgeGh(seg, ctx) {
   const t = seg.split(/\s+/);
   const sub = t[1] ?? '';
   const sub2 = t[2] ?? '';
-  if (sub === 'pr' && ['merge', 'review'].includes(sub2)) return deny('Merging and approving pull requests is the owner\'s decision.');
+  if (sub === 'pr' && sub2 === 'merge') {
+    // A green pull request into develop may be merged: the required gate has already judged it. Merging into main starts
+    // the production workflow, so that stays the owner's. The gate is never overridden.
+    if (/(?:^|\s)--admin\b/.test(seg)) return deny('Merging over a failing or missing gate (--admin) is not allowed.');
+    return ctx.prBase(seg) === 'develop' ? null : deny('Merging into main (which starts the production workflow) is the owner\'s decision; only pull requests into develop may be merged from here.');
+  }
+  if (sub === 'pr' && sub2 === 'review') return deny('Approving or reviewing pull requests is the owner\'s decision.');
   if (sub === 'api') {
     const method = seg.match(/(?:-X\s*|--method[= ]\s*)(\w+)/i);
     if (method && /^(POST|PUT|PATCH|DELETE)$/i.test(method[1])) return deny('Changing GitHub settings through the API is the owner\'s step (read-only gh api calls are fine).');
@@ -180,12 +228,12 @@ function judgeNetwork(seg, whole) {
   return write.test(seg) ? deny('Writing to a hosted Supabase project is not done from here (read-only requests are fine).') : null;
 }
 
-function judgeSegment(seg, whole) {
+function judgeSegment(seg, whole, ctx) {
   const s = norm(seg);
   const head = s.split(/\s+/)[0];
   let r = null;
   if (head === 'git') r = judgeGit(s);
-  else if (head === 'gh') r = judgeGh(s);
+  else if (head === 'gh') r = judgeGh(s, ctx);
   else if (head === 'docker') r = judgeDocker(s);
   if (r) return r;
   if (/(?:^|\s)supabase(?:\s|$)/.test(s) && /^(?:supabase|npx|pnpm|yarn|npm|bunx)\b/.test(s)) r = judgeSupabase(s);
@@ -196,23 +244,29 @@ function judgeSegment(seg, whole) {
   return judgeReads(s) ?? judgeNetwork(s, whole);
 }
 
-export function decideBash(command) {
+export function decideBash(command, { prBase = defaultPrBase } = {}) {
   const whole = String(command ?? '');
-  if (/55322|superLeagueBackup/i.test(whole)) return deny('The separate superLeagueBackup Supabase project (port 55322) is off-limits.');
-  if (/(?:^|[\s;&|(])(?:SKIP_[A-Z0-9_]+|HUSKY|HOOKS_BYPASS)=/.test(whole)) return deny('There is no bypass variable for the hooks or the gates.');
-  if (/core\.hooksPath/.test(whole)) return deny('The Git hooks path is not changed from here; the hooks are installed by `pnpm hooks:install` and cannot be switched off.');
-  if (/\bcli\.mjs\b[\s\S]*['"](?:approve|attest)['"]/.test(whole)) return deny('`work approve` and `work attest` are the owner\'s decisions.');
-  if (RECORDS.test(whole) && WRITE_VERB.test(whole)) return deny('Approvals, attestations and evidence are written only by the work commands, never by hand.');
+  const { lines, code, nodeCode } = analyze(whole);
+  const bareLines = strip(lines);
+  const ctx = { prBase };
 
-  const bare = strip(whole);
+  if (/55322|superLeagueBackup/i.test(whole)) return deny('The separate superLeagueBackup Supabase project (port 55322) is off-limits.');
+  if (/(?:^|[\s;&|(])(?:SKIP_[A-Z0-9_]+|HUSKY|HOOKS_BYPASS)=/.test(bareLines + code)) return deny('There is no bypass variable for the hooks or the gates.');
+  if (/core\.hooksPath/.test(bareLines + code)) return deny('The Git hooks path is not changed from here; the hooks are installed by `pnpm hooks:install` and cannot be switched off.');
+  if (/\bcli\.mjs\b/.test(nodeCode) && /['"](?:approve|attest)['"]/.test(nodeCode)) return deny('`work approve` and `work attest` are the owner\'s decisions.');
+
+  // What the command writes: records are written only by the work commands; the files that define the gates need the owner.
+  const targets = writeTargets(lines);
+  if (targets.some((t) => RECORDS.test(t)) || RECORDS.test(code)) return deny('Approvals, attestations and evidence are written only by the work commands, never by hand.');
+
   let asked = null;
-  for (const seg of splitSegments(bare)) {
-    const r = judgeSegment(seg, whole);
+  for (const seg of splitSegments(bareLines)) {
+    const r = judgeSegment(seg, whole, ctx);
     if (r?.decision === 'deny') return r;
     if (r?.decision === 'ask') asked = asked ?? r;
   }
   if (asked) return asked;
-  if (PROTECTED_IN_COMMAND.test(whole) && WRITE_VERB.test(whole)) return ask(ENFORCEMENT_ASK);
+  if (targets.some((t) => PROTECTED_PATH.test(t)) || PROTECTED_PATH.test(code)) return ask(ENFORCEMENT_ASK);
   return allow;
 }
 
@@ -225,18 +279,8 @@ export function decideEdit(file, { root = process.env.CLAUDE_PROJECT_DIR || proc
   if (rel.startsWith('..')) return allow;
   if (/^backlog\/(?:approvals|attestations|evidence)\//.test(rel)) return deny('Approvals, attestations and evidence are written only by the work commands, never edited by hand.');
   if (/^\.git(?:\/|$)/.test(rel)) return deny('Files inside .git (hooks, config) are not edited from here.');
-  if (
-    /^\.claude\/(?:settings(?:\.local)?\.json|hooks\/)/.test(rel) ||
-    /^\.githooks\//.test(rel) ||
-    /^scripts\/hooks\//.test(rel) ||
-    /^scripts\/work\//.test(rel) ||
-    rel === 'scripts/test-groups.mjs' ||
-    /^tests\/(?:gate-exemptions|groups)\.json$/.test(rel) ||
-    rel === '.github/workflows/ci.yml' ||
-    rel === 'CLAUDE.md'
-  ) {
-    return ask(ENFORCEMENT_ASK);
-  }
+  // Only the files that define the gates (see PROTECTED_PATH) need the owner's confirmation.
+  if (PROTECTED_PATH.test(rel)) return ask(ENFORCEMENT_ASK);
   return allow;
 }
 

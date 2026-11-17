@@ -37,7 +37,7 @@ function settingsProblems(root) {
   if (!pre.includes('claude-guard.mjs pre-tool')) problems.push('the guard command is missing');
   if (!JSON.stringify(s.hooks?.SessionStart ?? []).includes('claude-guard.mjs session-start')) problems.push('the session-start hook is missing');
   const deny = (s.permissions?.deny ?? []).join('\n');
-  for (const needle of ['gh pr merge', 'work approve', 'work attest', 'supabase link']) if (!deny.includes(needle)) problems.push(`no permission rule denies "${needle}"`);
+  for (const needle of ['work approve', 'work attest', 'supabase link']) if (!deny.includes(needle)) problems.push(`no permission rule denies "${needle}"`);
   return problems;
 }
 

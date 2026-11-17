@@ -6,7 +6,8 @@ name: CI
 #
 #   hygiene  Git hygiene of the commits being merged (the same code as the local hooks)
 #   records  backlog validity, every status change since the base, walkthroughs of finished items
-#   tests    the strict test rules, then the affected test groups (all groups for main, nightly and manual runs)
+#   tests    the strict test rules; pull requests into develop get only the cheap mapped-and-covered rules, while
+#            main (phase completion), the nightly run and manual runs get the full rules and every test group
 #   audit    the repository half of the enforcement audit
 #
 # No secrets are used here, so the gate works for every pull request.
@@ -91,16 +92,26 @@ jobs:
       - name: Install (frozen lockfiles)
         run: pnpm install --frozen-lockfile
 
-      - name: Strict test rules (every changed file mapped, covered and tested)
+      - name: Strict test rules
         run: |
           set -euo pipefail
           EVENT='${{ github.event_name }}'
           if [ "$EVENT" = 'pull_request' ]; then
-            node scripts/test-groups.mjs check --base "origin/${{ github.base_ref }}"
+            TARGET='${{ github.base_ref }}'
+            BASE="origin/$TARGET"
           elif [ "$EVENT" = 'push' ] && [ -n '${{ github.event.before }}' ] && [ '${{ github.event.before }}' != '0000000000000000000000000000000000000000' ]; then
-            node scripts/test-groups.mjs check --base '${{ github.event.before }}'
+            TARGET='${{ github.ref_name }}'
+            BASE='${{ github.event.before }}'
           else
-            echo "Full run: the strict file rules apply to changes, so there is no range to check."
+            echo "Full run: the strict file rules apply to a range of changes, so there is nothing to check here."
+            exit 0
+          fi
+          if [ "$TARGET" = 'main' ]; then
+            # Phase completion: every changed file mapped, covered, and tested.
+            node scripts/test-groups.mjs check --base "$BASE"
+          else
+            # Day-to-day integration into develop: only the cheap rules (mapped and covered by an active group).
+            node scripts/test-groups.mjs check --commit-stage --base "$BASE"
           fi
 
       - name: Select groups
@@ -112,14 +123,17 @@ jobs:
             ARGS=all
           elif [ "$EVENT" = 'pull_request' ] && [ '${{ github.base_ref }}' = 'main' ]; then
             ARGS=all
-          elif [ "$EVENT" = 'pull_request' ]; then
-            ARGS="affected --base origin/${{ github.base_ref }}"
-          elif [ -n '${{ github.event.before }}' ] && [ '${{ github.event.before }}' != '0000000000000000000000000000000000000000' ]; then
-            ARGS="affected --base ${{ github.event.before }}"
-          else
+          elif [ "$EVENT" = 'push' ] && [ '${{ github.ref_name }}' = 'main' ]; then
             ARGS=all
+          else
+            ARGS=none
           fi
           echo "args=$ARGS" >> "$GITHUB_OUTPUT"
+          if [ "$ARGS" = 'none' ]; then
+            echo "No test groups run for this change: the full suite runs for main, nightly and manual runs."
+            echo "needs_db=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           node scripts/test-groups.mjs $ARGS --dry-run | tee plan.txt
           # The runner reports whether any selected group needs the local Supabase stack.
           if grep -qx "needs local database: true" plan.txt; then
@@ -132,7 +146,8 @@ jobs:
         if: steps.select.outputs.needs_db == 'true'
         run: pnpm db:start
 
-      - name: Run selected groups
+      - name: Run every test group (main, nightly and manual runs)
+        if: steps.select.outputs.args != 'none'
         run: node scripts/test-groups.mjs ${{ steps.select.outputs.args }}
 
   audit:

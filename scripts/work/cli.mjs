@@ -2,9 +2,9 @@
 // pnpm work <command>: the enforced development workflow.
 //
 //   work status [SL-xxx]            what is open, and what an item still needs
-//   work approve SL-xxx             OWNER ONLY: record approval of the item's plan (stores the plan's hash)
-//   work ready SL-xxx               Definition of Ready; moves not-started -> ready
-//   work start SL-xxx               ready -> in-progress
+//   work approve SL-xxx             OPTIONAL, OWNER ONLY: record approval of the item's plan (stores the plan's hash)
+//   work ready SL-xxx               OPTIONAL strict readiness (plan, approval, checks); not required to start
+//   work start SL-xxx               not-started (or ready) -> in-progress; only the ORDER is checked
 //   work attest SL-xxx C2 [note]    OWNER ONLY: attest a manual acceptance check
 //   work done SL-xxx [--base <ref>] Definition of Done: runs the item's groups and checks, records evidence, writes the
 //                                   walkthrough skeleton, and marks the item done only when the walkthrough is complete
@@ -23,18 +23,18 @@ import {
   ROOT,
   approvalPath,
   loadBacklog,
-  phaseGateProblems,
   planProblems,
   readyProblems,
   saveItem,
   sha256,
+  startProblems,
   transitionProblems,
   validateBacklog,
 } from './backlog.mjs';
 import { parseItem } from './frontmatter.mjs';
 import { runAudit } from './audit.mjs';
 import { buildSkeleton, refreshGenerated, walkthroughProblems } from './walkthrough.mjs';
-import { globToRegExp } from '../test-groups.mjs';
+import { checkStrict, globToRegExp, loadExemptions } from '../test-groups.mjs';
 
 function gitUser(root) {
   const r = spawnSync('git', ['config', 'user.name'], { cwd: root, encoding: 'utf8' });
@@ -166,9 +166,9 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
   if (cmd === 'start') {
     const { item, error } = need();
     if (error) return error;
-    if (item.meta.status !== 'ready') return fail(`${id}: status is ${item.meta.status}; it must be ready before it can start (work ready ${id})`);
-    const problems = readyProblems(item, bl, { root });
-    if (problems.length) return fail(['Definition of Ready no longer holds:', ...problems.map((p) => `- ${p}`)]);
+    if (!['not-started', 'ready'].includes(item.meta.status)) return fail(`${id}: status is ${item.meta.status}; only a not-started or ready item can start`);
+    const problems = startProblems(item, bl);
+    if (problems.length) return fail(['This item cannot start yet:', ...problems.map((p) => `- ${p}`)]);
     item.meta.status = 'in-progress';
     item.meta.startCommit = gitLines(root, ['rev-parse', 'HEAD'])[0] ?? '';
     saveItem(item);
@@ -264,6 +264,66 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
     return 0;
   }
 
+  // Phase completion: the one place where validation is rigid and slow. Everything is checked up front, every active
+  // test group runs once, and every item gets its evidence and walkthrough together. Run again after the walkthroughs
+  // are written to finish the phase.
+  if (cmd === 'phase') {
+    const n = Number(id);
+    if (!Number.isInteger(n)) return fail('usage: work phase <number> --base <the commit before the phase began>');
+    const items = [...bl.items.values()].filter((i) => i.meta.phase === n);
+    if (items.length === 0) return fail(`phase ${n} has no items`);
+    const unfinished = items.filter((i) => !COMPLETE.includes(i.meta.status));
+    if (unfinished.length === 0) {
+      out(`Phase ${n} is already complete.`);
+      return 0;
+    }
+    const notRunning = unfinished.filter((i) => i.meta.status !== 'in-progress');
+    if (notRunning.length) return fail([`Phase ${n} cannot be completed: these items are not in progress:`, ...notRunning.map((i) => `- ${i.meta.id} (${i.meta.status})`)]);
+    const bi = argv.indexOf('--base');
+    const base = bi >= 0 ? argv[bi + 1] : null;
+    if (!base) return fail(`phase ${n}: pass --base <the commit before the phase began>`);
+
+    // 1. Every prerequisite of every item, reported together, before anything slow runs.
+    const attestations = (itemId) => readJson(join(root, `backlog/attestations/${itemId}.json`), { attestations: [] }).attestations;
+    const early = [];
+    for (const { meta } of unfinished) {
+      if ((meta.groups ?? []).length === 0) early.push(`${meta.id}: no test groups defined`);
+      if ((meta.checks ?? []).length === 0) early.push(`${meta.id}: no acceptance checks defined`);
+      const globs = (meta.groups ?? []).flatMap((g) => bl.groups[g]?.testPaths ?? []);
+      for (const c of meta.checks ?? []) {
+        const target = c.verify.split(':').slice(1).join(':');
+        if (c.verify.startsWith('test:')) {
+          if (!existsSync(join(root, target))) early.push(`${meta.id}: ${c.id}: test file ${target} does not exist`);
+          else if (!globs.some((glob) => globToRegExp(glob).test(target))) early.push(`${meta.id}: ${c.id}: ${target} is not a test of this item's groups`);
+        } else if (c.verify.startsWith('manual:') && !attestations(meta.id).some((a) => a.checkId === c.id)) {
+          early.push(`${meta.id}: ${c.id}: manual check not attested (the owner runs: pnpm work attest ${meta.id} ${c.id})`);
+        }
+      }
+    }
+    if (early.length) return fail([`Phase ${n} cannot be completed yet (nothing was run):`, ...early.map((p) => `- ${p}`)]);
+
+    // 2. The strict file rules over everything the phase changed (mapped, covered, and tested).
+    const changed = gitLines(root, ['diff', '--name-status', `${base}...HEAD`]).filter((l) => !l.startsWith('D')).map((l) => l.split('\t').pop());
+    const strict = checkStrict(changed, { groups: bl.groups }, loadExemptions(join(root, 'tests/gate-exemptions.json'))).errors;
+    if (strict.length) return fail([`Phase ${n}: the strict test rules failed (${strict.length}):`, ...strict.map((p) => `- ${p}`)]);
+
+    // 3. Every active test group, once. Each item then records the shared evidence.
+    const active = Object.entries(bl.groups).filter(([, g]) => g.status !== 'pending').map(([name]) => name);
+    const evidence = runGroups(active, { root });
+    const failedGroups = evidence.groups.filter((g) => g.state !== 'passed');
+    if (failedGroups.length) return fail([`Phase ${n}: test groups failed:`, ...failedGroups.map((g) => `- ${g.name}: ${g.note || g.state}`)]);
+
+    // 4. Evidence and a walkthrough for every item (the existing per-item completion, fed the shared evidence).
+    const results = unfinished.map((i) => run(['done', i.meta.id, '--base', base], { root, out, err, user, now, runGroups: () => structuredClone(evidence), runCommand }));
+    const stillOpen = loadBacklog(root);
+    const open = items.filter((i) => !COMPLETE.includes(stillOpen.items.get(i.meta.id).meta.status));
+    if (open.length === 0 && results.every((r) => r === 0)) {
+      out(`Phase ${n} is complete. Commit the items, evidence and walkthroughs together.`);
+      return 0;
+    }
+    return fail([`Phase ${n}: ${open.length} item(s) still need their walkthrough text: ${open.map((i) => i.meta.id).join(', ')}.`]);
+  }
+
   if (cmd === 'audit') return runAudit(argv.slice(1), { root, out, gh: undefined });
 
   if (cmd === 'check') {
@@ -288,7 +348,7 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
         problems.push(...tp.map((p) => `${itemId}: ${p}`));
         if (tp.length || from === to) continue;
         if (to === 'ready' && item.meta.legacy !== true) problems.push(...readyProblems(item, bl, { root }));
-        if (to === 'in-progress' && from === 'ready') problems.push(...phaseGateProblems(item, bl));
+        if (to === 'in-progress' && ['not-started', 'ready'].includes(from) && item.meta.legacy !== true) problems.push(...startProblems(item, bl));
       }
     }
     if (problems.length) return fail([`backlog check failed (${problems.length}):`, ...problems.map((p) => `- ${p}`)]);

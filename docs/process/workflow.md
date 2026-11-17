@@ -2,43 +2,43 @@
 
 The rules below are **enforced by scripts, hooks and CI**, not by instructions. Nobody, human or agent, decides case by case that a check can be skipped: there is no flag, variable or switch for it, and CI applies the same checks to every pull request.
 
-## What is enforced, and where
+## The principle
 
-| Gate | What it requires | Enforced by |
+**Everyday work is fast. Validation is rigid, once, when a phase is completed.** A commit or push takes seconds; the slow, thorough checks run at phase completion and for pull requests into `main`.
+
+| When | What runs | Enforced by |
 |---|---|---|
-| **Definition of Ready** | An item can start only when: its dependencies are done; the open decisions it names are resolved; it names test groups that really have tests; every acceptance check says how it is verified; a plan exists in `docs/plans/SL-xxx.md` with every section filled in; the **owner approved that exact plan**; and no earlier phase has unfinished items. | `pnpm work ready` / `start`; CI re-checks every status change (`pnpm work check --base`) |
-| **Tests required** | Every changed file is *mapped* to a test group, *covered* by an active group (pending groups cover nothing), and the change contains a *changed test* from a group that covers it. Only categories listed with a reason in `tests/gate-exemptions.json` need none. | `node scripts/test-groups.mjs check`, run by the pre-commit hook (all but the changed-test rule), the pre-push hook and CI (the whole range) |
-| **Git hygiene** | Conventional Commit messages (72 characters), no backlog or SL references in messages, no fixup/squash/WIP commits, no merge commits, no env or key files, no secrets in added lines, no force pushes, nothing pushed to `develop` or `main` directly. | `commit-msg`, `pre-commit` and `pre-push` hooks; CI `hygiene`; the GitHub ruleset |
-| **Definition of Done** | The item's test groups pass on a **clean tree** (evidence records the commit, tree and each command's exit code); automated checks pass; each manual check is **attested by the owner**; all ten cross-cutting rules are marked `pass` or `n/a: <reason>`; the walkthrough is complete and matches the evidence. | `pnpm work done`; CI validates every `done` item the same way |
-| **Plans** | One tracked plan per item with the sections Issue, Evidence, Scope, Acceptance checks, Tests, Rollback. A plan changed after approval needs approving again (the approval stores its hash). | Definition of Ready |
-| **Completion walkthrough** | `docs/walkthroughs/SL-xxx.md`: generated facts (commits, files by group, evidence, check results) plus the author's Summary, Hosted actions, Assumptions and deviations, Risks and follow-ups, Rollback. | `pnpm work done` writes it; the validator rejects any `TODO`, a missing section, an unaccounted rule or check, or stale evidence |
-| **Safety boundaries** | No hosted Supabase commands, no Docker removal, nothing touching the `superLeagueBackup` project, no reading `.env` files, no GitHub settings changes, no hook bypass, no merging, no owner-only steps. | The Claude Code guard (`.claude/settings.json`, `scripts/work/claude-guard.mjs`) |
-| **One required check** | `gate` succeeds only if `hygiene`, `records`, `tests` and `audit` all *succeeded* (a skipped job fails it). | `.github/workflows/ci.yml` and the GitHub ruleset |
+| Every commit | Staged-file safety (env files, key files, secrets), Conventional Commit message (72 characters, no backlog references) | `pre-commit` and `commit-msg` hooks |
+| Every push | Only `ready/<name>` branches; Git hygiene of the outgoing commits (no fixup/WIP/merge commits, no env or key files, no secrets) | `pre-push` hook (same code as CI); the GitHub ruleset |
+| Starting an item | Order only: dependencies done, open decisions resolved, no earlier phase still open. No plan approval, groups or checks needed | `pnpm work start`; CI re-checks status changes |
+| Pull request into `develop` | `gate`: hygiene, backlog records, repository audit, and the cheap rule that every changed file is mapped to a group with real tests. **No test suite** | CI `gate` (required by the ruleset) |
+| **Completing a phase** | Prerequisites of every item together (groups and acceptance checks defined, test files exist, the owner's attestations of manual checks); the strict test rules over everything the phase changed (every file mapped, covered by an active group, with a changed test); **every test group once**; evidence and a walkthrough per item, validated against the evidence | `pnpm work phase N --base <ref>` |
+| Pull request into `main` | The full strict rules and the whole test suite, plus the same hygiene, records and audit | CI `gate`; nightly and manual runs use the whole suite too |
+| Always | The safety boundaries (no hosted Supabase commands, no Docker removal, nothing touching the backup project, no reading `.env` files, no hook bypass, no GitHub settings changes, no merging into `main`) | The Claude Code guard (`.claude/settings.json`, `scripts/work/claude-guard.mjs`) |
 
-## Working on an item
+A finished item still needs, at phase completion: test groups that pass on a **clean tree** (evidence records the commit, tree and each command's exit code), each manual check **attested by the owner**, all ten cross-cutting rules marked `pass` or `n/a: <reason>`, and a complete walkthrough (`docs/walkthroughs/SL-xxx.md`: generated facts plus the author's Summary, Hosted actions, Assumptions and deviations, Risks and follow-ups, Rollback; no `TODO`, no stale evidence).
+
+## Working on items
 
 ```
 pnpm work status                     what is open
-pnpm work status SL-020              what an item still needs
-# write docs/plans/SL-020.md, define groups and checks in the item, resolve its decisions
-pnpm work approve SL-020             OWNER: approve the plan (typed with ! in the session)
-pnpm work ready SL-020               Definition of Ready, then start it
-pnpm work start SL-020
-# implement test first; commit atomically (the hooks run)
+pnpm work start SL-020               begin (order is checked; nothing else)
+# implement, commit freely, push a ready/<name> branch, open a PR into develop, merge when `gate` is green
 pnpm work attest SL-020 C5 "note"    OWNER: attest a manual check (a hosted step)
-pnpm work done SL-020                runs groups and checks, writes the walkthrough skeleton
-# fill in every TODO in docs/walkthroughs/SL-020.md, commit, run `pnpm work done SL-020` again
+pnpm work phase 2 --base <ref>       complete the phase: all the rigid validation, once
+# fill in every TODO in the walkthroughs, commit, run `pnpm work phase 2 --base <ref>` again
+pnpm work done SL-020 --base <ref>   (one item only; `phase` does this for all of them)
 ```
 
-Item status is changed only by these commands. Items closed before the workflow existed are `legacy-done`; items that were already underway are marked `legacy` and are not asked for a plan approval, but still need checks and, to finish, a walkthrough.
+Item status is changed only by these commands. `pnpm work approve` and `pnpm work ready` still exist for an item that wants a plan signed off, but nothing requires them. Items closed before the workflow existed are `legacy-done`; items already underway are marked `legacy`.
 
 ## Publishing
 
-`develop` and `main` are reached by pull request. Work stays on local `develop`; to publish, push a branch named `ready/<short-name>` and open a pull request into `develop`. The pre-push hook only allows `ready/*` branches and runs the hygiene and test rules over the outgoing range first. The merge happens when the required `gate` check passes; merging and everything hosted stay the owner's decision.
+`develop` and `main` are reached by pull request. Push a branch named `ready/<short-name>`, open a pull request into `develop`, and merge it (rebase merge, to keep history linear) once `gate` is green; afterwards `git rebase origin/develop` drops the already-merged local commits. The owner has pre-authorized this for `develop`. Pull requests into `main` start the production workflow and stay the owner's decision.
 
 ## What the Claude Code guard does
 
-Before every Bash, Edit and Write call it decides deterministically: **deny** (the bypasses and owner-only steps above), **ask** (editing the enforcement itself: hooks, settings, the guard, the groups and exemptions files, `ci.yml`, `CLAUDE.md`, or triggering a workflow, which the owner then confirms), or allow. Approvals, attestations and evidence cannot be written by hand. `tests` in `backend/tests/tooling/claude-guard.test.ts` pin each case, including what must stay allowed. At session start it reports the backlog and whether the hooks are installed.
+Before every Bash, Edit and Write call it decides deterministically: **deny** (the bypasses, the safety boundaries and the owner-only steps), **ask** (only the files that define the gates: `.claude/settings.json`, the hook wrappers, the guard itself, `tests/gate-exemptions.json` and `ci.yml`; and triggering or re-running a workflow, which is a hosted action), or allow. It judges what a command actually writes and runs, not words that appear in a commit message or a heredoc. Merging a pull request is allowed into `develop` and denied into `main`. Approvals, attestations and evidence cannot be written by hand. `tests` in `backend/tests/tooling/claude-guard.test.ts` pin each case, including what must stay allowed. At session start it reports the backlog and whether the hooks are installed.
 
 ## Owner setup (once)
 

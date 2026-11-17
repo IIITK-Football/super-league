@@ -10,7 +10,8 @@ import { describe, expect, it } from 'vitest';
 import { decideBash, decideEdit } from '../../../scripts/work/claude-guard.mjs';
 
 const root = join(__dirname, '../../..');
-const bash = (command: string) => decideBash(command).decision as string;
+// The base branch of a pull request is looked up through gh in real use; tests inject it.
+const bash = (command: string, prBase: () => string | null = () => null) => decideBash(command, { prBase }).decision as string;
 const edit = (file: string) => decideEdit(file, { root: '/repo' }).decision as string;
 
 describe('Bash: bypasses and unsafe Git are denied', () => {
@@ -64,6 +65,46 @@ describe('Bash: GitHub changes belong to the owner', () => {
   ];
   for (const c of denied) it(`denies: ${c}`, () => expect(bash(c)).toBe('deny'));
   it('asks before triggering a workflow (a hosted action)', () => expect(bash('gh workflow run db-deploy.yml')).toBe('ask'));
+});
+
+describe('Bash: merging pull requests', () => {
+  it('is allowed into develop (the integration branch the required gate already protects)', () => {
+    expect(bash('gh pr merge 12 --rebase', () => 'develop')).toBe('allow');
+    expect(bash('gh pr merge --rebase --delete-branch', () => 'develop')).toBe('allow');
+  });
+
+  it('stays the owner\'s for main (it triggers the production workflow) and when the base cannot be determined', () => {
+    expect(bash('gh pr merge 12 --rebase', () => 'main')).toBe('deny');
+    expect(bash('gh pr merge 12 --rebase', () => null)).toBe('deny');
+    expect(bash('gh pr merge 12 --admin --rebase', () => 'develop')).toBe('deny'); // never override the gate
+  });
+});
+
+describe('Bash: what a command really writes, not the words in it', () => {
+  const allowed = [
+    // data written by cat/tee is not code, even if it names protected paths
+    'cat >> backend/tests/tooling/x.test.ts <<\'EOF\'\nexpect(existsSync(join(root, "backlog/evidence/SL-100.json"))).toBe(true);\nEOF',
+    // quoted text in a commit message is only text
+    'git add backlog/evidence/SL-018.json && git commit -m "feat: x" -m "Co-Authored-By: A <a@b.c>"',
+    'git commit -m "explain that work attest and cli.mjs approve are owner-only"',
+    'echo "do not write backlog/approvals/x.json by hand"',
+    // an interpreter script that edits ordinary files may mention the owner commands in its text
+    'python3 - <<\'EOF\'\np="scripts/work/cli.mjs"\ns=open(p).read().replace("approve","attest")\nopen(p,"w").write(s)\nEOF',
+    // a redirect to an ordinary file
+    'node scripts/test-groups.mjs list > /tmp/groups.txt 2>&1',
+  ];
+  for (const c of allowed) it(`allows: ${c.split('\n')[0]}`, () => expect(bash(c)).toBe('allow'));
+
+  const denied = [
+    'cat > backlog/evidence/SL-018.json <<\'EOF\'\n{}\nEOF',
+    'echo {} >> "backlog/attestations/SL-018.json"',
+    'tee backlog/approvals/SL-019.json < x.json',
+    'python3 - <<\'EOF\'\nopen("backlog/evidence/SL-018.json","w").write("{}")\nEOF',
+    'node -e "require(\'fs\').writeFileSync(\'backlog/attestations/SL-018.json\',\'{}\')"',
+    'node -e "import(\'./scripts/work/cli.mjs\').then(m=>m.run([\'attest\',\'SL-018\',\'C6\']))"',
+    'cp x.json backlog/approvals/SL-019.json',
+  ];
+  for (const c of denied) it(`denies: ${c.split('\n')[0]}`, () => expect(bash(c)).toBe('deny'));
 });
 
 describe('Bash: the owner-only workflow steps', () => {
@@ -121,9 +162,8 @@ describe('Bash: protected configuration needs the owner\'s confirmation', () => 
     'sed -i s/a/b/ .claude/settings.json',
     'echo x > .githooks/pre-push',
     'python3 -c "open(\'tests/gate-exemptions.json\',\'w\').write(\'{}\')"',
-    'cp x scripts/hooks/lib.mjs',
+    'cp x scripts/work/claude-guard.mjs',
     'rm .githooks/pre-commit',
-    'echo x >> CLAUDE.md',
   ];
   for (const c of asks) it(`asks: ${c}`, () => expect(bash(c)).toBe('ask'));
 });
@@ -197,14 +237,9 @@ describe('Edit and Write', () => {
     for (const f of [
       '/repo/.claude/settings.json',
       '/repo/.githooks/pre-commit',
-      '/repo/scripts/hooks/lib.mjs',
-      '/repo/scripts/work/cli.mjs',
       '/repo/scripts/work/claude-guard.mjs',
-      '/repo/scripts/test-groups.mjs',
       '/repo/tests/gate-exemptions.json',
-      '/repo/tests/groups.json',
       '/repo/.github/workflows/ci.yml',
-      '/repo/CLAUDE.md',
     ]) {
       expect(edit(f), f).toBe('ask');
     }
@@ -219,6 +254,11 @@ describe('Edit and Write', () => {
       '/repo/docs/walkthroughs/SL-018.md',
       '/repo/backend/tests/tooling/x.test.ts',
       '/repo/docs/release.md',
+      '/repo/scripts/work/cli.mjs',
+      '/repo/scripts/hooks/lib.mjs',
+      '/repo/scripts/test-groups.mjs',
+      '/repo/tests/groups.json',
+      '/repo/CLAUDE.md',
     ]) {
       expect(edit(f), f).toBe('allow');
     }
@@ -300,7 +340,7 @@ describe('.claude/settings.json (tracked)', () => {
 
   it('also denies the clearest bypasses through permission rules the harness enforces itself', () => {
     const deny = (settings.permissions?.deny ?? []).join('\n');
-    for (const needle of ['git push --force', 'gh pr merge', 'work approve', 'work attest', '--no-verify', 'supabase link', '--linked']) {
+    for (const needle of ['git push --force', 'work approve', 'work attest', '--no-verify', 'supabase link', '--linked']) {
       expect(deny, needle).toContain(needle);
     }
   });
