@@ -43,11 +43,11 @@ Database tests use the deterministic local seed (`backend/supabase/seed.sql`, se
 
 ## Strict rules (no change can go untested)
 
-`node scripts/test-groups.mjs check` (staged files by default, or `--base <ref>` for a whole range, or `--files …`) applies three rules to every changed file that is not an approved exemption. It runs no tests; `affected --strict` applies it first and then runs the affected groups.
+`node scripts/test-groups.mjs check` (staged files by default, or `--base <ref>` for a whole range, or `--files …`) applies three rules to every changed file that is not an approved exemption. It runs no tests; `affected --strict` applies it first and then runs the affected groups (a manual convenience).
 
 1. **Mapped:** some group's `paths`, `covers` or `testPaths` must match it, otherwise nothing would run for it.
 2. **Covered:** an **active** group's `covers` must match it. A pending group has no tests, so it covers nothing; a file only a pending group maps is rejected until tests exist (the message names the backlog item that adds them).
-3. **Tested:** the change set must contain a changed or added test file (a group's `testPaths`) from a group that covers it. This rule runs over the whole outgoing range at push and in CI; the commit hook defers just this rule (`--commit-stage`) so a small follow-up commit is not blocked.
+3. **Tested:** the change set must contain a changed or added test file (a group's `testPaths`) from a group that covers it. This rule runs over the whole phase at phase completion (`pnpm work phase`) and in CI for pull requests into `main`; the cheaper `--commit-stage` form (rules 1 and 2 only) is what pull requests into `develop` get.
 
 There is no per-change opt-out. `tests/gate-exemptions.json` lists whole categories that need no tests (documentation, lockfiles, assets, vendored tools), each with a reason; changing it needs the owner's explicit confirmation. A group's `covers` and `testPaths` are what a reviewer reads to learn what its tests really verify, so declare them honestly. `--evidence <file>` records the commit, the tree and each command's exit code as JSON, which the completion walkthrough uses.
 
@@ -55,9 +55,11 @@ There is no per-change opt-out. `tests/gate-exemptions.json` lists whole categor
 
 `pnpm install` installs the hooks (the root `prepare` script runs `scripts/install-hooks.sh --auto`; it never fails an install and never overrides a hooks path you configured yourself). They share their logic with CI (`scripts/hooks/lib.mjs`, `scripts/hooks/hygiene.mjs`), so a local result and the CI result cannot disagree.
 
-- **pre-commit:** blocks `.env` and key files and secret-looking additions, then `affected --staged --strict --commit-stage`: the strict rules except "changed source needs a changed test", then only the groups the staged paths select.
+- **pre-commit:** blocks `.env` and key files and secret-looking additions. It takes well under a second and runs no tests.
 - **commit-msg:** Conventional Commits, 72 characters, no backlog references.
-- **pre-push:** only `ready/<name>` branches may be pushed (`develop` and `main` are reached by pull request). Over the whole outgoing range it checks hygiene (conventional messages, no fixup/squash/WIP commits, no merge commits, no env or key files, no secrets), the full strict rules, and runs the affected groups. The pushed commit must be the one checked out, so the tests run against what is published.
+- **pre-push:** only `ready/<name>` branches may be pushed (`develop` and `main` are reached by pull request), and the outgoing commits must pass Git hygiene (conventional messages, no fixup/squash/WIP commits, no merge commits, no env or key files, no secrets). No tests run here.
+
+The strict rules and the test groups run at **phase completion** (`pnpm work phase N --base <ref>`) and in CI for pull requests into `main`, the nightly run and manual runs. Pull requests into `develop` get only the cheap rules (every changed file mapped and covered by an active group).
 
 There is no bypass variable or flag. A person can still run `git commit --no-verify` or `git push --no-verify` by hand, which only skips the local copy: CI applies the same rules and cannot be skipped.
 

@@ -184,3 +184,21 @@ describe('automatic hook installation (pnpm install runs `prepare`)', () => {
     expect(readFileSync(installer, 'utf8')).not.toMatch(/SKIP_HOOKS/);
   });
 });
+
+describe('everyday commits and pushes stay fast (rigid validation happens at phase completion)', () => {
+  const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+
+  it('pre-commit only runs the fast staged-file safety checks, never a test group', () => {
+    const src = read('scripts/hooks/pre-commit.mjs');
+    expect(src).not.toMatch(/test-groups/);
+    expect(src).toMatch(/checkStagedFiles/);
+    expect(src).toMatch(/scanAddedLines/);
+  });
+
+  it('pre-push checks hygiene and the push target only, never a test group', () => {
+    const src = read('scripts/hooks/pre-push.mjs');
+    expect(src).not.toMatch(/test-groups/);
+    expect(src).toMatch(/checkRange/);
+    expect(src).toMatch(/checkPushRefs/);
+  });
+});

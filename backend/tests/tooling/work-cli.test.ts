@@ -81,18 +81,25 @@ describe('ready and start', () => {
     expect(read('backlog/items/SL-100.md')).toMatch(/status: in-progress/);
   });
 
-  it('refuses to start an item that is not ready, and to start the next phase', () => {
-    item('SL-100');
-    expect(cli('start', 'SL-100')).toBe(1);
-    expect(said()).toMatch(/not-started to in-progress|must be ready/);
+  it('an item starts straight from not-started with no plan or approval, and records where it began', () => {
+    item('SL-100', { plan: false });
+    expect(cli('start', 'SL-100')).toBe(0);
+    expect(read('backlog/items/SL-100.md')).toMatch(/status: in-progress/);
+  });
+
+  it('refuses to start an item in a later phase while an earlier phase is open', () => {
     item('SL-050', { phase: 1, status: 'in-progress', legacy: true });
     item('SL-200', { phase: 2 });
-    write('docs/plans/SL-200.md', PLAN);
-    cli('approve', 'SL-200');
-    out = [];
-    err = [];
-    expect(cli('ready', 'SL-200')).toBe(1);
+    expect(cli('start', 'SL-200')).toBe(1);
     expect(said()).toMatch(/phase 1 is still open: SL-050/);
+    expect(read('backlog/items/SL-200.md')).toMatch(/status: not-started/);
+    expect(cli('ready', 'SL-200')).toBe(1);
+  });
+
+  it('refuses to start a finished or already running item', () => {
+    item('SL-100', { status: 'in-progress', legacy: true });
+    expect(cli('start', 'SL-100')).toBe(1);
+    expect(said()).toMatch(/not-started or ready/);
   });
 
   it('changes only the status line of the item file', () => {
@@ -182,7 +189,6 @@ describe('check', () => {
     err = [];
     expect(cli('check', '--base', base2)).toBe(1);
     expect(said()).toMatch(/SL-102: status cannot change from not-started to done/);
-    expect(said()).toMatch(/SL-101: status cannot change from not-started to in-progress/);
   });
 
   it('rejects a change to ready that has no approval, and a done item without its walkthrough and evidence', () => {

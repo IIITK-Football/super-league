@@ -59,10 +59,19 @@ describe('ci.yml: one required check called gate', () => {
     expect(j.records).toMatch(/scripts\/work\/cli\.mjs check --base/);
   });
 
-  it('applies the strict test rules before running the affected groups, on every kind of run', () => {
-    expect(j.tests).toMatch(/test-groups\.mjs check --base/);
+  it('is light for pull requests into develop: only the cheap mapped-and-covered rules, no test groups', () => {
+    expect(j.tests).toMatch(/check --commit-stage --base/);
+    expect(j.tests).toMatch(/ARGS=none/);
+    expect(j.tests).toMatch(/steps\.select\.outputs\.args != 'none'/);
+  });
+
+  it('is rigid for main (phase completion), the nightly run and manual runs: the full strict rules and every group', () => {
+    expect(j.tests).toMatch(/test-groups\.mjs check --base/); // without --commit-stage
+    expect(j.tests).toMatch(/ARGS=all/);
+    expect(j.tests).toMatch(/base_ref \}\}' = 'main'/);
     expect(j.tests).toMatch(/frozen-lockfile/);
     expect(j.tests).toMatch(/needs_db/);
+    expect(j.tests).not.toMatch(/affected/); // never a partial selection: the rigid run is the whole suite
   });
 
   it('runs the repository half of the audit', () => {
