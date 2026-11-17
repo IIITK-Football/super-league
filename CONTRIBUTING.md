@@ -52,7 +52,7 @@ git checkout -b feature/your-feature-name
 
 ### 3. Install dependencies and run locally
 
-Prerequisites: Node.js 20 or newer (see `.nvmrc`) and pnpm 10 (`corepack enable` picks the version pinned in the root `package.json`). **Use `pnpm` only; do not use `npm` or `yarn`.**
+Prerequisites: Node.js 22.19 or newer (see `.nvmrc`; some test dependencies do not load on older versions) and pnpm 10 (`corepack enable` picks the version pinned in the root `package.json`). **Use `pnpm` only; do not use `npm` or `yarn`.**
 
 From the repository root (a pnpm workspace with `frontend/` and `backend/`):
 
