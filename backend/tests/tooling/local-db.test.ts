@@ -18,6 +18,7 @@ function fakeCli(statusUrl: string | null) {
 echo "$@" >> "${log}"
 if [ "$1" = "start" ]; then
   echo "google-client-id=$SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID google-secret=$SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET" >> "${log}"
+  echo "google-enabled=$SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED" >> "${log}"
   echo "captcha-secret=$SUPABASE_AUTH_CAPTCHA_SECRET" >> "${log}"
   touch "${dir}/started"
 fi
@@ -114,6 +115,35 @@ describe('local-db.sh', () => {
     expect(r.status).toBe(0);
     expect(calls()).toMatch(/google-client-id=\S+ google-secret=\S+/);
     expect(calls()).toContain('start');
+  });
+
+  it('start turns Google sign-in off when there are no credentials, so users never reach a Google error page', () => {
+    const r = run(['start'], { env: { STATUS_AFTER_START: '1' } });
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('google-enabled=false');
+  });
+
+  it('start leaves Google sign-in on when real credentials are in the environment', () => {
+    const r = run(['start'], {
+      env: { STATUS_AFTER_START: '1', SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: 'real-id', SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: 'real-secret' },
+    });
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('google-enabled=\n');
+  });
+
+  it('start leaves Google sign-in on when both credentials are in supabase/.env', () => {
+    const r = run(['start'], {
+      env: { STATUS_AFTER_START: '1' },
+      supabaseEnvFile: 'SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=from-file\nSUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=from-file-secret\n',
+    });
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('google-enabled=\n');
+  });
+
+  it('start turns Google off when only one of the two credentials exists', () => {
+    const r = run(['start'], { env: { STATUS_AFTER_START: '1', SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: 'real-id' } });
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('google-enabled=false');
   });
 
   it('start keeps real Google credentials from the environment', () => {

@@ -36,9 +36,12 @@ check_config() {
 }
 
 # config.toml enables Google sign-in with credentials read from the environment. Without real
-# credentials the CLI still needs values, so pass harmless placeholders (email/password sign-in
-# keeps working; the Google button then reports that Google is not set up). Real credentials come
-# from the process environment or the git-ignored backend/supabase/.env and are never overridden.
+# credentials the CLI still needs values, so pass harmless placeholders AND turn the provider off
+# (SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED=false). Left on, Auth sends Google the placeholder client
+# id and the user lands on Google's "Error 401: invalid_client" page; switched off, the button shows
+# the app's "Google sign-in is not set up" message and email/password sign-in keeps working. Real
+# credentials (both id and secret) come from the process environment or the git-ignored
+# backend/supabase/.env, are never overridden, and leave the provider on.
 #
 # config.toml also enables Cloudflare Turnstile for password sign-in. Locally it defaults to
 # Cloudflare's published always-pass TEST secret (a public documentation value, not a secret), so
@@ -50,6 +53,7 @@ google_env_defaults() {
     if [ -n "${!var:-}" ]; then continue; fi
     if [ -f "$envfile" ] && grep -Eq "^${var}=.+" "$envfile"; then continue; fi
     export "$var=google-not-configured"
+    export SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED=false
   done
   var=SUPABASE_AUTH_CAPTCHA_SECRET
   if [ -z "${!var:-}" ] && ! { [ -f "$envfile" ] && grep -Eq "^${var}=.+" "$envfile"; }; then

@@ -329,6 +329,9 @@ max_frequency = "5s"
 # SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID / _SECRET in the git-ignored backend/supabase/.env and
 # start the stack with `pnpm db:start`. Authorised redirect URI for the Google OAuth client:
 #   http://127.0.0.1:54321/auth/v1/callback
+# Without both values, `pnpm db:start` starts the stack with Google switched off
+# (SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED=false) so the button reports "not set up" instead of
+# sending users to a Google error page. Keep `enabled = true` here for hosted-like behaviour.
 [auth.external.google]
 enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"

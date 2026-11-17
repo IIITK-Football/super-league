@@ -25,7 +25,7 @@ New keys are **not JWTs**: never send one as `Authorization: Bearer`. supabase-j
 | `ALLOW_REMOTE_SUPABASE` | ignored local files only | Dev opt-in for a non-local project |
 | `CRON_SECRET`, `API_FOOTBALL_KEY`, `API_SPORTS_KEY` | backend env | Scheduled jobs and third-party APIs (not Supabase keys) |
 | `R2_*`, `NEXT_PUBLIC_*R2*` | backend env | Cloudflare R2 media (unchanged; storage redesign is separate) |
-| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/_SECRET`, `SUPABASE_AUTH_CAPTCHA_SECRET` | `backend/supabase/.env` (local Auth config) | Local Google sign-in and Turnstile secret |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/_SECRET`, `SUPABASE_AUTH_CAPTCHA_SECRET` | `backend/supabase/.env` (local Auth config) | Local Google sign-in and Turnstile secret. Without **both** Google values, `pnpm db:start` switches local Google sign-in off (the button says it is not set up) rather than sending users to a Google `invalid_client` error |
 
 Examples: [`frontend/.env.example`](../frontend/.env.example) (browser), [`frontend/.dev.vars.example`](../frontend/.dev.vars.example) (Pages Functions), [`backend/.env.example`](../backend/.env.example) (server), [`backend/supabase/.env.example`](../backend/supabase/.env.example) (local Auth).
 
