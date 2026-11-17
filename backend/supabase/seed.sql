@@ -1,5 +1,24 @@
 BEGIN;
 
+-- seed-guard:start
+-- This seed is for SYNTHETIC fixtures only (local development and the staging project). Refuse to
+-- run on a database that holds real accounts: the seed's own accounts (lamb, river, diana, sydney,
+-- fanNN @iiitkottayam.ac.in) are not counted, a handful of developer or tester accounts is fine,
+-- and a real production database always has far more than 20 other accounts.
+DO $$
+DECLARE
+  other_accounts integer;
+BEGIN
+  SELECT count(*) INTO other_accounts
+  FROM auth.users
+  WHERE email IS NULL
+     OR email !~ '^(lamb|river|diana|sydney|fan[0-9]{2})@iiitkottayam\.ac\.in$';
+  IF other_accounts > 20 THEN
+    RAISE EXCEPTION 'Refusing to seed: found % non-fixture accounts. This seed is for synthetic fixtures only and must not run against a database with real users.', other_accounts;
+  END IF;
+END $$;
+-- seed-guard:end
+
 -- Offline, deterministic image placeholder (SVG data URI). Local fixtures must not
 -- depend on third-party image hosts or production R2.
 CREATE FUNCTION pg_temp.placeholder_svg(label text, bg text, size integer DEFAULT 256)
