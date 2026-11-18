@@ -83,15 +83,19 @@ describe('schema inventory on the local database', () => {
   });
 
   it('reports what the migrations create in the public schema', () => {
-    expect(by('table')).toHaveLength(20);
+    expect(by('table')).toHaveLength(26);
     expect(by('view')).toHaveLength(3);
-    expect(by('function')).toHaveLength(10);
-    expect(by('policy')).toHaveLength(44);
+    expect(by('function')).toHaveLength(18);
+    expect(by('policy')).toHaveLength(55);
+    // the division and season model (20261119000000_divisions_and_seasons.sql)
+    for (const t of ['divisions', 'seasons', 'section_types', 'season_sections', 'team_entries', 'legacy_division_map']) {
+      expect(by('table').map((r) => r.object), t).toContain(`public.${t}`);
+    }
   });
 
   it('includes row level security flags, constraints and indexes', () => {
     expect(by('table').every((t) => /rls=(true|false)/.test(t.detail))).toBe(true);
-    expect(by('table').filter((t) => t.detail.includes('rls=true'))).toHaveLength(20);
+    expect(by('table').filter((t) => t.detail.includes('rls=true'))).toHaveLength(26);
     expect(by('constraint').length).toBeGreaterThan(40);
     expect(by('index').length).toBeGreaterThan(15);
   });
@@ -101,7 +105,7 @@ describe('schema inventory on the local database', () => {
     for (const name of ['ensure_domain_lock', 'ensure_domain_lock_on_email_change', 'on_auth_user_created', 'on_auth_user_role_created']) {
       expect(triggers, name).toContain(`auth.users.${name}`);
     }
-    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(3);
+    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(9);
   });
 
   it('includes function bodies and security-definer settings used to judge drift', () => {

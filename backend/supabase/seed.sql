@@ -729,4 +729,8 @@ SELECT
 FROM _mega_users u
 ON CONFLICT (id) DO NOTHING;
 
+-- Divisions and seasons come from the legacy rows above through the same idempotent backfill the migration
+-- runs on hosted data (docs/decisions/D-01-division-season-mapping.md). Re-seeding changes nothing.
+SELECT public.backfill_legacy_divisions();
+
 COMMIT;

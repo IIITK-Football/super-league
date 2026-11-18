@@ -214,6 +214,33 @@
         "frontend/src/components/__tests__/**"
       ]
     },
+    "divisions": {
+      "description": "Division, season and section model: the dictator path through the local Auth and Data API (allowed and denied cases, hidden and archived records)",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": [
+        "backend/tests/divisions/**",
+        "backend/supabase/migrations/*division*"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "tests/divisions"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/supabase/migrations/*division*"
+      ],
+      "testPaths": [
+        "backend/tests/divisions/**"
+      ]
+    },
     "auth-roles": {
       "description": "Five-role authorization: API checks and RLS (user, captain, scorer, editor, dictator)",
       "owner": "backend",
