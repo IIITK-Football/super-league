@@ -5,7 +5,7 @@
 -- It writes only the SL-003 allow-list: position and jersey number on the season roster place; overall rating,
 -- attributes/play styles and portrait on the player's card. Never a name, email, account link or the roster itself.
 -- It pins its search_path; anonymous callers and PUBLIC cannot execute it. Roles follow
--- docs/decisions/SL-003-role-capability-matrix.md. Editor, normal user and legacy admin are tested.
+-- docs/decisions/SL-003-role-capability-matrix.md. Editor and normal users (including a former legacy admin, now an ordinary user) are tested.
 BEGIN;
 SELECT plan(40);
 
@@ -20,7 +20,7 @@ UPDATE public.user_roles SET role = 'captain'  WHERE user_id IN ('c0000000-0000-
                                                                  'c0000000-0000-4000-8000-000000000008');
 UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'c0000000-0000-4000-8000-000000000003';
 UPDATE public.user_roles SET role = 'editor'   WHERE user_id = 'c0000000-0000-4000-8000-000000000005';
-UPDATE public.user_roles SET role = 'admin'    WHERE user_id = 'c0000000-0000-4000-8000-000000000006';
+UPDATE public.user_roles SET role = 'default'    WHERE user_id = 'c0000000-0000-4000-8000-000000000006';
 -- user 4 (normal) and user 7 (assigned.norole) keep the default role
 
 CREATE TEMP TABLE _season AS
@@ -148,7 +148,7 @@ SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8
   'P0001', 'Player is not part of your assigned roster', 'an editor who is not assigned is refused (editor is newsletter-only)');
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000006', 'a1000000-0000-4000-8000-000000000001',
   'GK', 1, 99, '{}'::jsonb, 'x')$$,
-  'P0001', 'Player is not part of your assigned roster', 'a legacy admin is not treated as a dictator or captain');
+  'P0001', 'Player is not part of your assigned roster', 'a former legacy admin, now an ordinary user, is not treated as a dictator or captain');
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-0000000000ff',
   'ST', 9, 80, '{}'::jsonb, NULL)$$,
   'P0001', 'Player is not part of your assigned roster', 'an unknown player gives the same error (no information about which players exist)');
@@ -166,10 +166,10 @@ UPDATE public.user_roles SET role = 'editor' WHERE user_id = 'c0000000-0000-4000
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'a1000000-0000-4000-8000-000000000003',
   'ST', 9, 80, '{}'::jsonb, 'new-c')$$,
   'P0001', 'Captain access is required to update players', 'an assigned editor is refused: no role implies another');
-UPDATE public.user_roles SET role = 'admin' WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
+UPDATE public.user_roles SET role = 'default' WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'a1000000-0000-4000-8000-000000000003',
   'ST', 9, 80, '{}'::jsonb, 'new-c')$$,
-  'P0001', 'Captain access is required to update players', 'an assigned legacy admin is refused');
+  'P0001', 'Captain access is required to update players', 'an assigned former legacy admin, now an ordinary user, is refused');
 UPDATE public.user_roles SET role = 'captain' WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
 SELECT lives_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'a1000000-0000-4000-8000-000000000003',
   'ST', 9, 80, '{}'::jsonb, 'new-c')$$,

@@ -1,6 +1,6 @@
 // Group: rosters. Dictator player and roster management through the real local Data API, as the Teams & Rosters
 // dashboard sends it: each account is signed in with its own token, so row level security, create_rostered_player
-// and the history triggers decide. Allowed for a dictator; refused for a captain, legacy admin, editor, normal user
+// and the history triggers decide. Allowed for a dictator; refused for a captain, editor, normal user
 // and anon, with nothing written. Also the captain portrait upload route and the registration route. Runs against
 // THIS repository's local Supabase stack (127.0.0.1:54321).
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -56,7 +56,7 @@ beforeAll(async () => {
   const c = clients(keys);
   admin = c.admin;
   anonClient = c.anon();
-  for (const role of ['dictator', 'captain', 'admin', 'editor', 'default']) as[role] = await signIn(role, c);
+  for (const role of ['dictator', 'captain', 'editor', 'default']) as[role] = await signIn(role, c);
 
   // The test's own division: season A is its current season (captains edit only current-season rosters).
   made.division = must(await admin.from('divisions').insert({ slug: tag, name: `${tag} Division` }).select('id').single()).data!.id;
@@ -168,7 +168,7 @@ describe('a dictator manages players and season rosters', () => {
   });
 });
 
-describe.each(['captain', 'admin', 'editor', 'default'])('a %s account', (who) => {
+describe.each(['captain', 'editor', 'default'])('a %s account', (who) => {
   it('cannot create, rename, move, add or remove players, and nothing is written', async () => {
     const before = (await admin.from('players').select('id', { count: 'exact', head: true }).ilike('first_name', `${tag}%`)).count;
     const created = await create(who, made.entries[0], `${tag}Intruder`);
@@ -199,7 +199,7 @@ describe('the captain portrait upload route', () => {
     expect((await upload('captain', own)).status).toBe(400);
     expect((await upload('dictator', own)).status).toBe(400);
     expect((await upload('captain', other)).status).toBe(403);
-    for (const who of ['admin', 'editor', 'default']) expect((await upload(who, own)).status).toBe(403);
+    for (const who of ['editor', 'default']) expect((await upload(who, own)).status).toBe(403);
     expect((await upload(null, own)).status).toBe(401);
   });
 });

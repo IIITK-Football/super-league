@@ -1,6 +1,6 @@
 // Group: audit. The append-only audit history through THIS repository's local Auth and Data API (127.0.0.1:54321):
 // a dictator's configuration change, a role change and a roster change made with their own token are recorded with
-// that dictator as actor and a safe summary; captains, legacy admins, editors, normal users and anon read nothing;
+// that dictator as actor and a safe summary; captains, editors, normal users and anon read nothing;
 // nobody can change or remove history, the server key included; no private contact data appears in it.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -35,7 +35,7 @@ beforeAll(async () => {
   const c = clients(keys);
   admin = c.admin;
   anon = c.anon();
-  for (const role of ['dictator', 'captain', 'admin', 'editor', 'default']) as[role] = await signIn(role, c);
+  for (const role of ['dictator', 'captain', 'editor', 'default']) as[role] = await signIn(role, c);
 }, 60000);
 
 afterAll(async () => {
@@ -83,9 +83,9 @@ describe('recording', () => {
 });
 
 describe('reading', () => {
-  it('a dictator reads the history; captains, legacy admins, editors and normal users read nothing; anon is refused', async () => {
+  it('a dictator reads the history; captains, editors and normal users read nothing; anon is refused', async () => {
     expect(((await as.dictator.db.from('audit_log').select('id').limit(5)).data ?? []).length).toBeGreaterThan(0);
-    for (const who of ['captain', 'admin', 'editor', 'default']) {
+    for (const who of ['captain', 'editor', 'default']) {
       const { data, error } = await as[who].db.from('audit_log').select('id').limit(5);
       expect(error, who).toBeNull();
       expect(data, who).toEqual([]);

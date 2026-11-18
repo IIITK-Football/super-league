@@ -111,7 +111,7 @@ FROM generate_series(1, 5) AS n;
 UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'c4000000-0000-4000-8000-000000000001';
 UPDATE public.user_roles SET role = 'captain'  WHERE user_id = 'c4000000-0000-4000-8000-000000000002';
 UPDATE public.user_roles SET role = 'editor'   WHERE user_id = 'c4000000-0000-4000-8000-000000000003';
-UPDATE public.user_roles SET role = 'admin'    WHERE user_id = 'c4000000-0000-4000-8000-000000000004';
+UPDATE public.user_roles SET role = 'default'    WHERE user_id = 'c4000000-0000-4000-8000-000000000004';
 UPDATE public.seasons SET archived_at = now() WHERE id = 'f2000000-0000-4000-8000-000000000003';
 
 SELECT ok(NOT has_function_privilege('anon', 'public.is_dictator()', 'EXECUTE'), 'anon cannot execute is_dictator');
@@ -123,7 +123,7 @@ SELECT is(pg_temp.exec_as('authenticated', 'c4000000-0000-4000-8000-000000000003
   $$INSERT INTO public.seasons (division_id, slug, name) VALUES ((SELECT id FROM public.divisions WHERE slug = 'wsl'), 'x', 'X')$$), '42501',
   'an editor cannot create a season');
 SELECT is(pg_temp.exec_as('authenticated', 'c4000000-0000-4000-8000-000000000004',
-  $$INSERT INTO public.divisions (slug, name) VALUES ('by-admin', 'Admin')$$), '42501', 'the legacy admin label grants nothing');
+  $$INSERT INTO public.divisions (slug, name) VALUES ('by-admin', 'Admin')$$), '42501', 'a former legacy admin, now an ordinary user, gets nothing');
 SELECT is(pg_temp.exec_as('authenticated', 'c4000000-0000-4000-8000-000000000005',
   $$UPDATE public.divisions SET name = 'Hacked'$$), 'ok:0', 'a normal user updates no division');
 SELECT is(pg_temp.exec_as('anon', NULL, $$INSERT INTO public.divisions (slug, name) VALUES ('by-anon', 'Anon')$$), '42501',

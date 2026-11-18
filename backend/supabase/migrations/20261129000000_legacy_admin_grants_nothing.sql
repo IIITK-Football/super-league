@@ -1,8 +1,7 @@
--- The legacy stored role 'admin' grants nothing (SL-003: no role implies another; a legacy admin is an ordinary user
--- unless an explicitly reviewed per-person assignment says otherwise). Until now the baseline still let it manage
--- every role (its own included, so it could make itself a dictator), read every role, registration and prediction,
--- and manage matches and news. This migration only removes those grants. It changes no row: existing 'admin' rows
--- and the role's check-constraint value stay until the reviewed per-person mapping (the five-role migration). The
+-- The legacy stored role 'admin' grants nothing (SL-003: no role implies another). Until now the baseline still let
+-- it manage every role (its own included, so it could make itself a dictator), read every role, registration and
+-- prediction, and manage matches and news. This migration only removes those grants and changes no row; the next
+-- migration retires the value itself (owner decision 2026-11-19: no legacy admin is ported or promoted). The
 -- separate open write policies on matches and news are a known gap closed by the security audit, not here.
 
 -- Role management: dictators only.

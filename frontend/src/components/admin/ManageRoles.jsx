@@ -8,9 +8,7 @@ const roleOptions = [
   { value: 'editor', label: 'Editor' },
   { value: 'dictator', label: 'Dictator' },
 ];
-// The legacy stored role admin grants nothing and cannot be assigned; an account still holding it is shown so a
-// dictator can give it a reviewed role.
-const LEGACY_ADMIN = { value: 'admin', label: 'Legacy admin (no access)' };
+
 
 export default function ManageRoles({ currentUserId }) {
   const [users, setUsers] = useState([]);
@@ -60,6 +58,6 @@ export default function ManageRoles({ currentUserId }) {
   return <div className="space-y-8 p-6">
     <div><h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><ShieldCheck size={21} /> Access control</h2><p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Choose a role beside a college email to update access</p></div>
     {(error || message) && <p className={error ? 'text-sm text-red-300' : 'text-sm text-emerald-300'}>{error || message}</p>}
-    {loading ? <p className="text-zinc-500">Loading registered users...</p> : <div className="divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10">{users.map((user) => <div key={user.id} className="grid gap-3 bg-black/30 p-4 sm:grid-cols-[1fr_220px] sm:items-center"><div><p className="font-bold text-white">{user.email}</p>{user.real_name && <p className="mt-1 text-xs text-zinc-500">{user.real_name}</p>}</div><select value={user.role} onChange={(event) => updateRole(user.id, event.target.value)} disabled={savingUserId === user.id} aria-label={`Role for ${user.email}`} className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white disabled:opacity-50">{user.role === 'admin' && <option value={LEGACY_ADMIN.value} disabled>{LEGACY_ADMIN.label}</option>}{roleOptions.map((option) => <option key={option.value} value={option.value} disabled={user.id === currentUserId && option.value !== 'dictator'}>{option.label}</option>)}</select></div>)}</div>}
+    {loading ? <p className="text-zinc-500">Loading registered users...</p> : <div className="divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10">{users.map((user) => <div key={user.id} className="grid gap-3 bg-black/30 p-4 sm:grid-cols-[1fr_220px] sm:items-center"><div><p className="font-bold text-white">{user.email}</p>{user.real_name && <p className="mt-1 text-xs text-zinc-500">{user.real_name}</p>}</div><select value={user.role} onChange={(event) => updateRole(user.id, event.target.value)} disabled={savingUserId === user.id} aria-label={`Role for ${user.email}`} className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white disabled:opacity-50">{roleOptions.map((option) => <option key={option.value} value={option.value} disabled={user.id === currentUserId && option.value !== 'dictator'}>{option.label}</option>)}</select></div>)}</div>}
   </div>;
 }

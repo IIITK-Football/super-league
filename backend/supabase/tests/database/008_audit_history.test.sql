@@ -11,7 +11,7 @@ SELECT ('a8000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'aut
 FROM generate_series(1, 4) AS n;
 UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'a8000000-0000-4000-8000-000000000001';
 UPDATE public.user_roles SET role = 'captain'  WHERE user_id = 'a8000000-0000-4000-8000-000000000002';
-UPDATE public.user_roles SET role = 'admin'    WHERE user_id = 'a8000000-0000-4000-8000-000000000004';
+UPDATE public.user_roles SET role = 'default'    WHERE user_id = 'a8000000-0000-4000-8000-000000000004';
 
 CREATE FUNCTION pg_temp.as_user(p_n integer, p_sql text, p_role text DEFAULT NULL)
 RETURNS integer LANGUAGE plpgsql AS $$
@@ -90,7 +90,7 @@ SELECT throws_ok($$UPDATE public.audit_log SET actor_role = 'x' WHERE id = (SELE
   'even the database owner is refused by the append-only trigger');
 SELECT is(
   ARRAY[pg_temp.as_user(2, 'SELECT count(*) FROM public.audit_log'), pg_temp.as_user(3, 'SELECT count(*) FROM public.audit_log'), pg_temp.as_user(4, 'SELECT count(*) FROM public.audit_log')]::int[],
-  ARRAY[0, 0, 0], 'a captain, a normal user and a legacy admin read nothing; dictators do (checked above through pg_temp.last as owner)');
+  ARRAY[0, 0, 0], 'a captain, a normal user and a former legacy admin (now an ordinary user) read nothing; dictators do (checked above through pg_temp.last as owner)');
 
 SELECT * FROM finish();
 ROLLBACK;

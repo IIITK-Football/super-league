@@ -24,7 +24,7 @@ SELECT ('c5000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'aut
 FROM generate_series(1, 4) AS n;
 UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'c5000000-0000-4000-8000-000000000001';
 UPDATE public.user_roles SET role = 'captain'  WHERE user_id = 'c5000000-0000-4000-8000-000000000002';
-UPDATE public.user_roles SET role = 'admin'    WHERE user_id = 'c5000000-0000-4000-8000-000000000003';
+UPDATE public.user_roles SET role = 'default'    WHERE user_id = 'c5000000-0000-4000-8000-000000000003';
 
 INSERT INTO public.seasons (id, division_id, slug, name, status) VALUES
   ('f5000000-0000-4000-8000-000000000001', (SELECT id FROM public.divisions WHERE slug = 'super-league'), '2027', '2027', 'planned'),
@@ -42,7 +42,7 @@ SELECT is((SELECT c FROM pg_proc p, unnest(p.proconfig) c WHERE p.oid = 'public.
   'search_path=""', 'it pins an empty search_path');
 
 SELECT is(pg_temp.call_as('authenticated', 'c5000000-0000-4000-8000-000000000002', 'f5000000-0000-4000-8000-000000000001'), '42501', 'a captain is refused');
-SELECT is(pg_temp.call_as('authenticated', 'c5000000-0000-4000-8000-000000000003', 'f5000000-0000-4000-8000-000000000001'), '42501', 'the legacy admin label is refused');
+SELECT is(pg_temp.call_as('authenticated', 'c5000000-0000-4000-8000-000000000003', 'f5000000-0000-4000-8000-000000000001'), '42501', 'a former legacy admin, now an ordinary user, is refused');
 SELECT is(pg_temp.call_as('authenticated', 'c5000000-0000-4000-8000-000000000004', 'f5000000-0000-4000-8000-000000000001'), '42501', 'a normal user is refused');
 SELECT is(pg_temp.call_as('anon', NULL, 'f5000000-0000-4000-8000-000000000001'), '42501', 'anon is refused');
 SELECT ok((SELECT is_current FROM public.seasons WHERE id = (SELECT id FROM old_current)), 'refusals change nothing');

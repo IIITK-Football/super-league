@@ -11,7 +11,7 @@ SELECT ('b7000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'aut
 FROM generate_series(1, 5) AS n;
 UPDATE public.user_roles SET role = 'captain'  WHERE user_id = 'b7000000-0000-4000-8000-000000000002';
 UPDATE public.user_roles SET role = 'editor'   WHERE user_id = 'b7000000-0000-4000-8000-000000000003';
-UPDATE public.user_roles SET role = 'admin'    WHERE user_id = 'b7000000-0000-4000-8000-000000000004';
+UPDATE public.user_roles SET role = 'default'    WHERE user_id = 'b7000000-0000-4000-8000-000000000004';
 UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'b7000000-0000-4000-8000-000000000005';
 
 -- The captain holds the registration of a seeded Super League team for its season.
@@ -148,7 +148,7 @@ SELECT throws_ok($$SELECT pg_temp.as_user(NULL, 'SELECT count(*) FROM public.pla
 SELECT is(pg_temp.as_user(1, 'SELECT count(*) FROM public.player_private_details'), 0, 'a normal user sees no private details');
 SELECT is(pg_temp.as_user(2, 'SELECT count(*) FROM public.player_private_details'), 0, 'a captain sees no private details');
 SELECT is(pg_temp.as_user(3, 'SELECT count(*) FROM public.player_private_details'), 0, 'an editor sees no private details');
-SELECT is(pg_temp.as_user(4, 'SELECT count(*) FROM public.player_private_details'), 0, 'a legacy admin sees no private details');
+SELECT is(pg_temp.as_user(4, 'SELECT count(*) FROM public.player_private_details'), 0, 'a former legacy admin, now an ordinary user, sees no private details');
 SELECT ok(pg_temp.as_user(5, 'SELECT count(*) FROM public.player_private_details') > 0, 'a dictator reads private details');
 SELECT is(pg_temp.as_user(2, 'SELECT count(*) FROM public.legacy_roster_map'), 0, 'only dictators read the roster mapping');
 
@@ -158,7 +158,7 @@ SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$INSERT INTO public.players (firs
 SELECT throws_ok($$SELECT pg_temp.as_user(2, $q$INSERT INTO public.players (first_name, last_name) VALUES ('Fake', 'Player')$q$)$$, '42501', NULL,
   'a captain cannot create a player');
 SELECT throws_ok($$SELECT pg_temp.as_user(4, $q$INSERT INTO public.players (first_name, last_name) VALUES ('Fake', 'Player')$q$)$$, '42501', NULL,
-  'a legacy admin cannot create a player');
+  'a former legacy admin, now an ordinary user, cannot create a player');
 SELECT is(pg_temp.as_user(2, $q$UPDATE public.players SET first_name = 'Renamed' WHERE id = (SELECT player_id FROM _fx)$q$), 0,
   'a captain cannot rename their own player directly');
 SELECT is(pg_temp.as_user(2, $q$DELETE FROM public.roster_memberships WHERE id = (SELECT membership_id FROM _fx)$q$), 0,

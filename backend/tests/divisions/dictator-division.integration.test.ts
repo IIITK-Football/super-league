@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { clients, localKeys, uniqueEmail } from '../auth/local-supabase';
 
 const PASSWORD = 'division-test-password-1';
-const ROLES = ['dictator', 'captain', 'editor', 'admin', 'default'] as const;
+const ROLES = ['dictator', 'captain', 'editor', 'default'] as const;
 type Role = (typeof ROLES)[number];
 
 let admin: SupabaseClient;
@@ -133,8 +133,8 @@ describe('a dictator configures a new division as data', () => {
 });
 
 describe('no other role can configure divisions', () => {
-  for (const role of ['captain', 'editor', 'admin', 'default'] as const) {
-    it(`${role === 'default' ? 'a normal user' : role === 'admin' ? 'the legacy admin label' : `a ${role}`} is refused`, async () => {
+  for (const role of ['captain', 'editor', 'default'] as const) {
+    it(`${role === 'default' ? 'a normal user' : `a ${role}`} is refused`, async () => {
       const create = await as(role).from('divisions').insert({ slug: `${role}-${suffix}`, name: 'Nope' });
       expect(create.error?.code).toBe('42501');
 
