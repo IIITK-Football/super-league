@@ -105,8 +105,8 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
   };
   // A synthetic team in the current Freshers season: the team, its season entry, the captain's registration and one
   // player on the season roster (a roster place). Names carry the run's prefix so cleanup can find them.
-  const makeTeam = async (captain, name) => {
-    const season = await currentFreshersSeason();
+  const makeTeam = async (captain, name, seasonId = null) => {
+    const season = seasonId ?? await currentFreshersSeason();
     const post = async (path, body, what) => {
       const r = await admin(path, { method: 'POST', prefer: 'return=representation', body });
       if (!r.ok) throw new Error(`could not create the ${name} ${what} (${message(r)})`);
@@ -281,6 +281,14 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     } else {
       record('Nobody can change or remove audit history, the server key included', 'FAIL', 'no audit entry to test');
     }
+
+    // A captain edits only the current season's roster: a registration and roster place in a past season of the
+    // check division are refused, so an old captain cannot change a player who has since moved team.
+    const pastName = 'A captain cannot change a player on their team in a season that is not current';
+    const past = divisionId ? await admin(`/rest/v1/seasons?division_id=eq.${divisionId}&is_current=eq.false&select=id`) : null;
+    const pastSeason = past?.data?.[0]?.id;
+    if (pastSeason) expectRefused(pastName, await rpc(tokenA, (await makeTeam(captainA, 'D', pastSeason)).member), /only the current season/i);
+    else record(pastName, 'FAIL', 'the check division has no past season');
 
     const seenByUser = await asUser(userToken)(`/rest/v1/divisions?slug=eq.${tag}&select=id`);
     const seenByAnon = await anon(`/rest/v1/divisions?slug=eq.${tag}&select=id`);

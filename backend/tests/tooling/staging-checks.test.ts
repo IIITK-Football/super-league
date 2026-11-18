@@ -13,7 +13,7 @@ const PUBLISHABLE = ['sb', 'publishable', 'NEVER_PRINT_THIS_key_abcdef'].join('_
 const goodEnv = () => ({ SUPABASE_URL: `https://${STAGING}.supabase.co`, SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE, SUPABASE_SECRET_KEY: SECRET, ALLOW_REMOTE_SUPABASE: 'true' });
 
 type Opts = { captchaEnforced?: boolean; openRpc?: boolean; failAtRpc?: boolean; leakEmail?: boolean; openDivisions?: boolean; brokenCurrentSeason?: boolean;
-  noAudit?: boolean; openAudit?: boolean; editableAudit?: boolean };
+  noAudit?: boolean; openAudit?: boolean; editableAudit?: boolean; anySeasonCaptain?: boolean };
 
 function fakeStaging(opts: Opts = {}) {
   const { captchaEnforced = true, openRpc = false, failAtRpc = false, openDivisions = false, brokenCurrentSeason = false } = opts;
@@ -152,6 +152,9 @@ function fakeStaging(opts: Opts = {}) {
         const assigned = entry && [...regs.values()].some((r) => r.captain_id === me && regTeams.get(r.id)?.team_id === entry.team_id && regTeams.get(r.id)?.season_id === m.season_id);
         if (!m || (!assigned && role !== 'dictator')) return json(400, { message: 'Player is not part of your assigned roster' });
         if (role !== 'captain' && role !== 'dictator') return json(400, { message: 'Captain access is required to update players' });
+        if (role === 'captain' && !opts.anySeasonCaptain && seasons.get(m.season_id)?.is_current === false) {
+          return json(400, { message: 'Only the current season\'s roster can be edited by its captain' });
+        }
       }
       if (m) { m.jersey_number = body.p_jersey_number; m.position = body.p_position; }
       return new Response(null, { status: 204 });
@@ -196,10 +199,10 @@ function fakeStaging(opts: Opts = {}) {
     if (p === '/rest/v1/seasons') {
       const divisionIds = inList(u.searchParams.get('division_id'));
       if (method === 'GET') {
-        const current = u.searchParams.get('is_current') === 'eq.true';
+        const flag = u.searchParams.get('is_current');
         const divisionEq = u.searchParams.get('division_id')?.match(/^eq\.(.+)$/)?.[1];
         return json(200, [...seasons.values()]
-          .filter((x) => (!current || x.is_current) && (!divisionEq || x.division_id === divisionEq))
+          .filter((x) => (!flag || x.is_current === (flag === 'eq.true')) && (!divisionEq || x.division_id === divisionEq))
           .map((x) => ({ id: x.id, division_id: x.division_id })));
       }
       if (method === 'POST') {
@@ -287,7 +290,7 @@ describe('runChecks against a healthy staging', () => {
     expect(results.filter((r: { status: string }) => r.status === 'FAIL')).toEqual([]);
     for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /rename a player/i, /private player details/i, /dictator/i, /recovery/i, /clean/i,
                       /legacy divisions/i, /new hidden division/i, /current season switches/i, /hidden division is invisible/i, /cannot create a division/i,
-                      /recorded in the audit history/i, /audit history is hidden/i, /change or remove audit history/i]) {
+                      /recorded in the audit history/i, /audit history is hidden/i, /change or remove audit history/i, /season that is not current/i]) {
       expect(by(results, re)?.status, String(re)).toBe('PASS');
     }
     expect(s.users.size).toBe(0);
@@ -304,7 +307,8 @@ describe('runChecks against a healthy staging', () => {
     await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     const regs = s.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/rest/v1/team_registrations'));
     expect(regs.length).toBeGreaterThan(0);
-    for (const c of regs) {
+    // Team D is the past-season check, deliberately in a non-current season of the run's own division.
+    for (const c of regs.filter((r) => r.body.team_name !== 'SL CHECK D')) {
       expect(c.body.season_id).toBe('s2'); // the fake's current Freshers season
       expect(c.body).not.toHaveProperty('division');
     }
@@ -364,6 +368,13 @@ describe('runChecks detects a broken staging', () => {
     expect(by(results, /hidden division is invisible/i)?.status).toBe('FAIL');
     expect(by(results, /cannot create a division/i)?.status).toBe('FAIL');
     expect([...s.divisions.values()].some((d) => d.slug.startsWith('sl-check-'))).toBe(false); // and still cleans up
+  });
+
+  it('fails the past-season check when a captain may edit any season', async () => {
+    const s = fakeStaging({ anySeasonCaptain: true });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
+    expect(by(results, /season that is not current/i)?.status).toBe('FAIL');
+    expect(s.users.size).toBe(0); // and still cleans up
   });
 
   it('fails the audit checks when a change is not recorded, the history is readable by anyone, or it can be changed', async () => {

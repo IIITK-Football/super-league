@@ -2,7 +2,8 @@
 -- passed = t. Run it in the SQL Editor of staging or production after the migrations (it changes nothing: a READ
 -- ONLY transaction that is always rolled back). captain_update_roster_player replaced captain_update_team_member when
 -- the Freshers member table became season roster memberships (20261124000000, 20261125000000); the retired
--- overloads must be gone. The last check reads only a count of registrations.
+-- overloads must be gone. Check 11 reads only a count of registrations. Checks 12-16 cover the dictator roster
+-- functions and the roster history guard (20261127000000) and the audit history's write protection (20261126000000).
 BEGIN READ ONLY;
 
 WITH f AS (
@@ -40,6 +41,36 @@ FROM (
          NOT EXISTS (SELECT 1 FROM public.team_registrations r
                      LEFT JOIN public.user_roles ur ON ur.user_id = r.captain_id
                      WHERE ur.role IS DISTINCT FROM 'captain' AND ur.role IS DISTINCT FROM 'dictator')
+  UNION ALL
+  SELECT 12, 'the dictator roster functions exist (new team in a season / save a player / remove an unplayed player / history check)',
+         to_regprocedure('public.create_team_in_season(uuid,text)') IS NOT NULL
+         AND to_regprocedure('public.update_rostered_player(uuid,text,text,integer,jsonb,integer,text,boolean,text)') IS NOT NULL
+         AND to_regprocedure('public.delete_unplayed_player(uuid)') IS NOT NULL
+         AND to_regprocedure('public.player_has_match_history(uuid,uuid)') IS NOT NULL
+  UNION ALL
+  SELECT 13, 'anonymous callers cannot execute the dictator roster functions',
+         NOT EXISTS (SELECT 1 FROM unnest(ARRAY['public.create_team_in_season(uuid,text)',
+                                                'public.update_rostered_player(uuid,text,text,integer,jsonb,integer,text,boolean,text)',
+                                                'public.delete_unplayed_player(uuid)', 'public.player_has_match_history(uuid,uuid)']) sig
+                     WHERE to_regprocedure(sig) IS NULL OR has_function_privilege('anon', to_regprocedure(sig), 'EXECUTE'))
+  UNION ALL
+  SELECT 14, 'signed-in users can call them (each then requires the dictator role)',
+         NOT EXISTS (SELECT 1 FROM unnest(ARRAY['public.create_team_in_season(uuid,text)',
+                                                'public.update_rostered_player(uuid,text,text,integer,jsonb,integer,text,boolean,text)',
+                                                'public.delete_unplayed_player(uuid)']) sig
+                     WHERE to_regprocedure(sig) IS NULL OR NOT has_function_privilege('authenticated', to_regprocedure(sig), 'EXECUTE'))
+  UNION ALL
+  SELECT 15, 'the roster history guard runs before every change or removal of a roster place',
+         EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = 'public.roster_memberships'::regclass
+                   AND t.tgname = 'roster_memberships_keep_history' AND (t.tgtype & 26) = 26 AND t.tgenabled <> 'D')
+  UNION ALL
+  SELECT 16, 'the audit history exists and nobody but its recorder can write it (signed-in users and the server key included)',
+         to_regclass('public.audit_log') IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
+                         LEFT JOIN pg_roles r ON r.oid = a.grantee
+                         WHERE c.oid = to_regclass('public.audit_log')
+                           AND (a.grantee = 0 OR r.rolname IN ('anon', 'authenticated', 'service_role'))
+                           AND a.privilege_type NOT IN ('SELECT', 'REFERENCES', 'TRIGGER', 'MAINTAIN'))
 ) c
 ORDER BY n;
 
