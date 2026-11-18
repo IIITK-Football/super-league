@@ -3,7 +3,7 @@
 -- player only when they never played (no other season, no goal or assist, own goals included) and otherwise changes
 -- nothing; a roster place with goals or assists cannot be moved to another player or season. Rolled back.
 BEGIN;
-SELECT plan(14);
+SELECT plan(15);
 
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('a9000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
@@ -83,6 +83,13 @@ SELECT 'a9200000-0000-4000-8000-000000000001', 'a9100000-0000-4000-8000-00000000
 SELECT lives_ok($$UPDATE public.roster_memberships SET team_entry_id = 'a9200000-0000-4000-8000-000000000001' WHERE id = (SELECT id FROM _h)$$,
   'moving it to another team in the same season is still allowed');
 SELECT lives_ok($$UPDATE public.roster_memberships SET jersey_number = 88 WHERE id = (SELECT id FROM _h)$$, 'and so is changing its jersey number');
+
+-- No signed-in user or visitor can empty these tables (TRUNCATE bypasses row level security).
+SELECT is((SELECT count(*) FROM unnest(ARRAY['divisions','seasons','section_types','season_sections','team_entries','division_flairs',
+                                             'players','roster_memberships','player_private_details']) t,
+                                unnest(ARRAY['anon','authenticated']) r
+           WHERE has_table_privilege(r, 'public.' || t, 'TRUNCATE'))::int, 0,
+  'anon and signed-in users cannot truncate division, season, roster or player tables');
 
 SELECT * FROM finish();
 ROLLBACK;
