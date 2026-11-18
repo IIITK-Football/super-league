@@ -107,6 +107,26 @@ describe('AuditHistory', () => {
     expect(document.body.textContent).not.toContain(gone);
   });
 
+  it('reloads the people list once when someone new appears, and never loops for an unknown account', async () => {
+    render(<AuditHistory />);
+    await screen.findByRole('list', { name: 'Audit entries' });
+    await waitFor(() => expect(screen.getByLabelText('Changed by').disabled).toBe(false));
+    const rpcCalls = () => db.calls.filter((c) => c.rpc).length;
+    expect(rpcCalls()).toBe(1);
+    // Two new people act after the page loaded: the list now knows one of them (u9) but not the other (u8).
+    db.rows = [entry({ id: 21, actor_id: 'u9' }), entry({ id: 20, actor_id: 'u8' }), ...db.rows];
+    db.actors = [...db.actors, { actor_id: 'u9', label: 'New Person (new@iiitkottayam.ac.in)', available: true }];
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
+    const list = screen.getByRole('list', { name: 'Audit entries' });
+    await waitFor(() => expect(within(list).getByText('New Person (new@iiitkottayam.ac.in)')).toBeTruthy());
+    expect(within(list).getByText(UNKNOWN_ACCOUNT)).toBeTruthy();
+    expect(rpcCalls()).toBe(2);
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
+    await waitFor(() => expect(db.calls.filter((c) => c.table === 'audit_log').length).toBeGreaterThanOrEqual(3));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(rpcCalls()).toBe(2); // asked once per person, not on every refresh
+  });
+
   it('keeps the history usable when the people list cannot be loaded, and can retry', async () => {
     db.actorsFail = { message: 'permission denied' };
     render(<AuditHistory />);
