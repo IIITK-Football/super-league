@@ -56,10 +56,12 @@ beforeAll(async () => {
   must(await admin.from('team_entries').insert(made.teams.map((team_id) => ({ team_id, season_id: next }))));
 
   const { data: players } = must(await admin.from('players').insert([
-    { team_id: made.teams[0], first_name: tag, last_name: 'Striker' },
-    { team_id: made.teams[0], first_name: tag, last_name: 'Creator' },
+    { first_name: tag, last_name: 'Striker' },
+    { first_name: tag, last_name: 'Creator' },
   ]).select('id'));
   made.players = players!.map((p) => p.id);
+  const rovers = must(await admin.from('team_entries').select('id').eq('team_id', made.teams[0]).eq('season_id', next).single()).data!;
+  must(await admin.from('roster_memberships').insert(made.players.map((player_id, i) => ({ player_id, team_entry_id: rovers.id, season_id: next, jersey_number: i + 1 }))));
   const { data: match } = must(await admin.from('matches').insert({
     home_team_id: made.teams[0], away_team_id: made.teams[1], season_id: next,
     status: 'completed', home_score: 1, away_score: 0, date: '2027-02-01T12:00:00Z',
@@ -73,6 +75,7 @@ afterAll(async () => {
   if (!admin) return;
   await admin.from('division_flairs').delete().eq('user_id', LAMB).eq('division_id', wsl?.id ?? '');
   for (const id of made.matches) await admin.from('matches').delete().eq('id', id); // goals cascade
+  await admin.from('roster_memberships').delete().in('season_id', made.seasons);
   for (const id of made.players) await admin.from('players').delete().eq('id', id);
   await admin.from('team_entries').delete().in('season_id', made.seasons);
   for (const id of made.teams) await admin.from('teams').delete().eq('id', id);
@@ -151,10 +154,14 @@ describe('standings, teams and statistics', () => {
     expect(sl.body.data.topScorers[0].goalsScored).toBe(best![0].goals);
   });
 
-  it('a season played with registration rosters (Freshers) reports its members', async () => {
+  it('a season played with registration rosters (Freshers) reports its players from the same source', async () => {
     const { status, body } = await call('leaderboard', 'division=freshers');
     expect(status).toBe(200);
     expect(body.data.topScorers.length).toBeGreaterThan(0);
+    const season = (await admin.from('seasons').select('id').eq('is_current', true)
+      .eq('division_id', (await admin.from('divisions').select('id').eq('slug', 'freshers').single()).data!.id).single()).data!;
+    const { data: best } = await admin.from('season_player_stats').select('goals').eq('season_id', season.id).order('goals', { ascending: false }).limit(1);
+    expect(body.data.topScorers[0].goalsScored).toBe(best![0].goals);
   });
 
   it('legends add a player\'s goals up across every season', async () => {

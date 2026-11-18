@@ -44,9 +44,13 @@ beforeAll(async () => {
   made.teams = must(await admin.from('teams').insert([{ name: `${tag} North`, short_name: 'NOR' }, { name: `${tag} South`, short_name: 'SOU' }]).select('id')).data!.map((t) => t.id);
   made.entries = must(await admin.from('team_entries').insert(made.teams.map((team_id) => ({ team_id, season_id: made.season }))).select('id')).data!.map((e) => e.id);
   made.players = must(await admin.from('players').insert([
-    { team_id: made.teams[0], team_entry_id: made.entries[0], first_name: tag, last_name: 'Keeper' },
-    { team_id: made.teams[1], team_entry_id: made.entries[1], first_name: tag, last_name: 'Winger' },
+    { first_name: tag, last_name: 'Keeper' },
+    { first_name: tag, last_name: 'Winger' },
   ]).select('id')).data!.map((p) => p.id);
+  must(await admin.from('roster_memberships').insert([
+    { player_id: made.players[0], team_entry_id: made.entries[0], season_id: made.season, jersey_number: 1 },
+    { player_id: made.players[1], team_entry_id: made.entries[1], season_id: made.season, jersey_number: 7 },
+  ]));
   made.matches = must(await admin.from('matches').insert([
     { home_team_id: made.teams[0], away_team_id: made.teams[1], season_id: made.season, status: 'scheduled', date: '2027-03-01T12:00:00Z' },
     { home_team_id: made.teams[1], away_team_id: made.teams[0], season_id: made.season, status: 'completed', home_score: 1, away_score: 0, date: '2027-02-01T12:00:00Z', scorers: [], assists: [] },
@@ -57,6 +61,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!admin) return;
   for (const id of made.matches) await admin.from('matches').delete().eq('id', id); // predictions cascade
+  if (made.season) await admin.from('roster_memberships').delete().eq('season_id', made.season);
   for (const id of made.players) await admin.from('players').delete().eq('id', id);
   if (made.season) await admin.from('team_entries').delete().eq('season_id', made.season);
   for (const id of made.teams) await admin.from('teams').delete().eq('id', id);
@@ -73,7 +78,9 @@ describe('season rosters', () => {
     expect(current.body.data).toHaveLength(64);
     expect(current.body.data.map((p: any) => p.last_name)).not.toContain('Keeper');
     const freshers = await get('players', 'division=freshers');
-    expect(freshers.body.data.length).toBeGreaterThan(64); // the players roster plus the registration rosters
+    // Eight players per team, plus the seeded Super League player who also plays for The Beef; nobody twice.
+    expect(freshers.body.data).toHaveLength(65);
+    expect(new Set(freshers.body.data.map((p: any) => p.id)).size).toBe(65);
   });
 
   it('a player profile names its season and counts that season\'s goals', async () => {

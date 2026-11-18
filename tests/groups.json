@@ -302,6 +302,46 @@
         "frontend/src/components/admin/__tests__/ManageDivisions.local.test.jsx"
       ]
     },
+    "rosters": {
+      "description": "Player identity and season rosters: one reusable FUT card per person, roster places per season, season-specific statistics from one source, dictator roster management and captain roster edits, against the local Auth and Data API (allowed and denied cases)",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": [
+        "backend/tests/rosters/**",
+        "backend/supabase/migrations/*roster*",
+        "backend/supabase/rehearsal/**",
+        "backend/app/api/players/**",
+        "backend/app/api/leaderboard/**",
+        "backend/app/api/legends/**",
+        "backend/app/api/home/dashboard/**",
+        "backend/app/api/admin/matches/live/**"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/rosters"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/supabase/migrations/*roster*",
+        "backend/supabase/rehearsal/**",
+        "backend/app/api/players/**",
+        "backend/app/api/leaderboard/**",
+        "backend/app/api/legends/**",
+        "backend/app/api/home/dashboard/**",
+        "backend/app/api/admin/matches/live/**"
+      ],
+      "testPaths": [
+        "backend/tests/rosters/**"
+      ]
+    },
     "auth-roles": {
       "description": "Five-role authorization: API checks and RLS (user, captain, scorer, editor, dictator)",
       "owner": "backend",

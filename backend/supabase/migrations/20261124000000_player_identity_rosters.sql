@@ -54,7 +54,7 @@ CREATE TABLE public.roster_memberships (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id uuid NOT NULL REFERENCES public.players(id) ON DELETE RESTRICT,
   team_entry_id uuid NOT NULL,
-  season_id uuid NOT NULL,
+  season_id uuid NOT NULL REFERENCES public.seasons(id) ON DELETE RESTRICT,
   jersey_number integer CONSTRAINT roster_memberships_jersey_range CHECK (jersey_number BETWEEN 0 AND 99),
   position text CONSTRAINT roster_memberships_position_length CHECK (position IS NULL OR char_length(btrim(position)) BETWEEN 1 AND 50),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -368,22 +368,54 @@ DROP TABLE _sl_before, _sl_linked, _sl_candidates, _sl_members;
 ALTER TABLE public.goals DROP CONSTRAINT goals_player_id_fkey;
 ALTER TABLE public.goals ADD CONSTRAINT goals_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON DELETE RESTRICT;
 
--- Season statistics: the club is the team of the player's roster place in that season, else the goal's team ------
+-- Season statistics -----------------------------------------------------------------------------------------------
+-- One line per (season, player), derived from match events and never stored. Until the canonical match-event model
+-- replaces both sources, a match records goals in two places: the goals table and the match JSON (scorers, assists;
+-- elements are player-id strings or {"player_id": ...} objects). Freshers goals scored by registration-roster members
+-- were recorded only in the JSON (their goals rows failed the players key). Per match and player the greater of the
+-- two counts is used: the usual duplicated record counts once, and a JSON-only goal is no longer lost. The result is
+-- the same for every viewer. The club is the team of the player's roster place in that season, else the goal's team.
 CREATE OR REPLACE VIEW public.season_player_stats WITH (security_invoker = true) AS
-WITH events AS (
-  SELECT m.season_id, g.player_id AS player_id, g.team_id, CASE WHEN g.is_own_goal THEN 0 ELSE 1 END AS goal, 0 AS assist
-  FROM public.goals g JOIN public.matches m ON m.id = g.match_id
-  WHERE g.player_id IS NOT NULL
+WITH recorded AS (
+  SELECT g.match_id, g.player_id, CASE WHEN g.is_own_goal THEN 0 ELSE 1 END AS goal, 0 AS assist, g.team_id
+  FROM public.goals g WHERE g.player_id IS NOT NULL
   UNION ALL
-  SELECT m.season_id, g.assist_id, g.team_id, 0, 1
-  FROM public.goals g JOIN public.matches m ON m.id = g.match_id
-  WHERE g.assist_id IS NOT NULL
+  SELECT g.match_id, g.assist_id, 0, 1, g.team_id
+  FROM public.goals g WHERE g.assist_id IS NOT NULL
+), recorded_by_match AS (
+  SELECT match_id, player_id, sum(goal) AS goals, sum(assist) AS assists,
+         (array_agg(team_id ORDER BY team_id) FILTER (WHERE team_id IS NOT NULL))[1] AS team_id
+  FROM recorded GROUP BY match_id, player_id
+), listed AS (
+  SELECT m.id AS match_id, x.ref, x.kind
+  FROM public.matches m
+  CROSS JOIN LATERAL (
+    SELECT CASE jsonb_typeof(el) WHEN 'string' THEN el #>> '{}' WHEN 'object' THEN el ->> 'player_id' END AS ref, 'goal' AS kind
+    FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m.scorers) = 'array' THEN m.scorers ELSE '[]'::jsonb END) el
+    UNION ALL
+    SELECT CASE jsonb_typeof(el) WHEN 'string' THEN el #>> '{}' WHEN 'object' THEN el ->> 'player_id' END, 'assist'
+    FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m.assists) = 'array' THEN m.assists ELSE '[]'::jsonb END) el
+  ) x
+), listed_by_match AS (
+  SELECT l.match_id, p.id AS player_id,
+         count(*) FILTER (WHERE l.kind = 'goal') AS goals,
+         count(*) FILTER (WHERE l.kind = 'assist') AS assists
+  FROM listed l JOIN public.players p ON p.id::text = l.ref
+  GROUP BY l.match_id, p.id
+), per_match AS (
+  SELECT COALESCE(r.match_id, l.match_id) AS match_id,
+         COALESCE(r.player_id, l.player_id) AS player_id,
+         GREATEST(COALESCE(r.goals, 0), COALESCE(l.goals, 0)) AS goals,
+         GREATEST(COALESCE(r.assists, 0), COALESCE(l.assists, 0)) AS assists,
+         r.team_id
+  FROM recorded_by_match r
+  FULL JOIN listed_by_match l ON l.match_id = r.match_id AND l.player_id = r.player_id
 ), lines AS (
-  SELECT e.season_id, e.player_id, sum(e.goal)::integer AS goals, sum(e.assist)::integer AS assists,
-         (array_agg(e.team_id ORDER BY e.team_id) FILTER (WHERE e.team_id IS NOT NULL))[1] AS event_team_id
-  FROM events e
-  WHERE e.season_id IS NOT NULL
-  GROUP BY e.season_id, e.player_id
+  SELECT m.season_id, pm.player_id, sum(pm.goals)::integer AS goals, sum(pm.assists)::integer AS assists,
+         (array_agg(pm.team_id ORDER BY pm.team_id) FILTER (WHERE pm.team_id IS NOT NULL))[1] AS event_team_id
+  FROM per_match pm JOIN public.matches m ON m.id = pm.match_id
+  WHERE m.season_id IS NOT NULL
+  GROUP BY m.season_id, pm.player_id
 )
 SELECT l.season_id,
        p.id AS player_id,
@@ -397,7 +429,7 @@ LEFT JOIN public.roster_memberships rm ON rm.player_id = l.player_id AND rm.seas
 LEFT JOIN public.team_entries te ON te.id = rm.team_entry_id
 LEFT JOIN public.teams rt ON rt.id = te.team_id
 LEFT JOIN public.teams et ON et.id = l.event_team_id;
-COMMENT ON VIEW public.season_player_stats IS 'Goals and assists per player and season, derived from match events. The club is the team of the player''s roster place in that season.';
+COMMENT ON VIEW public.season_player_stats IS 'Goals and assists per player and season, derived from match events (per match and player, the greater of the goals table and the match JSON until the canonical event model replaces both). The club is the team of the player''s roster place in that season. The single source for every season statistic.';
 
 -- Access ----------------------------------------------------------------------------------------------------------
 DROP POLICY IF EXISTS "Admin and Captain all access players" ON public.players;

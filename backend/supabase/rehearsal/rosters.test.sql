@@ -58,9 +58,8 @@ SELECT is((SELECT counter_value FROM public.legacy_player_assist_counts WHERE pl
           (SELECT linked_player_counter FROM public._rehearsal_before), 'the counter value is kept in the snapshot');
 
 -- Season statistics still read correctly ------------------------------------------------------------------------
-SELECT is((SELECT sum(goals) FROM public.season_player_stats)::int,
-          (SELECT count(*) FROM public.goals g JOIN public.matches m ON m.id = g.match_id WHERE NOT g.is_own_goal AND m.season_id IS NOT NULL)::int,
-  'season goal lines add up to the recorded goals');
+SELECT is((SELECT goals FROM public.season_player_stats WHERE player_id = (SELECT created_member FROM public._rehearsal_ids)), 1,
+  'the created member''s goal, recorded only in the match JSON, counts for the new player');
 SELECT ok((SELECT bool_and(sps.club IS NOT NULL) FROM public.season_player_stats sps), 'every season line has a club');
 SELECT is((SELECT count(*) FROM public.roster_memberships rm GROUP BY rm.team_entry_id, rm.jersey_number HAVING count(*) > 1 AND rm.jersey_number IS NOT NULL LIMIT 1)::int,
           NULL, 'no jersey number repeats within a team entry');

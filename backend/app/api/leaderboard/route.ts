@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../lib/errorHandler'; 
@@ -29,84 +28,8 @@ export async function GET(request: Request) {
 
     const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
 
-    // Seasons played with registration rosters (team_members, e.g. Freshers) record scorers on the match by member
-    // id; seasons played with the players roster use the goals table (season_player_stats).
-    const { count: registrations, error: registrationsErr } = await supabase
-      .from('team_registrations')
-      .select('id', { count: 'exact', head: true })
-      .eq('season_id', scope.season.id);
-    if (registrationsErr) throw registrationsErr;
-
-    if ((registrations ?? 0) > 0) {
-      const secret = process.env.SUPABASE_SECRET_KEY;
-      if (!secret) {
-        throw new Error('SUPABASE_SECRET_KEY is required to fetch Freshers player stats.');
-      }
-
-      type PlayerStats = {
-        id: string;
-        name: string;
-        club: string;
-        goalsScored: number;
-        assists: number;
-      };
-
-      const adminSupabase = createClient(process.env.SUPABASE_URL!, secret);
-      const [{ data: members, error: membersErr }, { data: matches, error: matchesErr }] = await Promise.all([
-        adminSupabase
-          .from('team_members')
-          .select('id, name, first_name, last_name, team_registrations!inner(team_name, season_id)')
-          .eq('team_registrations.season_id', scope.season.id),
-        adminSupabase
-          .from('matches')
-          .select('scorers, assists')
-          .eq('season_id', scope.season.id),
-      ]);
-
-      if (membersErr) throw membersErr;
-      if (matchesErr) throw matchesErr;
-
-      const statsByPlayer = new Map<string, PlayerStats>();
-      for (const member of members || []) {
-        const registration = Array.isArray(member.team_registrations)
-          ? member.team_registrations[0]
-          : member.team_registrations;
-        const name = member.name || [member.first_name, member.last_name].filter(Boolean).join(' ');
-
-        statsByPlayer.set(member.id, {
-          id: member.id,
-          name,
-          club: registration?.team_name || 'Unassigned',
-          goalsScored: 0,
-          assists: 0,
-        });
-      }
-
-      for (const match of matches || []) {
-        for (const playerId of match.scorers || []) {
-          const player = statsByPlayer.get(playerId);
-          if (player) player.goalsScored += 1;
-        }
-        for (const playerId of match.assists || []) {
-          const player = statsByPlayer.get(playerId);
-          if (player) player.assists += 1;
-        }
-      }
-      const playerStats = [...statsByPlayer.values()];
-      const sortByStat = (stat: 'goalsScored' | 'assists') => playerStats
-        .sort((a, b) => b[stat] - a[stat] || a.name.localeCompare(b.name))
-        .slice(0, 10);
-
-      return NextResponse.json({
-        success: true,
-        message: 'Leaderboard fetched successfully',
-        data: {
-          topScorers: sortByStat('goalsScored'),
-          topAssists: sortByStat('assists'),
-        },
-      });
-    }
-
+    // Every season reads season_player_stats, the single source of season statistics (it also counts goals that
+    // Freshers seasons recorded only in the match JSON), so every viewer sees the same numbers.
     // Top 10 scorers and assisters of this season
     const shape = (r: any) => ({ id: r.player_id, name: r.name, club: r.club, goalsScored: r.goals, assists: r.assists });
     const { data: scorerRows, error: scorersErr } = await supabase

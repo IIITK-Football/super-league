@@ -3,7 +3,7 @@
 -- season statistics derived from match events (never stored on the identity or membership), and access by role.
 -- Rolled back.
 BEGIN;
-SELECT plan(44);
+SELECT plan(46);
 
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('b7000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
@@ -105,9 +105,26 @@ SELECT ok((SELECT bool_and(sps.club = t.name) FROM public.season_player_stats sp
            JOIN public.roster_memberships rm ON rm.player_id = sps.player_id AND rm.season_id = sps.season_id
            JOIN public.team_entries te ON te.id = rm.team_entry_id JOIN public.teams t ON t.id = te.team_id),
   'every stat line''s club is the roster place of that season');
-SELECT is((SELECT sum(goals) FROM public.season_player_stats)::int,
-          (SELECT count(*) FROM public.goals g JOIN public.matches m ON m.id = g.match_id WHERE NOT g.is_own_goal AND g.player_id IS NOT NULL AND m.season_id IS NOT NULL)::int,
-  'season goal lines add up to the recorded goals');
+-- Until the canonical event model, a match records goals in the goals table and in its JSON: per match and player
+-- the greater count is used, so a duplicated record counts once and a JSON-only goal (Freshers) still counts.
+CREATE TEMP TABLE _st AS
+SELECT rm.player_id, rm.season_id, (SELECT id FROM public.matches WHERE season_id = rm.season_id ORDER BY id DESC LIMIT 1) AS match_id
+FROM public.roster_memberships rm WHERE rm.player_id = (SELECT player_id FROM public.roster_memberships rm2
+  WHERE NOT EXISTS (SELECT 1 FROM public.goals g WHERE g.player_id = rm2.player_id OR g.assist_id = rm2.player_id)
+  GROUP BY player_id ORDER BY player_id LIMIT 1);
+UPDATE public.matches SET scorers = COALESCE(scorers, '[]'::jsonb) || jsonb_build_array((SELECT player_id::text FROM _st))
+WHERE id = (SELECT match_id FROM _st);
+SELECT is((SELECT goals FROM public.season_player_stats WHERE player_id = (SELECT player_id FROM _st) AND season_id = (SELECT season_id FROM _st)), 1,
+  'a goal listed only in the match JSON counts');
+INSERT INTO public.goals (match_id, player_id, team_id, minute, is_own_goal)
+SELECT match_id, player_id, (SELECT te.team_id FROM public.roster_memberships rm JOIN public.team_entries te ON te.id = rm.team_entry_id
+                             WHERE rm.player_id = _st.player_id AND rm.season_id = _st.season_id), '20', false FROM _st;
+SELECT is((SELECT goals FROM public.season_player_stats WHERE player_id = (SELECT player_id FROM _st) AND season_id = (SELECT season_id FROM _st)), 1,
+  'the same goal recorded in both places counts once');
+UPDATE public.matches SET assists = COALESCE(assists, '[]'::jsonb) || jsonb_build_array(jsonb_build_object('player_id', (SELECT player_id::text FROM _st)))
+WHERE id = (SELECT match_id FROM _st);
+SELECT is((SELECT assists FROM public.season_player_stats WHERE player_id = (SELECT player_id FROM _st) AND season_id = (SELECT season_id FROM _st)), 1,
+  'an assist listed as a {"player_id"} object counts');
 
 -- Access: reading ---------------------------------------------------------------------------------------------
 SELECT is(pg_temp.as_user(NULL, 'SELECT count(*) FROM public.players'), (SELECT count(*)::int FROM public.players), 'anyone can read player cards');
