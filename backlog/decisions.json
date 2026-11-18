@@ -16,7 +16,8 @@
       "status": "open",
       "items": [
         "SL-043"
-      ]
+      ],
+      "proposal": "docs/decisions/D-02-world-cup-separation-proposal.md"
     },
     {
       "id": "D-03",
@@ -61,7 +62,8 @@
       "items": [
         "SL-060",
         "SL-093"
-      ]
+      ],
+      "proposal": "docs/decisions/D-07-home-video-proposal.md"
     },
     {
       "id": "D-08",
@@ -95,7 +97,8 @@
       "items": [
         "SL-060",
         "SL-093"
-      ]
+      ],
+      "proposal": "docs/decisions/D-11-home-sections-proposal.md"
     }
   ]
 }
