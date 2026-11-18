@@ -314,7 +314,11 @@
         "backend/app/api/leaderboard/**",
         "backend/app/api/legends/**",
         "backend/app/api/home/dashboard/**",
-        "backend/app/api/admin/matches/live/**"
+        "backend/app/api/admin/matches/live/**",
+        "backend/lib/roster/**",
+        "backend/app/api/admin/players/**",
+        "backend/app/api/admin/roster/**",
+        "backend/app/api/admin/freshers/**"
       ],
       "run": [
         {
@@ -336,7 +340,11 @@
         "backend/app/api/leaderboard/**",
         "backend/app/api/legends/**",
         "backend/app/api/home/dashboard/**",
-        "backend/app/api/admin/matches/live/**"
+        "backend/app/api/admin/matches/live/**",
+        "backend/lib/roster/**",
+        "backend/app/api/admin/players/**",
+        "backend/app/api/admin/roster/**",
+        "backend/app/api/admin/freshers/**"
       ],
       "testPaths": [
         "backend/tests/rosters/**"

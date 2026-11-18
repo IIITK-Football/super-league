@@ -27,6 +27,12 @@ export async function POST(request: Request) {
     if (!body.team_name?.trim() || !body.captain_id) {
       return NextResponse.json({ success: false, message: 'Team and captain are required.' }, { status: 400 });
     }
+    // Players and roster places are managed through /api/admin/players and /api/admin/roster; this route only
+    // registers the team for a season and assigns its captain. A request that still sends members is refused
+    // rather than silently dropping them.
+    if (Array.isArray(body.members) && body.members.length) {
+      return NextResponse.json({ success: false, message: 'Add players through the season roster, not the registration.' }, { status: 400 });
+    }
 
     // Captain access needs the assignment AND the captain role, but assigning a captain must never silently
     // replace another role ("no role implies another"). Decide before writing anything:
@@ -77,23 +83,6 @@ export async function POST(request: Request) {
       if (roleError) throw roleError;
     }
 
-    const members = (body.members || []).map((member: any) => ({
-      id: member.id || crypto.randomUUID(),
-      registration_id: registration.id,
-      name: member.name.trim(),
-      first_name: member.name.trim().split(/\s+/)[0],
-      last_name: member.name.trim().split(/\s+/).slice(1).join(' '),
-      email: member.email?.trim() || null,
-      position: member.position || null,
-      jersey_number: Number(member.jersey_number) || null,
-      image_url: member.image_url || null,
-      overall_rating: Number(member.overall_rating) || 50,
-      attributes: member.attributes || {},
-    }));
-    if (members.length) {
-      const { error: membersError } = await supabase.from('team_members').upsert(members, { onConflict: 'id' });
-      if (membersError) throw membersError;
-    }
     return NextResponse.json({ success: true, data: registration });
   } catch (error: any) {
     console.error('Admin team registration error:', error);
