@@ -67,7 +67,8 @@
       "status": "open",
       "items": [
         "SL-022"
-      ]
+      ],
+      "proposal": "docs/decisions/D-08-score-and-goal-events-proposal.md"
     },
     {
       "id": "D-09",
