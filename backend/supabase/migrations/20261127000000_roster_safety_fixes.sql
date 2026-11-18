@@ -165,10 +165,10 @@ DROP TRIGGER roster_memberships_keep_history ON public.roster_memberships;
 CREATE TRIGGER roster_memberships_keep_history BEFORE UPDATE OR DELETE ON public.roster_memberships
   FOR EACH ROW EXECUTE FUNCTION public.roster_memberships_keep_history();
 
--- TRUNCATE bypasses row level security and row triggers, and the baseline's default privileges grant it to every
--- signed-in user on new tables: any account could empty a season roster. No application path truncates, so it is
--- revoked from anon and signed-in users on the division, season, roster and player tables. The baseline-wide sweep
--- of default privileges belongs to the security audit (SL-025).
+-- Defence in depth: TRUNCATE bypasses row level security and row triggers, and the baseline's default privileges
+-- grant it to signed-in users on new tables. The Data API cannot issue TRUNCATE, so this was not reachable from the
+-- app, but no application path needs it, so it is revoked from anon and signed-in users on the division, season,
+-- roster and player tables. The baseline-wide sweep of default privileges belongs to the security audit.
 REVOKE TRUNCATE ON public.divisions, public.seasons, public.section_types, public.season_sections, public.team_entries,
   public.division_flairs, public.players, public.roster_memberships, public.player_private_details,
   public.legacy_roster_map, public.legacy_player_assist_counts
