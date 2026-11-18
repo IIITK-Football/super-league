@@ -92,11 +92,12 @@ SELECT id, 'authenticated', 'authenticated', email, '',
 FROM _mega_fans
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.user_profiles (id, email, real_name, nickname, points)
-SELECT id, email, full_name, nickname, points FROM _mega_fans
+-- Fantasy points are not stored on profiles: they are the season sums of graded predictions (season_fantasy_points).
+INSERT INTO public.user_profiles (id, email, real_name, nickname)
+SELECT id, email, full_name, nickname FROM _mega_fans
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email, real_name = EXCLUDED.real_name,
-    nickname = EXCLUDED.nickname, points = EXCLUDED.points;
+    nickname = EXCLUDED.nickname;
 
 INSERT INTO public.user_roles (user_id, role)
 SELECT id, 'default' FROM _mega_fans
@@ -106,14 +107,13 @@ INSERT INTO public.wc_leaderboard (user_id, points, updated_at)
 SELECT id, points, now() FROM _mega_fans
 ON CONFLICT (user_id) DO UPDATE SET points = EXCLUDED.points, updated_at = now();
 
-INSERT INTO public.user_profiles (id, email, real_name, nickname, points)
-SELECT id, email, full_name, nickname, points
+INSERT INTO public.user_profiles (id, email, real_name, nickname)
+SELECT id, email, full_name, nickname
 FROM _mega_users
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email,
     real_name = EXCLUDED.real_name,
-    nickname = EXCLUDED.nickname,
-    points = EXCLUDED.points;
+    nickname = EXCLUDED.nickname;
 
 INSERT INTO public.user_roles (user_id, role)
 SELECT id, role FROM _mega_users
@@ -278,13 +278,16 @@ SELECT t.id, s.season_id FROM _mega_teams t JOIN _mega_seasons s USING (division
 ON CONFLICT (team_id, season_id) DO NOTHING;
 
 -- 24 teams × 8 players = 192 players.
+-- Each player is on the 2026 roster (team entry) of their team.
 INSERT INTO public.players (
-  id, team_id, first_name, last_name, position,
+  id, team_id, team_entry_id, first_name, last_name, position,
   jersey_number, assists, overall_rating, image_url, attributes
 )
 SELECT
   md5('mega-player:' || t.id::text || ':' || r.slot)::uuid,
   t.id,
+  (SELECT e.id FROM public.team_entries e JOIN _mega_seasons ms ON ms.season_id = e.season_id
+   WHERE e.team_id = t.id AND ms.division = t.division),
   r.first_name,
   r.last_name,
   r.position,

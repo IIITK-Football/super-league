@@ -84,8 +84,8 @@ describe('schema inventory on the local database', () => {
 
   it('reports what the migrations create in the public schema', () => {
     expect(by('table')).toHaveLength(24);
-    expect(by('view')).toHaveLength(1);
-    expect(by('function')).toHaveLength(12);
+    expect(by('view')).toHaveLength(2);
+    expect(by('function')).toHaveLength(13);
     expect(by('policy')).toHaveLength(53);
     // the division and season model (20261119000000_divisions_and_seasons.sql)
     for (const t of ['divisions', 'seasons', 'section_types', 'season_sections', 'team_entries', 'division_flairs']) {
@@ -93,7 +93,9 @@ describe('schema inventory on the local database', () => {
     }
     // the retired division-string paths and the unused polls feature are gone (20261122000000)
     for (const t of ['legacy_division_map', 'polls', 'poll_options']) expect(by('table').map((r) => r.object), t).not.toContain(`public.${t}`);
-    expect(by('view').map((r) => r.object)).toEqual(['public.season_player_stats']);
+    expect(by('view').map((r) => r.object).sort()).toEqual(['public.season_fantasy_points', 'public.season_player_stats']);
+    // fantasy points are per season, not a profile total (20261123000000)
+    expect(by('column').some((c) => c.object === 'public.user_profiles.points')).toBe(false);
   });
 
   it('includes row level security flags, constraints and indexes', () => {
