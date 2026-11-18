@@ -53,7 +53,8 @@
       "items": [
         "SL-073",
         "SL-075"
-      ]
+      ],
+      "proposal": "docs/decisions/D-06-domains-and-buckets-proposal.md"
     },
     {
       "id": "D-07",
@@ -80,7 +81,8 @@
       "status": "open",
       "items": [
         "SL-063"
-      ]
+      ],
+      "proposal": "docs/decisions/D-09-external-results-proposal.md"
     },
     {
       "id": "D-10",
@@ -88,7 +90,8 @@
       "status": "open",
       "items": [
         "SL-081"
-      ]
+      ],
+      "proposal": "docs/decisions/D-10-code-ownership-proposal.md"
     },
     {
       "id": "D-11",
