@@ -33,7 +33,8 @@
       "status": "open",
       "items": [
         "SL-030"
-      ]
+      ],
+      "proposal": "docs/decisions/D-04-workers-supabase-access-proposal.md"
     },
     {
       "id": "D-05",
