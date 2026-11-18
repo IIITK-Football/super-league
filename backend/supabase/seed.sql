@@ -277,22 +277,14 @@ INSERT INTO public.team_entries (team_id, season_id)
 SELECT t.id, s.season_id FROM _mega_teams t JOIN _mega_seasons s USING (division)
 ON CONFLICT (team_id, season_id) DO NOTHING;
 
--- 24 teams × 8 players = 192 players.
--- Each player is on the 2026 roster (team entry) of their team.
+-- 24 teams × 8 players = 192 player identities (the reusable FUT card: name, rating, attributes, portrait).
 INSERT INTO public.players (
-  id, team_id, team_entry_id, first_name, last_name, position,
-  jersey_number, assists, overall_rating, image_url, attributes
+  id, first_name, last_name, overall_rating, image_url, attributes
 )
 SELECT
   md5('mega-player:' || t.id::text || ':' || r.slot)::uuid,
-  t.id,
-  (SELECT e.id FROM public.team_entries e JOIN _mega_seasons ms ON ms.season_id = e.season_id
-   WHERE e.team_id = t.id AND ms.division = t.division),
   r.first_name,
   r.last_name,
-  r.position,
-  r.slot,
-  mod(r.slot * 7, 9),
   55 + mod(r.slot * 11 + length(t.team_name), 40),
   portrait.image_url,
   jsonb_build_object(
@@ -304,6 +296,21 @@ FROM _mega_teams t
 JOIN _mega_roster r ON r.show_name = t.show_name
 JOIN _mega_portraits portrait ON portrait.slot = r.slot
 ON CONFLICT (id) DO NOTHING;
+
+-- Each player is on the 2026 roster of their team (a roster membership on the team's 2026 entry), with the
+-- season's jersey number and position. Goals and assists are never stored here: they come from match events.
+INSERT INTO public.roster_memberships (player_id, team_entry_id, season_id, jersey_number, position)
+SELECT
+  md5('mega-player:' || t.id::text || ':' || r.slot)::uuid,
+  e.id,
+  e.season_id,
+  r.slot,
+  r.position
+FROM _mega_teams t
+JOIN _mega_seasons ms ON ms.division = t.division
+JOIN public.team_entries e ON e.team_id = t.id AND e.season_id = ms.season_id
+JOIN _mega_roster r ON r.show_name = t.show_name
+ON CONFLICT (player_id, season_id) DO NOTHING;
 
 -- 8 teams per division, home and away: 56 matches per division.
 CREATE TEMP TABLE _mega_match_defs ON COMMIT DROP AS
@@ -473,27 +480,26 @@ SELECT id, captain_id, team_name, (SELECT season_id FROM _mega_seasons WHERE div
 FROM _mega_registrations
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.team_members (
-  id, registration_id, name, email, position, first_name, last_name,
-  jersey_number, image_url, overall_rating, attributes
-)
+-- The Freshers team-builder rosters are the season rosters above (no separate member table).
+-- History fixture: the first Super League team's slot-1 player also plays the Freshers 2026 season for The Beef,
+-- so one identity has roster places in two divisions' seasons.
+INSERT INTO public.roster_memberships (player_id, team_entry_id, season_id, jersey_number, position)
 SELECT
-  md5('mega-member:' || reg.id::text || ':' || roster.slot)::uuid,
-  reg.id,
-  roster.first_name || ' ' || roster.last_name,
-  NULL,
-  roster.position,
-  roster.first_name,
-  roster.last_name,
-  roster.slot,
-  portrait.image_url,
-  55 + mod(roster.slot * 11, 40),
-  jsonb_build_object('pace', 50 + roster.slot * 4, 'passing', 55 + roster.slot * 3)
-FROM _mega_registrations reg
-JOIN _mega_teams team ON team.id = reg.team_id
-JOIN _mega_roster roster ON roster.show_name = team.show_name
-JOIN _mega_portraits portrait ON portrait.slot = roster.slot
-ON CONFLICT (id) DO NOTHING;
+  md5('mega-player:' || mens.id::text || ':1')::uuid,
+  e.id,
+  e.season_id,
+  99,
+  'Forward'
+FROM (SELECT id FROM _mega_teams WHERE division = 'mens' ORDER BY team_name LIMIT 1) mens
+JOIN public.team_entries e ON e.team_id = md5('mega-team:freshers:BEEF')::uuid
+  AND e.season_id = (SELECT season_id FROM _mega_seasons WHERE division = 'freshers')
+ON CONFLICT (player_id, season_id) DO NOTHING;
+
+-- One player's private contact detail (dictators only).
+INSERT INTO public.player_private_details (player_id, email)
+SELECT md5('mega-player:' || mens.id::text || ':1')::uuid, 'roster.fixture@iiitkottayam.ac.in'
+FROM (SELECT id FROM _mega_teams WHERE division = 'mens' ORDER BY team_name LIMIT 1) mens
+ON CONFLICT (player_id) DO NOTHING;
 
 -- Four users predict all 168 league matches.
 INSERT INTO public.predictions (

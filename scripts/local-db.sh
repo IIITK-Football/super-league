@@ -86,7 +86,7 @@ confirm_reset() {
 }
 
 cmd="${1:-}"
-[ -n "$cmd" ] || die "usage: local-db.sh {check|status|start|stop|reset [--yes]|test|psql|inventory [file]}"
+[ -n "$cmd" ] || die "usage: local-db.sh {check|status|start|stop|reset [--yes] [--version <timestamp>] [--no-seed]|test|psql|inventory [file]}"
 shift
 
 case "$cmd" in
@@ -113,11 +113,36 @@ case "$cmd" in
     check_config
     (cd "$BACKEND_DIR" && "${SB[@]}" stop) ;;
   reset)
-    case "${1:-}" in ""|--yes) ;; *) die "unexpected argument '$1'" ;; esac
-    [ "$#" -le 1 ] || die "unexpected arguments"
+    # reset [--yes] [--version <14-digit migration timestamp>] [--no-seed]
+    # --version stops after that migration and --no-seed skips the seed: used by migration rehearsals, which load
+    # an older seed and then apply the newer migrations themselves. Still local-only and still confirmed.
+    yes=""; version=""; seed="yes"
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --yes) yes="--yes" ;;
+        --no-seed) seed="no" ;;
+        --version)
+          [ "$#" -ge 2 ] || die "--version needs a migration timestamp"
+          [[ "$2" =~ ^[0-9]{14}$ ]] || die "--version must be a 14-digit migration timestamp, not '$2'"
+          found=""
+          for f in "$BACKEND_DIR/supabase/migrations/$2"_*.sql; do [ -f "$f" ] && found="$f"; done
+          [ -n "$found" ] || die "no migration $2 in supabase/migrations"
+          version="$2"; shift ;;
+        *) die "unexpected argument '$1'" ;;
+      esac
+      shift
+    done
     verify_target
-    confirm_reset "${1:-}"
-    (cd "$BACKEND_DIR" && "${SB[@]}" db reset --local) ;;
+    confirm_reset "$yes"
+    if [ -n "$version" ] && [ "$seed" = "no" ]; then
+      (cd "$BACKEND_DIR" && "${SB[@]}" db reset --local --version "$version" --no-seed)
+    elif [ -n "$version" ]; then
+      (cd "$BACKEND_DIR" && "${SB[@]}" db reset --local --version "$version")
+    elif [ "$seed" = "no" ]; then
+      (cd "$BACKEND_DIR" && "${SB[@]}" db reset --local --no-seed)
+    else
+      (cd "$BACKEND_DIR" && "${SB[@]}" db reset --local)
+    fi ;;
   test)
     [ "$#" -eq 0 ] || die "unexpected arguments"
     verify_target

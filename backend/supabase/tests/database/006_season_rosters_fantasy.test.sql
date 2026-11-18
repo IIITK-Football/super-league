@@ -1,4 +1,4 @@
--- Group: database. Rosters and fantasy points belong to a season: every player is on a team's season entry, and a
+-- Group: database. Rosters and fantasy points belong to a season: every player is on a team's season roster (a roster membership), and a
 -- user's fantasy points in a season are the sum of their predictions on that season's matches. Rolled back.
 BEGIN;
 SELECT plan(14);
@@ -22,11 +22,11 @@ END;
 $$;
 
 -- Rosters ---------------------------------------------------------------------------------------------------
-SELECT is((SELECT count(*) FROM public.players WHERE team_entry_id IS NULL)::int, 0, 'every seeded player is on a season roster');
-SELECT is((SELECT count(*) FROM public.players p JOIN public.team_entries e ON e.id = p.team_entry_id
-           JOIN public.seasons s ON s.id = e.season_id WHERE s.slug = '2026' AND e.team_id = p.team_id)::int, 192,
-  'each player is on its own team''s 2026 entry');
-SELECT throws_ok($$DELETE FROM public.team_entries WHERE id = (SELECT team_entry_id FROM public.players LIMIT 1)$$, '23503', NULL,
+SELECT is((SELECT count(*) FROM public.players p WHERE NOT EXISTS (SELECT 1 FROM public.roster_memberships rm WHERE rm.player_id = p.id))::int, 0,
+  'every seeded player is on a season roster');
+SELECT is((SELECT count(DISTINCT rm.player_id) FROM public.roster_memberships rm JOIN public.seasons s ON s.id = rm.season_id WHERE s.slug = '2026')::int, 192,
+  'every player is on a 2026 roster');
+SELECT throws_ok($$DELETE FROM public.team_entries WHERE id = (SELECT team_entry_id FROM public.roster_memberships LIMIT 1)$$, '23503', NULL,
   'a season entry with a roster cannot be deleted');
 
 -- Fantasy points --------------------------------------------------------------------------------------------
