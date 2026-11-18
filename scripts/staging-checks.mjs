@@ -124,8 +124,17 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     else record(name, 'FAIL', `refused, but with an unexpected answer: ${message(r)}`);
   };
 
-  // Remove synthetic accounts (identified by the unmistakable address prefix) left by an earlier aborted run.
+  // Remove synthetic divisions (slug prefix) and their seasons, then synthetic accounts (address prefix), left by an
+  // earlier aborted run. Seeded and real divisions never carry the prefix.
+  const sweepDivisions = async () => {
+    const list = await admin(`/rest/v1/divisions?slug=like.${PREFIX}*&select=id`);
+    const ids = (list.data ?? []).map((d) => d.id);
+    if (!ids.length) return;
+    await admin(`/rest/v1/seasons?division_id=in.(${ids.join(',')})`, { method: 'DELETE' });
+    await admin(`/rest/v1/divisions?id=in.(${ids.join(',')})`, { method: 'DELETE' });
+  };
   const sweep = async () => {
+    await sweepDivisions();
     const list = await admin('/auth/v1/admin/users?per_page=1000');
     for (const u of list.data?.users ?? []) {
       if (u.email?.startsWith(PREFIX) && u.email.endsWith(`@${DOMAIN}`)) await admin(`/auth/v1/admin/users/${u.id}`, { method: 'DELETE' });
@@ -172,6 +181,34 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const dict = await rpc(await session(dictator), teamB.member, { p_jersey_number: 11 });
     record('A dictator can update a player on any team', dict.ok ? 'PASS' : 'FAIL', dict.ok ? 'accepted' : message(dict));
 
+    // Divisions and seasons are data (docs/decisions/D-01-division-season-mapping.md): the seeded legacy values are
+    // ordinary records, a new division with two seasons is created through the Data API by the managing role only,
+    // and a hidden division stays private.
+    const divisions = await admin('/rest/v1/divisions?select=slug');
+    const current = await admin('/rest/v1/seasons?is_current=eq.true&select=division_id');
+    const slugs = (divisions.data ?? []).map((d) => d.slug);
+    const legacyOk = ['super-league', 'wsl', 'freshers'].every((x) => slugs.includes(x)) && (current.data ?? []).length >= 3;
+    record('Legacy divisions are ordinary division records with a current season each', legacyOk ? 'PASS' : 'FAIL', `${slugs.length} divisions, ${(current.data ?? []).length} current seasons`);
+
+    const managerToken = await session(dictator);
+    const userToken = await session(normal);
+    const asUser = (token) => (path, opts) => call(path, { ...opts, key: PUBLISHABLE, token });
+    const division = await asUser(managerToken)('/rest/v1/divisions', { method: 'POST', prefer: 'return=representation', body: { slug: tag, name: 'SL Check Division', visibility: 'hidden' } });
+    const divisionId = division.data?.[0]?.id;
+    const seasons = divisionId
+      ? await asUser(managerToken)('/rest/v1/seasons', { method: 'POST', prefer: 'return=representation,missing=default', body: [{ division_id: divisionId, slug: '2026', name: '2026', is_current: true }, { division_id: divisionId, slug: '2027', name: '2027' }] })
+      : division;
+    const seasonsCreated = divisionId && seasons.ok && (seasons.data ?? []).length === 2;
+    record('A new hidden division with two coexisting seasons is created through the Data API, with no schema change', seasonsCreated ? 'PASS' : 'FAIL', seasonsCreated ? 'created' : message(seasons));
+
+    const seenByUser = await asUser(userToken)(`/rest/v1/divisions?slug=eq.${tag}&select=id`);
+    const seenByAnon = await anon(`/rest/v1/divisions?slug=eq.${tag}&select=id`);
+    const hiddenOk = seenByUser.ok && seenByAnon.ok && (seenByUser.data ?? []).length === 0 && (seenByAnon.data ?? []).length === 0;
+    record('A hidden division is invisible to a signed-in account without the role and to anonymous visitors', hiddenOk ? 'PASS' : 'FAIL', `${(seenByUser.data ?? []).length} and ${(seenByAnon.data ?? []).length} rows visible`);
+
+    const byUser = await asUser(userToken)('/rest/v1/divisions', { method: 'POST', prefer: 'return=minimal', body: { slug: `${tag}-x`, name: 'SL Check Refused' } });
+    expectRefused('An account without the managing role cannot create a division', byUser, /row-level security|permission denied|42501/i);
+
     // Recovery: the one-time token flow, without sending any mail (this does not test email delivery or redirect URLs).
     const recoveryToken = await session(normal, 'recovery');
     const reset = await call('/auth/v1/user', { method: 'PUT', key: PUBLISHABLE, token: recoveryToken, body: { password: rand(16) } });
@@ -187,8 +224,9 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
       const ids = created.join(',');
       const leftoverRegs = created.length ? (await admin(`/rest/v1/team_registrations?captain_id=in.(${ids})&select=id`)).data ?? [] : [];
       const leftoverRoles = created.length ? (await admin(`/rest/v1/user_roles?user_id=in.(${ids})&select=user_id`)).data ?? [] : [];
-      const clean = gone.every(Boolean) && leftoverRegs.length === 0 && leftoverRoles.length === 0;
-      record('Cleanup removed every synthetic account and row', clean ? 'PASS' : 'FAIL', `${created.length} accounts removed; ${leftoverRegs.length} team entries and ${leftoverRoles.length} role rows left over`);
+      const leftoverDivisions = (await admin(`/rest/v1/divisions?slug=like.${PREFIX}*&select=id`)).data ?? [];
+      const clean = gone.every(Boolean) && leftoverRegs.length === 0 && leftoverRoles.length === 0 && leftoverDivisions.length === 0;
+      record('Cleanup removed every synthetic account and row', clean ? 'PASS' : 'FAIL', `${created.length} accounts removed; ${leftoverRegs.length} team entries, ${leftoverRoles.length} role rows and ${leftoverDivisions.length} divisions left over`);
     } catch (e) {
       record('Cleanup removed every synthetic account and row', 'FAIL', `cleanup error: ${String(e.message ?? e).slice(0, 160)} (accounts are prefixed ${PREFIX} and removed by the next run)`);
     }

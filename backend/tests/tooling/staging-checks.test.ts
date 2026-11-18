@@ -12,15 +12,22 @@ const SECRET = ['sb', 'secret', 'NEVER_PRINT_THIS_secret_0123456789'].join('_');
 const PUBLISHABLE = ['sb', 'publishable', 'NEVER_PRINT_THIS_key_abcdef'].join('_');
 const goodEnv = () => ({ SUPABASE_URL: `https://${STAGING}.supabase.co`, SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE, SUPABASE_SECRET_KEY: SECRET, ALLOW_REMOTE_SUPABASE: 'true' });
 
-type Opts = { captchaEnforced?: boolean; openRpc?: boolean; failAtRpc?: boolean; leakEmail?: boolean };
+type Opts = { captchaEnforced?: boolean; openRpc?: boolean; failAtRpc?: boolean; leakEmail?: boolean; openDivisions?: boolean };
 
 function fakeStaging(opts: Opts = {}) {
-  const { captchaEnforced = true, openRpc = false, failAtRpc = false } = opts;
+  const { captchaEnforced = true, openRpc = false, failAtRpc = false, openDivisions = false } = opts;
   const users = new Map<string, { id: string; email: string }>();
   const roles = new Map<string, string>();
   const regs = new Map<string, { id: string; captain_id: string }>();
   const members = new Map<string, { id: string; registration_id: string; jersey_number: number | null; email: string | null; position: string | null }>();
   const hashes = new Map<string, string>();
+  // The seeded legacy divisions, each with a current season; synthetic ones are added by the run.
+  const divisions = new Map<string, { id: string; slug: string; visibility: string }>(
+    ['super-league', 'wsl', 'freshers'].map((slug, i) => [`d${i}`, { id: `d${i}`, slug, visibility: 'public' }]),
+  );
+  const seasons = new Map<string, { id: string; division_id: string; is_current: boolean }>(
+    ['d0', 'd1', 'd2'].map((d, i) => [`s${i}`, { id: `s${i}`, division_id: d, is_current: true }]),
+  );
   const calls: { method: string; url: string; headers: Record<string, string>; body: any }[] = [];
   let n = 0;
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -108,9 +115,50 @@ function fakeStaging(opts: Opts = {}) {
       if (m) { m.jersey_number = body.p_jersey_number; m.position = body.p_position; }
       return new Response(null, { status: 204 });
     }
+    // Divisions and seasons. The secret key without a user token administers; a user token is checked like RLS.
+    const isAdmin = !headers.authorization && headers.apikey?.startsWith('sb_secret_');
+    const me = uid(headers.authorization);
+    const manager = isAdmin || openDivisions || (me !== null && roles.get(me) === 'dictator');
+    const inList = (v: string | null) => (v ?? '').replace(/^in\.\(|\)$/g, '').split(',').filter(Boolean);
+    const rls = { code: '42501', message: 'new row violates row-level security policy for table "divisions"' };
+    if (p === '/rest/v1/divisions') {
+      const slugEq = u.searchParams.get('slug')?.match(/^eq\.(.+)$/)?.[1];
+      const slugLike = u.searchParams.get('slug')?.match(/^like\.(.+)\*$/)?.[1];
+      const ids = inList(u.searchParams.get('id'));
+      const match = (d: { id: string; slug: string }) =>
+        (!slugEq || d.slug === slugEq) && (!slugLike || d.slug.startsWith(slugLike)) && (!ids.length || ids.includes(d.id));
+      if (method === 'GET') return json(200, [...divisions.values()].filter((d) => match(d) && (manager || d.visibility === 'public')));
+      if (method === 'POST') {
+        if (!manager) return json(403, rls);
+        const id = `d${++n}`;
+        divisions.set(id, { id, slug: body.slug, visibility: body.visibility ?? 'public' });
+        return json(201, [{ id }]);
+      }
+      if (method === 'DELETE') {
+        for (const d of [...divisions.values()]) if (manager && match(d)) divisions.delete(d.id);
+        return new Response(null, { status: 204 });
+      }
+    }
+    if (p === '/rest/v1/seasons') {
+      const divisionIds = inList(u.searchParams.get('division_id'));
+      if (method === 'GET') {
+        const current = u.searchParams.get('is_current') === 'eq.true';
+        return json(200, [...seasons.values()].filter((x) => !current || x.is_current).map((x) => ({ division_id: x.division_id })));
+      }
+      if (method === 'POST') {
+        if (!manager) return json(403, rls);
+        const rows = (Array.isArray(body) ? body : [body]).map((b: any) => ({ id: `s${++n}`, division_id: b.division_id, is_current: !!b.is_current }));
+        for (const r of rows) seasons.set(r.id, r);
+        return json(201, rows.map((r) => ({ id: r.id })));
+      }
+      if (method === 'DELETE') {
+        for (const x of [...seasons.values()]) if (manager && divisionIds.includes(x.division_id)) seasons.delete(x.id);
+        return new Response(null, { status: 204 });
+      }
+    }
     return json(404, { msg: `unhandled ${method} ${p}` });
   };
-  return { fetchImpl, users, roles, regs, members, calls };
+  return { fetchImpl, users, roles, regs, members, divisions, seasons, calls };
 }
 
 let logs: string[];
@@ -161,13 +209,16 @@ describe('runChecks against a healthy staging', () => {
     const s = fakeStaging();
     const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(results.filter((r: { status: string }) => r.status === 'FAIL')).toEqual([]);
-    for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /email/i, /dictator/i, /recovery/i, /clean/i]) {
+    for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /email/i, /dictator/i, /recovery/i, /clean/i,
+                      /legacy divisions/i, /new hidden division/i, /hidden division is invisible/i, /cannot create a division/i]) {
       expect(by(results, re)?.status, String(re)).toBe('PASS');
     }
     expect(s.users.size).toBe(0);
     expect(s.regs.size).toBe(0);
     expect(s.members.size).toBe(0);
     expect(s.roles.size).toBe(0);
+    expect([...s.divisions.values()].map((d) => d.slug).sort()).toEqual(['freshers', 'super-league', 'wsl']); // only the seeded ones remain
+    expect(s.seasons.size).toBe(3);
   });
 
   it('only ever talks to the staging host', async () => {
@@ -217,6 +268,21 @@ describe('runChecks detects a broken staging', () => {
     expect(by(results, /without the captain role/i)?.status).toBe('FAIL');
     expect(by(results, /email/i)?.status).toBe('FAIL');
     expect(s.users.size).toBe(0); // and still cleans up
+  });
+
+  it('fails the division checks when any account can create divisions and see hidden ones', async () => {
+    const s = fakeStaging({ openDivisions: true });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
+    expect(by(results, /hidden division is invisible/i)?.status).toBe('FAIL');
+    expect(by(results, /cannot create a division/i)?.status).toBe('FAIL');
+    expect([...s.divisions.values()].some((d) => d.slug.startsWith('sl-check-'))).toBe(false); // and still cleans up
+  });
+
+  it('fails the legacy division check when the seeded divisions are missing', async () => {
+    const s = fakeStaging();
+    s.divisions.delete('d1');
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
+    expect(by(results, /legacy divisions/i)?.status).toBe('FAIL');
   });
 
   it('fails the CAPTCHA check when password sign-in works without a token', async () => {
