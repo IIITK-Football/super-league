@@ -24,7 +24,8 @@
       "status": "open",
       "items": [
         "SL-024"
-      ]
+      ],
+      "proposal": "docs/decisions/D-03-roles-and-assignments-proposal.md"
     },
     {
       "id": "D-04",
