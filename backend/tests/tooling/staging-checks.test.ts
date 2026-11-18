@@ -147,6 +147,9 @@ function fakeStaging(opts: Opts = {}) {
       }
       if (method === 'POST') {
         if (!manager) return json(403, rls);
+        // Like PostgREST: a bulk insert without ?columns= needs the same keys in every row.
+        const keySets = (Array.isArray(body) ? body : [body]).map((b: object) => Object.keys(b).sort().join(','));
+        if (!u.searchParams.has('columns') && new Set(keySets).size > 1) return json(400, { code: 'PGRST102', message: 'All object keys must match' });
         const rows = (Array.isArray(body) ? body : [body]).map((b: any) => ({ id: `s${++n}`, division_id: b.division_id, is_current: !!b.is_current }));
         for (const r of rows) seasons.set(r.id, r);
         return json(201, rows.map((r) => ({ id: r.id })));
