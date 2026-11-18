@@ -59,7 +59,8 @@ const labelClass = 'text-[10px] font-black uppercase tracking-widest text-zinc-5
 const ghostButton = 'flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/5 disabled:opacity-40';
 const primaryButton = 'flex items-center gap-2 rounded-lg bg-[#d9ff4a] px-3 py-2 text-xs font-black uppercase text-black disabled:opacity-40';
 
-function PlayerFields({ value, onChange, idPrefix }) {
+// The player form fields, shared by the edit and create forms (a render helper, not a component).
+function playerFields(value, onChange, idPrefix) {
   const field = (key) => (e) => onChange({ ...value, [key]: e.target.value });
   return <div className="grid gap-3 md:grid-cols-4">
     <label className={labelClass}>First name<input aria-label={`${idPrefix} first name`} value={value.first_name} onChange={field('first_name')} className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
@@ -386,7 +387,7 @@ export default function ManageRosters() {
         </label>}
 
       {place && editing && <div aria-label="Edit player" className="space-y-3 rounded-xl border border-[#d9ff4a]/30 p-4">
-        <PlayerFields value={editing} onChange={setEditing} idPrefix="Edit" />
+        {playerFields(editing, setEditing, 'Edit')}
         <div className="flex flex-wrap items-end gap-2">
           <button type="button" onClick={savePlayer} disabled={busy === `save-${place.id}`} className={primaryButton}>{busy === `save-${place.id}` ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save player</button>
           <label className={ghostButton}>
@@ -416,7 +417,7 @@ export default function ManageRosters() {
 
       <form noValidate onSubmit={createPlayer} aria-label="New player" className="space-y-3 rounded-xl border border-white/10 p-4">
         <p className="text-xs font-black uppercase tracking-wider text-zinc-400">New player on {entry?.name}</p>
-        <PlayerFields value={newPlayer} onChange={setNewPlayer} idPrefix="New" />
+        {playerFields(newPlayer, setNewPlayer, 'New')}
         <button type="submit" disabled={busy === 'create-player'} className={primaryButton}>{busy === 'create-player' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Create player</button>
       </form>
     </section>}
