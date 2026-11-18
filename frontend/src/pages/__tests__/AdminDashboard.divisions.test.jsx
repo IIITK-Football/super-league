@@ -15,7 +15,7 @@ vi.mock('../../lib/supabase', () => ({
 }));
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' }, signOut: vi.fn() }) }));
 vi.mock('../../components/admin/LiveController', () => ({ default: () => <p>live panel</p> }));
-vi.mock('../../components/admin/ManagePlayers', () => ({ default: () => null }));
+vi.mock('../../components/admin/ManageRosters', () => ({ default: () => null }));
 vi.mock('../../components/admin/ScheduleMatches', () => ({ default: () => null }));
 vi.mock('../../components/admin/ManageNews', () => ({ default: () => null }));
 vi.mock('../../components/admin/GradePredictions', () => ({ default: () => null }));

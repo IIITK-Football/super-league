@@ -316,7 +316,9 @@
         "backend/app/api/home/dashboard/**",
         "backend/app/api/admin/matches/live/**",
         "backend/lib/roster/**",
-        "backend/app/api/admin/freshers/**"
+        "backend/app/api/admin/freshers/**",
+        "frontend/src/components/admin/ManageRosters.jsx",
+        "frontend/src/components/admin/__tests__/ManageRosters.local.test.jsx"
       ],
       "run": [
         {
@@ -329,6 +331,18 @@
             "--no-file-parallelism",
             "tests/rosters"
           ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "env",
+            "SL_LOCAL_SUPABASE=1",
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "src/components/admin/__tests__/ManageRosters.local.test.jsx"
+          ]
         }
       ],
       "covers": [
@@ -340,10 +354,12 @@
         "backend/app/api/home/dashboard/**",
         "backend/app/api/admin/matches/live/**",
         "backend/lib/roster/**",
-        "backend/app/api/admin/freshers/**"
+        "backend/app/api/admin/freshers/**",
+        "frontend/src/components/admin/ManageRosters.jsx"
       ],
       "testPaths": [
-        "backend/tests/rosters/**"
+        "backend/tests/rosters/**",
+        "frontend/src/components/admin/__tests__/ManageRosters.local.test.jsx"
       ]
     },
     "auth-roles": {
