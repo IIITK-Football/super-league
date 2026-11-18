@@ -58,18 +58,26 @@ Enforce these boundaries in server authorization and Supabase RLS wherever direc
 
 Follow the backlog in order. The key dependencies are:
 
-1. Reliable local Supabase setup, deterministic seed, and test foundation.
-2. Formal division/season/player/match model and the five-role authorization policy.
-3. Hono/Workers gateway and API migration while preserving the existing Pages frontend.
-4. Shared division/season, identity, fantasy, and configuration services.
-5. Scorer, match events, lineups, brackets, and statistics.
-6. Home metadata, sharing, and external schedule/score integration.
-7. R2 configuration and Wrangler local emulation only after the Worker and storage boundaries exist.
-8. CI, security, migration, and release workflows.
-9. Frontend consolidation, design system, responsive fixes, and visual redesign of flows that are already usable from earlier phases. The redesign remains last; first usable flows do not wait for it (see "Usable in its own phase").
-10. Separately reviewed production cutover and legacy retirement.
+The unfinished work is organised as **end-to-end feature slices** (restructured 2026-11-18; `backlog/phases.md`, and `backlog/superseded.json` for folded items). Each slice delivers, in its own phase:
+- its migration with data-preservation guards;
+- its API;
+- a minimal usable frontend;
+- local and staging verification.
 
-The order is enforced: no item in a later phase can become ready while an earlier phase still has unfinished items (`pnpm work` phase gating).
+Each slice ports every known caller, then retires the path it replaces.
+
+1. Reliable local Supabase setup, deterministic seed, and test foundation.
+2. Canonical domain slices, end to end, on the current API: divisions/seasons (done), player identity and season rosters, audit history, account-linked players, five roles with scoped assignments, canonical match events and statistics; then the security audit and API contracts.
+3. Hono/Workers runtime, gateway and parity port, plus the complete R2 storage system after the Worker runtime exists: inventory, abstraction, Wrangler local emulation, bucket/domain reorganization rolled out local → staging → production one bucket at a time, and credential rotation. Later phases consume this storage and never redo its migration.
+4. Division/season product capabilities: configuration and navigation, fantasy (World Cup decoupled), rules, registration, exports, sign-in allowlists.
+5. Match operations: phone/offline scorer workspace, lineups, formats and brackets.
+6. Home configuration, sharing, and external schedule/score integration.
+7. (Merged into 3; the phase holds no items.)
+8. CI, repository policy, and contributor documentation.
+9. Frontend consolidation, design system, responsive fixes, and visual redesign of flows that are already usable from earlier phases. The redesign remains last; first usable flows do not wait for it (see "Usable in its own phase").
+10. Separately reviewed production cutover, branded Auth domain, and the final legacy sweep.
+
+The order is enforced: no item in a later phase can become ready while an earlier phase still has unfinished items (`pnpm work` phase gating), and `dependsOn` orders items inside a phase.
 
 ### Usable in its own phase
 

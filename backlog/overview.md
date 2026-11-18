@@ -61,16 +61,18 @@ This is the code-based starting point observed during repository review on 15 No
 |---|---|---|
 | 0 | Scope, data safety, product/domain decisions | All schema and service rewrites |
 | 1 | Local-first setup, fixture validation, test/CI foundation | Migration implementation and reliable feature work |
-| 2 | Canonical data model, permissions, and API contracts | Workers migration and unified features |
-| 3 | Hono/Cloudflare Workers gateway and service migration | Wrangler R2 emulation; new backend feature APIs |
-| 4 | Division/season, player, fantasy, and settings backend | Consolidated interface (minimal flows ship with each item) |
-| 5 | Match operations, scorer role, lineups, brackets, statistics | Consolidated match/admin interface (minimal flows ship with each item) |
-| 6 | Configurable home metadata, sharing, and external data integrations | Consolidated home interface (minimal flows ship with each item) |
-| 7 | R2 storage redesign and Wrangler local emulation | Media cutover and final frontend media integration |
-| 8 | Migration, security, test, and release automation completion | Production cutover |
-| 9 | Full frontend consolidation and design system | User-facing launch |
-| 10 | Production cutover and legacy retirement | Completion |
+| 2 | Canonical domain slices, each end to end: divisions/seasons, player identity and rosters, audit history, account linking, scoped roles, match events and statistics, then the security audit and API contracts | Workers migration (which ports each final model once) |
+| 3 | Hono/Cloudflare Workers runtime, gateway and parity port, plus the complete R2 storage system (inventory, abstraction, Wrangler local emulation, bucket and domain migration, credential rotation) | All later feature work, which uses the Worker API and the finished storage |
+| 4 | Division/season product capabilities: configuration and navigation, fantasy (World Cup decoupled), rules, registration, exports, sign-in allowlists | Match operations and home configuration |
+| 5 | Match operations: phone/offline scorer workspace, lineups, formats and brackets | Sharing and external integrations |
+| 6 | Configurable home content, sharing, and external data integrations | Contributor documentation and the redesign |
+| 7 | (merged into Phase 3 on 2026-11-18) | — |
+| 8 | CI, repository policy and contributor documentation | Production cutover |
+| 9 | Frontend consolidation and design-system redesign of flows that already work | User-facing launch |
+| 10 | Production cutover, branded Auth domain, final legacy sweep | Completion |
 
-**Hard ordering constraint:** Wrangler R2 emulation is Phase 7 and cannot start until the Worker runtime and storage boundary from Phase 3 are in place. **Frontend constraint:** Do not begin the product redesign or the division UI consolidation until Phases 0–8 are complete. Existing frontend behavior stays compatible while the backend changes. A capability a person uses or configures still ships a minimal, working flow in the existing frontend in its own phase, following current patterns (rule R10); Phase 9 consolidates, redesigns and refines those flows rather than creating them.
+**Feature-slice rule (2026-11-18):** each unfinished item is an end-to-end slice. It delivers its migration with data-preservation guards, its API, a minimal usable frontend for the people who need it (rule R10) and local plus staging verification, and it retires the path it replaces once every caller is ported. Folded items are listed in `superseded.json`.
+
+**Hard ordering constraint:** Wrangler R2 emulation and the storage redesign run in Phase 3 only after the Worker runtime (SL-030) exists. **Frontend constraint:** do not begin the product redesign or the division UI consolidation until Phases 0–8 are complete. A capability a person uses or configures ships a minimal, working flow in the existing frontend in its own phase, following current patterns (rule R10); Phase 9 consolidates, redesigns and refines those flows rather than creating them.
 
 ## 3. Phased backlog

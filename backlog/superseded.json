@@ -1,0 +1,14 @@
+{
+  "intro": "Items folded into others when the backlog was restructured into end-to-end feature slices (owner instruction 2026-11-18). Their work lives on in the items listed under \"by\"; each surviving item records what it absorbed.",
+  "superseded": [
+    { "id": "SL-023", "by": ["SL-054"], "date": "2026-11-18", "note": "Stage/format model and editable bracket mapping merged with the bracket calculation and its usable flows." },
+    { "id": "SL-033", "by": ["SL-030"], "date": "2026-11-18", "note": "The Supabase access path for Workers is part of the Worker runtime foundation (D-04 moved with it)." },
+    { "id": "SL-041", "by": ["SL-021", "SL-024", "SL-045"], "date": "2026-11-18", "note": "Team entries, rosters and the Freshers roster retirement went to SL-021; captain assignment, team details/branding, the captain-change defect and the team_registrations retirement to SL-024; configurable registration requirements to SL-045." },
+    { "id": "SL-051", "by": ["SL-022"], "date": "2026-11-18", "note": "Unknown attribution and correction-safe scorekeeping are part of the canonical match-event slice (D-08 moved with it)." },
+    { "id": "SL-052", "by": ["SL-022"], "date": "2026-11-18", "note": "Cards and the match timeline are part of the canonical match-event slice." },
+    { "id": "SL-055", "by": ["SL-022"], "date": "2026-11-18", "note": "Statistics, standings and fantasy reconciliation with idempotent regrading are part of the canonical match-event slice." },
+    { "id": "SL-062", "by": ["SL-061"], "date": "2026-11-18", "note": "Match-specific Open Graph content is configured with the share target and copy." },
+    { "id": "SL-094", "by": ["SL-043", "SL-060"], "date": "2026-11-18", "note": "Decoupling World Cup from onboarding, profile and navigation went to SL-043; the home entry to the World Cup page to SL-060." },
+    { "id": "SL-096", "by": ["SL-045", "SL-091"], "date": "2026-11-18", "note": "The player-facing registration flow ships with SL-045; its Phase 9 redesign is part of SL-091." }
+  ]
+}

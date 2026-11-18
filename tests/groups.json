@@ -331,7 +331,7 @@
       "description": "Scorer workspace, match events, cards, lineups, brackets, statistics",
       "owner": "backend",
       "status": "pending",
-      "pendingFor": "SL-050..SL-055",
+      "pendingFor": "SL-022/SL-050/SL-053/SL-054",
       "paths": [
         "backend/app/api/matches/**",
         "backend/app/api/admin/matches/**",
@@ -343,7 +343,7 @@
       "description": "Division fantasy and World Cup fantasy scoring and predictions",
       "owner": "backend",
       "status": "pending",
-      "pendingFor": "SL-043/SL-055",
+      "pendingFor": "SL-022/SL-043",
       "paths": [
         "backend/app/api/leaderboard/**",
         "backend/app/api/predictions/**",
