@@ -26,8 +26,11 @@ FROM (
   UNION ALL SELECT 10, 'every team assignment has a captain or dictator holder',
          NOT EXISTS (SELECT 1 FROM public.team_registrations r LEFT JOIN public.user_roles ur ON ur.user_id = r.captain_id
                      WHERE ur.role IS DISTINCT FROM 'captain' AND ur.role IS DISTINCT FROM 'dictator')
-  UNION ALL SELECT 11, 'team builder registrations and members exist',
-         (SELECT count(*) FROM public.team_registrations) >= 2 AND (SELECT count(*) FROM public.team_members) > 0
+  UNION ALL SELECT 11, 'team builder registrations exist and their teams have season rosters',
+         (SELECT count(*) FROM public.team_registrations) >= 2
+         AND NOT EXISTS (SELECT 1 FROM public.team_registrations r
+                         WHERE NOT EXISTS (SELECT 1 FROM public.roster_memberships rm JOIN public.team_entries e ON e.id = rm.team_entry_id
+                                           WHERE e.team_id = r.team_id AND e.season_id = r.season_id))
   UNION ALL SELECT 12, 'league predictions exist',
          (SELECT count(*) FROM public.predictions) > 0
   UNION ALL SELECT 13, 'newsletter items exist and every division has a current season with its teams',

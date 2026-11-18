@@ -83,9 +83,9 @@ describe('schema inventory on the local database', () => {
   });
 
   it('reports what the migrations create in the public schema', () => {
-    expect(by('table')).toHaveLength(24);
+    expect(by('table')).toHaveLength(27);
     expect(by('view')).toHaveLength(2);
-    expect(by('function')).toHaveLength(13);
+    expect(by('function')).toHaveLength(14);
     expect(by('policy')).toHaveLength(53);
     // the division and season model (20261119000000_divisions_and_seasons.sql)
     for (const t of ['divisions', 'seasons', 'section_types', 'season_sections', 'team_entries', 'division_flairs']) {
@@ -94,13 +94,20 @@ describe('schema inventory on the local database', () => {
     // the retired division-string paths and the unused polls feature are gone (20261122000000)
     for (const t of ['legacy_division_map', 'polls', 'poll_options']) expect(by('table').map((r) => r.object), t).not.toContain(`public.${t}`);
     expect(by('view').map((r) => r.object).sort()).toEqual(['public.season_fantasy_points', 'public.season_player_stats']);
+    // player identity and season rosters (20261124000000) replace the team-bound roster and the member table (20261125000000)
+    for (const t of ['roster_memberships', 'player_private_details', 'legacy_roster_map', 'legacy_player_assist_counts']) {
+      expect(by('table').map((r) => r.object), t).toContain(`public.${t}`);
+    }
+    expect(by('table').map((r) => r.object)).not.toContain('public.team_members');
+    expect(by('function').some((f) => f.object.startsWith('public.captain_update_team_member'))).toBe(false);
+    expect(by('function').some((f) => f.object.startsWith('public.captain_update_roster_player'))).toBe(true);
     // fantasy points are per season, not a profile total (20261123000000)
     expect(by('column').some((c) => c.object === 'public.user_profiles.points')).toBe(false);
   });
 
   it('includes row level security flags, constraints and indexes', () => {
     expect(by('table').every((t) => /rls=(true|false)/.test(t.detail))).toBe(true);
-    expect(by('table').filter((t) => t.detail.includes('rls=true'))).toHaveLength(24);
+    expect(by('table').filter((t) => t.detail.includes('rls=true'))).toHaveLength(27);
     expect(by('constraint').length).toBeGreaterThan(40);
     expect(by('index').length).toBeGreaterThan(15);
   });
@@ -110,7 +117,7 @@ describe('schema inventory on the local database', () => {
     for (const name of ['ensure_domain_lock', 'ensure_domain_lock_on_email_change', 'on_auth_user_created', 'on_auth_user_role_created']) {
       expect(triggers, name).toContain(`auth.users.${name}`);
     }
-    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(7);
+    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(10);
   });
 
   it('includes function bodies and security-definer settings used to judge drift', () => {

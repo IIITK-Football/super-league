@@ -19,7 +19,12 @@ function fakeStaging(opts: Opts = {}) {
   const users = new Map<string, { id: string; email: string }>();
   const roles = new Map<string, string>();
   const regs = new Map<string, { id: string; captain_id: string }>();
-  const members = new Map<string, { id: string; registration_id: string; jersey_number: number | null; email: string | null; position: string | null }>();
+  const regTeams = new Map<string, { team_id: string; season_id: string }>();
+  // Rosters: teams, season entries, players (cards), private details and roster places.
+  const rows: Record<string, Map<string, any>> = {
+    teams: new Map(), team_entries: new Map(), players: new Map(), player_private_details: new Map(), roster_memberships: new Map(),
+  };
+  const members = rows.roster_memberships;
   const hashes = new Map<string, string>();
   // The seeded legacy divisions, each with a current season; synthetic ones are added by the run.
   const divisions = new Map<string, { id: string; slug: string; visibility: string }>(
@@ -58,7 +63,7 @@ function fakeStaging(opts: Opts = {}) {
       if (method === 'DELETE') {
         users.delete(id);
         roles.delete(id);
-        for (const [rid, r] of regs) if (r.captain_id === id) { regs.delete(rid); for (const [mid, m] of members) if (m.registration_id === rid) members.delete(mid); }
+        for (const [rid, r] of regs) if (r.captain_id === id) regs.delete(rid);
         return json(200, {});
       }
     }
@@ -86,32 +91,64 @@ function fakeStaging(opts: Opts = {}) {
     if (p === '/rest/v1/team_registrations' && method === 'POST') {
       const id = `r${++n}`;
       regs.set(id, { id, captain_id: body.captain_id });
+      regTeams.set(id, { team_id: body.team_id, season_id: body.season_id });
       return json(201, [{ id }]);
     }
     if (p === '/rest/v1/team_registrations' && method === 'GET') {
       const ids = (u.searchParams.get('captain_id') ?? '').replace(/^in\.\(|\)$/g, '').split(',').filter(Boolean);
       return json(200, [...regs.values()].filter((r) => ids.includes(r.captain_id)).map((r) => ({ id: r.id })));
     }
-    if (p === '/rest/v1/team_members' && method === 'POST') {
-      const id = `m${++n}`;
-      members.set(id, { id, registration_id: body.registration_id, jersey_number: body.jersey_number ?? null, email: body.email ?? null, position: body.position ?? null });
-      return json(201, [{ id }]);
+    // Roster tables. The secret key without a user token administers; a user token gets RLS: public reads of cards
+    // and rosters, nothing of private details, and writes for dictators only (none for the run's captains).
+    const rosterTable = p.match(/^\/rest\/v1\/(teams|team_entries|players|player_private_details|roster_memberships)$/)?.[1];
+    if (rosterTable) {
+      const table = rows[rosterTable];
+      const asAdmin = !headers.authorization && headers.apikey?.startsWith('sb_secret_');
+      const writer = asAdmin || (uid(headers.authorization) !== null && roles.get(uid(headers.authorization)!) === 'dictator');
+      const filters = [...u.searchParams.entries()].filter(([k]) => !['select', 'on_conflict'].includes(k));
+      const matches = (r: any) => filters.every(([k, v]) => {
+        if (v.startsWith('eq.')) return String(r[k]) === v.slice(3);
+        if (v.startsWith('in.(')) return v.slice(4, -1).split(',').includes(String(r[k]));
+        if (v.startsWith('like.')) return String(r[k] ?? '').startsWith(v.slice(5).replace(/\*$/, ''));
+        return true;
+      });
+      if (method === 'GET') {
+        if (rosterTable === 'player_private_details' && !asAdmin) {
+          if (!headers.authorization) return json(401, { code: '42501', message: 'permission denied for table player_private_details' });
+          if (!writer) return json(200, []);
+        }
+        const found = [...table.values()].filter(matches).map((r) => (rosterTable === 'players' && (u.searchParams.get('select') ?? '').includes('roster_memberships')
+          ? { ...r, roster_memberships: [...members.values()].filter((m) => m.player_id === r.id).map((m) => ({ id: m.id })) } : r));
+        return json(200, found);
+      }
+      if (!writer) return method === 'POST' ? json(403, { code: '42501', message: `new row violates row-level security policy for table "${rosterTable}"` }) : json(200, []);
+      if (method === 'POST') {
+        const id = `${rosterTable[0]}${++n}`;
+        table.set(id, { id, ...body });
+        return json(201, [{ id }]);
+      }
+      if (method === 'PATCH') { for (const r of [...table.values()].filter(matches)) Object.assign(r, body); return new Response(null, { status: 204 }); }
+      if (method === 'DELETE') {
+        for (const r of [...table.values()].filter(matches)) {
+          table.delete(r.id);
+          if (rosterTable === 'players') rows.player_private_details.forEach((d, k) => { if (d.player_id === r.id) rows.player_private_details.delete(k); }); // ON DELETE CASCADE
+        }
+        return new Response(null, { status: 204 });
+      }
     }
-    if (p === '/rest/v1/team_members' && method === 'GET') {
-      const id = (u.searchParams.get('id') ?? '').replace(/^eq\./, '');
-      return json(200, members.has(id) ? [members.get(id)] : []);
-    }
-    if (p === '/rest/v1/rpc/captain_update_team_member') {
+    // The member-table function is retired (20261125000000): PostgREST no longer finds it.
+    if (p === '/rest/v1/rpc/captain_update_team_member') return json(404, { code: 'PGRST202', message: 'Could not find the function' });
+    if (p === '/rest/v1/rpc/captain_update_roster_player') {
       if (failAtRpc) throw new Error('network went away');
       const me = uid(headers.authorization);
-      if (!me) return json(401, { code: '42501', message: 'permission denied for function captain_update_team_member' });
-      const m = members.get(body.p_member_id);
+      if (!me) return json(401, { code: '42501', message: 'permission denied for function captain_update_roster_player' });
+      const m = members.get(body.p_membership_id);
       const role = roles.get(me);
       if (!openRpc) {
-        const owner = m ? regs.get(m.registration_id)?.captain_id : undefined;
-        if (!m || (owner !== me && role !== 'dictator')) return json(400, { message: "Player is not part of your assigned roster" });
+        const entry = m ? rows.team_entries.get(m.team_entry_id) : undefined;
+        const assigned = entry && [...regs.values()].some((r) => r.captain_id === me && regTeams.get(r.id)?.team_id === entry.team_id && regTeams.get(r.id)?.season_id === m.season_id);
+        if (!m || (!assigned && role !== 'dictator')) return json(400, { message: 'Player is not part of your assigned roster' });
         if (role !== 'captain' && role !== 'dictator') return json(400, { message: 'Captain access is required to update players' });
-        if (body.p_email && body.p_email !== m.email && role !== 'dictator') return json(400, { message: "Only a dictator can change a player's email" });
       }
       if (m) { m.jersey_number = body.p_jersey_number; m.position = body.p_position; }
       return new Response(null, { status: 204 });
@@ -181,7 +218,7 @@ function fakeStaging(opts: Opts = {}) {
     }
     return json(404, { msg: `unhandled ${method} ${p}` });
   };
-  return { fetchImpl, users, roles, regs, members, divisions, seasons, sections, calls };
+  return { fetchImpl, users, roles, regs, members, rows, divisions, seasons, sections, calls };
 }
 
 let logs: string[];
@@ -232,13 +269,13 @@ describe('runChecks against a healthy staging', () => {
     const s = fakeStaging();
     const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(results.filter((r: { status: string }) => r.status === 'FAIL')).toEqual([]);
-    for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /email/i, /dictator/i, /recovery/i, /clean/i,
+    for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /rename a player/i, /private player details/i, /dictator/i, /recovery/i, /clean/i,
                       /legacy divisions/i, /new hidden division/i, /current season switches/i, /hidden division is invisible/i, /cannot create a division/i]) {
       expect(by(results, re)?.status, String(re)).toBe('PASS');
     }
     expect(s.users.size).toBe(0);
     expect(s.regs.size).toBe(0);
-    expect(s.members.size).toBe(0);
+    for (const table of ['teams', 'team_entries', 'players', 'player_private_details', 'roster_memberships']) expect(s.rows[table].size, table).toBe(0);
     expect(s.roles.size).toBe(0);
     expect([...s.divisions.values()].map((d) => d.slug).sort()).toEqual(['freshers', 'super-league', 'wsl']); // only the seeded ones remain
     expect(s.seasons.size).toBe(3);
@@ -278,7 +315,7 @@ describe('runChecks against a healthy staging', () => {
   it('uses the secret key only for administration, and a user token with the publishable key for user-level calls', async () => {
     const s = fakeStaging();
     await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
-    for (const c of s.calls.filter((x) => x.url.includes('/rpc/captain_update_team_member') && x.headers.authorization)) {
+    for (const c of s.calls.filter((x) => x.url.includes('/rpc/captain_update_roster_player') && x.headers.authorization)) {
       expect(c.headers.apikey).toBe(PUBLISHABLE);
       expect(c.headers.authorization).not.toContain(SECRET);
     }
@@ -301,7 +338,6 @@ describe('runChecks detects a broken staging', () => {
     expect(by(results, /other team/i)?.status).toBe('FAIL');
     expect(by(results, /normal user/i)?.status).toBe('FAIL');
     expect(by(results, /without the captain role/i)?.status).toBe('FAIL');
-    expect(by(results, /email/i)?.status).toBe('FAIL');
     expect(s.users.size).toBe(0); // and still cleans up
   });
 

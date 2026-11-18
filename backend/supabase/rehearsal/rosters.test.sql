@@ -2,7 +2,7 @@
 -- pre-SL-021 schema, its seed and legacy_rosters_fixture.sql). Not part of the routine database group: the
 -- rehearsal rebuilds the local database.
 BEGIN;
-SELECT plan(19);
+SELECT plan(21);
 
 -- Every Freshers member is accounted for ----------------------------------------------------------------------
 SELECT is((SELECT count(*) FROM public.legacy_roster_map)::int, (SELECT members FROM public._rehearsal_before),
@@ -63,6 +63,10 @@ SELECT is((SELECT goals FROM public.season_player_stats WHERE player_id = (SELEC
 SELECT ok((SELECT bool_and(sps.club IS NOT NULL) FROM public.season_player_stats sps), 'every season line has a club');
 SELECT is((SELECT count(*) FROM public.roster_memberships rm GROUP BY rm.team_entry_id, rm.jersey_number HAVING count(*) > 1 AND rm.jersey_number IS NOT NULL LIMIT 1)::int,
           NULL, 'no jersey number repeats within a team entry');
+
+-- After the contract step the legacy roster is gone; its record lives on in the mapping and the snapshot.
+SELECT hasnt_table('public', 'team_members', 'the Freshers member table is retired');
+SELECT hasnt_column('public', 'players', 'assists', 'the cross-season counter is retired (its values are in the snapshot)');
 
 SELECT * FROM finish();
 ROLLBACK;

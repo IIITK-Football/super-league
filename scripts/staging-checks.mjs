@@ -103,16 +103,22 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     if (!freshersSeason) throw new Error('the Freshers division has no current season on this project');
     return freshersSeason;
   };
+  // A synthetic team in the current Freshers season: the team, its season entry, the captain's registration and one
+  // player on the season roster (a roster place). Names carry the run's prefix so cleanup can find them.
   const makeTeam = async (captain, name) => {
-    const reg = await admin('/rest/v1/team_registrations', { method: 'POST', prefer: 'return=representation', body: { captain_id: captain.id, team_name: `SL CHECK ${name}`, season_id: await currentFreshersSeason() } });
-    if (!reg.ok) throw new Error(`could not create the ${name} team entry (${message(reg)})`);
-    const mem = await admin('/rest/v1/team_members', {
-      method: 'POST',
-      prefer: 'return=representation',
-      body: { registration_id: reg.data[0].id, name: `SL Check Player ${name}`, first_name: 'SL', last_name: `Check ${name}`, email: `${tag}-player-${name.toLowerCase()}@${DOMAIN}`, position: 'CM', jersey_number: 7, overall_rating: 60, attributes: {} },
-    });
-    if (!mem.ok) throw new Error(`could not create the ${name} player (${message(mem)})`);
-    return { member: mem.data[0].id };
+    const season = await currentFreshersSeason();
+    const post = async (path, body, what) => {
+      const r = await admin(path, { method: 'POST', prefer: 'return=representation', body });
+      if (!r.ok) throw new Error(`could not create the ${name} ${what} (${message(r)})`);
+      return r.data[0].id;
+    };
+    const team = await post('/rest/v1/teams', { name: `${tag} ${name}` }, 'team');
+    const entry = await post('/rest/v1/team_entries', { team_id: team, season_id: season }, 'season entry');
+    await post('/rest/v1/team_registrations', { captain_id: captain.id, team_name: `SL CHECK ${name}`, season_id: season, team_id: team }, 'registration');
+    const player = await post('/rest/v1/players', { first_name: `${tag}-player`, last_name: name, overall_rating: 60, attributes: {} }, 'player');
+    await post('/rest/v1/player_private_details', { player_id: player, email: `${tag}-player-${name.toLowerCase()}@${DOMAIN}` }, 'player contact');
+    const member = await post('/rest/v1/roster_memberships', { player_id: player, team_entry_id: entry, season_id: season, jersey_number: 7, position: 'CM' }, 'roster place');
+    return { member, player };
   };
   const session = async (user, type = 'magiclink') => {
     const link = await admin('/auth/v1/admin/generate_link', { method: 'POST', body: { type, email: user.email } });
@@ -122,12 +128,12 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     if (!v.ok || !v.data?.access_token) throw new Error(`could not turn the ${type} link into a session (${message(v)})`);
     return v.data.access_token;
   };
-  const rpc = (token, memberId, extra = {}) =>
-    call('/rest/v1/rpc/captain_update_team_member', {
+  const rpc = (token, membershipId, extra = {}) =>
+    call('/rest/v1/rpc/captain_update_roster_player', {
       method: 'POST',
       key: PUBLISHABLE,
       token,
-      body: { p_member_id: memberId, p_position: 'ST', p_jersey_number: 9, p_overall_rating: 61, p_attributes: {}, p_email: null, p_image_url: null, ...extra },
+      body: { p_membership_id: membershipId, p_position: 'ST', p_jersey_number: 9, p_overall_rating: 61, p_attributes: {}, p_image_url: null, ...extra },
     });
   const expectRefused = (name, r, pattern) => {
     if (r.ok) record(name, 'FAIL', 'the call was ALLOWED');
@@ -144,7 +150,21 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     await admin(`/rest/v1/seasons?division_id=in.(${ids.join(',')})`, { method: 'DELETE' });
     await admin(`/rest/v1/divisions?id=in.(${ids.join(',')})`, { method: 'DELETE' });
   };
+  // Remove synthetic rosters: roster places, players (with their private details), season entries and teams.
+  const sweepRosters = async () => {
+    const teams = ((await admin(`/rest/v1/teams?name=like.${PREFIX}*&select=id`)).data ?? []).map((t) => t.id);
+    const entries = teams.length ? ((await admin(`/rest/v1/team_entries?team_id=in.(${teams.join(',')})&select=id`)).data ?? []).map((e) => e.id) : [];
+    if (entries.length) await admin(`/rest/v1/roster_memberships?team_entry_id=in.(${entries.join(',')})`, { method: 'DELETE' });
+    const players = ((await admin(`/rest/v1/players?first_name=like.${PREFIX}*&select=id`)).data ?? []).map((p) => p.id);
+    if (players.length) {
+      await admin(`/rest/v1/roster_memberships?player_id=in.(${players.join(',')})`, { method: 'DELETE' });
+      await admin(`/rest/v1/players?id=in.(${players.join(',')})`, { method: 'DELETE' });
+    }
+    if (entries.length) await admin(`/rest/v1/team_entries?id=in.(${entries.join(',')})`, { method: 'DELETE' });
+    if (teams.length) await admin(`/rest/v1/teams?id=in.(${teams.join(',')})`, { method: 'DELETE' });
+  };
   const sweep = async () => {
+    await sweepRosters();
     await sweepDivisions();
     const list = await admin('/auth/v1/admin/users?per_page=1000');
     for (const u of list.data?.users ?? []) {
@@ -156,8 +176,8 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     await sweep();
 
     const probe = await probeAll(base, PUBLISHABLE, fetchImpl);
-    const open = probe.filter((p) => p.verdict !== 'closed');
-    record('Anonymous callers cannot execute either overload (probe: CLOSED)', open.length ? 'FAIL' : 'PASS', probe.map((p) => `${p.overload} ${p.verdict}`).join(', '));
+    const open = probe.filter((p) => p.verdict !== 'closed' && p.verdict !== 'retired');
+    record('Anonymous callers cannot execute the captain roster function, and the retired overloads are gone (probe: CLOSED)', open.length ? 'FAIL' : 'PASS', probe.map((p) => `${p.overload} ${p.verdict}`).join(', '));
 
     const captainA = await makeUser('captain-a');
     const captainB = await makeUser('captain-b');
@@ -180,12 +200,21 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
 
     const tokenA = await session(captainA);
     const own = await rpc(tokenA, teamA.member);
-    const readBack = own.ok ? await admin(`/rest/v1/team_members?id=eq.${teamA.member}&select=jersey_number,position`) : null;
+    const readBack = own.ok ? await admin(`/rest/v1/roster_memberships?id=eq.${teamA.member}&select=jersey_number,position`) : null;
     const saved = readBack?.data?.[0]?.jersey_number === 9;
     record('A captain can save a player on their own team', own.ok && saved ? 'PASS' : 'FAIL', own.ok ? (saved ? 'saved and read back' : 'accepted but the change is not there') : message(own));
 
     expectRefused('A captain cannot change a player on another team', await rpc(tokenA, teamB.member), /not part of your assigned roster/i);
-    expectRefused("A captain cannot change a player's email", await rpc(tokenA, teamA.member, { p_email: `${tag}-other@${DOMAIN}` }), /only a dictator can change/i);
+    // A captain has no direct write path to players or rosters: a rename through the Data API changes nothing.
+    await call(`/rest/v1/players?id=eq.${teamA.player}`, { method: 'PATCH', key: PUBLISHABLE, token: tokenA, prefer: 'return=minimal', body: { first_name: `${tag}-renamed` } });
+    await call(`/rest/v1/roster_memberships?id=eq.${teamA.member}`, { method: 'DELETE', key: PUBLISHABLE, token: tokenA });
+    const afterRename = await admin(`/rest/v1/players?id=eq.${teamA.player}&select=first_name,roster_memberships(id)`);
+    const untouched = afterRename.data?.[0]?.first_name === `${tag}-player` && (afterRename.data?.[0]?.roster_memberships ?? []).length === 1;
+    record('A captain cannot rename a player or remove them from the roster directly', untouched ? 'PASS' : 'FAIL', untouched ? 'unchanged' : 'the player or roster place changed');
+    const contactAnon = await anon(`/rest/v1/player_private_details?select=email`);
+    const contactCaptain = await call(`/rest/v1/player_private_details?select=email`, { key: PUBLISHABLE, token: tokenA });
+    const privateOk = (!contactAnon.ok || (contactAnon.data ?? []).length === 0) && contactCaptain.ok && (contactCaptain.data ?? []).length === 0;
+    record('Private player details are hidden from visitors and captains', privateOk ? 'PASS' : 'FAIL', privateOk ? 'hidden' : 'a private email was readable');
     expectRefused('An assigned user without the captain role is refused', await rpc(await session(assigned), teamC.member), /captain access is required/i);
     expectRefused('A normal user cannot change a player', await rpc(await session(normal), teamA.member), /not part of your assigned roster/i);
 
@@ -254,8 +283,11 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
       const leftoverRegs = created.length ? (await admin(`/rest/v1/team_registrations?captain_id=in.(${ids})&select=id`)).data ?? [] : [];
       const leftoverRoles = created.length ? (await admin(`/rest/v1/user_roles?user_id=in.(${ids})&select=user_id`)).data ?? [] : [];
       const leftoverDivisions = (await admin(`/rest/v1/divisions?slug=like.${PREFIX}*&select=id`)).data ?? [];
-      const clean = gone.every(Boolean) && leftoverRegs.length === 0 && leftoverRoles.length === 0 && leftoverDivisions.length === 0;
-      record('Cleanup removed every synthetic account and row', clean ? 'PASS' : 'FAIL', `${created.length} accounts removed; ${leftoverRegs.length} team entries, ${leftoverRoles.length} role rows and ${leftoverDivisions.length} divisions left over`);
+      const leftoverPlayers = (await admin(`/rest/v1/players?first_name=like.${PREFIX}*&select=id`)).data ?? [];
+      const leftoverTeams = (await admin(`/rest/v1/teams?name=like.${PREFIX}*&select=id`)).data ?? [];
+      const clean = gone.every(Boolean) && leftoverRegs.length === 0 && leftoverRoles.length === 0 && leftoverDivisions.length === 0
+        && leftoverPlayers.length === 0 && leftoverTeams.length === 0;
+      record('Cleanup removed every synthetic account and row', clean ? 'PASS' : 'FAIL', `${created.length} accounts removed; ${leftoverRegs.length} registrations, ${leftoverRoles.length} role rows, ${leftoverDivisions.length} divisions, ${leftoverPlayers.length} players and ${leftoverTeams.length} teams left over`);
     } catch (e) {
       record('Cleanup removed every synthetic account and row', 'FAIL', `cleanup error: ${String(e.message ?? e).slice(0, 160)} (accounts are prefixed ${PREFIX} and removed by the next run)`);
     }

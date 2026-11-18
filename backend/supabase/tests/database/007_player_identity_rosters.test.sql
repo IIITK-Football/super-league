@@ -3,7 +3,7 @@
 -- season statistics derived from match events (never stored on the identity or membership), and access by role.
 -- Rolled back.
 BEGIN;
-SELECT plan(48);
+SELECT plan(55);
 
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('b7000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
@@ -61,6 +61,14 @@ SELECT hasnt_column('public', 'players', 'goals', 'the identity stores no goals'
 SELECT hasnt_column('public', 'roster_memberships', 'goals', 'a membership stores no goals');
 SELECT hasnt_column('public', 'roster_memberships', 'assists', 'a membership stores no assists');
 SELECT hasnt_column('public', 'players', 'email', 'the identity has no public email column');
+-- The team-bound roster is retired (20261125000000).
+SELECT hasnt_table('public', 'team_members', 'the separate Freshers member table is gone');
+SELECT hasnt_column('public', 'players', 'team_id', 'a player is not bound to a team');
+SELECT hasnt_column('public', 'players', 'team_entry_id', 'a player is not bound to one season');
+SELECT hasnt_column('public', 'players', 'jersey_number', 'the jersey number belongs to the roster place');
+SELECT hasnt_column('public', 'players', 'position', 'the position belongs to the roster place');
+SELECT hasnt_column('public', 'players', 'assists', 'no cross-season assists counter on the identity');
+SELECT hasnt_function('public', 'captain_update_team_member', 'the member-table RPC is retired (both overloads)');
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.roster_memberships'::regclass), 'memberships have row level security');
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.player_private_details'::regclass), 'private details have row level security');
 
