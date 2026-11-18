@@ -22,7 +22,7 @@
 | `goals` | `match_events` (goal/own_goal + assist) | Canonical source. |
 | `matches.scorers/assists/own_goals` JSON | `match_events` | **Parallel duplicate** of `goals`. Reconcile per match: where JSON and `goals` disagree, produce a discrepancy report; owner picks winner (default: `goals` rows, JSON used to fill missing attribution). Keep JSON columns until verified, then retire (SL-102). |
 | `matches.home_score/away_score/penalties/status/minute/timer_*` | retained on match | Authority rule when score ≠ events is a Phase 2 open item (backlog §5). |
-| `user_roles` (`default/editor/captain/dictator/admin`) | five roles + assignments | `default→user`, `captain→captain` (+ assignment from `team_registrations`), `dictator→dictator`, **`editor→editor` (newsletter-only, preserved)**. **`admin` → user with no elevated access** unless a reviewed per-person assignment is recorded **before** migration; never auto-mapped to scorer or dictator (see §3a and SL-003). |
+| `user_roles` (`default/editor/captain/dictator/admin`) | five roles + assignments | `default→user`, `captain→captain` (+ assignment from `team_registrations`), `dictator→dictator`, **`editor→editor` (newsletter-only, preserved)**. **`admin` → user with no elevated access**: never ported, mapped or promoted (owner decision 2026-11-19; see §3a and SL-003). |
 | `user_profiles` (`mens_team_flair`, `womens_team_flair`, `wc_team_flair`, `points`) | profile + per-division fantasy profile + WC profile | `points` is derived; recompute and compare. |
 | `predictions` | prediction scoped to season via match | Retained as-is; FK to match unchanged. |
 | `wc_*` (10 tables) | unchanged | Separate domain; no division/season columns. |
@@ -40,20 +40,9 @@ Orphans/unsupported to report in dry-run: matches with null team ids, players wi
 4. No `DROP`/`TRUNCATE` of tables holding retained data in the same release as its replacement.
 5. Local first: every migration proven on a fresh local reset **and** on a local copy loaded with a sanitized production-shaped dump, if the owner supplies one.
 
-## 3a. Legacy-admin review (local-only, read-only)
+## 3a. Legacy admin removal
 
-Run only against the local database (port 54322) to list legacy admins needing an explicit decision:
-
-```sql
--- read-only; run via: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-SELECT ur.user_id, up.email, up.real_name, ur.role
-FROM public.user_roles ur
-LEFT JOIN public.user_profiles up ON up.id = ur.user_id
-WHERE ur.role = 'admin'
-ORDER BY up.email;
-```
-
-The output stays local (git-ignored), is never committed, and is never run against hosted. The owner reviews the list and records scorer, dictator, or nothing per person **before** the role migration runs (the migration reads that reviewed mapping; unlisted admins become user). The reviewed list is kept only on the owner's machine, outside the repository.
+Owner decision 2026-11-19: legacy `admin` accounts are never ported or promoted, and there is no review list. `20261129000000_legacy_admin_grants_nothing.sql` removed every privilege of `admin` (policies, `is_role_manager()`, API routes and UI). `20261130000000_retire_legacy_admin_role.sql` sets every remaining `admin` row to `default` (audited, with the count reported), removes `admin` from the `user_roles` role check and drops the unused `get_user_role()`. Auth accounts and profiles are kept, nobody is promoted, and a dictator may later grant a role like any other user's. `/dictator` is the canonical dashboard URL; `/admin` redirects to it.
 
 ## 4. Environments and release targets
 
@@ -81,9 +70,8 @@ Staging is created **empty** and filled by CI. No hosted migration is run by any
 
 - Creating the staging Supabase project and the GitHub environments (steps in `docs/release.md`); this record should then be updated to confirm they exist.
 - Whether to supply a sanitized production-shaped dump for local rehearsal.
-- Per-person decision for each legacy `admin` (from the local-only review list), recorded before the role migration runs. This is a gate for the SL-024 role migration.
 
-Resolved 2026-11-16: `inter` (no data, no division created), `editor` (preserved as editor), `freshers_fixtures` (absent on hosted).
+Resolved 2026-11-16: `inter` (no data, no division created), `editor` (preserved as editor), `freshers_fixtures` (absent on hosted). Resolved 2026-11-19: the per-person legacy `admin` gate for the SL-024 role migration is retired by the owner decision in §3a.
 
 **Owner exception to §3 rule 4 (2026-11-19):** the contract step for divisions ships in the same release as the expand step (`20261119000000` → `20261122000000`), instead of waiting for SL-102. The owner stated that production has only the three divisions, with 2026 data, and that `polls`, `poll_options` and `league_schedule` are empty. The contract migration enforces both statements as guards: it refuses to run unless every record survives and polls hold no real data. Release order is unchanged: local, then staging, then a reviewed `main` release with a backup or PITR point first.
 

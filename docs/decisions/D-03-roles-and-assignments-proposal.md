@@ -4,13 +4,13 @@ Status: **proposal, open**. The owner resolves D-03 and records the answers. Unb
 
 ## 1. Current state
 
-- **One role per user.** `user_roles(user_id, role)` has `PRIMARY KEY (user_id)` (`baseline.sql:529-533, 737-738`), check `default/editor/captain/dictator/admin`. New accounts get `default` (`handle_new_user_role`, `baseline.sql:181-191`). `get_user_role()` returns the one value (`baseline.sql:151-156`).
-- **`admin` is a broad role labelled "Scorer".** `is_role_manager()` lets `dictator` **and** `admin` manage roles (`baseline.sql:226-236`, policy at `:1097`); `admin` has full access to matches, newsletter, predictions and players (`:963-979`). The UI labels it Scorer (`ManageRoles.jsx:10`) but treats it as dictator: `AuthContext.jsx:80` maps `admin → dictator`, `AdminDashboard.jsx:33-35` admits `admin`, `RoleWorkspace.jsx:13-14` too. The API also accepts it (`admin/team-registrations/route.ts:20`, `admin/newsletter/route.ts:42,73`, `newsletter/upload-url/route.ts:29`).
-- **`editor`** stays newsletter-only (`RoleWorkspace.jsx:17`), but the delete route still admits `admin` (`newsletter/route.ts:73`).
+- **One role per user.** `user_roles(user_id, role)` has `PRIMARY KEY (user_id)` (`baseline.sql:529-533, 737-738`), check `default/editor/captain/dictator` (`admin` removed by `20261130000000`). New accounts get `default` (`handle_new_user_role`, `baseline.sql:181-191`). `get_user_role()` is dropped (`20261130000000`).
+- **Legacy `admin` grants nothing (2026-11-19).** It was a broad role labelled "Scorer" that managed roles and wrote matches, newsletter and predictions. `20261129000000_legacy_admin_grants_nothing.sql` made `is_role_manager()` and those policies dictator-only, and API routes and UI no longer accept `admin`. `20261130000000_retire_legacy_admin_role.sql` sets remaining `admin` rows to `default` (audited), removes `admin` from the role check and drops the unused `get_user_role()`. `is_role_manager()` stays, dictator-only, until this proposal's helpers replace it.
+- **`editor`** stays newsletter-only (`RoleWorkspace.jsx:17`).
 - **Captain = role + `team_registrations.captain_id`.** `UNIQUE (captain_id)` (`baseline.sql:702-703`) means one team per captain **across all seasons**. FK to `auth.users` is `ON DELETE CASCADE` (`:898`). The team is linked by `team_id` (`ON DELETE SET NULL`, `:903`) and `season_id` (`divisions_and_seasons.sql:117`, `NOT NULL` from `retire_legacy_division_paths.sql:86`). Readers: `captain_update_roster_player` (`player_identity_rosters.sql:530-541`), `captain/team-branding/route.ts:72-75` (no season filter, relies on the global unique key), `admin/freshers/player-image/route.ts:29-38`, `admin/team-registrations/route.ts:41-82` (the upsert behind the captain-change defect, and it also upserts the `captain` role, `:82`).
 - **`is_dictator()`** checks `role = 'dictator'` only (`divisions_and_seasons.sql:171-178`); the newer division tables use it.
-- **No scorer is stored.** `admin/matches/live/route.ts:46-51` lets `admin`, `dictator` **and `captain`** write live match state: a captain can score any match today, which SL-003 forbids.
-- **Local data** (read-only query, port 54322): `default 46, captain 2, dictator 1, editor 1, admin 0`; 2 registrations, both map to a `team_entries` row and both captains hold the `captain` role.
+- **No scorer is stored.** `admin/matches/live/route.ts:46-51` lets `dictator` **and `captain`** write live match state (`admin` removed 2026-11-19): a captain can score any match today, which SL-003 forbids.
+- **Local data** (read-only query, port 54322): `default 46, captain 2, dictator 1, editor 1, admin 0` (before 2026-11-19); 2 registrations, both map to a `team_entries` row and both captains hold the `captain` role.
 
 ## 2. Multiple roles
 
@@ -66,7 +66,7 @@ ON DELETE: deleting a user removes their grants and assignments (as today). Dele
 - `is_dictator()`: redefined as `has_role('dictator')` (existing callers keep working).
 - `is_captain_of(p_team_entry uuid)`: `has_role('captain') AND` an assignment for that entry.
 - `can_score(p_match uuid)`: `has_role('scorer') AND` an unexpired assignment on that match or its `season_id`.
-- `my_roles() → text[]` for the UI; `get_user_role()` and `is_role_manager()` are dropped.
+- `my_roles() → text[]` for the UI; `is_role_manager()` is dropped (`get_user_role()` already is).
 
 Helpers never include the dictator; policies spell it out (`is_dictator() OR can_score(id)`), so every capability stays visible at the call site.
 
@@ -81,10 +81,10 @@ Helpers never include the dictator; policies spell it out (`is_dictator() OR can
 ## 4. Data migration (one transactional forward migration, guarded)
 
 1. Abort if any `team_registrations` row has a null `team_id` or no matching `team_entries (team_id, season_id)`, or if any captain holds two registrations in one season.
-2. Grants: `default` → no row; `captain`, `editor`, `dictator` → same grant; **`admin` → no grant** (SL-004 §3a). The migration records each dropped `admin` holder in the audit history with the old value.
+2. Grants: `default` → no row; `captain`, `editor`, `dictator` → same grant. No `admin` row remains (`20261130000000` already set them to `default`, audited; SL-004 §3a); the migration asserts none exists.
 3. `team_registrations` → `captain_assignments` (one row each, `assigned_at = created_at`). Postcondition: row counts equal and every pair `(captain_id, team_id, season_id)` matches; registration captains lacking the role are reported (0 locally).
 4. Same slice: port every reader listed in §1 and the seed and staging checks; then a later migration in SL-024 drops `team_registrations` after a guard confirms no runtime reader and equal counts. `team_registrations.team_name` is compared with `teams.name` first, and any difference is reported, not silently lost.
-5. The owner's reviewed admin list (kept off-repo) is applied **after** deploy by a dictator through the dictator dashboard (scorer assignment or dictator grant), so no private list enters the repository or a migration.
+5. No legacy `admin` is re-granted: there is no reviewed list (owner decision 2026-11-19). A dictator grants roles to former admins only as to any other user.
 
 ## 5. Questions for the owner
 
@@ -93,6 +93,6 @@ Helpers never include the dictator; policies spell it out (`is_dictator() OR can
 3. **One captain per team entry, or allow co-captains?** Default: one (`UNIQUE (team_entry_id)`); a vice-captain can be added later as a separate decision.
 4. **On captain change, does the previous captain keep the `captain` grant?** Default: keep it (it grants nothing without an assignment); the dashboard shows grants with no assignment so the dictator can revoke them.
 5. **Does assigning a captain or scorer also add the matching role grant automatically?** Default: yes, in the same transaction and audited, because it is an explicit dictator action (today's route already does this). Removing an assignment never removes a grant automatically.
-6. **Legacy `admin` holders:** accept the "becomes user, dictator re-grants from the reviewed list after deploy" path? Default: yes; temporary loss of access is accepted over any automatic mapping.
+6. **Legacy `admin` holders:** *answered by the owner 2026-11-19:* never ported or promoted; their `admin` rows are removed and the accounts stay ordinary users (Auth accounts and profiles kept), with no review or re-grant path. `/dictator` is the canonical dashboard URL and `/admin` redirects to it. Done by `20261129000000` and `20261130000000`.
 7. **May a captain-assigned user also score matches involving their own team?** Default: technically allowed if the dictator assigns it (no role implies another, and no role forbids another); the dashboard warns.
 8. **Do scorer assignments expire?** Default: optional `expires_at`, null for dictator-made assignments, required for SL-050 invitations.

@@ -83,17 +83,17 @@ Legend: **R** read, **C** create, **U** update, **D** delete, **P** publish, **o
 | `captain` | captain | direct; assignment from `team_registrations` |
 | `dictator` | dictator | direct |
 | `editor` | **editor** | preserved; **newsletter-only**, no other rights |
-| `admin` | **user (no elevated access)** unless a reviewed per-person assignment exists **before** the migration runs | The UI label "Scorer" and the broad access are *not* evidence of intent. Each legacy admin appears on a local-only review list; the owner reviews it and records scorer, dictator, or nothing per person *before* migration. Unreviewed admins become user. **Never automatic.** |
+| `admin` | **user (no elevated access)** | Owner decision 2026-11-19: never ported or promoted. Every stored `admin` row becomes an ordinary user (Auth account and profile kept); no individual admin is reviewed or re-granted. The UI label "Scorer" and the old broad access are *not* evidence of intent. |
 
-The legacy-admin review list is generated only against the **local** database (see SL-004 §3a). The local seed currently contains no `admin` users (roles: dictator, captain, editor, default).
+`20261129000000_legacy_admin_grants_nothing.sql` removed every privilege of `admin`, and `20261130000000_retire_legacy_admin_role.sql` sets any remaining `admin` row to `default` (audited), removes `admin` from the `user_roles` role check and drops the unused `get_user_role()` (SL-004 §3a). `/dictator` is the canonical dashboard URL; `/admin` is a legacy URL that redirects to it.
 
 ## Current-state gaps this resolves (evidence)
 
-- `user_roles_role_check` allows `default, editor, captain, dictator, admin`; `is_role_manager()` treats `admin` as a role manager.
+- `user_roles_role_check` allowed `default, editor, captain, dictator, admin`, and `is_role_manager()` treated `admin` as a role manager. *Closed 2026-11-19:* `is_role_manager()` and the matches, newsletter, predictions and team-registration policies are dictator-only (`20261129000000`), and `admin` is no longer an allowed value (`20261130000000`). `is_role_manager()` stays (dictator-only) until SL-024's scoped roles replace it.
 - Baseline RLS has `USING (true)`/`WITH CHECK (true)` insert/update/delete for any `authenticated` user on `matches`, `goals`, `teams`, `players`, `newsletter`.
 - Policy "Admin and Captain all access players" gives captains full player CRUD.
 - The 7-argument `captain_update_team_member` is SECURITY DEFINER with no ownership check and writes `email`, a protected identity field.
-- `admin`/`editor` string checks appear in 11 backend/frontend source files (e.g. `backend/app/api/admin/*`, `players/*`, `AdminDashboard.jsx`, `RoleWorkspace.jsx`, `ManageRoles.jsx`); `editor` currently gets newsletter routes alongside others and must be narrowed.
+- `admin`/`editor` string checks appeared in 11 backend/frontend source files (e.g. `backend/app/api/admin/*`, `players/*`, `AdminDashboard.jsx`, `RoleWorkspace.jsx`, `ManageRoles.jsx`). *Closed 2026-11-19 for `admin`:* API routes and the UI no longer accept it. `editor` is newsletter-only; the remaining narrowing is SL-024.
 
 ## Owner clarifications (2026-11-16)
 
