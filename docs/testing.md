@@ -10,6 +10,7 @@ Tests are organised by domain so a change runs only the groups it can affect. Th
 | `auth-identity` | backend | college email rule, password and Google same-user behavior, reset (local Auth) | active |
 | `frontend-components` | frontend | React components/pages (Vitest) | active (no tests yet beyond config) |
 | `rosters` | backend | player identity, season rosters, season statistics, dictator and captain roster flows (local Auth and Data API) | active |
+| `audit` | backend | append-only audit history: recording, dictator-only reads, no changes by any role, the dictator view (local Auth and Data API) | active |
 | `auth-roles` | backend | five-role API checks and RLS | pending (SL-024/025) |
 | `api-services` | backend | API services and contracts | pending (SL-026/030) |
 | `match-operations` | backend | scorer, events, cards, lineups, brackets | pending (SL-022/050/053/054) |

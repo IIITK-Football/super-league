@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { Users, Shield, Calendar, Newspaper, Activity, LogOut, Menu, X ,Calculator, Layers} from 'lucide-react';
+import { Users, Shield, Calendar, Newspaper, Activity, LogOut, Menu, X ,Calculator, Layers, History} from 'lucide-react';
 import { GlassPanel } from '../components/GlassPanel';
 import LiveController from '../components/admin/LiveController';
 import ScheduleMatches from '../components/admin/ScheduleMatches';
@@ -11,6 +11,7 @@ import ManageRegistrations from '../components/admin/ManageRegistrations';
 import ManageRoles from '../components/admin/ManageRoles';
 import ManageDivisions from '../components/admin/ManageDivisions';
 import ManageRosters from '../components/admin/ManageRosters';
+import AuditHistory from '../components/admin/AuditHistory';
 export function AdminDashboard() {
   const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('live');
@@ -65,6 +66,7 @@ export function AdminDashboard() {
     ...(storedRole === 'dictator' ? [
       { id: 'divisions', label: 'Divisions & Seasons', icon: Layers },
       { id: 'rosters', label: 'Teams & Rosters', icon: Users },
+      { id: 'audit', label: 'Audit History', icon: History },
     ] : []),
   ];
 
@@ -158,6 +160,7 @@ export function AdminDashboard() {
           {activeTab === 'news' && <ManageNews />}
           {activeTab === 'divisions' && storedRole === 'dictator' && <ManageDivisions />}
           {activeTab === 'rosters' && storedRole === 'dictator' && <ManageRosters />}
+          {activeTab === 'audit' && storedRole === 'dictator' && <AuditHistory />}
         </GlassPanel>
       </div>
 

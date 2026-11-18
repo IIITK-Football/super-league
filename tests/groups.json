@@ -369,6 +369,50 @@
         "frontend/src/pages/__tests__/TeamBuilder.local.test.jsx"
       ]
     },
+    "audit": {
+      "description": "Append-only audit history: sensitive changes recorded with their actor and a safe summary through the local Auth and Data API, read by dictators only, unchangeable by any role, and the dictator Audit History view against the real stack",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": [
+        "backend/tests/audit/**",
+        "backend/supabase/migrations/*audit*",
+        "frontend/src/components/admin/AuditHistory.jsx",
+        "frontend/src/components/admin/__tests__/AuditHistory.local.test.jsx"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/audit"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "env",
+            "SL_LOCAL_SUPABASE=1",
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "src/components/admin/__tests__/AuditHistory.local.test.jsx"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/supabase/migrations/*audit*",
+        "frontend/src/components/admin/AuditHistory.jsx"
+      ],
+      "testPaths": [
+        "backend/tests/audit/**",
+        "frontend/src/components/admin/__tests__/AuditHistory.local.test.jsx"
+      ]
+    },
     "auth-roles": {
       "description": "Five-role authorization: API checks and RLS (user, captain, scorer, editor, dictator)",
       "owner": "backend",

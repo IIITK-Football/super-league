@@ -83,10 +83,10 @@ describe('schema inventory on the local database', () => {
   });
 
   it('reports what the migrations create in the public schema', () => {
-    expect(by('table')).toHaveLength(27);
+    expect(by('table')).toHaveLength(28);
     expect(by('view')).toHaveLength(2);
-    expect(by('function')).toHaveLength(14);
-    expect(by('policy')).toHaveLength(53);
+    expect(by('function')).toHaveLength(16);
+    expect(by('policy')).toHaveLength(54);
     // the division and season model (20261119000000_divisions_and_seasons.sql)
     for (const t of ['divisions', 'seasons', 'section_types', 'season_sections', 'team_entries', 'division_flairs']) {
       expect(by('table').map((r) => r.object), t).toContain(`public.${t}`);
@@ -101,13 +101,15 @@ describe('schema inventory on the local database', () => {
     expect(by('table').map((r) => r.object)).not.toContain('public.team_members');
     expect(by('function').some((f) => f.object.startsWith('public.captain_update_team_member'))).toBe(false);
     expect(by('function').some((f) => f.object.startsWith('public.captain_update_roster_player'))).toBe(true);
+    // the append-only audit history (20261126000000)
+    expect(by('table').map((r) => r.object)).toContain('public.audit_log');
     // fantasy points are per season, not a profile total (20261123000000)
     expect(by('column').some((c) => c.object === 'public.user_profiles.points')).toBe(false);
   });
 
   it('includes row level security flags, constraints and indexes', () => {
     expect(by('table').every((t) => /rls=(true|false)/.test(t.detail))).toBe(true);
-    expect(by('table').filter((t) => t.detail.includes('rls=true'))).toHaveLength(27);
+    expect(by('table').filter((t) => t.detail.includes('rls=true'))).toHaveLength(28);
     expect(by('constraint').length).toBeGreaterThan(40);
     expect(by('index').length).toBeGreaterThan(15);
   });
@@ -117,7 +119,7 @@ describe('schema inventory on the local database', () => {
     for (const name of ['ensure_domain_lock', 'ensure_domain_lock_on_email_change', 'on_auth_user_created', 'on_auth_user_role_created']) {
       expect(triggers, name).toContain(`auth.users.${name}`);
     }
-    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(10);
+    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(24);
   });
 
   it('includes function bodies and security-definer settings used to judge drift', () => {
