@@ -62,3 +62,7 @@ erDiagram
 ## Current names → target names (feeds SL-004 map)
 
 `teams.division` / `matches.division` / `team_registrations.division` / `polls.division` → `division_id` (+ `season_id` where run-specific). `players` + `team_members` → person + roster membership. `goals` + `matches.scorers/assists/own_goals` → match events. `user_profiles.*_team_flair` → per-division fantasy profile; `wc_team_flair` → World Cup profile.
+
+## Implemented (2026-11-19)
+
+Migration `20261119000000_divisions_and_seasons.sql` creates `divisions`, `seasons` (several per division, at most one `is_current`), `section_types` and `season_sections` (the season's sections: enabled, navigation, order, settings), and `team_entries` (a team in a season). `matches.season_id` and `team_registrations.season_id` are added beside the legacy strings, which stay until the contract step. Mapping, naming and the compatibility rules are in `D-01-division-season-mapping.md`. Hidden or archived (`visibility`, `archived_at`) is separate from deletion, which foreign keys refuse once a season has data.

@@ -30,6 +30,8 @@
 
 Orphans/unsupported to report in dry-run: matches with null team ids, players with null `team_id`, goals with null `player_id`, remote stock image URLs in seed (non-production), R2 media URLs (kept untouched until SL-073).
 
+**Division mapping applied (2026-11-19):** the `teams`, `matches` and `team_registrations` rows above are mapped by `public.backfill_legacy_divisions()` in `20261119000000_divisions_and_seasons.sql` (one initial season per populated value, D-01). `polls.division` and the flair columns are not mapped yet (SL-060, SL-043). `public.division_model_drift()` is the parity query: it must return nothing except reported anomalies (an `inter` value, a row without a division).
+
 ## 3. Rules for every domain migration
 
 1. Additive first: new tables/columns and backfill; old columns stay until parity verified (expand → migrate → contract; the contract step is SL-102).
