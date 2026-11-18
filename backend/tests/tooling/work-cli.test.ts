@@ -68,6 +68,16 @@ describe('approve', () => {
   });
 });
 
+describe('status of a superseded item', () => {
+  it('names the items it was folded into instead of claiming it never existed', () => {
+    item('SL-100');
+    write('backlog/superseded.json', JSON.stringify({ superseded: [{ id: 'SL-101', by: ['SL-100'], date: '2026-11-18', note: 'merged into the full slice' }] }));
+    expect(cli('status', 'SL-101')).toBe(1);
+    expect(said()).toMatch(/SL-101: superseded by SL-100 \(2026-11-18\): merged into the full slice/);
+    expect(cli('start', 'SL-101')).toBe(1);
+  });
+});
+
 describe('ready and start', () => {
   it('needs the approval, then moves the item to ready and on to in-progress', () => {
     item('SL-100');

@@ -113,6 +113,51 @@ describe('validateBacklog', () => {
     item('SL-100');
     expect(backlog.validateBacklog(backlog.loadBacklog(root)).join('\n')).toMatch(/D-01: a resolved decision needs a resolution/);
   });
+
+  it('a decision may only list existing items', () => {
+    write('backlog/decisions.json', JSON.stringify({ decisions: [{ id: 'D-01', question: 'q', status: 'open', items: ['SL-101'] }] }));
+    item('SL-100');
+    expect(backlog.validateBacklog(backlog.loadBacklog(root)).join('\n')).toMatch(/D-01: lists unknown item SL-101/);
+  });
+});
+
+describe('superseded items', () => {
+  const supersede = (entries: unknown[]) => write('backlog/superseded.json', JSON.stringify({ superseded: entries }));
+
+  it('accepts an item folded into a live item', () => {
+    item('SL-100');
+    supersede([{ id: 'SL-101', by: ['SL-100'], date: '2026-11-18', note: 'merged' }]);
+    expect(backlog.validateBacklog(backlog.loadBacklog(root))).toEqual([]);
+  });
+
+  it('refuses a superseded id whose file still exists, or that points at an unknown item', () => {
+    item('SL-100');
+    item('SL-101');
+    supersede([{ id: 'SL-101', by: ['SL-102'], note: 'merged' }]);
+    const out = backlog.validateBacklog(backlog.loadBacklog(root)).join('\n');
+    expect(out).toMatch(/SL-101 still has an item file/);
+    expect(out).toMatch(/SL-101 was folded into unknown item SL-102/);
+  });
+
+  it('refuses an entry without targets or a note, a duplicate and a malformed id', () => {
+    item('SL-100');
+    supersede([{ id: 'SL-101', by: [] }, { id: 'SL-101', by: ['SL-100'], note: 'x' }, { id: 'nope', by: ['SL-100'], note: 'x' }]);
+    const out = backlog.validateBacklog(backlog.loadBacklog(root)).join('\n');
+    expect(out).toMatch(/SL-101 needs the items it was folded into/);
+    expect(out).toMatch(/SL-101 needs a note/);
+    expect(out).toMatch(/SL-101 is listed twice/);
+    expect(out).toMatch(/"nope" is not an item id/);
+  });
+
+  it('never supersedes finished or approved work', () => {
+    item('SL-100');
+    write('backlog/evidence/SL-101.json', '{}');
+    write('backlog/approvals/SL-102.json', '{}');
+    supersede([{ id: 'SL-101', by: ['SL-100'], note: 'x' }, { id: 'SL-102', by: ['SL-100'], note: 'x' }]);
+    const out = backlog.validateBacklog(backlog.loadBacklog(root)).join('\n');
+    expect(out).toMatch(/SL-101 has evidence; finished or approved work cannot be superseded/);
+    expect(out).toMatch(/SL-102 has approvals; finished or approved work cannot be superseded/);
+  });
 });
 
 describe('phase gating (do not start the next phase)', () => {
@@ -252,9 +297,17 @@ describe('the real backlog', () => {
     expect(backlog.validateBacklog(backlog.loadBacklog(real))).toEqual([]);
   });
 
-  it('kept every item from the original backlog', () => {
+  it('kept every item from the original backlog, or recorded what it was folded into', () => {
     const bl = backlog.loadBacklog(real);
-    expect(bl.items.size).toBeGreaterThanOrEqual(65);
-    for (const id of ['SL-001', 'SL-018', 'SL-020', 'SL-075', 'SL-103']) expect(bl.items.has(id), id).toBe(true);
+    const original = [
+      '001', '002', '003', '004', '010', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020', '021', '022',
+      '023', '024', '025', '026', '030', '031', '032', '033', '034', '040', '041', '042', '043', '044', '045', '046', '050',
+      '051', '052', '053', '054', '055', '060', '061', '062', '063', '070', '071', '072', '073', '074', '075', '080', '081',
+      '082', '090', '091', '092', '093', '094', '095', '096', '097', '098', '099', '100', '101', '102', '103',
+    ].map((n) => `SL-${n}`);
+    const superseded = new Set(bl.superseded.map((s: { id: string }) => s.id));
+    for (const id of original) expect(bl.items.has(id) || superseded.has(id), id).toBe(true);
+    // Finished work is never folded away.
+    for (const [id, { meta }] of bl.items) if (['done', 'legacy-done'].includes(meta.status)) expect(superseded.has(id), id).toBe(false);
   });
 });

@@ -50,8 +50,34 @@ export function loadBacklog(root = ROOT) {
     parseErrors,
     rules: json('backlog/rules.json', 'rules'),
     decisions: json('backlog/decisions.json', 'decisions'),
+    // Items folded into others when the backlog was restructured: { id, by: [ids], date, note }.
+    superseded: json('backlog/superseded.json', 'superseded'),
     groups: existsSync(groupsPath) ? JSON.parse(readFileSync(groupsPath, 'utf8')).groups : {},
   };
+}
+
+// A superseded item's file is gone; its work lives on in the items it was folded into. Finished work is never
+// superseded, so a superseded id must have no evidence or attestations.
+export function supersededProblems(bl) {
+  const problems = [];
+  const seen = new Set();
+  for (const s of bl.superseded ?? []) {
+    const id = s?.id;
+    if (!/^SL-\d{3}$/.test(id ?? '')) {
+      problems.push(`superseded: "${id}" is not an item id`);
+      continue;
+    }
+    if (seen.has(id)) problems.push(`superseded: ${id} is listed twice`);
+    seen.add(id);
+    if (bl.items.has(id)) problems.push(`superseded: ${id} still has an item file`);
+    if (!Array.isArray(s.by) || s.by.length === 0) problems.push(`superseded: ${id} needs the items it was folded into ("by")`);
+    for (const target of s.by ?? []) if (!bl.items.has(target)) problems.push(`superseded: ${id} was folded into unknown item ${target}`);
+    if (!s.note) problems.push(`superseded: ${id} needs a note`);
+    for (const dir of ['evidence', 'attestations', 'approvals']) {
+      if (existsSync(join(bl.root, `backlog/${dir}/${id}.json`))) problems.push(`superseded: ${id} has ${dir}; finished or approved work cannot be superseded`);
+    }
+  }
+  return problems;
 }
 
 export function saveItem(item) {
@@ -97,7 +123,9 @@ export function validateBacklog(bl) {
       if ((meta.checks ?? []).length === 0) problems.push(`${id}: done items need acceptance checks`);
     }
   }
+  problems.push(...supersededProblems(bl));
   for (const d of bl.decisions) {
+    for (const i of d.items ?? []) if (!ids.has(i)) problems.push(`${d.id}: lists unknown item ${i}`);
     if (!['open', 'resolved'].includes(d.status)) problems.push(`${d.id}: status must be open or resolved`);
     if (d.status === 'resolved' && !d.resolution) problems.push(`${d.id}: a resolved decision needs a resolution (a path to its record)`);
   }

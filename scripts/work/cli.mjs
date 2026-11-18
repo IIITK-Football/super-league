@@ -117,6 +117,8 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
   const need = () => {
     if (!id) return { error: fail(`usage: work ${cmd} SL-xxx`) };
     const item = bl.items.get(id);
+    const gone = (bl.superseded ?? []).find((s) => s.id === id);
+    if (!item && gone) return { error: fail(`${id}: superseded by ${gone.by.join(', ')} (${gone.date ?? 'undated'}): ${gone.note}`) };
     if (!item) return { error: fail(`${id}: no such backlog item`) };
     return { item };
   };
