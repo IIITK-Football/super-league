@@ -287,7 +287,13 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const pastName = 'A captain cannot change a player on their team in a season that is not current';
     const past = divisionId ? await admin(`/rest/v1/seasons?division_id=eq.${divisionId}&is_current=eq.false&select=id`) : null;
     const pastSeason = past?.data?.[0]?.id;
-    if (pastSeason) expectRefused(pastName, await rpc(tokenA, (await makeTeam(captainA, 'D', pastSeason)).member), /only the current season/i);
+    if (pastSeason) {
+      // A separate captain: an account holds one registration at a time.
+      const captainPast = await makeUser('captain-past');
+      await setRole(captainPast.id, 'captain');
+      const teamD = await makeTeam(captainPast, 'D', pastSeason);
+      expectRefused(pastName, await rpc(await session(captainPast), teamD.member), /only the current season/i);
+    }
     else record(pastName, 'FAIL', 'the check division has no past season');
 
     const seenByUser = await asUser(userToken)(`/rest/v1/divisions?slug=eq.${tag}&select=id`);

@@ -92,6 +92,10 @@ function fakeStaging(opts: Opts = {}) {
       return json(200, ids.filter((i) => roles.has(i)).map((i) => ({ user_id: i })));
     }
     if (p === '/rest/v1/team_registrations' && method === 'POST') {
+      // Like team_registrations_captain_id_key: an account holds one registration.
+      if ([...regs.values()].some((r) => r.captain_id === body.captain_id)) {
+        return json(409, { code: '23505', message: 'duplicate key value violates unique constraint "team_registrations_captain_id_key"' });
+      }
       const id = `r${++n}`;
       regs.set(id, { id, captain_id: body.captain_id });
       regTeams.set(id, { team_id: body.team_id, season_id: body.season_id });
