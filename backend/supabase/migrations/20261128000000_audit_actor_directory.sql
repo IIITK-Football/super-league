@@ -1,8 +1,11 @@
 -- Everyone who appears in the audit history, for the Audit History "Changed by" filter: one row per distinct actor
--- across the whole history (not only the loaded page), with a readable label and never a raw id. The label is the
--- sign-in email of the account, which its owner cannot edit, with the profile's real name (else nickname) as context:
--- "Real Name (email)". Profile names and the profile email are self-edited, so they never stand alone: a copied name
--- or a borrowed address cannot make one person look like another. Names of only whitespace are ignored. An actor
+-- across the whole history (not only the loaded page), with a readable label and never a raw id. The identity stays
+-- the immutable Auth user id; the label is the account's verified sign-in email from Supabase Auth (confirmed at
+-- sign-up; changing it needs confirmation from both the old and new address and stays within the college domain),
+-- with the profile's real name (else nickname) as context: "Real Name (email)". The profile email is not used: users
+-- can edit their own profile row, nothing keeps that copy in step with Auth, and it is not unique. Profile names are
+-- self-edited too, so they never stand alone: a copied name or a borrowed address cannot make one person look like
+-- another. Names of only whitespace are ignored. An actor
 -- whose account is gone is labelled as deleted or unavailable; repeated labels (several deleted accounts) are
 -- numbered so every option is distinct. Server and system changes have no actor and are not listed. Dictators only:
 -- anyone else gets no rows, like the history itself. Security definer so the labels keep working when profile data
