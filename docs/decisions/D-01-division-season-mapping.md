@@ -36,3 +36,27 @@ These slugs and names are only the initial data. Nothing in the schema or code d
 ## Contract (owner instruction 2026-11-19)
 
 Production has only Super League, WSL and Freshers, and all their data belongs to 2026. After every reader and writer was ported, `20261122000000_retire_legacy_division_paths.sql` removed the legacy strings, the map, the triggers and the backfill. On a database that still holds legacy rows (production), the migrations run in order: `20261119000000` backfills, `20261121000000` copies flairs, and `20261122000000` drops the old paths, but only after its guards confirm that every match and registration has a season, the drift report is empty, every flair was copied, and polls hold no real data. Otherwise it stops and changes nothing. `public.season_label` is kept. New seasons are created by dictators, and the seed inserts divisions and seasons directly.
+
+## Season or division (owner instruction 2026-11-19)
+
+All division data belongs to a season unless it describes the division itself or a person. Existing production records are all 2026 data, so they join the 2026 season of their division.
+
+| Data | Scope | Where |
+|---|---|---|
+| Team participation | Season | `team_entries` (a team joins a season of its division) |
+| Player roster | Season | `players.team_entry_id`; every existing player is on its team's 2026 entry (`20261123000000`) |
+| Registration roster (Freshers team builder) and captain | Season | `team_registrations.season_id`, with `team_members` through their registration |
+| Matches, goals, own goals, assists, scorer JSON | Season | `matches.season_id` |
+| Standings, form, top scorers and assisters | Season | Computed from that season's matches (`season_player_stats`) |
+| Fantasy predictions | Season | Through their match |
+| Fantasy points and leaderboard | Season | `season_fantasy_points` and `season_fantasy_leaderboard()`; `user_profiles.points` is removed |
+| Sections, navigation, format, rules text | Season | `season_sections`, `seasons.format`, `seasons.rules_md` |
+| Division identity, branding, order | Division | `divisions` |
+| Team identity (name, logo, colour) | Division-wide | `teams`: one club identity across seasons; only participation is per season |
+| Supporter flair | Division | `division_flairs`: a fan supports a club in a division |
+| Legends | All time | Every season added up |
+| Newsletter | Global | Editorial content; home placement is SL-060 |
+| Accounts, profiles, roles | Global | Unchanged |
+| World Cup fantasy | Separate | `wc_*`, `wc_team_flair`, `/wc`: untouched |
+
+**Fantasy points migration (owner decision):** the season totals are the sums of `points_awarded`, exactly what grading wrote into `user_profiles.points`. Before that column is dropped, the migration compares it with the sums for every real account and stops, changing nothing, on any difference (for example a manual edit). The owner then resolves each case. The synthetic seed accounts are not compared.
