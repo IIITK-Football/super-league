@@ -2,8 +2,10 @@
 // Group: rosters. The real dictator Teams & Rosters flow: the ManageRosters component, driven like a person would,
 // talks to a REAL Supabase Data API through a real supabase-js client signed in as a dictator, and every write is
 // checked in the database. It chooses division -> season -> team, adds a team to the season, creates, edits and
-// moves a player, adds a player from another season (one identity, two seasons) and removes a roster place. A
-// normal user using the same screen is refused and nothing is written.
+// moves a player, adds a player from another season (one identity, two seasons) and removes a roster place. It
+// also creates a new team in the season (create_team_in_season: team and season entry together) and deletes a
+// player who never played (delete_unplayed_player: player and roster place together). A normal user using the same
+// screen is refused (creating a player or a team) and nothing is written.
 //
 // Targets (skipped unless one is chosen):
 //   SL_LOCAL_SUPABASE=1     this repository's local stack only (127.0.0.1:54321); run by the rosters test group
@@ -206,6 +208,38 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(must(await admin.from('roster_memberships').select('season_id').eq('player_id', made.veteran))).toEqual([{ season_id: made.seasons.old }]);
   }, 120000);
 
+  it('a dictator creates a team in the season and deletes a player who never played', async () => {
+    holder.client = dictator.client;
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<ManageRosters />);
+    await openTeam('Alpha');
+
+    // Create a new team: the team and its season entry are written together (create_team_in_season).
+    type('New team name', `${tag} Delta`);
+    fireEvent.click(screen.getByRole('button', { name: /create team/i }));
+    await statusText(new RegExp(`${tag} Delta created and added to ${tag} 2026`));
+    const delta = must(await admin.from('teams').select('id, team_entries(id, season_id)').eq('name', `${tag} Delta`).single());
+    expect(delta.team_entries).toEqual([expect.objectContaining({ season_id: made.seasons.now })]);
+    await waitFor(() => expect(within(screen.getByLabelText('Team')).getByRole('option', { name: `${tag} Delta` })).toBeTruthy(), { timeout: 15000 });
+
+    // Give Delta a player who never plays, then delete them for good (delete_unplayed_player).
+    type('Team', delta.team_entries[0].id);
+    await screen.findByText(/no players on this roster yet/i, {}, { timeout: 15000 });
+    type('New first name', `${tag}Temp`);
+    type('New last name', 'Trialist');
+    fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
+    await statusText(/Temp Trialist added to/);
+    const temp = must(await admin.from('players').select('id, roster_memberships(id)').eq('first_name', `${tag}Temp`).single());
+    expect(temp.roster_memberships).toHaveLength(1);
+    await option(/Temp Trialist/);
+    type('Player', temp.roster_memberships[0].id);
+    fireEvent.click(screen.getByRole('button', { name: /delete player/i }));
+    await statusText(/Temp Trialist deleted/);
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/Delete .*Temp Trialist for good/));
+    expect(must(await admin.from('players').select('id').eq('id', temp.id))).toEqual([]);
+    expect(must(await admin.from('roster_memberships').select('id').eq('player_id', temp.id))).toEqual([]);
+  }, 120000);
+
   it('a normal user using the same screen is refused and nothing is written', async () => {
     holder.client = normal.client;
     render(<ManageRosters />);
@@ -214,5 +248,11 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/only a dictator/i), { timeout: 15000 });
     expect(must(await admin.from('players').select('id').eq('first_name', `${tag}Refused`))).toEqual([]);
+
+    // Creating a team is refused as well, and no team is written.
+    type('New team name', `${tag} Refused FC`);
+    fireEvent.click(screen.getByRole('button', { name: /create team/i }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/only a dictator/i), { timeout: 15000 });
+    expect(must(await admin.from('teams').select('id').eq('name', `${tag} Refused FC`))).toEqual([]);
   }, 60000);
 });
