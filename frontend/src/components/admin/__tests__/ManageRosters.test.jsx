@@ -94,6 +94,16 @@ const rpc = vi.fn(async (name, args) => {
     db.tables.team_entries.push({ id: `e-${nextId++}`, team_id: team, season_id: args.p_season_id });
     return { data: team, error: null };
   }
+  if (name === 'update_rostered_player') {
+    const place = db.tables.roster_memberships.find((m) => m.id === args.p_membership_id);
+    Object.assign(db.tables.players.find((p) => p.id === place.player_id), { first_name: args.p_first_name, last_name: args.p_last_name, overall_rating: args.p_overall_rating, attributes: args.p_attributes });
+    Object.assign(place, { jersey_number: args.p_jersey_number, position: args.p_position });
+    if (args.p_set_email) {
+      db.tables.player_private_details = db.tables.player_private_details.filter((d) => d.player_id !== place.player_id);
+      if (args.p_email) db.tables.player_private_details.push({ player_id: place.player_id, email: args.p_email });
+    }
+    return { data: null, error: null };
+  }
   if (name === 'delete_unplayed_player') {
     db.tables.roster_memberships = db.tables.roster_memberships.filter((m) => m.player_id !== args.p_player_id);
     db.tables.players = db.tables.players.filter((p) => p.id !== args.p_player_id);
@@ -255,11 +265,22 @@ describe('players', () => {
     pick('Edit email', '');
     fireEvent.click(screen.getByRole('button', { name: /save player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada saved/));
-    expect(writes().map((w) => [w.table, w.op, w.payload, w.filters])).toEqual([
-      ['players', 'update', { first_name: 'Ada', last_name: 'Finisher', overall_rating: 70, attributes: { pace: 80 } }, [['id', 'p1']]],
-      ['roster_memberships', 'update', { jersey_number: 10, position: 'ST' }, [['id', 'm1']]],
-      ['player_private_details', 'delete', null, [['player_id', 'p1']]],
-    ]);
+    expect(writes()).toEqual([{ rpc: 'update_rostered_player', args: {
+      p_membership_id: 'm1', p_first_name: 'Ada', p_last_name: 'Finisher', p_overall_rating: 70, p_attributes: { pace: 80 },
+      p_jersey_number: 10, p_position: 'ST', p_set_email: true, p_email: null,
+    } }]);
+  });
+
+  it('saves in one database call, so a refused jersey number saves nothing and says why', async () => {
+    db.fail['rpc.update_rostered_player'] = { code: '23505', message: 'duplicate key value violates unique constraint "roster_memberships_entry_jersey_key"' };
+    await openTeam();
+    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    pick('Player', 'm1');
+    pick('Edit last name', 'Finisher');
+    fireEvent.click(screen.getByRole('button', { name: /save player/i }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/jersey number is already taken/i));
+    expect(writes()).toHaveLength(1);
+    expect(db.tables.players.find((p) => p.id === 'p1').last_name).toBe('Striker');
   });
 
   it('moves a player to another team of the season', async () => {
@@ -309,7 +330,7 @@ describe('players', () => {
     pick('Edit last name', 'Finisher');
     fireEvent.click(screen.getByRole('button', { name: /save player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada saved/));
-    expect(writes().map((w) => w.table)).toEqual(['players', 'roster_memberships']);
+    expect(writes()).toEqual([{ rpc: 'update_rostered_player', args: expect.objectContaining({ p_set_email: false }) }]);
   });
 
   it('finds an existing player from another season and adds them to this roster', async () => {

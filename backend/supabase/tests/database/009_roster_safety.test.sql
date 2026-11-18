@@ -3,7 +3,7 @@
 -- player only when they never played (no other season, no goal or assist, own goals included) and otherwise changes
 -- nothing; a roster place with goals or assists cannot be moved to another player or season. Rolled back.
 BEGIN;
-SELECT plan(18);
+SELECT plan(23);
 
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('a9000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
@@ -84,6 +84,24 @@ SELECT throws_ok($$DELETE FROM public.roster_memberships WHERE player_id = (SELE
 -- A player in two seasons is kept.
 SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.delete_unplayed_player((SELECT player_id FROM public.roster_memberships GROUP BY player_id HAVING count(*) > 1 LIMIT 1))::text$q$)$$,
   '23503', NULL, 'a player who plays in another season is kept');
+
+-- update_rostered_player ---------------------------------------------------------------------------------------
+CREATE TEMP TABLE _u AS
+SELECT public.create_rostered_player((SELECT id FROM public.team_entries WHERE season_id = (SELECT id FROM _s) ORDER BY id LIMIT 1), 'Save', 'Me', 94) AS p;
+GRANT SELECT ON _u TO authenticated;
+CREATE TEMP TABLE _um AS SELECT id FROM public.roster_memberships WHERE player_id = (SELECT p FROM _u);
+GRANT SELECT ON _um TO authenticated;
+SELECT lives_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.update_rostered_player((SELECT id FROM _um), ' Saved ', 'Player', 77, '{"pace": 90}', 93, 'CM', true, ' Saved@IIITKottayam.ac.in ')::text$q$)$$,
+  'a dictator saves the card, roster place and email in one step');
+SELECT results_eq($$SELECT p.first_name::text, p.overall_rating, rm.jersey_number, rm.position::text, d.email::text
+                    FROM public.players p JOIN public.roster_memberships rm ON rm.player_id = p.id
+                    LEFT JOIN public.player_private_details d ON d.player_id = p.id WHERE p.id = (SELECT p FROM _u)$$,
+  $$VALUES ('Saved'::text, 77, 93, 'CM'::text, 'saved@iiitkottayam.ac.in'::text)$$, 'every part was saved');
+SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.update_rostered_player((SELECT id FROM _um), 'Renamed', 'Player', 77, '{}', 96, 'CM')::text$q$)$$,
+  '23505', NULL, 'a jersey number already taken on the team is refused');
+SELECT is((SELECT first_name::text FROM public.players WHERE id = (SELECT p FROM _u)), 'Saved', 'and the card rename was not saved either');
+SELECT throws_ok($$SELECT pg_temp.as_user(2, $q$SELECT public.update_rostered_player((SELECT id FROM _um), 'Captain', 'Edit', 77, '{}', 93, 'CM')::text$q$)$$,
+  '42501', 'Only a dictator can edit players', 'a captain cannot use it');
 
 -- roster history cannot be moved ---------------------------------------------------------------------------------
 CREATE TEMP TABLE _h AS

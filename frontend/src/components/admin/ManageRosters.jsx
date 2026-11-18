@@ -243,18 +243,15 @@ export default function ManageRosters() {
     if (checked.error) { fail(checked.error); return; }
     const v = checked.value;
     setBusy(`save-${place.id}`);
-    const card = await supabase.from('players')
-      .update({ first_name: v.first_name, last_name: v.last_name, overall_rating: v.overall_rating, attributes: v.attributes })
-      .eq('id', place.player_id).select('id');
-    if (card.error || !card.data?.length) { setBusy(''); report(card.error || { code: '42501' }); return; }
-    const spot = await supabase.from('roster_memberships').update({ jersey_number: v.jersey_number, position: v.position }).eq('id', place.id).select('id');
-    if (spot.error || !spot.data?.length) { setBusy(''); report(spot.error || { code: '42501' }); return; }
-    const contact = !contactsLoaded ? { error: null }
-      : v.email
-        ? await supabase.from('player_private_details').upsert({ player_id: place.player_id, email: v.email }, { onConflict: 'player_id' })
-        : await supabase.from('player_private_details').delete().eq('player_id', place.player_id);
+    // One database call: the card, the roster place and the email are saved together or not at all. Without loaded
+    // contact details the form cannot show the email, so the email is left alone.
+    const { error: err } = await supabase.rpc('update_rostered_player', {
+      p_membership_id: place.id, p_first_name: v.first_name, p_last_name: v.last_name, p_overall_rating: v.overall_rating,
+      p_attributes: v.attributes, p_jersey_number: v.jersey_number, p_position: v.position,
+      p_set_email: contactsLoaded, p_email: v.email || null,
+    });
     setBusy('');
-    if (report(contact.error, `${v.first_name} saved.`)) loadRoster(entryId);
+    if (report(err, `${v.first_name} saved.`)) loadRoster(entryId);
   };
 
   const uploadPortrait = async (file) => {

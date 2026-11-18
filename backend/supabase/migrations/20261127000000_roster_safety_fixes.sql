@@ -113,6 +113,55 @@ $$;
 REVOKE ALL ON FUNCTION public.create_team_in_season(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.create_team_in_season(uuid, text) TO authenticated, service_role;
 
+-- A dictator saves a player's card, roster place and (when p_set_email) private email in one step: if any part is
+-- refused, such as a jersey number already taken, nothing is saved. Security invoker, so row level security applies.
+CREATE FUNCTION public.update_rostered_player(
+  p_membership_id uuid,
+  p_first_name text,
+  p_last_name text,
+  p_overall_rating integer,
+  p_attributes jsonb,
+  p_jersey_number integer,
+  p_position text,
+  p_set_email boolean DEFAULT false,
+  p_email text DEFAULT NULL
+) RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path TO ''
+AS $$
+DECLARE
+  v_player uuid;
+BEGIN
+  IF NOT public.is_dictator() THEN
+    RAISE EXCEPTION 'Only a dictator can edit players' USING ERRCODE = '42501';
+  END IF;
+  IF char_length(btrim(COALESCE(p_first_name, ''))) NOT BETWEEN 1 AND 100 OR char_length(btrim(COALESCE(p_last_name, ''))) > 100 THEN
+    RAISE EXCEPTION 'A first name (up to 100 characters) is required' USING ERRCODE = '22023';
+  END IF;
+  SELECT player_id INTO v_player FROM public.roster_memberships WHERE id = p_membership_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Roster place not found' USING ERRCODE = 'P0002';
+  END IF;
+  UPDATE public.players
+  SET first_name = btrim(p_first_name), last_name = btrim(COALESCE(p_last_name, '')),
+      overall_rating = COALESCE(p_overall_rating, overall_rating), attributes = COALESCE(p_attributes, '{}'::jsonb)
+  WHERE id = v_player;
+  UPDATE public.roster_memberships SET jersey_number = p_jersey_number, position = NULLIF(btrim(p_position), '')
+  WHERE id = p_membership_id;
+  IF p_set_email THEN
+    IF NULLIF(btrim(p_email), '') IS NULL THEN
+      DELETE FROM public.player_private_details WHERE player_id = v_player;
+    ELSE
+      INSERT INTO public.player_private_details (player_id, email) VALUES (v_player, lower(btrim(p_email)))
+      ON CONFLICT (player_id) DO UPDATE SET email = EXCLUDED.email;
+    END IF;
+  END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.update_rostered_player(uuid, text, text, integer, jsonb, integer, text, boolean, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.update_rostered_player(uuid, text, text, integer, jsonb, integer, text, boolean, text) TO authenticated, service_role;
+
 -- Whether a player has any match record, in one season or (p_season_id NULL) in any season: a goal, own goal or
 -- assist in the goals table, or a mention in a match's scorers, assists or own_goals list (legacy records, string or
 -- {"player_id": ...} elements). Definer so the answer never depends on what the caller can see.
