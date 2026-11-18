@@ -47,7 +47,9 @@ const defaultAttributes = {
 
 export default function PlayerProfile({ onBack }) {
     // 1. PULL DIVISION FROM CONTEXT
-    const { setView, division } = useLeague();
+    const { setView, division, seasonScope } = useLeague();
+    // The card shows the season being browsed; the history below lists every season.
+    const seasonId = seasonScope?.season?.id || '';
     const [player, setPlayer] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -64,7 +66,8 @@ useEffect(() => {
         const base = JSON.parse(raw);
 
         // 1. THE FIX: Check if we already fetched this player's deep data recently
-        const cachedProfile = sessionStorage.getItem(`player_profile_${base.id}`);
+        const cacheKey = `player_profile_${base.id}_${seasonId}`;
+        const cachedProfile = sessionStorage.getItem(cacheKey);
         if (cachedProfile) {
             setPlayer(JSON.parse(cachedProfile));
             setLoading(false);
@@ -72,19 +75,19 @@ useEffect(() => {
         }
 
         // 2. If not cached, fetch it from the API
-        fetch(`${API_BASE_URL}/players/${base.id}`)
+        fetch(`${API_BASE_URL}/players/${base.id}${seasonId ? `?season_id=${seasonId}` : ''}`)
             .then(r => r.json())
             .then(res => {
                 if (res.success) {
                     setPlayer(res.data);
                     // 3. Save the successful result to memory so we never have to fetch it again this session!
-                    sessionStorage.setItem(`player_profile_${base.id}`, JSON.stringify(res.data));
+                    sessionStorage.setItem(cacheKey, JSON.stringify(res.data));
                 }
                 else setError('Failed to load player.');
             })
             .catch(() => setError('Failed to load player.'))
             .finally(() => setLoading(false));
-    }, [setView]);
+    }, [setView, seasonId]);
 
     const handleBack = () => {
       sessionStorage.removeItem('selectedPlayer');
@@ -306,7 +309,59 @@ useEffect(() => {
                         ))}
                     </div>
                 )}
+
+                <SeasonHistory player={player} />
             </div>
         </div>
+    );
+}
+
+// One line per season (team, number, position, goals, assists) and a career line that adds them up. Goals and
+// assists always belong to a season; the career line is computed, never stored.
+export function SeasonHistory({ player }) {
+    const seasons = player?.seasons || [];
+    return (
+        <section aria-label="Season history" className="col-span-full bg-[#1A1820] rounded-2xl p-6 border border-white/5">
+            <h3 className="text-xl font-black uppercase tracking-widest mb-4 border-b border-white/10 pb-4">Season history</h3>
+            {seasons.length === 0 ? (
+                <p className="text-sm text-zinc-500">No seasons played yet.</p>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-left text-[10px] uppercase tracking-wider text-gray-400">
+                                <th className="py-2 pr-4">Season</th>
+                                <th className="py-2 pr-4">Team</th>
+                                <th className="py-2 pr-4">No.</th>
+                                <th className="py-2 pr-4">Pos.</th>
+                                <th className="py-2 pr-4 text-right">Goals</th>
+                                <th className="py-2 text-right">Assists</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {seasons.map((line) => (
+                                <tr key={line.season.id} className="border-t border-white/5">
+                                    <td className="py-2 pr-4 font-bold">{line.division?.name ? `${line.division.name} ` : ''}{line.season.name}</td>
+                                    <td className="py-2 pr-4 text-zinc-300">{line.team?.name || '—'}</td>
+                                    <td className="py-2 pr-4 tabular-nums">{line.jersey_number ?? '—'}</td>
+                                    <td className="py-2 pr-4">{line.position || '—'}</td>
+                                    <td className="py-2 pr-4 text-right tabular-nums">{line.goals}</td>
+                                    <td className="py-2 text-right tabular-nums">{line.assists}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                        {player.career && (
+                            <tfoot>
+                                <tr className="border-t border-white/20 font-black">
+                                    <td className="py-2 pr-4" colSpan={4}>Career ({player.career.seasons} {player.career.seasons === 1 ? 'season' : 'seasons'})</td>
+                                    <td className="py-2 pr-4 text-right tabular-nums">{player.career.goals}</td>
+                                    <td className="py-2 text-right tabular-nums">{player.career.assists}</td>
+                                </tr>
+                            </tfoot>
+                        )}
+                    </table>
+                </div>
+            )}
+        </section>
     );
 }
