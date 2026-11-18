@@ -1,8 +1,8 @@
-// Group: rosters. Dictator player and roster management (/api/admin/players, /api/admin/roster) and the captain
-// portrait upload (/api/admin/freshers/player-image), run for real against THIS repository's local Supabase stack
-// with each account's token, as the dashboard and team builder send it. Allowed for a dictator; refused for a
-// captain, legacy admin, editor, normal user and anon, with nothing written. Every allowed write is checked in the
-// database.
+// Group: rosters. Dictator player and roster management through the real local Data API, as the Teams & Rosters
+// dashboard sends it: each account is signed in with its own token, so row level security, create_rostered_player
+// and the history triggers decide. Allowed for a dictator; refused for a captain, legacy admin, editor, normal user
+// and anon, with nothing written. Also the captain portrait upload route and the registration route. Runs against
+// THIS repository's local Supabase stack (127.0.0.1:54321).
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys, uniqueEmail } from '../auth/local-supabase';
@@ -11,21 +11,22 @@ vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: 
 
 const tag = `roster${Date.now().toString(36)}`;
 let admin: SupabaseClient;
-let anon: () => SupabaseClient;
+let anonClient: SupabaseClient;
 const users: string[] = [];
-const made = { seasons: [] as string[], teams: [] as string[], entries: [] as string[], players: [] as string[], matches: [] as string[], regs: [] as string[] };
-const tokens: Record<string, { id: string; token: string }> = {};
+const made = { seasons: [] as string[], teams: [] as string[], entries: [] as string[], matches: [] as string[], regs: [] as string[] };
+const as: Record<string, { id: string; token: string; db: SupabaseClient }> = {};
 
-async function tokenFor(role: string) {
+async function signIn(role: string, c: ReturnType<typeof clients>) {
   const email = uniqueEmail(`roster-${role}`);
   const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true });
   if (error) throw error;
   users.push(data.user.id);
   await admin.from('user_roles').update({ role }).eq('user_id', data.user.id);
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
-  const { data: v, error: vErr } = await anon().auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
+  const db = c.anon();
+  const { data: v, error: vErr } = await db.auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
   if (vErr) throw vErr;
-  return { id: data.user.id, token: v.session!.access_token };
+  return { id: data.user.id, token: v.session!.access_token, db };
 }
 
 const must = <T extends { error: unknown }>(r: T): T => {
@@ -33,28 +34,29 @@ const must = <T extends { error: unknown }>(r: T): T => {
   return r;
 };
 
-type Handler = (r: Request) => Promise<Response>;
-async function call(path: string, method: string, who: string | null, body?: unknown, query = '') {
+async function route(path: string, who: string | null, body: FormData | object) {
   const mod = await import(`../../app/api/${path}/route`);
-  const headers: Record<string, string> = {};
-  if (who) headers.Authorization = `Bearer ${tokens[who].token}`;
-  let payload: BodyInit | undefined;
+  const headers: Record<string, string> = who ? { Authorization: `Bearer ${as[who].token}` } : {};
+  let payload: BodyInit;
   if (body instanceof FormData) payload = body;
-  else if (body !== undefined) {
+  else {
     headers['Content-Type'] = 'application/json';
     payload = JSON.stringify(body);
   }
-  const res: Response = await (mod[method] as Handler)(new Request(`http://localhost/api/${path}${query}`, { method, headers, body: payload }));
+  const res: Response = await mod.POST(new Request(`http://localhost/api/${path}`, { method: 'POST', headers, body: payload }));
   return { status: res.status, body: await res.json() };
 }
+
+const create = (who: string, entry: string, first: string, extra: Record<string, unknown> = {}) =>
+  as[who].db.rpc('create_rostered_player', { p_team_entry_id: entry, p_first_name: first, p_last_name: 'Test', ...extra });
 
 beforeAll(async () => {
   const keys = localKeys();
   Object.assign(process.env, { SUPABASE_URL: keys.url, SUPABASE_PUBLISHABLE_KEY: keys.publishable, SUPABASE_SECRET_KEY: keys.secret });
   const c = clients(keys);
   admin = c.admin;
-  anon = c.anon;
-  for (const role of ['dictator', 'captain', 'admin', 'editor', 'default']) tokens[role] = await tokenFor(role);
+  anonClient = c.anon();
+  for (const role of ['dictator', 'captain', 'admin', 'editor', 'default']) as[role] = await signIn(role, c);
 
   const wsl = must(await admin.from('divisions').select('id').eq('slug', 'wsl').single()).data!;
   made.seasons = must(await admin.from('seasons').insert([
@@ -65,8 +67,14 @@ beforeAll(async () => {
     { team_id: made.teams[0], season_id: made.seasons[0] }, { team_id: made.teams[1], season_id: made.seasons[0] },
     { team_id: made.teams[0], season_id: made.seasons[1] },
   ]).select('id')).data!.map((e) => e.id);
+  // A fixed player on each team of season A, used by the refusal and portrait tests.
+  const fixed = must(await admin.from('players').insert([{ first_name: `${tag}FixedOne`, last_name: 'Keeper' }, { first_name: `${tag}FixedTwo`, last_name: 'Keeper' }]).select('id')).data!;
+  must(await admin.from('roster_memberships').insert([
+    { player_id: fixed[0].id, team_entry_id: made.entries[0], season_id: made.seasons[0], jersey_number: 1 },
+    { player_id: fixed[1].id, team_entry_id: made.entries[1], season_id: made.seasons[0], jersey_number: 1 },
+  ]));
   // The captain holds team One's registration for season A only.
-  made.regs = must(await admin.from('team_registrations').insert({ captain_id: tokens.captain.id, team_name: `${tag} One`, season_id: made.seasons[0], team_id: made.teams[0] }).select('id')).data!.map((r) => r.id);
+  made.regs = must(await admin.from('team_registrations').insert({ captain_id: as.captain.id, team_name: `${tag} One`, season_id: made.seasons[0], team_id: made.teams[0] }).select('id')).data!.map((r) => r.id);
 }, 90000);
 
 afterAll(async () => {
@@ -87,137 +95,115 @@ describe('a dictator manages players and season rosters', () => {
   let place = '';
 
   it('creates a player on a season roster in one step, with a private email', async () => {
-    const res = await call('admin/players', 'POST', 'dictator', {
-      team_entry_id: made.entries[0], first_name: `${tag}Ada`, last_name: 'Striker', jersey_number: 9, position: 'ST', overall_rating: 72,
-      attributes: { pace: 80 }, email: 'Ada.Striker@IIITKottayam.ac.in',
+    const { data, error } = await create('dictator', made.entries[0], `${tag}Ada`, {
+      p_last_name: 'Striker', p_jersey_number: 9, p_position: 'ST', p_overall_rating: 72, p_attributes: { pace: 80 }, p_email: 'Ada.Striker@IIITKottayam.ac.in',
     });
-    expect(res.status).toBe(201);
-    player = res.body.data.id;
-    const { data } = await admin.from('players').select('first_name, last_name, overall_rating, attributes, roster_memberships(id, team_entry_id, jersey_number, position), player_private_details(email)').eq('id', player).single();
-    expect(data).toMatchObject({ first_name: `${tag}Ada`, last_name: 'Striker', overall_rating: 72, attributes: { pace: 80 } });
-    expect((data as any).roster_memberships).toEqual([expect.objectContaining({ team_entry_id: made.entries[0], jersey_number: 9, position: 'ST' })]);
-    expect((data as any).player_private_details).toMatchObject({ email: 'ada.striker@iiitkottayam.ac.in' });
-    place = (data as any).roster_memberships[0].id;
+    expect(error).toBeNull();
+    player = data as string;
+    const row = (await admin.from('players').select('first_name, overall_rating, attributes, roster_memberships(id, team_entry_id, jersey_number, position), player_private_details(email)').eq('id', player).single()).data as any;
+    expect(row).toMatchObject({ first_name: `${tag}Ada`, overall_rating: 72, attributes: { pace: 80 } });
+    expect(row.roster_memberships).toEqual([expect.objectContaining({ team_entry_id: made.entries[0], jersey_number: 9, position: 'ST' })]);
+    expect(row.player_private_details).toMatchObject({ email: 'ada.striker@iiitkottayam.ac.in' });
+    place = row.roster_memberships[0].id;
   });
 
   it('refuses a jersey already taken on the team, and a second team in the same season', async () => {
-    const clash = await call('admin/players', 'POST', 'dictator', { team_entry_id: made.entries[0], first_name: `${tag}Ben`, last_name: 'Clash', jersey_number: 9 });
-    expect(clash.status).toBe(409);
-    expect(clash.body.message).toMatch(/jersey number is already taken/);
-    const twice = await call('admin/roster', 'POST', 'dictator', { player_id: player, team_entry_id: made.entries[1] });
-    expect(twice.status).toBe(409);
-    expect(twice.body.message).toMatch(/already on a team this season/);
+    const clash = await create('dictator', made.entries[0], `${tag}Ben`, { p_jersey_number: 9 });
+    expect(clash.error?.code).toBe('23505');
+    const twice = await as.dictator.db.from('roster_memberships').insert({ player_id: player, team_entry_id: made.entries[1], season_id: made.seasons[0] });
+    expect(twice.error?.code).toBe('23505');
+    expect((await admin.from('players').select('id').eq('first_name', `${tag}Ben`)).data).toEqual([]);
   });
 
   it('adds the same player to another season\'s roster: one identity, two seasons', async () => {
-    const res = await call('admin/roster', 'POST', 'dictator', { player_id: player, team_entry_id: made.entries[2], jersey_number: 10, position: 'CF' });
-    expect(res.status).toBe(201);
-    const { count } = await admin.from('roster_memberships').select('id', { count: 'exact', head: true }).eq('player_id', player);
-    expect(count).toBe(2);
-    const { count: identities } = await admin.from('players').select('id', { count: 'exact', head: true }).eq('first_name', `${tag}Ada`);
-    expect(identities).toBe(1);
+    const res = await as.dictator.db.from('roster_memberships').insert({ player_id: player, team_entry_id: made.entries[2], season_id: made.seasons[1], jersey_number: 10, position: 'CF' });
+    expect(res.error).toBeNull();
+    expect((await admin.from('roster_memberships').select('id', { count: 'exact', head: true }).eq('player_id', player)).count).toBe(2);
+    expect((await admin.from('players').select('id', { count: 'exact', head: true }).eq('first_name', `${tag}Ada`)).count).toBe(1);
   });
 
-  it('moves a player within a season, and refuses a move to another season', async () => {
-    const moved = await call('admin/roster', 'PATCH', 'dictator', { membership_id: place, team_entry_id: made.entries[1], jersey_number: 11 });
-    expect(moved.status).toBe(200);
-    expect((await admin.from('roster_memberships').select('team_entry_id, jersey_number').eq('id', place).single()).data)
-      .toEqual({ team_entry_id: made.entries[1], jersey_number: 11 });
-    const across = await call('admin/roster', 'PATCH', 'dictator', { membership_id: place, team_entry_id: made.entries[2] });
-    expect(across.status).toBe(400);
-    expect(across.body.message).toMatch(/same season/);
+  it('moves a player within a season; a roster place cannot point at another season\'s team', async () => {
+    const moved = await as.dictator.db.from('roster_memberships').update({ team_entry_id: made.entries[1], jersey_number: 11 }).eq('id', place).select('id');
+    expect(moved.data).toHaveLength(1);
+    const across = await as.dictator.db.from('roster_memberships').update({ team_entry_id: made.entries[2] }).eq('id', place).select('id');
+    expect(across.error?.code).toBe('23503');
   });
 
   it('edits the card and private email, and clears the email', async () => {
-    const res = await call('admin/players', 'PUT', 'dictator', { id: player, last_name: 'Finisher', overall_rating: 80, email: 'ada@iiitkottayam.ac.in' });
-    expect(res.status).toBe(200);
-    expect((await admin.from('players').select('last_name, overall_rating').eq('id', player).single()).data).toEqual({ last_name: 'Finisher', overall_rating: 80 });
+    expect((await as.dictator.db.from('players').update({ last_name: 'Finisher', overall_rating: 80 }).eq('id', player).select('id')).data).toHaveLength(1);
+    expect((await as.dictator.db.from('player_private_details').upsert({ player_id: player, email: 'ada@iiitkottayam.ac.in' }, { onConflict: 'player_id' })).error).toBeNull();
     expect((await admin.from('player_private_details').select('email').eq('player_id', player).single()).data!.email).toBe('ada@iiitkottayam.ac.in');
-    expect((await call('admin/players', 'PUT', 'dictator', { id: player, email: null })).status).toBe(200);
+    expect((await as.dictator.db.from('player_private_details').delete().eq('player_id', player)).error).toBeNull();
     expect((await admin.from('player_private_details').select('email').eq('player_id', player)).data).toEqual([]);
-    expect((await call('admin/players', 'PUT', 'dictator', { id: player, overall_rating: 120 })).status).toBe(400);
   });
 
-  it('keeps history: a roster place with goals and a player with roster places cannot be removed', async () => {
+  it('keeps history: a roster place with goals, and a player who scored or assisted, cannot be removed', async () => {
+    const helper = (await create('dictator', made.entries[1], `${tag}Helper`)).data as string;
     const { data: match } = must(await admin.from('matches').insert({ home_team_id: made.teams[1], away_team_id: made.teams[0], season_id: made.seasons[0], status: 'completed', home_score: 1, away_score: 0 }).select('id').single());
     made.matches.push(match!.id);
-    must(await admin.from('goals').insert({ match_id: match!.id, team_id: made.teams[1], player_id: player, minute: 5 }));
-    const keep = await call('admin/roster', 'DELETE', 'dictator', undefined, `?membership_id=${place}`);
-    expect(keep.status).toBe(409);
-    const del = await call('admin/players', 'DELETE', 'dictator', undefined, `?id=${player}`);
-    expect(del.status).toBe(409);
-    expect((await admin.from('players').select('id').eq('id', player)).data).toHaveLength(1);
+    must(await admin.from('goals').insert({ match_id: match!.id, team_id: made.teams[1], player_id: player, assist_id: helper, minute: 5 }));
+    const keep = await as.dictator.db.from('roster_memberships').delete().eq('id', place);
+    expect(keep.error?.message).toMatch(/goals or assists this season/);
+    const helperPlace = (await admin.from('roster_memberships').select('id').eq('player_id', helper).single()).data!.id;
+    expect((await as.dictator.db.from('roster_memberships').delete().eq('id', helperPlace)).error?.message).toMatch(/goals or assists this season/);
+    expect((await as.dictator.db.from('players').delete().eq('id', player)).error?.code).toBe('23503');
+    // Even the server key cannot erase it.
+    expect((await admin.from('roster_memberships').delete().eq('id', place)).error?.message).toMatch(/goals or assists this season/);
+    expect((await admin.from('roster_memberships').select('id').eq('id', place)).data).toHaveLength(1);
   });
 
   it('removes a roster place without history, then deletes a player who never played', async () => {
-    const created = await call('admin/players', 'POST', 'dictator', { team_entry_id: made.entries[2], first_name: `${tag}Cal`, last_name: 'Bench' });
-    expect(created.status).toBe(201);
-    const id = created.body.data.id;
-    const { data: placeRow } = await admin.from('roster_memberships').select('id').eq('player_id', id).single();
-    expect((await call('admin/players', 'DELETE', 'dictator', undefined, `?id=${id}`)).status).toBe(409);
-    expect((await call('admin/roster', 'DELETE', 'dictator', undefined, `?membership_id=${placeRow!.id}`)).status).toBe(200);
-    expect((await call('admin/players', 'DELETE', 'dictator', undefined, `?id=${id}`)).status).toBe(200);
-    expect((await admin.from('players').select('id').eq('id', id)).data).toEqual([]);
+    const id = (await create('dictator', made.entries[2], `${tag}Cal`)).data as string;
+    expect((await as.dictator.db.from('players').delete().eq('id', id)).error?.code).toBe('23503'); // still rostered
+    expect((await as.dictator.db.from('roster_memberships').delete().eq('player_id', id).select('id')).data).toHaveLength(1);
+    expect((await as.dictator.db.from('players').delete().eq('id', id).select('id')).data).toHaveLength(1);
   });
 
-  it('the public roster and player page never show the private email', async () => {
-    const res = await call('players', 'GET', null, undefined, `?division=wsl&season=${tag}-a`);
-    expect(JSON.stringify(res.body)).not.toMatch(/@iiitkottayam/);
+  it('visitors read cards and rosters but never private details', async () => {
+    expect((await anonClient.from('players').select('id').eq('id', player)).data).toHaveLength(1);
+    expect((await anonClient.from('player_private_details').select('email')).error?.code).toBe('42501');
   });
 });
 
-describe.each(['captain', 'admin', 'editor', 'default'])('a %s account is refused', (who) => {
-  it('cannot create, edit, move or remove players, and nothing is written', async () => {
+describe.each(['captain', 'admin', 'editor', 'default'])('a %s account', (who) => {
+  it('cannot create, rename, move, add or remove players, and nothing is written', async () => {
     const before = (await admin.from('players').select('id', { count: 'exact', head: true }).ilike('first_name', `${tag}%`)).count;
-    const create = await call('admin/players', 'POST', who, { team_entry_id: made.entries[0], first_name: `${tag}Intruder`, last_name: who });
-    expect(create.status).toBe(403);
-    const { data: any } = await admin.from('roster_memberships').select('id').eq('season_id', made.seasons[0]).limit(1);
-    const someone = (await admin.from('roster_memberships').select('player_id').eq('season_id', made.seasons[0]).limit(1)).data![0].player_id;
-    expect((await call('admin/players', 'PUT', who, { id: someone, first_name: `${tag}Renamed` })).status).toBe(403);
-    expect((await call('admin/players', 'DELETE', who, undefined, `?id=${someone}`)).status).toBe(403);
-    expect((await call('admin/roster', 'POST', who, { player_id: someone, team_entry_id: made.entries[2] })).status).toBe(403);
-    expect((await call('admin/roster', 'PATCH', who, { membership_id: any![0].id, jersey_number: 99 })).status).toBe(403);
-    expect((await call('admin/roster', 'DELETE', who, undefined, `?membership_id=${any![0].id}`)).status).toBe(403);
-    const after = (await admin.from('players').select('id', { count: 'exact', head: true }).ilike('first_name', `${tag}%`)).count;
-    expect(after).toBe(before);
-    expect((await admin.from('players').select('first_name').eq('id', someone).single()).data!.first_name).not.toBe(`${tag}Renamed`);
+    const created = await create(who, made.entries[0], `${tag}Intruder`);
+    expect(created.error?.code).toBe('42501');
+    const someone = (await admin.from('roster_memberships').select('id, player_id').eq('team_entry_id', made.entries[0]).limit(1)).data![0];
+    expect((await as[who].db.from('players').update({ first_name: `${tag}Renamed` }).eq('id', someone.player_id).select('id')).data).toEqual([]);
+    expect((await as[who].db.from('roster_memberships').update({ jersey_number: 99 }).eq('id', someone.id).select('id')).data).toEqual([]);
+    expect((await as[who].db.from('roster_memberships').delete().eq('id', someone.id).select('id')).data).toEqual([]);
+    expect((await as[who].db.from('roster_memberships').insert({ player_id: someone.player_id, team_entry_id: made.entries[2], season_id: made.seasons[1] })).error?.code).toBe('42501');
+    expect((await as[who].db.from('players').insert({ first_name: `${tag}Fake`, last_name: who })).error?.code).toBe('42501');
+    expect((await as[who].db.from('player_private_details').select('player_id')).data).toEqual([]);
+    expect((await admin.from('players').select('id', { count: 'exact', head: true }).ilike('first_name', `${tag}%`)).count).toBe(before);
+    expect((await admin.from('players').select('first_name').eq('id', someone.player_id).single()).data!.first_name).not.toBe(`${tag}Renamed`);
   });
 });
 
-describe('without signing in', () => {
-  it('every write is refused with 401', async () => {
-    expect((await call('admin/players', 'POST', null, { team_entry_id: made.entries[0], first_name: 'x' })).status).toBe(401);
-    expect((await call('admin/roster', 'DELETE', null, undefined, `?membership_id=${made.entries[0]}`)).status).toBe(401);
-    const form = new FormData();
-    form.set('membership_id', made.entries[0]);
-    expect((await call('admin/freshers/player-image', 'POST', null, form)).status).toBe(401);
-  });
-});
-
-describe('the captain portrait upload', () => {
-  const upload = (who: string, membershipId: string) => {
+describe('the captain portrait upload route', () => {
+  const upload = (who: string | null, membershipId: string) => {
     const form = new FormData();
     form.set('membership_id', membershipId);
-    return call('admin/freshers/player-image', 'POST', who, form);
+    return route('admin/freshers/player-image', who, form);
   };
 
   it('a captain may upload only for a player on their team in their season; a dictator for anyone', async () => {
-    const ownPlace = must(await admin.from('roster_memberships').select('id').eq('team_entry_id', made.entries[1]).limit(1)).data!;
-    const created = await call('admin/players', 'POST', 'dictator', { team_entry_id: made.entries[0], first_name: `${tag}Dee`, last_name: 'Keeper', jersey_number: 1 });
-    const own = must(await admin.from('roster_memberships').select('id').eq('player_id', created.body.data.id).single()).data!.id;
-    // Allowed past authorization; there is no image, so the request stops at validation (no upload is attempted).
+    const own = (await admin.from('roster_memberships').select('id').eq('team_entry_id', made.entries[0]).limit(1)).data![0].id;
+    const other = (await admin.from('roster_memberships').select('id').eq('team_entry_id', made.entries[1]).limit(1)).data![0].id;
+    // Past authorization the request stops at validation: no image was sent, so nothing is uploaded.
     expect((await upload('captain', own)).status).toBe(400);
     expect((await upload('dictator', own)).status).toBe(400);
-    expect((await upload('captain', ownPlace[0].id)).status).toBe(403); // team Two
-    expect((await upload('admin', own)).status).toBe(403);
-    expect((await upload('editor', own)).status).toBe(403);
-    expect((await upload('default', own)).status).toBe(403);
+    expect((await upload('captain', other)).status).toBe(403);
+    for (const who of ['admin', 'editor', 'default']) expect((await upload(who, own)).status).toBe(403);
+    expect((await upload(null, own)).status).toBe(401);
   });
 });
 
 describe('the team registration route', () => {
   it('no longer writes players: a request with members is refused', async () => {
-    const res = await call('admin/team-registrations', 'POST', 'dictator', { team_name: `${tag} Reg`, captain_id: tokens.default.id, division: 'wsl', members: [{ name: 'Old Way' }] });
+    const res = await route('admin/team-registrations', 'dictator', { team_name: `${tag} Reg`, captain_id: as.default.id, division: 'wsl', members: [{ name: 'Old Way' }] });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/season roster/);
   });

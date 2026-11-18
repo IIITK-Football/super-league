@@ -3,7 +3,7 @@
 -- season statistics derived from match events (never stored on the identity or membership), and access by role.
 -- Rolled back.
 BEGIN;
-SELECT plan(46);
+SELECT plan(48);
 
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('b7000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
@@ -80,6 +80,12 @@ SELECT throws_ok($$DELETE FROM public.players WHERE id = (SELECT player_id FROM 
   'a player on a roster cannot be deleted (history is kept)');
 SELECT is((SELECT confdeltype FROM pg_constraint WHERE conname = 'goals_player_id_fkey')::text, 'r',
   'deleting a player who scored is refused instead of deleting the goals');
+SELECT is((SELECT confdeltype FROM pg_constraint WHERE conname = 'goals_assist_id_fkey')::text, 'r',
+  'deleting a player who assisted is refused instead of clearing the assist');
+SELECT throws_ok($$DELETE FROM public.roster_memberships
+                   WHERE (player_id, season_id) IN (SELECT player_id, season_id FROM public.season_player_stats WHERE goals > 0 LIMIT 1)$$,
+  '23503', 'This player has goals or assists this season, so their place on the roster is kept',
+  'a roster place with goals in that season cannot be removed, whoever asks');
 SELECT lives_ok($$INSERT INTO public.players (id, first_name, last_name) VALUES
                    ('b7100000-0000-4000-8000-000000000002', 'Unlinked', 'One'), ('b7100000-0000-4000-8000-000000000003', 'Unlinked', 'Two')$$,
   'players without an account or roster are valid');

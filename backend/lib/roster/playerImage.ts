@@ -1,7 +1,7 @@
-// Player portraits: validation and upload, shared by the dictator player route and the captain portrait route.
+// Player portraits: validation and upload for the portrait route (captains and dictators).
 // The R2 client is created only when an image is uploaded, so routes that do not upload work without R2 settings.
 // Keys are the player's id (players/<id>.png); existing portraits and their URLs are never touched.
-import { PutObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 export const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
@@ -46,11 +46,6 @@ export async function uploadPortrait(key: string, buffer: Buffer): Promise<strin
   const { client, bucket, publicBase } = storage();
   await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: 'image/png', CacheControl: 'public, max-age=3600' }));
   return `${publicBase}/${key.split('/').map(encodeURIComponent).join('/')}`;
-}
-
-export async function removePortrait(key: string): Promise<void> {
-  const { client, bucket } = storage();
-  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
 export async function readPortrait(form: FormData): Promise<Buffer | null> {

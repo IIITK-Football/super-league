@@ -367,6 +367,9 @@ DROP TABLE _sl_before, _sl_linked, _sl_candidates, _sl_members;
 -- History is never erased by deleting a player -------------------------------------------------------------------
 ALTER TABLE public.goals DROP CONSTRAINT goals_player_id_fkey;
 ALTER TABLE public.goals ADD CONSTRAINT goals_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON DELETE RESTRICT;
+-- An assist is history too: deleting the assisting player is refused instead of clearing the assist.
+ALTER TABLE public.goals DROP CONSTRAINT goals_assist_id_fkey;
+ALTER TABLE public.goals ADD CONSTRAINT goals_assist_id_fkey FOREIGN KEY (assist_id) REFERENCES public.players(id) ON DELETE RESTRICT;
 
 -- Season statistics -----------------------------------------------------------------------------------------------
 -- One line per (season, player), derived from match events and never stored. Until the canonical match-event model
@@ -430,6 +433,25 @@ LEFT JOIN public.team_entries te ON te.id = rm.team_entry_id
 LEFT JOIN public.teams rt ON rt.id = te.team_id
 LEFT JOIN public.teams et ON et.id = l.event_team_id;
 COMMENT ON VIEW public.season_player_stats IS 'Goals and assists per player and season, derived from match events (per match and player, the greater of the goals table and the match JSON until the canonical event model replaces both). The club is the team of the player''s roster place in that season. The single source for every season statistic.';
+
+-- A roster place is history once the player has goals or assists in that season (in the goals table or the match
+-- JSON): removing it is refused on every path (Data API, RPC, service role). Moving within the season is allowed.
+CREATE FUNCTION public.roster_memberships_keep_history()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO ''
+AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.season_player_stats s
+             WHERE s.player_id = OLD.player_id AND s.season_id = OLD.season_id AND (s.goals > 0 OR s.assists > 0)) THEN
+    RAISE EXCEPTION 'This player has goals or assists this season, so their place on the roster is kept'
+      USING ERRCODE = '23503';
+  END IF;
+  RETURN OLD;
+END;
+$$;
+CREATE TRIGGER roster_memberships_keep_history BEFORE DELETE ON public.roster_memberships
+  FOR EACH ROW EXECUTE FUNCTION public.roster_memberships_keep_history();
 
 -- Access ----------------------------------------------------------------------------------------------------------
 DROP POLICY IF EXISTS "Admin and Captain all access players" ON public.players;
