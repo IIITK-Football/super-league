@@ -196,10 +196,28 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const division = await asUser(managerToken)('/rest/v1/divisions', { method: 'POST', prefer: 'return=representation', body: { slug: tag, name: 'SL Check Division', visibility: 'hidden' } });
     const divisionId = division.data?.[0]?.id;
     const seasons = divisionId
-      ? await asUser(managerToken)('/rest/v1/seasons', { method: 'POST', prefer: 'return=representation', body: [{ division_id: divisionId, slug: '2026', name: '2026', is_current: true }, { division_id: divisionId, slug: '2027', name: '2027', is_current: false }] }) // PostgREST requires every row of a bulk insert to have the same keys
+      ? await asUser(managerToken)('/rest/v1/seasons?select=id,slug', { method: 'POST', prefer: 'return=representation', body: [{ division_id: divisionId, slug: '2026', name: '2026', is_current: true }, { division_id: divisionId, slug: '2027', name: '2027', is_current: false }] }) // PostgREST requires every row of a bulk insert to have the same keys
       : division;
     const seasonsCreated = divisionId && seasons.ok && (seasons.data ?? []).length === 2;
     record('A new hidden division with two coexisting seasons is created through the Data API, with no schema change', seasonsCreated ? 'PASS' : 'FAIL', seasonsCreated ? 'created' : message(seasons));
+
+    // The dashboard switches the current season with one function call and saves sections by upsert.
+    const nextSeason = (seasons.data ?? []).find((x) => x.slug === '2027') ?? (seasons.data ?? [])[1];
+    if (seasonsCreated && nextSeason?.id) {
+      const refused = await asUser(userToken)('/rest/v1/rpc/set_current_season', { method: 'POST', body: { p_season: nextSeason.id } });
+      const switched = await asUser(managerToken)('/rest/v1/rpc/set_current_season', { method: 'POST', body: { p_season: nextSeason.id } });
+      const current = await admin(`/rest/v1/seasons?division_id=eq.${divisionId}&is_current=eq.true&select=id`);
+      const section = await asUser(managerToken)('/rest/v1/season_sections?on_conflict=season_id,section_key', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates,return=representation',
+        body: { season_id: nextSeason.id, section_key: 'fantasy', enabled: false, nav_visible: false, sort_order: 80, settings: { note: 'sl-check' } },
+      });
+      const configOk = !refused.ok && switched.ok && (current.data ?? []).length === 1 && current.data[0].id === nextSeason.id && section.ok;
+      record('The current season switches in one step and a season section is configured; an account without the role cannot switch it', configOk ? 'PASS' : 'FAIL',
+        configOk ? 'switched and saved' : `refused=${!refused.ok}, switched=${switched.ok ? 'yes' : message(switched)}, current=${(current.data ?? []).length}, section=${section.ok ? 'saved' : message(section)}`);
+    } else {
+      record('The current season switches in one step and a season section is configured; an account without the role cannot switch it', 'FAIL', 'no seasons to switch');
+    }
 
     const seenByUser = await asUser(userToken)(`/rest/v1/divisions?slug=eq.${tag}&select=id`);
     const seenByAnon = await anon(`/rest/v1/divisions?slug=eq.${tag}&select=id`);

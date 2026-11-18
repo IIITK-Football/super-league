@@ -12,10 +12,10 @@ const SECRET = ['sb', 'secret', 'NEVER_PRINT_THIS_secret_0123456789'].join('_');
 const PUBLISHABLE = ['sb', 'publishable', 'NEVER_PRINT_THIS_key_abcdef'].join('_');
 const goodEnv = () => ({ SUPABASE_URL: `https://${STAGING}.supabase.co`, SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE, SUPABASE_SECRET_KEY: SECRET, ALLOW_REMOTE_SUPABASE: 'true' });
 
-type Opts = { captchaEnforced?: boolean; openRpc?: boolean; failAtRpc?: boolean; leakEmail?: boolean; openDivisions?: boolean };
+type Opts = { captchaEnforced?: boolean; openRpc?: boolean; failAtRpc?: boolean; leakEmail?: boolean; openDivisions?: boolean; brokenCurrentSeason?: boolean };
 
 function fakeStaging(opts: Opts = {}) {
-  const { captchaEnforced = true, openRpc = false, failAtRpc = false, openDivisions = false } = opts;
+  const { captchaEnforced = true, openRpc = false, failAtRpc = false, openDivisions = false, brokenCurrentSeason = false } = opts;
   const users = new Map<string, { id: string; email: string }>();
   const roles = new Map<string, string>();
   const regs = new Map<string, { id: string; captain_id: string }>();
@@ -25,7 +25,8 @@ function fakeStaging(opts: Opts = {}) {
   const divisions = new Map<string, { id: string; slug: string; visibility: string }>(
     ['super-league', 'wsl', 'freshers'].map((slug, i) => [`d${i}`, { id: `d${i}`, slug, visibility: 'public' }]),
   );
-  const seasons = new Map<string, { id: string; division_id: string; is_current: boolean }>(
+  const sections = new Map<string, { season_id: string; section_key: string }>();
+  const seasons = new Map<string, { id: string; division_id: string; is_current: boolean; slug?: string }>(
     ['d0', 'd1', 'd2'].map((d, i) => [`s${i}`, { id: `s${i}`, division_id: d, is_current: true }]),
   );
   const calls: { method: string; url: string; headers: Record<string, string>; body: any }[] = [];
@@ -143,25 +144,44 @@ function fakeStaging(opts: Opts = {}) {
       const divisionIds = inList(u.searchParams.get('division_id'));
       if (method === 'GET') {
         const current = u.searchParams.get('is_current') === 'eq.true';
-        return json(200, [...seasons.values()].filter((x) => !current || x.is_current).map((x) => ({ division_id: x.division_id })));
+        const divisionEq = u.searchParams.get('division_id')?.match(/^eq\.(.+)$/)?.[1];
+        return json(200, [...seasons.values()]
+          .filter((x) => (!current || x.is_current) && (!divisionEq || x.division_id === divisionEq))
+          .map((x) => ({ id: x.id, division_id: x.division_id })));
       }
       if (method === 'POST') {
         if (!manager) return json(403, rls);
         // Like PostgREST: a bulk insert without ?columns= needs the same keys in every row.
         const keySets = (Array.isArray(body) ? body : [body]).map((b: object) => Object.keys(b).sort().join(','));
         if (!u.searchParams.has('columns') && new Set(keySets).size > 1) return json(400, { code: 'PGRST102', message: 'All object keys must match' });
-        const rows = (Array.isArray(body) ? body : [body]).map((b: any) => ({ id: `s${++n}`, division_id: b.division_id, is_current: !!b.is_current }));
+        const rows = (Array.isArray(body) ? body : [body]).map((b: any) => ({ id: `s${++n}`, division_id: b.division_id, is_current: !!b.is_current, slug: b.slug }));
         for (const r of rows) seasons.set(r.id, r);
-        return json(201, rows.map((r) => ({ id: r.id })));
+        return json(201, rows.map((r) => ({ id: r.id, slug: r.slug })));
       }
       if (method === 'DELETE') {
-        for (const x of [...seasons.values()]) if (manager && divisionIds.includes(x.division_id)) seasons.delete(x.id);
+        for (const x of [...seasons.values()]) if (manager && divisionIds.includes(x.division_id)) {
+          seasons.delete(x.id);
+          for (const [k, v] of sections) if (v.season_id === x.id) sections.delete(k); // ON DELETE CASCADE
+        }
         return new Response(null, { status: 204 });
       }
     }
+    if (p === '/rest/v1/rpc/set_current_season' && method === 'POST') {
+      if (!manager) return json(403, { code: '42501', message: 'Only a dictator can change the current season' });
+      const target = seasons.get(body.p_season);
+      if (!target) return json(404, { code: 'P0002', message: 'Season not found' });
+      if (!brokenCurrentSeason) for (const x of seasons.values()) if (x.division_id === target.division_id) x.is_current = false;
+      target.is_current = true;
+      return new Response(null, { status: 204 });
+    }
+    if (p === '/rest/v1/season_sections' && method === 'POST') {
+      if (!manager) return json(403, rls);
+      sections.set(`${body.season_id}:${body.section_key}`, { season_id: body.season_id, section_key: body.section_key });
+      return json(201, [body]);
+    }
     return json(404, { msg: `unhandled ${method} ${p}` });
   };
-  return { fetchImpl, users, roles, regs, members, divisions, seasons, calls };
+  return { fetchImpl, users, roles, regs, members, divisions, seasons, sections, calls };
 }
 
 let logs: string[];
@@ -213,7 +233,7 @@ describe('runChecks against a healthy staging', () => {
     const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(results.filter((r: { status: string }) => r.status === 'FAIL')).toEqual([]);
     for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /email/i, /dictator/i, /recovery/i, /clean/i,
-                      /legacy divisions/i, /new hidden division/i, /hidden division is invisible/i, /cannot create a division/i]) {
+                      /legacy divisions/i, /new hidden division/i, /current season switches/i, /hidden division is invisible/i, /cannot create a division/i]) {
       expect(by(results, re)?.status, String(re)).toBe('PASS');
     }
     expect(s.users.size).toBe(0);
@@ -222,6 +242,7 @@ describe('runChecks against a healthy staging', () => {
     expect(s.roles.size).toBe(0);
     expect([...s.divisions.values()].map((d) => d.slug).sort()).toEqual(['freshers', 'super-league', 'wsl']); // only the seeded ones remain
     expect(s.seasons.size).toBe(3);
+    expect(s.sections.size).toBe(0);
   });
 
   it('only ever talks to the staging host', async () => {
@@ -279,6 +300,18 @@ describe('runChecks detects a broken staging', () => {
     expect(by(results, /hidden division is invisible/i)?.status).toBe('FAIL');
     expect(by(results, /cannot create a division/i)?.status).toBe('FAIL');
     expect([...s.divisions.values()].some((d) => d.slug.startsWith('sl-check-'))).toBe(false); // and still cleans up
+  });
+
+  it('fails the current-season check when switching leaves two current seasons', async () => {
+    const s = fakeStaging({ brokenCurrentSeason: true });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
+    expect(by(results, /current season switches/i)?.status).toBe('FAIL');
+  });
+
+  it('fails the current-season check when any account may switch it', async () => {
+    const s = fakeStaging({ openDivisions: true });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
+    expect(by(results, /current season switches/i)?.status).toBe('FAIL');
   });
 
   it('fails the legacy division check when the seeded divisions are missing', async () => {
