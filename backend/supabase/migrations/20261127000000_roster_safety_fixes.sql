@@ -113,6 +113,36 @@ $$;
 REVOKE ALL ON FUNCTION public.create_team_in_season(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.create_team_in_season(uuid, text) TO authenticated, service_role;
 
+-- Whether a player has any match record, in one season or (p_season_id NULL) in any season: a goal, own goal or
+-- assist in the goals table, or a mention in a match's scorers, assists or own_goals list (legacy records, string or
+-- {"player_id": ...} elements). Definer so the answer never depends on what the caller can see.
+CREATE FUNCTION public.player_has_match_history(p_player_id uuid, p_season_id uuid DEFAULT NULL)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.goals g JOIN public.matches m ON m.id = g.match_id
+    WHERE (g.player_id = p_player_id OR g.assist_id = p_player_id)
+      AND (p_season_id IS NULL OR m.season_id = p_season_id)
+  ) OR EXISTS (
+    SELECT 1 FROM public.matches m
+    CROSS JOIN LATERAL (
+      SELECT el FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m.scorers) = 'array' THEN m.scorers ELSE '[]'::jsonb END) el
+      UNION ALL
+      SELECT el FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m.assists) = 'array' THEN m.assists ELSE '[]'::jsonb END) el
+      UNION ALL
+      SELECT el FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m.own_goals) = 'array' THEN m.own_goals ELSE '[]'::jsonb END) el
+    ) x
+    WHERE (p_season_id IS NULL OR m.season_id = p_season_id)
+      AND CASE jsonb_typeof(x.el) WHEN 'string' THEN x.el #>> '{}' WHEN 'object' THEN x.el ->> 'player_id' END = p_player_id::text
+  );
+$$;
+REVOKE ALL ON FUNCTION public.player_has_match_history(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.player_has_match_history(uuid, uuid) TO authenticated, service_role;
+
 -- A dictator deletes a player who never played: no other roster place, no goal or assist (own goals included),
 -- no statistics. The roster place and the player go together, or nothing changes.
 CREATE FUNCTION public.delete_unplayed_player(p_player_id uuid)
@@ -131,8 +161,7 @@ BEGIN
   IF (SELECT count(*) FROM public.roster_memberships WHERE player_id = p_player_id) > 1 THEN
     RAISE EXCEPTION 'This player plays in another season, so the player is kept' USING ERRCODE = '23503';
   END IF;
-  IF EXISTS (SELECT 1 FROM public.goals WHERE player_id = p_player_id OR assist_id = p_player_id)
-     OR EXISTS (SELECT 1 FROM public.season_player_stats WHERE player_id = p_player_id) THEN
+  IF public.player_has_match_history(p_player_id) THEN
     RAISE EXCEPTION 'This player has match history, so the player is kept' USING ERRCODE = '23503';
   END IF;
   DELETE FROM public.roster_memberships WHERE player_id = p_player_id;
@@ -142,7 +171,7 @@ $$;
 REVOKE ALL ON FUNCTION public.delete_unplayed_player(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.delete_unplayed_player(uuid) TO authenticated, service_role;
 
--- A roster place with statistics in its season is history: it cannot be removed, or moved to another player or
+-- A roster place with any match record in its season (own goals included) is history: it cannot be removed, or moved to another player or
 -- season. Moving to another team in the same season stays allowed.
 CREATE OR REPLACE FUNCTION public.roster_memberships_keep_history()
 RETURNS trigger
@@ -153,8 +182,7 @@ BEGIN
   IF TG_OP = 'UPDATE' AND NEW.player_id = OLD.player_id AND NEW.season_id = OLD.season_id THEN
     RETURN NEW;
   END IF;
-  IF EXISTS (SELECT 1 FROM public.season_player_stats s
-             WHERE s.player_id = OLD.player_id AND s.season_id = OLD.season_id AND (s.goals > 0 OR s.assists > 0)) THEN
+  IF public.player_has_match_history(OLD.player_id, OLD.season_id) THEN
     RAISE EXCEPTION 'This player has goals or assists this season, so their place on the roster is kept'
       USING ERRCODE = '23503';
   END IF;

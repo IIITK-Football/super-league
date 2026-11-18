@@ -3,7 +3,7 @@
 -- player only when they never played (no other season, no goal or assist, own goals included) and otherwise changes
 -- nothing; a roster place with goals or assists cannot be moved to another player or season. Rolled back.
 BEGIN;
-SELECT plan(15);
+SELECT plan(18);
 
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('a9000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
@@ -65,6 +65,21 @@ SELECT (SELECT id FROM public.matches WHERE season_id = (SELECT id FROM _s) ORDE
 SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.delete_unplayed_player((SELECT p FROM _og))::text$q$)$$,
   '23503', 'This player has match history, so the player is kept', 'an own-goal scorer is kept');
 SELECT is((SELECT count(*) FROM public.roster_memberships WHERE player_id = (SELECT p FROM _og))::int, 1, 'and keeps their roster place: nothing changed');
+
+-- Own goals are match history too: the own-goal scorer's roster place cannot be removed.
+SELECT throws_ok($$DELETE FROM public.roster_memberships WHERE player_id = (SELECT p FROM _og)$$,
+  '23503', NULL, 'the roster place of a player whose only record is an own goal is kept');
+
+-- A player named only in a match's own-goal list (legacy JSON record) is kept.
+CREATE TEMP TABLE _jog AS
+SELECT public.create_rostered_player((SELECT id FROM public.team_entries WHERE season_id = (SELECT id FROM _s) ORDER BY id LIMIT 1), 'Json', 'OwnGoal', 95) AS p;
+GRANT SELECT ON _jog TO authenticated;
+UPDATE public.matches SET own_goals = COALESCE(own_goals, '[]'::jsonb) || jsonb_build_array((SELECT p FROM _jog)::text)
+WHERE id = (SELECT id FROM public.matches WHERE season_id = (SELECT id FROM _s) ORDER BY id LIMIT 1);
+SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.delete_unplayed_player((SELECT p FROM _jog))::text$q$)$$,
+  '23503', 'This player has match history, so the player is kept', 'a player with only a recorded own goal in the match list is kept');
+SELECT throws_ok($$DELETE FROM public.roster_memberships WHERE player_id = (SELECT p FROM _jog)$$,
+  '23503', NULL, 'and so is their roster place');
 
 -- A player in two seasons is kept.
 SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.delete_unplayed_player((SELECT player_id FROM public.roster_memberships GROUP BY player_id HAVING count(*) > 1 LIMIT 1))::text$q$)$$,
