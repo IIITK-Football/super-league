@@ -8,7 +8,7 @@ import { DivisionSwitch } from './DivisionSwitch';
 export default function LiveController() {
   const [division, setDivision] = useState('super-league');
   const { data: resp, refetch } = useApi(`/admin/matches?status=live,scheduled&division=${division}`);
-  const { data: playersResp } = useApi('/players?all=true'); 
+  const { data: playersResp } = useApi(`/players?division=${division}`); // the selected division's current season roster 
   
   const matches = resp?.data || [];
   const allPlayers = playersResp?.data || [];

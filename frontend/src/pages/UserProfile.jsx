@@ -190,7 +190,7 @@ export function UserProfile() {
                                     <Medal size={14} className="text-zinc-400" />
                                     <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400">{myPoints.toLocaleString()}</span>
                                 </div>
-                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Fantasy Pts</p>
+                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Season Fantasy Pts</p>
                             </div>
                         </div>
                     )}

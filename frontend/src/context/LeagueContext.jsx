@@ -68,7 +68,7 @@ export function LeagueProvider({ children }) {
       let error = divisionError?.message || '';
       if (record) {
         const { data, error: seasonsError } = await supabase.from('seasons')
-          .select('id, slug, name, is_current, starts_on, ends_on, format').eq('division_id', record.id);
+          .select('id, slug, name, is_current, starts_on, ends_on, format, rules_md').eq('division_id', record.id);
         seasons = orderSeasons(data || []);
         error = seasonsError?.message || error;
       }

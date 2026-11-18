@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useLeague } from '../context/LeagueContext';
+import { scopeQuery, useLeague } from '../context/LeagueContext';
 import { useAuth } from '../context/AuthContext';
 import { FifaPrediction } from './FifaPrediction';
 import { useApi } from '../hooks/useApi';
@@ -73,7 +73,8 @@ export function Fantasy() {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) return;
                 const API_URL = API_BASE_URL;
-                const res = await fetch(`${API_URL}/predictions/history`, {
+                // This season's predictions only
+                const res = await fetch(`${API_URL}/predictions/history?${scopeQuery(seasonScope)}`, {
                     headers: { 'Authorization': `Bearer ${session.access_token}` }
                 });
                 const result = await res.json();
@@ -84,8 +85,8 @@ export function Fantasy() {
                 setPredLoading(false);
             }
         };
-        if (user && (activeTab === 'history' || activeTab === 'pending')) fetchHistory();
-    }, [user, activeTab]);
+        if (user && seasonScope.ready && (activeTab === 'history' || activeTab === 'pending')) fetchHistory();
+    }, [user, activeTab, seasonScope.ready, seasonScope.division, seasonScope.season?.slug]);
 
     const pendingPredictions = predictions.filter(p => p.status === 'pending');
     const gradedPredictions = predictions.filter(p => p.status === 'graded');
