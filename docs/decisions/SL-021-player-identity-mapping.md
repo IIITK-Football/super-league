@@ -35,7 +35,7 @@ A jersey collision on a team after the merge also stops the migration.
 
 - **Public:** player cards (`players`) and roster places of visible seasons (`roster_memberships`).
 - **Dictators only:** all writes, and reads of private details, the mapping and the snapshot. Players are created on a roster through `create_rostered_player`.
-- **Captains:** `captain_update_roster_player` only. It needs the captain role and the team's registration for that season (SL-003 rule 3). It writes only position and jersey on the roster place, and rating, attributes/play styles and portrait on the card. There is no name, email, link or roster argument, and no direct write path.
+- **Captains:** `captain_update_roster_player` only. It needs the captain role and the team's registration for that season (SL-003 rule 3), and the season must be current (`20261127000000`): the card is shared by every season, so an earlier season's assignment must not reach a player who moved on. It writes only position and jersey on the roster place, and rating, attributes/play styles and portrait on the card. There is no name, email, link or roster argument, and no direct write path.
 - **History is kept on every path:**
   - deleting a player who scored or assisted is refused (`goals` foreign keys are RESTRICT);
   - a roster place with goals or assists in that season cannot be removed (trigger `roster_memberships_keep_history`);
