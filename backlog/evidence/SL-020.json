@@ -1,9 +1,9 @@
 {
-  "head": "7a8648d474df3d63d499d6fcea003205f708ac1a",
-  "tree": "c5085e832eed68cfb24c0aa9410dda21036bedc3",
-  "clean": false,
+  "head": "947d0749ce7051a758a81c960f6abbab1825d128",
+  "tree": "a5bbdb338bd2f1652049bdbed2b4b05d3cde7b58",
+  "clean": true,
   "dryRun": false,
-  "at": "2026-11-18T08:08:41.379Z",
+  "at": "2026-11-18T08:12:49.772Z",
   "groups": [
     {
       "name": "database",
@@ -14,7 +14,7 @@
           "cwd": ".",
           "cmd": "bash scripts/local-db.sh test",
           "exit": 0,
-          "ms": 3007
+          "ms": 3263
         }
       ]
     },
@@ -27,13 +27,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/divisions",
           "exit": 0,
-          "ms": 9955
+          "ms": 9887
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageDivisions.local.test.jsx",
           "exit": 0,
-          "ms": 3602
+          "ms": 3622
         }
       ]
     },
@@ -46,7 +46,7 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/tooling",
           "exit": 0,
-          "ms": 9831
+          "ms": 9147
         }
       ]
     },
@@ -59,7 +59,7 @@
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run --passWithNoTests",
           "exit": 0,
-          "ms": 3397
+          "ms": 3642
         }
       ]
     }
