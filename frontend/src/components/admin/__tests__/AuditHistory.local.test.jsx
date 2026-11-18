@@ -24,7 +24,7 @@ const DOMAIN = 'iiitkottayam.ac.in';
 const tag = `sl-check-${randomBytes(4).toString('hex')}`;
 
 const holder = vi.hoisted(() => ({ client: null }));
-vi.mock('../../../lib/supabase', () => ({ supabase: { from: (...a) => holder.client.from(...a) } }));
+vi.mock('../../../lib/supabase', () => ({ supabase: { from: (...a) => holder.client.from(...a), rpc: (...a) => holder.client.rpc(...a) } }));
 
 import AuditHistory from '../AuditHistory';
 
@@ -95,7 +95,7 @@ describe.skipIf(!TARGET)(`AuditHistory through the real Data API (${TARGET ?? 's
     fireEvent.change(await screen.findByLabelText('Table'), { target: { value: 'divisions' } });
     await waitFor(() => expect(screen.getByText(`name: ${tag} Audit → ${tag} Renamed`)).toBeTruthy(), { timeout: 15000 });
     const entry = screen.getByText(`name: ${tag} Audit → ${tag} Renamed`).closest('li').parentElement.closest('li');
-    await waitFor(() => expect(within(entry).getByText(dictator.email)).toBeTruthy(), { timeout: 15000 }); // the email follows the profile lookup
+    await waitFor(() => expect(within(entry).getByText(dictator.email)).toBeTruthy(), { timeout: 15000 }); // the label comes from audit_actors (no name set, so the email)
     expect(within(entry).getByText('update')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Changed by'), { target: { value: dictator.id } });
     await waitFor(() => {

@@ -5,7 +5,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = { rows: [], profiles: [], calls: [], fail: null, slow: null };
+const db = { rows: [], profiles: [], actors: [], actorsFail: null, calls: [], fail: null, slow: null };
 
 function from(table) {
   const q = { filters: [], range: null, ins: null };
@@ -26,9 +26,14 @@ function from(table) {
   };
   return b;
 }
-vi.mock('../../../lib/supabase', () => ({ supabase: { from: (t) => from(t) } }));
+const rpc = async (name) => {
+  db.calls.push({ rpc: name });
+  if (db.actorsFail) return { data: null, error: db.actorsFail };
+  return { data: db.actors, error: null };
+};
+vi.mock('../../../lib/supabase', () => ({ supabase: { from: (t) => from(t), rpc: (...a) => rpc(...a) } }));
 
-import AuditHistory, { PAGE_SIZE, describeActor, summarize } from '../AuditHistory';
+import AuditHistory, { PAGE_SIZE, UNKNOWN_ACCOUNT, describeActor, summarize } from '../AuditHistory';
 
 const entry = (over) => ({ id: 1, occurred_at: '2026-11-18T10:00:00Z', actor_id: 'u1', actor_role: 'authenticated', action: 'update', table_name: 'divisions', record_id: 'd1', changes: {}, ...over });
 
@@ -39,6 +44,9 @@ beforeEach(() => {
     entry({ id: 1, actor_id: null, actor_role: 'postgres', action: 'insert', table_name: 'seasons', record_id: 's1', changes: { name: '2026', slug: '2026', archived_at: null } }),
   ];
   db.profiles = [{ id: 'u1', email: 'lamb@iiitkottayam.ac.in' }, { id: 'u2', email: 'diana@iiitkottayam.ac.in' }];
+  // What audit_actors returns: every person in the whole history, labelled by the database.
+  db.actors = [{ actor_id: 'u2', label: 'diana@iiitkottayam.ac.in', available: true }, { actor_id: 'u1', label: 'lamb@iiitkottayam.ac.in', available: true }];
+  db.actorsFail = null;
   db.calls = [];
   db.fail = null;
   db.slow = null;
@@ -54,6 +62,7 @@ describe('summaries', () => {
 
   it('names the actor by email, or the server and system sessions', () => {
     expect(describeActor(entry({}), { u1: 'lamb@iiitkottayam.ac.in' })).toBe('lamb@iiitkottayam.ac.in');
+    expect(describeActor(entry({ actor_id: '6a1f0c2e-0000-4000-8000-000000000001' }), {})).toBe(UNKNOWN_ACCOUNT); // never a raw id
     expect(describeActor(entry({ actor_id: null, actor_role: 'service_role' }), {})).toBe('Server');
     expect(describeActor(entry({ actor_id: null, actor_role: 'postgres' }), {})).toBe('System (postgres)');
   });
@@ -69,7 +78,46 @@ describe('AuditHistory', () => {
     expect(items[0].textContent).toMatch(/lamb@iiitkottayam\.ac\.in.*update.*Divisions.*name: Inter → Inter League/);
     expect(items[1].textContent).toMatch(/diana@iiitkottayam\.ac\.in.*Roles.*role: default → captain/);
     expect(items[2].textContent).toMatch(/System \(postgres\).*insert.*Seasons/);
-    expect(db.calls[0]).toMatchObject({ table: 'audit_log', range: [0, PAGE_SIZE - 1] });
+    expect(db.calls.find((c) => c.table === 'audit_log')).toMatchObject({ table: 'audit_log', range: [0, PAGE_SIZE - 1] });
+  });
+
+  it('offers every person in the whole history, including one who appears only on an older page', async () => {
+    db.actors = [...db.actors, { actor_id: 'u-old', label: 'Old Timer', available: true }];
+    db.rows = [...db.rows, ...Array.from({ length: PAGE_SIZE }, (_, i) => entry({ id: 100 + i, actor_id: i === PAGE_SIZE - 1 ? 'u-old' : 'u1' }))];
+    render(<AuditHistory />);
+    await screen.findByRole('list', { name: 'Audit entries' });
+    const options = await waitFor(() => {
+      const names = within(screen.getByLabelText('Changed by')).getAllByRole('option').map((o) => o.textContent);
+      expect(names).toContain('Old Timer');
+      return names;
+    });
+    expect(options).toEqual(['Anyone', 'diana@iiitkottayam.ac.in', 'lamb@iiitkottayam.ac.in', 'Old Timer']);
+    fireEvent.change(screen.getByLabelText('Changed by'), { target: { value: 'u-old' } });
+    await waitFor(() => expect(db.calls.filter((c) => c.table === 'audit_log').at(-1).filters).toEqual([['actor_id', 'u-old']]));
+  });
+
+  it('shows the database labels for people without a name and for deleted accounts, never a raw id', async () => {
+    const gone = '9d3c1b7a-0000-4000-8000-0000000000ff';
+    db.rows = [entry({ id: 9, actor_id: gone }), entry({ id: 8, actor_id: 'u3' })];
+    db.actors = [{ actor_id: 'u3', label: 'plain@iiitkottayam.ac.in', available: true }, { actor_id: gone, label: 'Deleted or unavailable account', available: false }];
+    render(<AuditHistory />);
+    const list = await screen.findByRole('list', { name: 'Audit entries' });
+    await waitFor(() => expect(within(list).getByText('Deleted or unavailable account')).toBeTruthy());
+    expect(within(list).getByText('plain@iiitkottayam.ac.in')).toBeTruthy();
+    expect(document.body.textContent).not.toContain(gone);
+  });
+
+  it('keeps the history usable when the people list cannot be loaded, and can retry', async () => {
+    db.actorsFail = { message: 'permission denied' };
+    render(<AuditHistory />);
+    const list = await screen.findByRole('list', { name: 'Audit entries' });
+    await waitFor(() => expect(screen.getByText(/people list could not be loaded/i)).toBeTruthy());
+    expect(screen.getByLabelText('Changed by').disabled).toBe(true);
+    expect(within(list).getAllByText(UNKNOWN_ACCOUNT).length).toBeGreaterThan(0);
+    db.actorsFail = null;
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => expect(screen.getByLabelText('Changed by').disabled).toBe(false));
+    expect(within(list).getAllByText('lamb@iiitkottayam.ac.in').length).toBeGreaterThan(0);
   });
 
   it('shows the entries of the filter chosen last, even when an earlier filter answers later', async () => {

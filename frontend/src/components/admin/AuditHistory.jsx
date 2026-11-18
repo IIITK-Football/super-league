@@ -41,8 +41,11 @@ export function summarize(entry) {
   return keys.filter((k) => changes[k] !== null).map((k) => `${k}: ${show(changes[k])}`);
 }
 
-export function describeActor(entry, emails) {
-  if (entry.actor_id) return emails[entry.actor_id] || entry.actor_id;
+// A person is shown by the label from audit_actors (name, else email, else "Deleted or unavailable account"), never by
+// a raw id; until the labels arrive, or if they could not be loaded, a neutral placeholder stands in.
+export const UNKNOWN_ACCOUNT = 'Unknown account';
+export function describeActor(entry, labels) {
+  if (entry.actor_id) return labels[entry.actor_id] || UNKNOWN_ACCOUNT;
   if (entry.actor_role === 'service_role') return 'Server';
   return `System (${entry.actor_role})`;
 }
@@ -54,9 +57,11 @@ const ghostButton = 'flex items-center gap-1 rounded-lg border border-white/10 p
 export default function AuditHistory() {
   const [table, setTable] = useState('');
   const [actor, setActor] = useState('');
+  // Everyone in the whole history (not only the loaded page), from the dictator-only audit_actors function.
   const [actors, setActors] = useState([]);
+  const [actorsState, setActorsState] = useState('loading');
   const [entries, setEntries] = useState([]);
-  const [emails, setEmails] = useState({});
+  const [labels, setLabels] = useState({});
   const [loading, setLoading] = useState(true);
   const [more, setMore] = useState(false);
   const [error, setError] = useState('');
@@ -86,19 +91,28 @@ export default function AuditHistory() {
     const next = append ? [...entries, ...rows] : rows;
     setEntries(next);
     setMore(rows.length === PAGE_SIZE);
-    const unknown = [...new Set(rows.map((r) => r.actor_id).filter((id) => id && !emails[id]))];
-    if (unknown.length) {
-      const { data: profiles } = await supabase.from('user_profiles').select('id, email').in('id', unknown);
-      setEmails((known) => ({ ...known, ...Object.fromEntries((profiles || []).map((p) => [p.id, p.email])) }));
-    }
     if (request === latestLoad.current) setLoading(false);
   };
 
-  // The actor filter offers the people who appear in the recent history.
+  const loadActors = async () => {
+    setActorsState('loading');
+    const { data, error: err } = await supabase.rpc('audit_actors');
+    if (err) { setActorsState('error'); return; }
+    const list = data || [];
+    setActors(list);
+    setLabels(Object.fromEntries(list.map((a) => [a.actor_id, a.label])));
+    setActorsState('ready');
+  };
+  useEffect(() => { loadActors(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Someone new since the people list was loaded (for example after Refresh): reload the list, once per person.
+  const askedFor = useRef(new Set());
   useEffect(() => {
-    const ids = [...new Set(entries.map((e) => e.actor_id).filter(Boolean))];
-    setActors((current) => [...new Set([...current, ...ids])]);
-  }, [entries]);
+    if (actorsState !== 'ready') return;
+    const missing = entries.map((e) => e.actor_id).filter((id) => id && !labels[id] && !askedFor.current.has(id));
+    if (!missing.length) return;
+    missing.forEach((id) => askedFor.current.add(id));
+    loadActors();
+  }, [entries, labels, actorsState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [table, actor]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -119,10 +133,11 @@ export default function AuditHistory() {
         </select>
       </label>
       <label className={labelClass}>Changed by
-        <select aria-label="Changed by" value={actor} onChange={(e) => setActor(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">Anyone</option>
-          {actors.map((id) => <option key={id} value={id}>{emails[id] || id}</option>)}
+        <select aria-label="Changed by" value={actor} onChange={(e) => setActor(e.target.value)} disabled={actorsState !== 'ready'} className={`${inputClass} mt-1 normal-case tracking-normal`}>
+          <option value="">{actorsState === 'loading' ? 'Loading people...' : 'Anyone'}</option>
+          {actors.map((a) => <option key={a.actor_id} value={a.actor_id}>{a.label}</option>)}
         </select>
+        {actorsState === 'error' && <span role="status" className="mt-1 block normal-case tracking-normal text-amber-300">The people list could not be loaded, so the history cannot be filtered by person. <button type="button" onClick={loadActors} className="underline">Try again</button></span>}
       </label>
     </div>
 
@@ -133,7 +148,7 @@ export default function AuditHistory() {
       : <ol aria-label="Audit entries" className="space-y-2">{entries.map((e) => <li key={e.id} className="rounded-xl border border-white/5 bg-black/30 p-3 text-sm">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <time dateTime={e.occurred_at} className="text-xs tabular-nums text-zinc-400">{new Date(e.occurred_at).toLocaleString()}</time>
-          <span className="font-bold">{describeActor(e, emails)}</span>
+          <span className="font-bold">{describeActor(e, labels)}</span>
           <span className="rounded-full border border-white/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-zinc-300">{e.action}</span>
           <span className="text-zinc-300">{tableLabel(e.table_name)}</span>
           {e.record_id && <span className="font-mono text-[10px] text-zinc-500">{e.record_id}</span>}
