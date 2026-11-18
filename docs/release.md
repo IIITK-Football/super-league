@@ -136,3 +136,13 @@ After the migrations, the `staging` job runs, in order: `scripts/preview-seed.sh
 - **Production job fails:** each migration runs in a transaction, so a failing one changes nothing. Read the job log, fix forward with a new migration, and use `docs/rollback/` for the auth triggers if needed.
 - **Seed refuses to run:** the seed aborts if the database has more than 20 accounts outside its own fixtures. That is the safeguard against seeding real data; it should never trigger on staging.
 - **Rolling back:** database changes are forward-fix only, backed by your manual export. There is no automatic revert.
+
+## Player identity and season rosters (2026-11-18)
+
+- **What changes:** migrations `20261124000000_player_identity_rosters.sql` (expand) and `20261125000000_retire_team_bound_rosters.sql` (contract) turn players into reusable identities with season roster places and retire the Freshers member table. They also replace `captain_update_team_member` with `captain_update_roster_player`. The mapping is in `docs/decisions/SL-021-player-identity-mapping.md`.
+- **Before the `main` release:** run `scripts/sql/roster-mapping-dryrun.sql` on a **local restore** of production. It must list no blockers. Review each linked member's replaced values. The migration stops by itself on any blocker and changes nothing.
+- **Rehearsal (local only):** `pnpm db:rehearse-rosters --yes` rebuilds the local database from the pre-SL-021 schema, its seed and edge cases, applies both migrations and checks the result and the stop path, then resets normally.
+- **The anonymous probe** (`scripts/verify-rpc-closed.mjs`) now checks `captain_update_roster_player` and the two retired overloads:
+  - after these migrations it prints `roster player ... CLOSED`, and `RETIRED` for both old overloads;
+  - before them, the roster function does not exist yet, so it reports `INCONCLUSIVE`.
+- **The staging deploy's read-only check** `scripts/sql/verify-captain-rpc.sql` expects the new function and the old overloads gone.
