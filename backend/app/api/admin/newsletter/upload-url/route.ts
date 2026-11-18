@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { data: roleRecord } = await supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
-    if (!['editor', 'dictator', 'admin'].includes(roleRecord?.role)) return NextResponse.json({ error: 'Insufficient role' }, { status: 403 });
+    if (!['editor', 'dictator'].includes(roleRecord?.role)) return NextResponse.json({ error: 'Insufficient role' }, { status: 403 });
 
     const { filename, contentType } = await req.json();
 

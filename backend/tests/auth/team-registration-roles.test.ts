@@ -101,6 +101,15 @@ describe('POST /api/admin/team-registrations: captain role assignment', () => {
     expect(state.roles.p4).toBe('dictator');
   });
 
+  it('refuses a caller who holds only the legacy admin role, before writing anything', async () => {
+    state.roles[DICTATOR] = 'admin';
+    state.roles.p6 = 'default';
+    const res = await assign('p6');
+    expect(res.status).toBe(401);
+    expect(state.roles.p6).toBe('default');
+    expect(state.writes).toEqual([]);
+  });
+
   it('refuses an editor or a legacy admin, before writing anything', async () => {
     for (const role of ['editor', 'admin']) {
       state.roles.p5 = role;

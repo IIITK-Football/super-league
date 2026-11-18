@@ -17,7 +17,7 @@ async function getDictator(request: Request) {
   const { data: { user } } = await authClient.auth.getUser();
   if (!user) return null;
   const { data: role } = await supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
-  return role?.role === 'admin' || role?.role === 'dictator' ? user : null;
+  return role?.role === 'dictator' ? user : null; // the legacy admin role grants nothing
 }
 
 export async function POST(request: Request) {

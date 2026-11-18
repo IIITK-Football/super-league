@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
-      .in('role', ['admin', 'dictator', 'captain'])
+      .in('role', ['dictator', 'captain'])
       .limit(1)
       .single();
 
