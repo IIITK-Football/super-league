@@ -235,6 +235,66 @@ describe('work done', () => {
   });
 });
 
+describe('work rerecord', () => {
+  // A done item whose evidence CI rejects because it was recorded while a file was uncommitted.
+  function doneWithUncleanEvidence() {
+    const base = git('rev-parse', 'HEAD~1');
+    cli('done', 'SL-100', '--base', base);
+    commit('feat: evidence');
+    fillNarrative('SL-100');
+    cli('done', 'SL-100', '--base', base);
+    commit('feat: done');
+    const ev = JSON.parse(read('backlog/evidence/SL-100.json'));
+    write('backlog/evidence/SL-100.json', JSON.stringify({ ...ev, clean: false }));
+    commit('chore: evidence recorded with an uncommitted file');
+    out = [];
+    err = [];
+    ranGroups = [];
+    return base;
+  }
+
+  it('re-runs the groups on a clean tree and replaces unusable evidence, which CI then accepts', () => {
+    const base = doneWithUncleanEvidence();
+    expect(cli('check', '--base', base)).toBe(1);
+    out = [];
+    err = [];
+    expect(cli('rerecord', 'SL-100')).toBe(0);
+    expect(ranGroups).toEqual([['tooling']]);
+    const ev = JSON.parse(read('backlog/evidence/SL-100.json'));
+    expect(ev).toMatchObject({ clean: true, id: 'SL-100', base });
+    expect(read('backlog/items/SL-100.md')).toMatch(/status: done/);
+    commit('chore: re-record evidence');
+    out = [];
+    err = [];
+    expect(cli('check', '--base', base)).toBe(0);
+  });
+
+  it('refuses an item that is not done', () => {
+    expect(cli('rerecord', 'SL-100')).toBe(1);
+    expect(said()).toMatch(/only a done item's evidence can be re-recorded/);
+    expect(ranGroups).toEqual([]);
+  });
+
+  it('refuses a tree with any uncommitted tracked change, even an exempt one, and writes nothing', () => {
+    doneWithUncleanEvidence();
+    const before = read('backlog/evidence/SL-100.json');
+    write('backlog/items/SL-100.md', `${read('backlog/items/SL-100.md')}\nan uncommitted note\n`);
+    expect(cli('rerecord', 'SL-100')).toBe(1);
+    expect(said()).toMatch(/fully clean/);
+    expect(ranGroups).toEqual([]);
+    expect(read('backlog/evidence/SL-100.json')).toBe(before);
+  });
+
+  it('writes nothing when a required group fails', () => {
+    doneWithUncleanEvidence();
+    const before = read('backlog/evidence/SL-100.json');
+    groupResult = 'failed';
+    expect(cli('rerecord', 'SL-100')).toBe(1);
+    expect(said()).toMatch(/group tooling did not pass/);
+    expect(read('backlog/evidence/SL-100.json')).toBe(before);
+  });
+});
+
 describe('evidence after history was rewritten', () => {
   function finishedItem() {
     const base = git('rev-parse', 'HEAD~1');

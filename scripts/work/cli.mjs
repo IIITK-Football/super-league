@@ -266,6 +266,55 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
     return 0;
   }
 
+  // Re-record the evidence of a finished item whose evidence is unusable (for example recorded while an exempt file
+  // was uncommitted, so it is not from a clean tree). Only on a fully clean tree; it re-runs every required group and
+  // writes nothing unless all pass. Status, checks and the owner's attestations are not touched, and the walkthrough
+  // must still be complete.
+  if (cmd === 'rerecord') {
+    const { item, error } = need();
+    if (error) return error;
+    if (item.meta.status !== 'done') return fail(`${id}: status is ${item.meta.status}; only a done item's evidence can be re-recorded (finish an item with: pnpm work done ${id})`);
+    const unclean = gitLines(root, ['status', '--porcelain', '--untracked-files=no']);
+    if (unclean.length) return fail([`${id}: the tree must be fully clean (evidence is recorded against a commit); commit or stash:`, ...unclean.map((l) => `- ${l.slice(3)}`)]);
+    const evidencePath = join(root, `backlog/evidence/${id}.json`);
+    const previous = readJson(evidencePath, {});
+    const base = previous?.base ?? item.meta.startCommit;
+    if (!base) return fail(`${id}: no recorded base for this item's evidence`);
+    const groups = item.meta.groups ?? [];
+    const evidence = runGroups(groups, { root });
+    const problems = [];
+    if (evidence.clean !== true) problems.push(`${id}: the tree changed while the groups ran`);
+    for (const g of groups) if (!evidence.groups.some((x) => x.name === g && x.state === 'passed')) problems.push(`${id}: group ${g} did not pass`);
+    evidence.commandChecks = {};
+    for (const c of item.meta.checks ?? []) {
+      const [kind, ...restParts] = c.verify.split(':');
+      if (kind !== 'command') continue;
+      const r = runCommand(restParts.join(':'), { root });
+      evidence.commandChecks[c.id] = { exit: r.exit };
+      if (r.exit !== 0) problems.push(`${id}: ${c.id}: command failed (exit ${r.exit})`);
+    }
+    if (problems.length) return fail(['Evidence not re-recorded (nothing was written):', ...problems.map((p) => `- ${p}`)]);
+    const record = { ...evidence, id, base };
+    const walkthroughRel = item.meta.walkthrough ?? `docs/walkthroughs/${id}.md`;
+    const walkthroughPath = join(root, walkthroughRel);
+    if (!existsSync(walkthroughPath)) return fail(`${id}: the walkthrough ${walkthroughRel} is missing`);
+    const ctx = {
+      item,
+      bl,
+      evidence: record,
+      attestations: readJson(join(root, `backlog/attestations/${id}.json`), { attestations: [] }).attestations,
+      commits: gitLines(root, ['log', '--reverse', '--format=%H%x09%s', `${base}..HEAD`]).map((l) => ({ sha: l.split('\t')[0], subject: l.split('\t').slice(1).join('\t') })),
+      files: gitLines(root, ['diff', '--name-only', `${base}..HEAD`]),
+    };
+    const text = refreshGenerated(readFileSync(walkthroughPath, 'utf8'), ctx);
+    const open = walkthroughProblems(text, ctx);
+    if (open.length) return fail([`Evidence not re-recorded: the walkthrough ${walkthroughRel} is not complete:`, ...open.map((p) => `- ${p}`)]);
+    writeJson(evidencePath, record);
+    writeFileSync(walkthroughPath, text);
+    out(`${id}: evidence re-recorded on a clean tree. Commit the evidence and walkthrough together.`);
+    return 0;
+  }
+
   // Phase completion: the one place where validation is rigid and slow. Everything is checked up front, every active
   // test group runs once, and every item gets its evidence and walkthrough together. Run again after the walkthroughs
   // are written to finish the phase.
@@ -358,7 +407,7 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
     return 0;
   }
 
-  return fail('usage: work {status [id] | approve id | ready id | start id | attest id check [note] | done id [--base ref] | check [--base ref] | audit}');
+  return fail('usage: work {status [id] | approve id | ready id | start id | attest id check [note] | done id [--base ref] | rerecord id | check [--base ref] | audit}');
 }
 
 if (process.argv[1] && join(process.argv[1]) === fileURLToPath(import.meta.url)) {

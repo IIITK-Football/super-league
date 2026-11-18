@@ -20,6 +20,8 @@ pnpm work start SL-xxx             ready -> in-progress
 pnpm work attest SL-xxx C2 [note]  OWNER: attest a manual check
 pnpm work done SL-xxx [--base <ref>]  Definition of Done: runs the item's groups and checks, records
                                    evidence, writes docs/walkthroughs/SL-xxx.md, marks it done when complete
+pnpm work rerecord SL-xxx          re-record a done item's evidence on a fully clean tree (re-runs its groups;
+                                   status, checks and attestations are unchanged)
 pnpm work check [--base <ref>]     what CI runs
 ```
 
