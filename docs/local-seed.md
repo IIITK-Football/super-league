@@ -18,7 +18,7 @@ pnpm exec supabase test db --local   # runs tests/database/*.test.sql (pgTAP)
 | Users | 50 accounts: `lamb@` (dictator), `river@` and `sydney@` (captains, each assigned to a team entry), `diana@` (editor) and 46 `fanNN@` default accounts for leaderboard/pagination volume |
 | Registrations | 2 Freshers team-builder registrations with 16 members |
 | Predictions | 672 division predictions; World Cup fantasy: 16 teams, 64 players, 40 matches, 160 predictions, group/knockout/award picks, 50 leaderboard rows |
-| Content | 24 news articles, 6 polls with options |
+| Content | 24 news articles (the unused polls feature was removed in `20261122000000`) |
 
 Every table in the current schema receives rows. Tables for the target model (divisions/seasons, match events, lineups, etc.) do not exist yet and are seeded when their migrations land (Phase 2).
 

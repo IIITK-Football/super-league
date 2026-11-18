@@ -32,3 +32,7 @@ These slugs and names are only the initial data. Nothing in the schema or code d
 - `public.backfill_legacy_divisions()` is idempotent. The migration calls it to backfill existing hosted data, and `seed.sql` calls it after the synthetic legacy rows are inserted, so local, staging and production all run the same code.
 - `public.legacy_division_map` records the value → division → season mapping. It exists only for the expand period and is removed with the legacy columns (SL-102).
 - While legacy writers still exist, triggers fill whichever side of a row is missing (`division` ↔ `season_id`), and `public.division_model_drift()` must return no rows.
+
+## Contract (owner instruction 2026-11-19)
+
+Production has only Super League, WSL and Freshers, and all their data belongs to 2026. After every reader and writer was ported, `20261122000000_retire_legacy_division_paths.sql` removed the legacy strings, the map, the triggers and the backfill. On a database that still holds legacy rows (production), the migrations run in order: `20261119000000` backfills, `20261121000000` copies flairs, and `20261122000000` drops the old paths, but only after its guards confirm that every match and registration has a season, the drift report is empty, every flair was copied, and polls hold no real data. Otherwise it stops and changes nothing. `public.season_label` is kept. New seasons are created by dictators, and the seed inserts divisions and seasons directly.

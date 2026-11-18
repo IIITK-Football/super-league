@@ -18,7 +18,7 @@ This is the code-based starting point observed during repository review on 15 No
 
 ### 1.2 Data and behavior split
 
-- The current baseline has 20 public tables, 3 views, 10 functions, and 44 policies. It stores a division on teams, matches, registrations, and polls, but has no canonical `divisions` or `seasons` records and no configurable page/feature model.
+- The current baseline has 20 public tables, 3 views, 10 functions, and 44 policies. It stored a division string on teams, matches, registrations, and polls (retired in SL-020, replaced by `divisions`, `seasons` and `team_entries`), but had no canonical `divisions` or `seasons` records and no configurable page/feature model.
 - The current schema holds match scorers/assists/own goals in JSON fields and also records goals in a separate `goals` table. These parallel representations can disagree and make score/stat/fantasy calculations harder to trust.
 - `players` are associated directly with a team. Freshers also has a separate `team_members` registration roster. There is no single account-linked player identity that persists across teams, divisions, and seasons.
 - The schema has no first-class match card events, team lineups/starting positions, bracket-to-match mappings, or division-level home presentation settings.

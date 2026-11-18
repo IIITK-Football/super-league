@@ -84,3 +84,5 @@ Staging is created **empty** and filled by CI. No hosted migration is run by any
 - Per-person decision for each legacy `admin` (from the local-only review list), recorded before the role migration runs. This is a gate for the SL-024 role migration.
 
 Resolved 2026-11-16: `inter` (no data, no division created), `editor` (preserved as editor), `freshers_fixtures` (absent on hosted).
+
+**Owner exception to §3 rule 4 (2026-11-19):** the contract step for divisions ships in the same release as the expand step (`20261119000000` → `20261122000000`), instead of waiting for SL-102. The owner stated that production has only the three divisions, with 2026 data, and that `polls`, `poll_options` and `league_schedule` are empty. The contract migration enforces both statements as guards: it refuses to run unless every record survives and polls hold no real data. Release order is unchanged: local, then staging, then a reviewed `main` release with a backup or PITR point first.
