@@ -108,7 +108,7 @@ export async function loadRoster(registration) {
 
 export function TeamBuilder() {
     const { user, role } = useAuth();
-    const isDictatorPreview = role === 'dictator' || role === 'admin';
+    const isDictatorPreview = role === 'dictator';
     const [registration, setRegistration] = useState(null);
     const [registrations, setRegistrations] = useState([]);
     const [players, setPlayers] = useState([]);

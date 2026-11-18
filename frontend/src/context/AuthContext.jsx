@@ -3,6 +3,12 @@ import { supabase } from '../lib/supabase';
 import { createAuthApi } from '../lib/authApi';
 import { COLLEGE_EMAIL_MESSAGE, isCollegeEmail } from '../lib/authRules';
 
+// The role the app acts on for a stored role. The legacy stored role admin grants nothing: such an account is an
+// ordinary user until a dictator gives it a reviewed role.
+export function appRole(stored) {
+  return stored && stored !== 'admin' ? stored : 'default';
+}
+
 const AuthContext = createContext({});
 
 export function AuthProvider({ children }) {
@@ -77,7 +83,7 @@ export function AuthProvider({ children }) {
       .select('role')
       .eq('user_id', user.id)
       .maybeSingle();
-    setRole(roleRecord?.role === 'admin' ? 'dictator' : roleRecord?.role || 'default');
+    setRole(appRole(roleRecord?.role));
     setLoading(false);
   };
 

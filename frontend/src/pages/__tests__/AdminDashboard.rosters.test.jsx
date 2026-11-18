@@ -9,7 +9,10 @@ const state = { role: 'dictator' };
 vi.mock('../../lib/supabase', () => ({
   supabase: {
     from: () => {
-      const b = { select: () => b, eq: () => b, in: () => b, maybeSingle: async () => ({ data: state.role ? { role: state.role } : null, error: null }) };
+      const want = {};
+      // Like the Data API: only a stored role matching the query's role filter is returned.
+      const b = { select: () => b, eq: (c, v) => { if (c === 'role') want.eq = v; return b; }, in: (c, v) => { if (c === 'role') want.in = v; return b; },
+        maybeSingle: async () => ({ data: state.role && (!want.eq || want.eq === state.role) && (!want.in || want.in.includes(state.role)) ? { role: state.role } : null, error: null }) };
       return b;
     },
   },
@@ -36,13 +39,11 @@ describe('AdminDashboard Teams & Rosters tab', () => {
     expect(await screen.findByText('rosters panel')).toBeTruthy();
   });
 
-  it('is not offered to the legacy admin label, which keeps the captains tab', async () => {
+  it('is not offered to a legacy admin, who gets no dashboard tab at all', async () => {
     state.role = 'admin';
     render(<AdminDashboard />);
-    expect(await screen.findByText('live panel')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /teams & rosters/i })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /captains/i }));
-    expect(await screen.findByText('captains panel')).toBeTruthy();
+    expect(await screen.findByText(/403 forbidden/i)).toBeTruthy();
+    for (const tab of [/teams & rosters/i, /captains/i, /live/i, /access control/i]) expect(screen.queryByRole('button', { name: tab })).toBeNull();
   });
 
   it('no longer offers the old Players tab to anyone', async () => {

@@ -8,7 +8,10 @@ const state = { role: 'dictator' };
 vi.mock('../../lib/supabase', () => ({
   supabase: {
     from: () => {
-      const b = { select: () => b, eq: () => b, in: () => b, maybeSingle: async () => ({ data: state.role ? { role: state.role } : null, error: null }) };
+      const want = {};
+      // Like the Data API: only a stored role matching the query's role filter is returned.
+      const b = { select: () => b, eq: (c, v) => { if (c === 'role') want.eq = v; return b; }, in: (c, v) => { if (c === 'role') want.in = v; return b; },
+        maybeSingle: async () => ({ data: state.role && (!want.eq || want.eq === state.role) && (!want.in || want.in.includes(state.role)) ? { role: state.role } : null, error: null }) };
       return b;
     },
   },
@@ -32,10 +35,11 @@ describe('AdminDashboard Audit History tab', () => {
     expect(await screen.findByText('audit panel')).toBeTruthy();
   });
 
-  it('is not offered to the legacy admin label', async () => {
+  it('is not offered to a legacy admin, who gets no dashboard at all', async () => {
     state.role = 'admin';
     render(<AdminDashboard />);
-    expect(await screen.findByText('live panel')).toBeTruthy();
+    expect(await screen.findByText(/403 forbidden/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /audit history/i })).toBeNull();
+    expect(screen.queryByText('live panel')).toBeNull();
   });
 });
