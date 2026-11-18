@@ -86,7 +86,7 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
     conn = connection();
     admin = createClient(conn.url, conn.secret, opts);
     made.division = must(await admin.from('divisions').insert({ slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
-    made.season = must(await admin.from('seasons').insert({ division_id: made.division, slug: '2026', name: `${tag} 2026` }).select('id').single()).id;
+    made.season = must(await admin.from('seasons').insert({ division_id: made.division, slug: '2026', name: `${tag} 2026`, is_current: true }).select('id').single()).id; // captains edit current-season rosters only
     for (const name of ['Own', 'Other']) {
       // Branded, so the builder goes straight to the roster.
       const team = must(await admin.from('teams').insert({ name: `${tag} ${name}`, logo_url: 'https://example.invalid/logo.png', team_color: '#112233' }).select('id').single()).id;

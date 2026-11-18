@@ -33,5 +33,7 @@ describe('rosterPlayerRpcArgs', () => {
       p_image_url: null,
     });
     expect(rosterPlayerRpcArgs({ id: 'm1', overallRating: 72 }, attributes, () => 61).p_overall_rating).toBe(72);
+    expect(rosterPlayerRpcArgs({ id: 'm1', jerseyNumber: 0 }, attributes, () => 61).p_jersey_number).toBe(0); // 0 is a real number
+    expect(rosterPlayerRpcArgs({ id: 'm1', jerseyNumber: '0' }, attributes, () => 61).p_jersey_number).toBe(0);
   });
 });

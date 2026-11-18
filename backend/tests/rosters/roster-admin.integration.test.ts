@@ -13,7 +13,7 @@ const tag = `roster${Date.now().toString(36)}`;
 let admin: SupabaseClient;
 let anonClient: SupabaseClient;
 const users: string[] = [];
-const made = { seasons: [] as string[], teams: [] as string[], entries: [] as string[], matches: [] as string[], regs: [] as string[] };
+const made = { division: '', seasons: [] as string[], teams: [] as string[], entries: [] as string[], matches: [] as string[], regs: [] as string[] };
 const as: Record<string, { id: string; token: string; db: SupabaseClient }> = {};
 
 async function signIn(role: string, c: ReturnType<typeof clients>) {
@@ -58,9 +58,11 @@ beforeAll(async () => {
   anonClient = c.anon();
   for (const role of ['dictator', 'captain', 'admin', 'editor', 'default']) as[role] = await signIn(role, c);
 
-  const wsl = must(await admin.from('divisions').select('id').eq('slug', 'wsl').single()).data!;
+  // The test's own division: season A is its current season (captains edit only current-season rosters).
+  made.division = must(await admin.from('divisions').insert({ slug: tag, name: `${tag} Division` }).select('id').single()).data!.id;
   made.seasons = must(await admin.from('seasons').insert([
-    { division_id: wsl.id, slug: `${tag}-a`, name: `${tag} A` }, { division_id: wsl.id, slug: `${tag}-b`, name: `${tag} B` },
+    { division_id: made.division, slug: `${tag}-a`, name: `${tag} A`, is_current: true },
+    { division_id: made.division, slug: `${tag}-b`, name: `${tag} B`, is_current: false },
   ]).select('id')).data!.map((s) => s.id);
   made.teams = must(await admin.from('teams').insert([{ name: `${tag} One`, short_name: 'ONE' }, { name: `${tag} Two`, short_name: 'TWO' }]).select('id')).data!.map((t) => t.id);
   made.entries = must(await admin.from('team_entries').insert([
@@ -87,6 +89,7 @@ afterAll(async () => {
   await admin.from('team_entries').delete().in('season_id', made.seasons);
   await admin.from('teams').delete().in('id', made.teams);
   await admin.from('seasons').delete().in('id', made.seasons);
+  if (made.division) await admin.from('divisions').delete().eq('id', made.division);
   for (const id of users) await admin.auth.admin.deleteUser(id);
 }, 60000);
 

@@ -50,6 +50,7 @@ export function describeError(error) {
   if (error.code === '23505' && /jersey/.test(text)) return 'That jersey number is already taken on this team.';
   if (error.code === '23505' && /team_season|team_entries/.test(text)) return 'This team is already in the season.';
   if (error.code === '23503' && /goals or assists/.test(text)) return 'This player has goals or assists this season, so their place on the roster is kept.';
+  if (error.code === '23503' && /player is kept/.test(text)) return error.message;
   if (error.code === '23503') return 'This player still has a roster place or match history, so the player is kept.';
   return error.message || 'Something went wrong. Try again.';
 }
@@ -94,6 +95,7 @@ export default function ManageRosters() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [contactsLoaded, setContactsLoaded] = useState(false);
 
   const report = (err, success) => {
     if (err) { setMessage(''); setError(describeError(err)); return false; }
@@ -151,13 +153,16 @@ export default function ManageRosters() {
     const { data: places, error: err } = await supabase.from('roster_memberships').select('id, player_id, team_entry_id, season_id, jersey_number, position').eq('team_entry_id', eId);
     if (err) { setError(describeError(err)); isLoading('roster', false); return; }
     const ids = (places || []).map((p) => p.player_id);
-    const [{ data: players, error: playersError }, { data: privates }] = ids.length
+    const [{ data: players, error: playersError }, { data: privates, error: privatesError }] = ids.length
       ? await Promise.all([
         supabase.from('players').select('id, first_name, last_name, image_url, overall_rating, attributes').in('id', ids),
         supabase.from('player_private_details').select('player_id, email').in('player_id', ids),
       ])
-      : [{ data: [], error: null }, { data: [] }];
+      : [{ data: [], error: null }, { data: [], error: null }];
     if (playersError) setError(describeError(playersError));
+    // Without the contact details the form cannot show the email, so saving must leave it alone.
+    if (privatesError) setError(`Contact details could not be loaded (${describeError(privatesError)}); saving will not change any email.`);
+    setContactsLoaded(!privatesError);
     const byId = new Map((players || []).map((p) => [p.id, p]));
     const emails = new Map((privates || []).map((p) => [p.player_id, p.email]));
     setRoster((places || []).map((p) => ({ ...p, player: byId.get(p.player_id) || null, email: emails.get(p.player_id) || '' }))
@@ -203,12 +208,10 @@ export default function ManageRosters() {
     const name = newTeamName.trim();
     if (name.length < 2 || name.length > 60) { fail('A team name needs 2 to 60 characters.'); return; }
     setBusy('new-team');
-    const { data: team, error: err } = await supabase.from('teams')
-      .insert({ name, short_name: name.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() || null }).select('id').single();
-    if (err) { setBusy(''); report(err); return; }
-    const { error: entryError } = await supabase.from('team_entries').insert({ team_id: team.id, season_id: seasonId });
+    // One step in the database: the team and its season entry are created together, or neither is.
+    const { error: err } = await supabase.rpc('create_team_in_season', { p_season_id: seasonId, p_name: name });
     setBusy('');
-    if (report(entryError, `${name} created and added to ${season?.name}.`)) { setNewTeamName(''); loadEntries(seasonId); }
+    if (report(err, `${name} created and added to ${season?.name}.`)) { setNewTeamName(''); loadEntries(seasonId); }
   };
 
   // Players ----------------------------------------------------------------------------------------------------
@@ -238,9 +241,10 @@ export default function ManageRosters() {
     if (card.error || !card.data?.length) { setBusy(''); report(card.error || { code: '42501' }); return; }
     const spot = await supabase.from('roster_memberships').update({ jersey_number: v.jersey_number, position: v.position }).eq('id', place.id).select('id');
     if (spot.error || !spot.data?.length) { setBusy(''); report(spot.error || { code: '42501' }); return; }
-    const contact = v.email
-      ? await supabase.from('player_private_details').upsert({ player_id: place.player_id, email: v.email }, { onConflict: 'player_id' })
-      : await supabase.from('player_private_details').delete().eq('player_id', place.player_id);
+    const contact = !contactsLoaded ? { error: null }
+      : v.email
+        ? await supabase.from('player_private_details').upsert({ player_id: place.player_id, email: v.email }, { onConflict: 'player_id' })
+        : await supabase.from('player_private_details').delete().eq('player_id', place.player_id);
     setBusy('');
     if (report(contact.error, `${v.first_name} saved.`)) loadRoster(entryId);
   };
@@ -293,14 +297,11 @@ export default function ManageRosters() {
     const name = place.player ? `${place.player.first_name} ${place.player.last_name}` : 'this player';
     if (!window.confirm(`Delete ${name} for good? This only works for a player with no other season and no match history.`)) return;
     setBusy(`delete-${place.id}`);
-    const removed = await supabase.from('roster_memberships').delete().eq('id', place.id).select('id');
-    if (removed.error || !removed.data?.length) { setBusy(''); report(removed.error || { code: '42501' }); return; }
-    const { data, error: err } = await supabase.from('players').delete().eq('id', place.player_id).select('id');
+    // One step in the database: the roster place and the player go together, or nothing changes.
+    const { error: err } = await supabase.rpc('delete_unplayed_player', { p_player_id: place.player_id });
     setBusy('');
+    if (!report(err, `${name} deleted.`)) return;
     setSelectedPlace(''); setEditing(null); loadRoster(entryId);
-    if (err?.code === '23503') { fail(`${name} was removed from this roster but kept, because they play in another season or have match history.`); return; }
-    if (!err && !data?.length) { report({ code: '42501' }); return; }
-    report(err, `${name} deleted.`);
   };
 
   const findPlayers = async (event) => {

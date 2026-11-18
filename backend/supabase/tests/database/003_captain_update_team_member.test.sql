@@ -7,7 +7,7 @@
 -- It pins its search_path; anonymous callers and PUBLIC cannot execute it. Roles follow
 -- docs/decisions/SL-003-role-capability-matrix.md. Editor, normal user and legacy admin are tested.
 BEGIN;
-SELECT plan(37);
+SELECT plan(40);
 
 -- Fixtures -------------------------------------------------------------------------------------------------
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -126,6 +126,14 @@ SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8
   'CB', 5, 70, '{}'::jsonb, 'x')$$,
   'P0001', 'Player is not part of your assigned roster', 'the captain''s assignment does not reach the same team in another season');
 
+-- A captain of the same team in an earlier, no longer current season cannot reach the player's shared card.
+INSERT INTO public.team_registrations (id, captain_id, team_name, season_id, team_id) VALUES
+  ('d0000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000008', 'RPC Team A old', 'f9000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001');
+SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000008', 'a1000000-0000-4000-8000-000000000005',
+  'CB', 5, 70, '{}'::jsonb, 'stale')$$,
+  'P0001', 'Only the current season''s roster can be edited by its captain', 'a captain edits only the current season''s roster');
+SELECT isnt((SELECT image_url FROM public.players WHERE id = 'e0000000-0000-4000-8000-000000000002'), 'stale', 'the shared card is unchanged');
+
 -- Other teams, other roles ---------------------------------------------------------------------------------
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000002', 'a1000000-0000-4000-8000-000000000001',
   'GK', 1, 99, '{}'::jsonb, 'stolen')$$,
@@ -200,7 +208,9 @@ SELECT is((SELECT count(*) FROM public.roster_memberships WHERE id = 'a1000000-0
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001',
   'XX', 9, 80, '{}'::jsonb, NULL)$$, 'P0001', 'Choose a valid player position', 'an unknown position is rejected');
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001',
-  'ST', 0, 80, '{}'::jsonb, NULL)$$, 'P0001', 'Jersey number must be between 1 and 99', 'a jersey number outside 1-99 is rejected');
+  'ST', 100, 80, '{}'::jsonb, NULL)$$, 'P0001', 'Jersey number must be between 0 and 99', 'a jersey number outside 0-99 is rejected');
+SELECT lives_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001',
+  'ST', 0, 80, '{}'::jsonb, NULL)$$, 'jersey number 0 is allowed, as the roster table allows it');
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001',
   'ST', 9, 100, '{}'::jsonb, NULL)$$, 'P0001', 'Overall rating must be between 1 and 99', 'a rating outside 1-99 is rejected');
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001',

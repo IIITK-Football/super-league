@@ -86,6 +86,17 @@ function from(table) {
 const rpc = vi.fn(async (name, args) => {
   db.calls.push({ rpc: name, args });
   if (db.fail[`rpc.${name}`]) return { data: null, error: db.fail[`rpc.${name}`] };
+  if (name === 'create_team_in_season') {
+    const team = `t-${nextId++}`;
+    db.tables.teams.push({ id: team, name: args.p_name });
+    db.tables.team_entries.push({ id: `e-${nextId++}`, team_id: team, season_id: args.p_season_id });
+    return { data: team, error: null };
+  }
+  if (name === 'delete_unplayed_player') {
+    db.tables.roster_memberships = db.tables.roster_memberships.filter((m) => m.player_id !== args.p_player_id);
+    db.tables.players = db.tables.players.filter((p) => p.id !== args.p_player_id);
+    return { data: null, error: null };
+  }
   const id = `p-${nextId++}`;
   db.tables.players.push({ id, first_name: args.p_first_name, last_name: args.p_last_name, overall_rating: args.p_overall_rating, attributes: args.p_attributes });
   const entry = db.tables.team_entries.find((e) => e.id === args.p_team_entry_id);
@@ -187,10 +198,9 @@ describe('teams in the season', () => {
     pick('New team name', 'Delta Rovers');
     fireEvent.click(screen.getByRole('button', { name: /create team/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Delta Rovers created and added to 2026/));
-    expect(writes().map((w) => [w.table, w.op, w.payload])).toEqual([
-      ['teams', 'insert', { name: 'Delta Rovers', short_name: 'DELT' }],
-      ['team_entries', 'insert', { team_id: expect.any(String), season_id: 's1' }],
-    ]);
+    // One database call creates the team and its season entry together.
+    expect(writes()).toEqual([{ rpc: 'create_team_in_season', args: { p_season_id: 's1', p_name: 'Delta Rovers' } }]);
+    await waitFor(() => expect(within(screen.getByLabelText('Team')).getByRole('option', { name: 'Delta Rovers' })).toBeTruthy());
   });
 });
 
@@ -260,6 +270,36 @@ describe('players', () => {
     fireEvent.click(screen.getByRole('button', { name: /remove from roster/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/goals or assists this season/));
     expect(db.tables.roster_memberships).toHaveLength(1);
+  });
+
+  it('deletes a player who never played in one database call, and explains a refusal without changing the form', async () => {
+    db.fail['rpc.delete_unplayed_player'] = { code: '23503', message: 'This player has match history, so the player is kept' };
+    await openTeam();
+    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    pick('Player', 'm1');
+    fireEvent.click(screen.getByRole('button', { name: /delete player/i }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/match history, so the player is kept/));
+    expect(db.tables.roster_memberships).toHaveLength(1);
+    expect(screen.getByLabelText('Edit first name').value).toBe('Ada');
+    delete db.fail['rpc.delete_unplayed_player'];
+    fireEvent.click(screen.getByRole('button', { name: /delete player/i }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada Striker deleted/));
+    expect(writes().filter((w) => w.rpc)).toEqual([
+      { rpc: 'delete_unplayed_player', args: { p_player_id: 'p1' } },
+      { rpc: 'delete_unplayed_player', args: { p_player_id: 'p1' } },
+    ]);
+    expect(writes().filter((w) => w.table)).toEqual([]); // never a separate roster delete
+  });
+
+  it('leaves the private email alone when contact details could not be loaded', async () => {
+    db.fail['player_private_details.select'] = { message: 'permission denied' };
+    await openTeam();
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/saving will not change any email/));
+    pick('Player', 'm1');
+    pick('Edit last name', 'Finisher');
+    fireEvent.click(screen.getByRole('button', { name: /save player/i }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada saved/));
+    expect(writes().map((w) => w.table)).toEqual(['players', 'roster_memberships']);
   });
 
   it('finds an existing player from another season and adds them to this roster', async () => {

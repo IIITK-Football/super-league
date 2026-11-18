@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ImagePlus, Loader2, Save, Shield, UploadCloud, Users, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -49,7 +49,7 @@ const fromMember = (member) => {
         id: member.id,
         fullName: member.name || [member.first_name, member.last_name].filter(Boolean).join(' '),
         position: member.position || '',
-        jerseyNumber: member.jersey_number || '',
+        jerseyNumber: member.jersey_number ?? '',
         imageUrl: member.image_url || '',
         preferredFoot: bio.preferredFoot || 'Right',
         playStyleId: getPlayStyleId(playStyle.name),
@@ -126,6 +126,7 @@ export function TeamBuilder() {
     const [brandingModalOpen, setBrandingModalOpen] = useState(false);
     const [brandingError, setBrandingError] = useState('');
     const [brandingSuccess, setBrandingSuccess] = useState('');
+    const latestRegistration = useRef(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -179,9 +180,11 @@ export function TeamBuilder() {
         const selected = registrations.find((item) => item.id === registrationId) || null;
         setRegistration(selected);
         setPlayers([]);
+        // Only the latest choice may fill the roster: a slower answer for an earlier team is ignored.
+        latestRegistration.current = registrationId;
         loadRoster(selected)
-            .then((roster) => setPlayers(roster.map(fromMember)))
-            .catch((rosterError) => setError(rosterError.message || 'Could not load the roster.'));
+            .then((roster) => { if (latestRegistration.current === registrationId) setPlayers(roster.map(fromMember)); })
+            .catch((rosterError) => { if (latestRegistration.current === registrationId) setError(rosterError.message || 'Could not load the roster.'); });
         setActivePlayer(0);
         setActiveTab('basic');
         setTeamLogoFile(null);
@@ -494,7 +497,7 @@ export function TeamBuilder() {
                     {activeTab === 'basic' && <div className="team-builder-grid team-builder-basic">
                         <label>Player<select value={activePlayer} onChange={(event) => setActivePlayer(Number(event.target.value))}>{players.map((player, index) => <option key={player.id} value={index}>{player.fullName}</option>)}</select></label>
                         <label>Position (Mandatory)<select value={currentPlayer.position} onChange={(event) => updatePlayer('position', event.target.value)}><option value="">Choose position</option>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
-                        <label>Jersey number<input type="number" min="1" max="99" value={currentPlayer.jerseyNumber} onChange={(event) => updatePlayer('jerseyNumber', event.target.value)} /></label>
+                        <label>Jersey number<input type="number" min="0" max="99" value={currentPlayer.jerseyNumber} onChange={(event) => updatePlayer('jerseyNumber', event.target.value)} /></label>
                         <label>Overall rating<input type="number" min="1" max="99" value={currentPlayer.overallRating} onChange={(event) => updatePlayer('overallRating', event.target.value)} /></label>
                         
                         <div className="col-span-2 space-y-2">

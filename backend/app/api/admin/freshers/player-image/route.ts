@@ -4,7 +4,8 @@ import { ImageError, portraitKey, readPortrait, uploadPortrait } from '@/lib/ros
 
 export const runtime = 'nodejs';
 
-// A captain (or a dictator) uploads the portrait for a player on their roster: multipart { membership_id, image }.
+// A captain (or a dictator) uploads the portrait for a player on their current-season roster: multipart
+// { membership_id, image }.
 // The same rule as captain_update_roster_player applies: the captain role AND the team's registration for that
 // season, or the dictator role. The upload returns the URL; the team builder then saves it on the player's card
 // through the captain RPC. The key is the player's id, never an email.
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
 
     const { data: place, error: placeError } = await supabase
       .from('roster_memberships')
-      .select('player_id, season_id, entry:team_entries ( team_id )')
+      .select('player_id, season_id, entry:team_entries ( team_id ), season:seasons ( is_current )')
       .eq('id', membershipId)
       .maybeSingle();
     if (placeError) throw placeError;
@@ -29,7 +30,9 @@ export async function POST(request: Request) {
     const { data: roles } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
     const held = new Set((roles ?? []).map((r) => r.role));
     let allowed = held.has('dictator');
-    if (!allowed && place && teamId && held.has('captain')) {
+    // The portrait belongs to the player's shared card, so a captain changes it only through the current season.
+    const current = (place?.season as { is_current?: boolean } | null)?.is_current === true;
+    if (!allowed && place && teamId && current && held.has('captain')) {
       const { data: registration } = await supabase
         .from('team_registrations')
         .select('id')

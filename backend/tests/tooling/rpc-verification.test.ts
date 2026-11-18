@@ -75,7 +75,7 @@ describe('against the local stack (this project, 127.0.0.1:54321)', () => {
     const keys = localKeys();
     const out = await probeAll(keys.url, keys.publishable);
     expect(out.map((o: any) => `${o.overload}:${o.verdict}`)).toEqual(['roster player:closed', '7-argument (retired):retired', '5-argument (retired):retired']);
-  });
+  }, 20000); // three sequential requests to the local API; the default 5 s is tight under a full-suite run
 
   it('the command prints one verdict per function, never prints the key, and refuses to run without arguments', () => {
     const keys = localKeys();
