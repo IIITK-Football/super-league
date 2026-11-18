@@ -259,6 +259,29 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
       record('The current season switches in one step and a season section is configured; an account without the role cannot switch it', 'FAIL', 'no seasons to switch');
     }
 
+    // Audit history: the dictator's division insert is recorded with them as the actor, only dictators can read the
+    // history, and nobody can change or remove it, the server key included.
+    const auditName = 'A dictator\'s change is recorded in the audit history with them as the actor';
+    const entry = divisionId
+      ? await asUser(managerToken)(`/rest/v1/audit_log?table_name=eq.divisions&record_id=eq.${divisionId}&action=eq.insert&select=id,actor_id`)
+      : null;
+    const auditRow = entry?.ok ? entry.data?.[0] : null;
+    record(auditName, auditRow?.actor_id === dictator.id ? 'PASS' : 'FAIL',
+      auditRow ? (auditRow.actor_id === dictator.id ? 'recorded' : 'recorded with another actor') : (entry ? message(entry) : 'no division was created'));
+    const auditByUser = await asUser(userToken)('/rest/v1/audit_log?select=id&limit=1');
+    const auditByAnon = await anon('/rest/v1/audit_log?select=id&limit=1');
+    const auditHidden = [auditByUser, auditByAnon].every((r) => !r.ok || (r.data ?? []).length === 0);
+    record('The audit history is hidden from visitors and accounts without the dictator role', auditHidden ? 'PASS' : 'FAIL', auditHidden ? 'hidden' : 'audit entries were readable');
+    if (auditRow) {
+      await admin(`/rest/v1/audit_log?id=eq.${auditRow.id}`, { method: 'PATCH', prefer: 'return=minimal', body: { action: 'delete' } });
+      await admin(`/rest/v1/audit_log?id=eq.${auditRow.id}`, { method: 'DELETE' });
+      const kept = await admin(`/rest/v1/audit_log?id=eq.${auditRow.id}&select=action`);
+      const unchanged = kept.data?.[0]?.action === 'insert';
+      record('Nobody can change or remove audit history, the server key included', unchanged ? 'PASS' : 'FAIL', unchanged ? 'unchanged' : 'the entry was changed or removed');
+    } else {
+      record('Nobody can change or remove audit history, the server key included', 'FAIL', 'no audit entry to test');
+    }
+
     const seenByUser = await asUser(userToken)(`/rest/v1/divisions?slug=eq.${tag}&select=id`);
     const seenByAnon = await anon(`/rest/v1/divisions?slug=eq.${tag}&select=id`);
     const hiddenOk = seenByUser.ok && seenByAnon.ok && (seenByUser.data ?? []).length === 0 && (seenByAnon.data ?? []).length === 0;

@@ -12,10 +12,13 @@ const SECRET = ['sb', 'secret', 'NEVER_PRINT_THIS_secret_0123456789'].join('_');
 const PUBLISHABLE = ['sb', 'publishable', 'NEVER_PRINT_THIS_key_abcdef'].join('_');
 const goodEnv = () => ({ SUPABASE_URL: `https://${STAGING}.supabase.co`, SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE, SUPABASE_SECRET_KEY: SECRET, ALLOW_REMOTE_SUPABASE: 'true' });
 
-type Opts = { captchaEnforced?: boolean; openRpc?: boolean; failAtRpc?: boolean; leakEmail?: boolean; openDivisions?: boolean; brokenCurrentSeason?: boolean };
+type Opts = { captchaEnforced?: boolean; openRpc?: boolean; failAtRpc?: boolean; leakEmail?: boolean; openDivisions?: boolean; brokenCurrentSeason?: boolean;
+  noAudit?: boolean; openAudit?: boolean; editableAudit?: boolean };
 
 function fakeStaging(opts: Opts = {}) {
   const { captchaEnforced = true, openRpc = false, failAtRpc = false, openDivisions = false, brokenCurrentSeason = false } = opts;
+  // The append-only audit history: division inserts are recorded with the signed-in actor (absent with noAudit).
+  const auditLog = new Map<string, { id: string; actor_id: string | null; table_name: string; record_id: string; action: string }>();
   const users = new Map<string, { id: string; email: string }>();
   const roles = new Map<string, string>();
   const regs = new Map<string, { id: string; captain_id: string }>();
@@ -170,12 +173,25 @@ function fakeStaging(opts: Opts = {}) {
         if (!manager) return json(403, rls);
         const id = `d${++n}`;
         divisions.set(id, { id, slug: body.slug, visibility: body.visibility ?? 'public' });
+        if (!opts.noAudit) { const a = `a${++n}`; auditLog.set(a, { id: a, actor_id: me, table_name: 'divisions', record_id: id, action: 'insert' }); }
         return json(201, [{ id }]);
       }
       if (method === 'DELETE') {
         for (const d of [...divisions.values()]) if (manager && match(d)) divisions.delete(d.id);
         return new Response(null, { status: 204 });
       }
+    }
+    if (p === '/rest/v1/audit_log') {
+      const filters = [...u.searchParams.entries()].filter(([k]) => !['select', 'limit'].includes(k));
+      const found = [...auditLog.values()].filter((r: any) => filters.every(([k, v]) => !v.startsWith('eq.') || String(r[k]) === v.slice(3)));
+      const refused = json(401, { code: '42501', message: 'permission denied for table audit_log' });
+      if (method === 'GET') {
+        if (!headers.authorization && !isAdmin && !opts.openAudit) return refused;
+        return json(200, isAdmin || opts.openAudit || (me !== null && roles.get(me) === 'dictator') ? found : []);
+      }
+      if (!opts.editableAudit) return refused;
+      if (method === 'PATCH') { found.forEach((r) => Object.assign(r, body)); return new Response(null, { status: 204 }); }
+      if (method === 'DELETE') { found.forEach((r) => auditLog.delete(r.id)); return new Response(null, { status: 204 }); }
     }
     if (p === '/rest/v1/seasons') {
       const divisionIds = inList(u.searchParams.get('division_id'));
@@ -270,7 +286,8 @@ describe('runChecks against a healthy staging', () => {
     const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(results.filter((r: { status: string }) => r.status === 'FAIL')).toEqual([]);
     for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /rename a player/i, /private player details/i, /dictator/i, /recovery/i, /clean/i,
-                      /legacy divisions/i, /new hidden division/i, /current season switches/i, /hidden division is invisible/i, /cannot create a division/i]) {
+                      /legacy divisions/i, /new hidden division/i, /current season switches/i, /hidden division is invisible/i, /cannot create a division/i,
+                      /recorded in the audit history/i, /audit history is hidden/i, /change or remove audit history/i]) {
       expect(by(results, re)?.status, String(re)).toBe('PASS');
     }
     expect(s.users.size).toBe(0);
@@ -347,6 +364,15 @@ describe('runChecks detects a broken staging', () => {
     expect(by(results, /hidden division is invisible/i)?.status).toBe('FAIL');
     expect(by(results, /cannot create a division/i)?.status).toBe('FAIL');
     expect([...s.divisions.values()].some((d) => d.slug.startsWith('sl-check-'))).toBe(false); // and still cleans up
+  });
+
+  it('fails the audit checks when a change is not recorded, the history is readable by anyone, or it can be changed', async () => {
+    for (const [opts, re] of [[{ noAudit: true }, /recorded in the audit history/i], [{ openAudit: true }, /audit history is hidden/i], [{ editableAudit: true }, /change or remove audit history/i]] as const) {
+      const s = fakeStaging(opts);
+      const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
+      expect(by(results, re)?.status, String(re)).toBe('FAIL');
+      expect(s.users.size).toBe(0); // and still cleans up
+    }
   });
 
   it('fails the current-season check when switching leaves two current seasons', async () => {
