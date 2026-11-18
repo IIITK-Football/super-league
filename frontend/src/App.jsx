@@ -16,7 +16,6 @@ import { Fantasy } from './pages/Fantasy';
 import { Leaderboard } from './pages/Leaderboard';
 import { ArticleView } from './pages/ArticleView';
 import { AdminLogin } from './pages/AdminLogin';
-import { AdminDashboard } from './pages/AdminDashboard';
 import { Onboarding } from './pages/Onboarding';
 import { UserProfile } from './pages/UserProfile'; // <-- FIXED: Added this missing import!
 
@@ -27,6 +26,7 @@ import { Rules } from './pages/Rules';
 import { LeagueLanding } from './pages/LeagueLanding';
 import { TeamBuilder } from './pages/TeamBuilder';
 import { RoleWorkspace } from './pages/RoleWorkspace';
+import { LEGACY_REDIRECTS, LegacyRedirect } from './routes/legacyRedirects';
 import { DivisionHomeRoute } from './pages/DivisionHomeRoute';
 import MatchTimeline from './components/MatchTimeline';
 
@@ -95,7 +95,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/hq-login" element={<AdminLogin />} />
-            <Route path="/admin" element={<AdminDashboard />} />
+            {LEGACY_REDIRECTS.map(({ from, to }) => <Route key={from} path={from} element={<LegacyRedirect to={to} />} />)}
 
             {/* Public App Routes */}
             <Route path="/" element={<LeagueLanding />} />
