@@ -42,7 +42,8 @@
       "status": "open",
       "items": [
         "SL-030"
-      ]
+      ],
+      "proposal": "docs/decisions/D-05-worker-topology-proposal.md"
     },
     {
       "id": "D-06",
