@@ -52,7 +52,7 @@ export default function PlayerProfile({ onBack }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const isMens = division === 'mens'; // Check if we should apply the buff
+    const isMens = division === 'super-league'; // Check if we should apply the buff
 
 useEffect(() => {
         const raw = sessionStorage.getItem('selectedPlayer');

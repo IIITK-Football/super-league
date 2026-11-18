@@ -5,7 +5,8 @@ import { useApi } from '../hooks/useApi';
 import { GlassPanel } from '../components/GlassPanel';
 import { FormGuide } from '../components/FormGuide';
 import { Loader } from '../components/Loader';
-import { STANDINGS_CONFIG } from '../data/standingsConfig';
+import { DEFAULT_STANDINGS_CONFIG, STANDINGS_CONFIG } from '../data/standingsConfig';
+import { scopeQuery } from '../context/LeagueContext';
 
 function MatchCard({ title, team1, team2, note1, note2, onClick }) {
     return (
@@ -198,15 +199,17 @@ export function FreshersBracket({ matches = [], title, buttonText }) {
 export function Standings() {
     const { division: divisionParam } = useParams();
     const navigate = useNavigate();
-    const { setDivision } = useLeague();
-    const division = STANDINGS_CONFIG[divisionParam] ? divisionParam : 'mens';
-    const config = STANDINGS_CONFIG[division];
+    const { setDivision, seasonScope } = useLeague();
+    const division = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(divisionParam || '') ? divisionParam : 'super-league';
+    const config = STANDINGS_CONFIG[division] || DEFAULT_STANDINGS_CONFIG;
 
     useEffect(() => {
         setDivision(division);
     }, [division, setDivision]);
 
-    const { data: apiResponse, loading, error } = useApi(config.dataEndpoint);
+    // The selected season of this division (its current season unless another was chosen).
+    const endpoint = seasonScope.ready && seasonScope.division === division ? `/standings?${scopeQuery(seasonScope)}` : null;
+    const { data: apiResponse, loading, error } = useApi(endpoint);
 
     const bracketMatches = apiResponse?.data?.bracketMatches || [];
 

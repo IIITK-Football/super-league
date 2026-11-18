@@ -27,6 +27,7 @@ import { Rules } from './pages/Rules';
 import { LeagueLanding } from './pages/LeagueLanding';
 import { TeamBuilder } from './pages/TeamBuilder';
 import { RoleWorkspace } from './pages/RoleWorkspace';
+import { DivisionHomeRoute } from './pages/DivisionHomeRoute';
 import MatchTimeline from './components/MatchTimeline';
 
 import { useEffect } from 'react';
@@ -72,13 +73,7 @@ function WcRoute() {
 }
 
 function LeagueDashboardRoute({ division }) {
-  const { setDivision } = useLeague();
-
-  useEffect(() => {
-    setDivision(division);
-  }, [division, setDivision]);
-
-  return <PublicRoute><Home /></PublicRoute>;
+  return <DivisionHomeRoute division={division}><PublicRoute><Home /></PublicRoute></DivisionHomeRoute>;
 }
 
 function AuthenticatedRoute({ children }) {
@@ -104,13 +99,16 @@ function App() {
 
             {/* Public App Routes */}
             <Route path="/" element={<LeagueLanding />} />
-            <Route path="/super-league" element={<LeagueDashboardRoute division="mens" />} />
-            <Route path="/wsl" element={<LeagueDashboardRoute division="womens" />} />
+            <Route path="/super-league" element={<LeagueDashboardRoute division="super-league" />} />
+            <Route path="/super-league/:season" element={<LeagueDashboardRoute division="super-league" />} />
+            <Route path="/wsl" element={<LeagueDashboardRoute division="wsl" />} />
+            <Route path="/wsl/:season" element={<LeagueDashboardRoute division="wsl" />} />
             <Route path="/freshers" element={<LeagueDashboardRoute division="freshers" />} />
+            <Route path="/freshers/:season" element={<LeagueDashboardRoute division="freshers" />} />
             <Route path="/team-builder" element={<RoleWorkspace requiredRole="captain" />} />
             <Route path="/editor" element={<RoleWorkspace requiredRole="editor" />} />
             <Route path="/dictator" element={<RoleWorkspace requiredRole="dictator" />} />
-            <Route path="/standings" element={<Navigate to="/standings/mens" replace />} />
+            <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
             <Route path="/standings/:division" element={<PublicRoute><Standings /></PublicRoute>} />
             <Route path="/teams" element={<PublicRoute><Teams /></PublicRoute>} />
             

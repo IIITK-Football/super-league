@@ -129,7 +129,7 @@ export function Rules() {
     }
   ];
 
-  const isWomens = division === 'womens';
+  const isWomens = division === 'wsl';
   const activeRules = isWomens ? womensRules : mensRules;
   const themeColor = isWomens ? 'text-pink-400' : 'text-[#E8C881]';
   const gradientClass = isWomens ? 'from-pink-400 to-purple-500' : 'from-[#E8C881] to-yellow-600';

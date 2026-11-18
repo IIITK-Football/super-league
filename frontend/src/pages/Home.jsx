@@ -6,6 +6,7 @@ import { FormGuide } from '../components/FormGuide';
 import { NewsArticle } from '../components/NewsArticle';
 import { ChevronRight, Trophy, Goal, Zap, Loader2, Calendar } from 'lucide-react';
 import { Loader } from '../components/Loader';
+import { SeasonSelect } from '../components/SeasonSelect';
 import { Link, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import './DashboardGrid.css';
 import teamStyles from './Teams.module.css';
@@ -50,10 +51,10 @@ function SectionHeader({ title, action, onAction }) {
 }
 
 export function Home() {
-    const { division, setView } = useLeague();
-    // useApi automatically appends the selected division and refetches when it changes.
-    // Keep the endpoint division-neutral to avoid duplicate `division` query parameters.
-    const { data: apiResponse, loading, error } = useApi('/home/dashboard');
+    const { division, seasonScope, setView } = useLeague();
+    // useApi scopes the request to the selected division and season and refetches when either changes.
+    // Nothing is requested for a season that does not exist (the page says so instead).
+    const { data: apiResponse, loading, error } = useApi(seasonScope.seasonMissing ? null : '/home/dashboard');
     const navigate = useNavigate();
     const location = useLocation();
     const navigationType = useNavigationType();
@@ -78,6 +79,24 @@ export function Home() {
         window.location.reload();
     }, [location.key, location.pathname, navigationType]);
 
+    // Choosing a season puts it in the address (/wsl/2027), so the page can be shared; the current season is plain /wsl.
+    const chooseSeason = (slug) => {
+        const current = seasonScope.currentSeason;
+        navigate(!current || slug === current.slug ? `/${division}` : `/${division}/${slug}`);
+    };
+
+    if (seasonScope.seasonMissing) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 text-center">
+                <span className="font-black tracking-[0.3em] uppercase text-sm text-zinc-300">Season not found</span>
+                <span className="text-zinc-500 text-sm">There is no season "{seasonScope.requestedSeasonSlug}" in {seasonScope.divisionRecord?.name || 'this division'}.</span>
+                <Link to={`/${division}`} className="text-xs font-bold tracking-widest uppercase text-zinc-400 hover:text-white">
+                    Go to the current season
+                </Link>
+            </div>
+        );
+    }
+
     if (loading) {
         return <Loader variant="spinner" fullScreen text="Aggregating Live Data..." />;
     }
@@ -95,14 +114,20 @@ export function Home() {
     const top4 = data.standings || [];
     const newsItems = data.news || [];
     const fantasyTop = data.fantasyTop || [];
-    // Prefer explicitly division-scoped payloads when the API provides them;
-    // otherwise the query above asks the endpoint to return this division's leaders.
-    const divisionData = data.divisions?.[division] ?? data[division] ?? data;
-    const topScorer = divisionData.topScorer;
-    const topAssist = divisionData.topAssist;
+    // The WSL and Freshers "Road to Final" cards describe their 2026 tournaments (fixed content until brackets are
+    // data, SL-054). Any other season shows its own table from the API.
+    const roadToFinal = (division === 'wsl' || division === 'freshers') && seasonScope.season?.slug === '2026';
+    const topScorer = data.topScorer;
+    const topAssist = data.topAssist;
 
     return (
         <div className="space-y-12 pb-12 overflow-x-hidden">
+
+            {seasonScope.seasons.length > 1 && (
+                <div className="flex justify-center">
+                    <SeasonSelect seasons={seasonScope.seasons} value={seasonScope.season?.slug} onChange={chooseSeason} />
+                </div>
+            )}
 
             {match ? (
                 <GlassPanel
@@ -194,12 +219,12 @@ export function Home() {
 
                 <div className="bento-standings">
                     <SectionHeader
-                        title={division === 'womens' || division === 'freshers' ? 'Road to Final' : 'Top 4 Standings'}
-                        action={division === 'womens' || division === 'freshers' ? 'View Fixtures' : 'Full Table'}
+                        title={roadToFinal ? 'Road to Final' : 'Top 4 Standings'}
+                        action={roadToFinal ? 'View Fixtures' : 'Full Table'}
                         onAction={() => navigate(`/standings/${division}`)}
                     />
                     <GlassPanel className="overflow-hidden relative h-fit">
-                        {division === 'womens' ? (
+                        {roadToFinal && division === 'wsl' ? (
                             <div className="p-6 sm:p-10 flex flex-col justify-center relative group cursor-pointer hover:bg-white/5 transition-colors overflow-hidden" onClick={() => navigate('/standings/womens')}>
                                 <Trophy className="absolute right-[-20px] bottom-[-20px] w-64 h-64 text-white/[0.03] -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none animate-float" />
                                 <h4 className="text-sm font-black text-zinc-500 tracking-widest uppercase mb-6 relative z-10">Final Result &bull; WSL</h4>
@@ -215,7 +240,7 @@ export function Home() {
                                     View WSL Road to Final <ChevronRight size={14} />
                                 </div>
                             </div>
-                        ) : division === 'freshers' ? (
+                        ) : roadToFinal && division === 'freshers' ? (
                             <div className="p-6 sm:p-8 flex flex-col justify-center relative group cursor-pointer hover:bg-white/5 transition-colors overflow-hidden min-h-64" onClick={() => navigate('/standings/freshers')}>
                                 <Trophy className="absolute right-[-18px] bottom-[-28px] w-56 h-56 text-sky-300/[0.05] -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none" />
                                 <p className="relative z-10 text-xs font-black tracking-[.2em] uppercase text-sky-200">Knockout Tournament · October 12–13</p>
@@ -340,9 +365,9 @@ export function Home() {
                                     </div>
                                     <div className="flex flex-col items-start leading-tight min-w-0">
                                         <span className="font-bold text-md text-white uppercase tracking-wider truncate">{user.name}</span>
-                                        {user.mens_team_flair && (
-                                            <span className={cn("px-2 py-[2px] mt-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10 shrink-0 inline-block", getTeamColorClass(division === 'mens' ? user.mens_team_flair : user.womens_team_flair))}>
-                                                {division === 'mens' ? user.mens_team_flair : user.womens_team_flair}
+                                        {user.flair && (
+                                            <span className={cn("px-2 py-[2px] mt-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10 shrink-0 inline-block", getTeamColorClass(user.flair))}>
+                                                {user.flair}
                                             </span>
                                         )}
                                     </div>

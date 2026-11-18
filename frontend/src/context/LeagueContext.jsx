@@ -1,46 +1,109 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { supabase } from '../lib/supabase';
 
 const LeagueContext = createContext(undefined);
 
+// A division is a data record, named by its slug (super-league, wsl, freshers, or any division a dictator creates).
+// Each division remembers the season chosen for it; without a choice its current season is used.
+export const DEFAULT_DIVISION = 'super-league';
 const DIVISION_STORAGE_KEY = 'league:division';
-const VALID_DIVISIONS = ['mens', 'womens', 'freshers'];
+const SEASON_STORAGE_PREFIX = 'league:season:';
+const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+// Values stored by the earlier division-string app, mapped once to their division slugs.
+const STORED_LEGACY = { mens: 'super-league', womens: 'wsl', freshers: 'freshers' };
+
+const readStorage = (key) => {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null; // Storage can be unavailable in private/restricted browsing contexts.
+  }
+};
+const writeStorage = (key, value) => {
+  try {
+    if (value === null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, value);
+  } catch {
+    // Keep the in-memory selection working if storage is unavailable.
+  }
+};
 
 function getInitialDivision() {
-  if (typeof window === 'undefined') return 'mens';
-
-  try {
-    const savedDivision = window.sessionStorage.getItem(DIVISION_STORAGE_KEY);
-    return VALID_DIVISIONS.includes(savedDivision) ? savedDivision : 'mens';
-  } catch {
-    // Storage can be unavailable in private/restricted browsing contexts.
-    return 'mens';
-  }
+  if (typeof window === 'undefined') return DEFAULT_DIVISION;
+  const saved = readStorage(DIVISION_STORAGE_KEY);
+  const slug = STORED_LEGACY[saved] ?? saved;
+  return slug && SLUG.test(slug) ? slug : DEFAULT_DIVISION;
 }
+
+// Current season first, then the most recent.
+const orderSeasons = (list) => [...list].sort((a, b) =>
+  Number(b.is_current) - Number(a.is_current)
+  || String(b.starts_on ?? '').localeCompare(String(a.starts_on ?? ''))
+  || String(b.slug).localeCompare(String(a.slug)));
 
 export function LeagueProvider({ children }) {
   const [division, setDivisionInternal] = useState(getInitialDivision);
   const divisionRef = useRef(division);
 
-  // Persist immediately when the division changes, so a route-triggered full
-  // page reload cannot reset the dashboard back to 'mens'. Supports both
-  // setDivision('womens') and setDivision(current => ...).
+  // Persist immediately when the division changes, so a route-triggered full page reload cannot reset it.
+  // Supports both setDivision('wsl') and setDivision(current => ...).
   const setDivision = useCallback((nextDivision) => {
-    const resolvedDivision = typeof nextDivision === 'function'
-      ? nextDivision(divisionRef.current)
-      : nextDivision;
-
-    if (!VALID_DIVISIONS.includes(resolvedDivision)) return;
-
-    divisionRef.current = resolvedDivision;
-
-    try {
-      window.sessionStorage.setItem(DIVISION_STORAGE_KEY, resolvedDivision);
-    } catch {
-      // Keep the in-memory selection working if storage is unavailable.
-    }
-
-    setDivisionInternal(resolvedDivision);
+    const resolved = typeof nextDivision === 'function' ? nextDivision(divisionRef.current) : nextDivision;
+    if (!resolved || !SLUG.test(resolved)) return;
+    divisionRef.current = resolved;
+    writeStorage(DIVISION_STORAGE_KEY, resolved);
+    setDivisionInternal(resolved);
   }, []);
+
+  // Seasons of the selected division that the viewer may see (row level security hides hidden/archived ones).
+  const [seasonState, setSeasonState] = useState({ division: null, divisionRecord: null, seasons: [], loading: true, error: '' });
+  const [seasonChoice, setSeasonChoice] = useState(() => ({ [division]: readStorage(`${SEASON_STORAGE_PREFIX}${division}`) }));
+
+  useEffect(() => {
+    let cancelled = false;
+    setSeasonState((s) => ({ ...s, loading: true, error: '' }));
+    (async () => {
+      const { data: record, error: divisionError } = await supabase.from('divisions').select('id, slug, name').eq('slug', division).maybeSingle();
+      let seasons = [];
+      let error = divisionError?.message || '';
+      if (record) {
+        const { data, error: seasonsError } = await supabase.from('seasons')
+          .select('id, slug, name, is_current, starts_on, ends_on, format').eq('division_id', record.id);
+        seasons = orderSeasons(data || []);
+        error = seasonsError?.message || error;
+      }
+      if (!cancelled) setSeasonState({ division, divisionRecord: record || null, seasons, loading: false, error });
+    })();
+    return () => { cancelled = true; };
+  }, [division]);
+
+  // Choose a season of a division by slug (null = its current season). Called by the dropdown and by URLs.
+  const setSeasonSlug = useCallback((slug, forDivision) => {
+    const target = forDivision || divisionRef.current;
+    const value = slug && SLUG.test(slug) ? slug : null;
+    writeStorage(`${SEASON_STORAGE_PREFIX}${target}`, value);
+    setSeasonChoice((c) => ({ ...c, [target]: value }));
+  }, []);
+
+  const ready = seasonState.division === division && !seasonState.loading;
+  const seasons = ready ? seasonState.seasons : [];
+  const requestedSeasonSlug = seasonChoice[division] ?? readStorage(`${SEASON_STORAGE_PREFIX}${division}`) ?? null;
+  const currentSeason = seasons.find((s) => s.is_current) || seasons[0] || null;
+  const chosen = requestedSeasonSlug ? seasons.find((s) => s.slug === requestedSeasonSlug) : null;
+  const season = chosen || currentSeason;
+
+  const seasonScope = useMemo(() => ({
+    ready,
+    division,
+    divisionRecord: ready ? seasonState.divisionRecord : null,
+    seasons,
+    season,
+    currentSeason,
+    requestedSeasonSlug,
+    // A season named (by URL or a stored choice) that is not among the visible seasons.
+    seasonMissing: ready && Boolean(requestedSeasonSlug) && !chosen,
+    error: ready ? seasonState.error : '',
+  }), [ready, division, seasonState, seasons, season, currentSeason, requestedSeasonSlug, chosen]);
 
   // ADDED 'matchTimeline' and 'player-profile' to your tracker comment!
   const [view, setViewInternal] = useState(() => {
@@ -76,16 +139,15 @@ export function LeagueProvider({ children }) {
   }, []);
 
   const [fantasyPrediction, setFantasyPrediction] = useState(null);
-  const [globalPollState, setGlobalPollState] = useState({ mens: null, womens: null });
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [fantasySection, setFantasySection] = useState('fifa'); // 'season1' | 'fifa'
 
   return (
     <LeagueContext.Provider value={{
       division, setDivision,
+      seasonScope, setSeasonSlug,
       view, setView, goBack,
       fantasyPrediction, setFantasyPrediction,
-      globalPollState, setGlobalPollState,
       selectedArticle, setSelectedArticle,
       fantasySection, setFantasySection
     }}>
@@ -102,3 +164,9 @@ export function useLeague() {
   return context;
 }
 
+// The query string that scopes an API request to the selected division and season.
+export function scopeQuery(seasonScope) {
+  const params = new URLSearchParams({ division: seasonScope.division });
+  if (seasonScope.season) params.set('season', seasonScope.season.slug);
+  return params.toString();
+}

@@ -103,7 +103,7 @@ export function TeamBuilder() {
             if (!user?.id) return;
             let query = supabase
                 .from('team_registrations')
-                .select('id, team_id, team_name, division, team_members(*)')
+                .select('id, team_id, team_name, season:seasons(name, division:divisions(name)), team_members(*)')
                 .order('team_name', { ascending: true });
             if (!isDictatorPreview) query = query.eq('captain_id', user.id);
             const { data, error: loadError } = isDictatorPreview
@@ -366,7 +366,7 @@ export function TeamBuilder() {
     if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictatorPreview) return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
         <div className="team-builder-shell">
-            <div className="team-builder-heading"><Shield size={28} /><p>Captain workspace / {registration.division}</p><h1>Brand your<br /><em>team.</em></h1><span>Set your team identity before entering the Team Builder.</span></div>
+            <div className="team-builder-heading"><Shield size={28} /><p>Captain workspace / {registration.season?.division?.name} {registration.season?.name}</p><h1>Brand your<br /><em>team.</em></h1><span>Set your team identity before entering the Team Builder.</span></div>
             <form onSubmit={handleBrandingSubmit} className="team-builder-form team-builder-brand-form">
                 <div className="team-builder-brand-preview" style={{ borderColor: teamColor }}>
                     {teamLogoFile ? <span>{teamLogoFile.name}</span> : registration.team?.logo_url ? <img src={registration.team.logo_url} alt={`${registration.team_name} logo`} /> : <Shield size={38} />}
@@ -393,7 +393,7 @@ export function TeamBuilder() {
     if ((!registration.team?.logo_url || !registration.team?.team_color) && isDictatorPreview) return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
         <div className="team-builder-shell">
-            <div className="team-builder-heading"><Shield size={28} /><p>Dictator preview / {registration.division}</p><h1>Brand your<br /><em>team.</em></h1><span>This captain is prompted to upload a team logo and choose its color before accessing the roster.</span></div>
+            <div className="team-builder-heading"><Shield size={28} /><p>Dictator preview / {registration.season?.division?.name} {registration.season?.name}</p><h1>Brand your<br /><em>team.</em></h1><span>This captain is prompted to upload a team logo and choose its color before accessing the roster.</span></div>
             <div className="team-builder-form team-builder-brand-form">
                 <label>Captain team
                     <select value={registration.id} onChange={(event) => selectRegistration(event.target.value)}>
@@ -419,7 +419,7 @@ export function TeamBuilder() {
         <div className="team-builder-shell team-builder-shell-wide">
             <div className="team-builder-heading">
                 <Users size={28} />
-                <p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'} / {registration.division}</p>
+                <p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'} / {registration.season?.division?.name} {registration.season?.name}</p>
                 <h1>Set your<br /><em>lineup.</em></h1>
                 <span>Set positions, ratings, and images for {registration.team_name}.</span>
 

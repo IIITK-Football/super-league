@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { useLeague } from '../context/LeagueContext';
+import { scopeQuery, useLeague } from '../context/LeagueContext';
 import { API_BASE_URL } from '../lib/api';
 /**
  * A React Hook for standard GET requests to the backend API.
@@ -12,10 +12,14 @@ import { API_BASE_URL } from '../lib/api';
 export function useApi(endpoint) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const { division } = useLeague(); // <--- Get the current division
+  const { seasonScope } = useLeague();
+  // An endpoint that names its own division (admin tools) is sent as written. Otherwise the request is scoped to
+  // the selected division and season, once the division's seasons are known (so it is not sent twice).
+  const explicit = Boolean(endpoint && /[?&]division=/.test(endpoint));
+  const scope = explicit ? '' : (seasonScope.ready ? scopeQuery(seasonScope) : null);
 
   const fetchData = useCallback(async () => {
-    if (!endpoint) return;
+    if (!endpoint || scope === null) return;
     
     try {
       setLoading(true);
@@ -23,11 +27,10 @@ export function useApi(endpoint) {
       
       const headers = session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {};
       
-      // Append the division to the API URL!
       const separator = endpoint.includes('?') ? '&' : '?';
-      const urlWithDivision = `${API_BASE_URL}${endpoint}${separator}division=${division}`;
+      const url = scope ? `${API_BASE_URL}${endpoint}${separator}${scope}` : `${API_BASE_URL}${endpoint}`;
       
-      const response = await fetch(urlWithDivision, { headers });
+      const response = await fetch(url, { headers });
       const result = await response.json();
       setData(result);
     } catch (err) {
@@ -35,7 +38,7 @@ export function useApi(endpoint) {
     } finally {
       setLoading(false);
     }
-  }, [endpoint, division]); // <--- Add division to the dependency array!
+  }, [endpoint, scope]);
 
   useEffect(() => {
     fetchData();
