@@ -318,7 +318,10 @@
         "backend/lib/roster/**",
         "backend/app/api/admin/freshers/**",
         "frontend/src/components/admin/ManageRosters.jsx",
-        "frontend/src/components/admin/__tests__/ManageRosters.local.test.jsx"
+        "frontend/src/components/admin/__tests__/ManageRosters.local.test.jsx",
+        "frontend/src/pages/TeamBuilder.jsx",
+        "frontend/src/lib/rosterPlayerUpdate.js",
+        "frontend/src/pages/__tests__/TeamBuilder.local.test.jsx"
       ],
       "run": [
         {
@@ -341,7 +344,8 @@
             "exec",
             "vitest",
             "run",
-            "src/components/admin/__tests__/ManageRosters.local.test.jsx"
+            "src/components/admin/__tests__/ManageRosters.local.test.jsx",
+            "src/pages/__tests__/TeamBuilder.local.test.jsx"
           ]
         }
       ],
@@ -355,11 +359,14 @@
         "backend/app/api/admin/matches/live/**",
         "backend/lib/roster/**",
         "backend/app/api/admin/freshers/**",
-        "frontend/src/components/admin/ManageRosters.jsx"
+        "frontend/src/components/admin/ManageRosters.jsx",
+        "frontend/src/pages/TeamBuilder.jsx",
+        "frontend/src/lib/rosterPlayerUpdate.js"
       ],
       "testPaths": [
         "backend/tests/rosters/**",
-        "frontend/src/components/admin/__tests__/ManageRosters.local.test.jsx"
+        "frontend/src/components/admin/__tests__/ManageRosters.local.test.jsx",
+        "frontend/src/pages/__tests__/TeamBuilder.local.test.jsx"
       ]
     },
     "auth-roles": {

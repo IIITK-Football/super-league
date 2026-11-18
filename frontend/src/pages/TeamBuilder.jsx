@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPlayStyle, PLAY_STYLES } from '../data/playStyles';
 import { API_BASE_URL } from '../lib/api';
-import { teamMemberRpcArgs } from '../lib/teamMemberUpdate';
+import { rosterPlayerRpcArgs } from '../lib/rosterPlayerUpdate';
 import './TeamBuilder.css';
 import './TeamBranding.css';
 
@@ -48,7 +48,6 @@ const fromMember = (member) => {
     return {
         id: member.id,
         fullName: member.name || [member.first_name, member.last_name].filter(Boolean).join(' '),
-        email: member.email || '',
         position: member.position || '',
         jerseyNumber: member.jersey_number || '',
         imageUrl: member.image_url || '',
@@ -74,6 +73,37 @@ function PlayStylePicker({ value, onChange }) {
             <div><strong>{style.name}</strong><p>{style.description}</p></div>
         </div> : <p className="team-builder-playstyle-hint">Select a PlayStyle to preview its icon and ability.</p>}
     </div>;
+}
+
+// The roster of a registration's team in its season: each roster place with the player's card. The id used for
+// saving is the roster place (captain_update_roster_player checks that it belongs to the captain's team and season).
+export async function loadRoster(registration) {
+    if (!registration?.team_id || !registration?.season_id) return [];
+    const { data: entry, error: entryError } = await supabase
+        .from('team_entries')
+        .select('id')
+        .eq('team_id', registration.team_id)
+        .eq('season_id', registration.season_id)
+        .maybeSingle();
+    if (entryError) throw entryError;
+    if (!entry) return [];
+    const { data, error } = await supabase
+        .from('roster_memberships')
+        .select('id, jersey_number, position, player:players(id, first_name, last_name, image_url, overall_rating, attributes)')
+        .eq('team_entry_id', entry.id)
+        .order('jersey_number', { ascending: true });
+    if (error) throw error;
+    return (data || []).filter((place) => place.player).map((place) => ({
+        id: place.id,
+        player_id: place.player.id,
+        first_name: place.player.first_name,
+        last_name: place.player.last_name,
+        position: place.position,
+        jersey_number: place.jersey_number,
+        image_url: place.player.image_url,
+        overall_rating: place.player.overall_rating,
+        attributes: place.player.attributes,
+    }));
 }
 
 export function TeamBuilder() {
@@ -103,7 +133,7 @@ export function TeamBuilder() {
             if (!user?.id) return;
             let query = supabase
                 .from('team_registrations')
-                .select('id, team_id, team_name, season:seasons(name, division:divisions(name)), team_members(*)')
+                .select('id, team_id, team_name, season_id, season:seasons(name, division:divisions(name))')
                 .order('team_name', { ascending: true });
             if (!isDictatorPreview) query = query.eq('captain_id', user.id);
             const { data, error: loadError } = isDictatorPreview
@@ -129,7 +159,13 @@ export function TeamBuilder() {
                 ? choices[0] || null
                 : choices[0] || null;
             setRegistration(selected);
-            setPlayers((selected?.team_members || []).map(fromMember));
+            try {
+                const roster = await loadRoster(selected);
+                if (cancelled) return;
+                setPlayers(roster.map(fromMember));
+            } catch (rosterError) {
+                if (!cancelled) setError(rosterError.message || 'Could not load the roster.');
+            }
             setTeamColor(selected?.team?.team_color || '#ffffff');
             setTeamColorSelected(Boolean(selected?.team?.team_color));
             setLoading(false);
@@ -142,7 +178,10 @@ export function TeamBuilder() {
     const selectRegistration = (registrationId) => {
         const selected = registrations.find((item) => item.id === registrationId) || null;
         setRegistration(selected);
-        setPlayers((selected?.team_members || []).map(fromMember));
+        setPlayers([]);
+        loadRoster(selected)
+            .then((roster) => setPlayers(roster.map(fromMember)))
+            .catch((rosterError) => setError(rosterError.message || 'Could not load the roster.'));
         setActivePlayer(0);
         setActiveTab('basic');
         setTeamLogoFile(null);
@@ -270,11 +309,6 @@ export function TeamBuilder() {
         const file = event.target.files?.[0];
         if (!file) return;
         
-        if (!currentPlayer?.email?.trim() || !currentPlayer.email.includes('@')) {
-            setError(`${currentPlayer?.fullName || 'This player'} has no email on record. Ask a dictator to add it before uploading an image.`);
-            return;
-        }
-
         setUploadingImage(true);
         setError('');
         try {
@@ -299,8 +333,8 @@ export function TeamBuilder() {
             }
 
             const formData = new FormData();
-            formData.append('email', currentPlayer.email.trim());
-            formData.append('image', file, `${currentPlayer.email.trim()}.png`);
+            formData.append('membership_id', currentPlayer.id);
+            formData.append('image', file, 'portrait.png');
 
             const { data: { session } } = await supabase.auth.getSession();
             const response = await fetch(`${API_URL}/admin/freshers/player-image`, {
@@ -311,7 +345,7 @@ export function TeamBuilder() {
             });
 
             const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Failed to upload player image.');
+            if (!response.ok) throw new Error(result.message || result.error || 'Failed to upload player image.');
 
             updatePlayer('imageUrl', result.imageUrl);
             setSuccess(`Image uploaded successfully for ${currentPlayer.fullName}!`);
@@ -343,9 +377,9 @@ export function TeamBuilder() {
                 };
 
                 // The database decides who may change what. There is deliberately no direct-update fallback:
-                // captains have no UPDATE access to team_members, so a fallback would change nothing yet still
+                // captains have no write access to players or rosters, so a fallback would change nothing yet still
                 // report success.
-                const { error: rpcError } = await supabase.rpc('captain_update_team_member', teamMemberRpcArgs(player, attributes, getRandomStat));
+                const { error: rpcError } = await supabase.rpc('captain_update_roster_player', rosterPlayerRpcArgs(player, attributes, getRandomStat));
                 if (rpcError) throw rpcError;
             }
             setSuccess('Player profiles and images saved successfully.');
@@ -455,12 +489,11 @@ export function TeamBuilder() {
                 <div className="team-builder-player-nav"><div className="team-builder-player-tabs">{players.map((player, index) => <button type="button" key={player.id} onClick={() => { setActivePlayer(index); setActiveTab('basic'); }} className={index === activePlayer ? 'is-active' : ''}>{String(index + 1).padStart(2, '0')} {player.fullName || 'Player'}</button>)}</div></div>
                 <fieldset disabled={isDictatorPreview} className="team-builder-preview-fieldset">
                 <div className="team-builder-card">
-                    <div className="team-builder-card-head"><div><p>{currentPlayer?.fullName}</p><span>{currentPlayer?.email || 'Email required'}</span></div></div>
+                    <div className="team-builder-card-head"><div><p>{currentPlayer?.fullName}</p><span>{currentPlayer?.jerseyNumber ? `#${currentPlayer.jerseyNumber}` : 'No jersey number yet'}{currentPlayer?.position ? ` · ${currentPlayer.position}` : ''}</span></div></div>
                     <div className="team-builder-form-tabs"><button type="button" onClick={() => setActiveTab('basic')} className={activeTab === 'basic' ? 'is-active' : ''}>Position & Details</button><button type="button" onClick={() => setActiveTab('bio')} className={activeTab === 'bio' ? 'is-active' : ''}>Bio & Playstyle</button><button type="button" onClick={() => setActiveTab('stats')} className={activeTab === 'stats' ? 'is-active' : ''}>Attributes</button></div>
                     {activeTab === 'basic' && <div className="team-builder-grid team-builder-basic">
                         <label>Player<select value={activePlayer} onChange={(event) => setActivePlayer(Number(event.target.value))}>{players.map((player, index) => <option key={player.id} value={index}>{player.fullName}</option>)}</select></label>
                         <label>Position (Mandatory)<select value={currentPlayer.position} onChange={(event) => updatePlayer('position', event.target.value)}><option value="">Choose position</option>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
-                        <label className="col-span-2">Player email (set by a dictator, read-only)<input type="email" value={currentPlayer.email || ''} readOnly placeholder="No email on record: ask a dictator to add it" /></label>
                         <label>Jersey number<input type="number" min="1" max="99" value={currentPlayer.jerseyNumber} onChange={(event) => updatePlayer('jerseyNumber', event.target.value)} /></label>
                         <label>Overall rating<input type="number" min="1" max="99" value={currentPlayer.overallRating} onChange={(event) => updatePlayer('overallRating', event.target.value)} /></label>
                         
