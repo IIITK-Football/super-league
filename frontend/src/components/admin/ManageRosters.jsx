@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRightLeft, ImagePlus, Loader2, Plus, Save, Search, Trash2, UserMinus, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
@@ -96,6 +96,8 @@ export default function ManageRosters() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [contactsLoaded, setContactsLoaded] = useState(false);
+  // The team whose roster was asked for last; an answer for any other team arrives late and is dropped.
+  const latestEntry = useRef('');
 
   const report = (err, success) => {
     if (err) { setMessage(''); setError(describeError(err)); return false; }
@@ -149,8 +151,10 @@ export default function ManageRosters() {
   };
 
   const loadRoster = async (eId) => {
+    latestEntry.current = eId;
     isLoading('roster', true);
     const { data: places, error: err } = await supabase.from('roster_memberships').select('id, player_id, team_entry_id, season_id, jersey_number, position').eq('team_entry_id', eId);
+    if (latestEntry.current !== eId) return;
     if (err) { setError(describeError(err)); isLoading('roster', false); return; }
     const ids = (places || []).map((p) => p.player_id);
     const [{ data: players, error: playersError }, { data: privates, error: privatesError }] = ids.length
@@ -159,6 +163,7 @@ export default function ManageRosters() {
         supabase.from('player_private_details').select('player_id, email').in('player_id', ids),
       ])
       : [{ data: [], error: null }, { data: [], error: null }];
+    if (latestEntry.current !== eId) return;
     if (playersError) setError(describeError(playersError));
     // Without the contact details the form cannot show the email, so saving must leave it alone.
     if (privatesError) setError(`Contact details could not be loaded (${describeError(privatesError)}); saving will not change any email.`);
@@ -173,14 +178,17 @@ export default function ManageRosters() {
   // Selection ---------------------------------------------------------------------------------------------------
 
   const chooseDivision = (id) => {
+    latestEntry.current = '';
     setDivisionId(id); setSeasonId(''); setSeasons([]); setEntryId(''); setEntries([]); setRoster([]); setSelectedPlace(''); setEditing(null);
     if (id) loadSeasons(id);
   };
   const chooseSeason = (id) => {
+    latestEntry.current = '';
     setSeasonId(id); setEntryId(''); setEntries([]); setRoster([]); setSelectedPlace(''); setEditing(null);
     if (id) loadEntries(id);
   };
   const chooseEntry = (id) => {
+    latestEntry.current = id;
     setEntryId(id); setRoster([]); setSelectedPlace(''); setEditing(null); setFound([]); setMoveTo('');
     if (id) loadRoster(id);
   };

@@ -22,6 +22,7 @@ function seed() {
   db.tables.seasons.push({ id: 's0', division_id: 'd1', slug: '2025', name: '2025', is_current: false, sort_order: 0 });
   db.calls = [];
   db.fail = {};
+  db.slow = null;
 }
 
 function from(table) {
@@ -70,7 +71,8 @@ function from(table) {
     order: () => b,
     limit: () => b,
     single: () => { q.single = true; return b; },
-    then: (resolve, reject) => Promise.resolve().then(() => {
+    then: (resolve, reject) => (db.slow && q.filters.some(([c, v]) => c === 'team_entry_id' && v === db.slow)
+      ? new Promise((r) => setTimeout(r, 50)) : Promise.resolve()).then(() => {
       if (q.matchName !== undefined) {
         q.filters = q.filters.filter(([c]) => c !== '__or');
         const data = db.tables[table].filter((r) => `${r.first_name} ${r.last_name}`.toLowerCase().includes(q.matchName));
@@ -177,6 +179,14 @@ describe('choosing a division, season and team', () => {
     expect(screen.getByLabelText('Edit rating').value).toBe('70');
     expect(screen.getByLabelText('Edit attributes').value).toBe('{"pace":80}');
     expect(screen.getByLabelText('Edit email').value).toBe('ada@iiitkottayam.ac.in');
+  });
+  it('shows the roster of the team chosen last, even when an earlier team answers later', async () => {
+    db.slow = 'e1';
+    await openTeam('e1');
+    pick('Team', 'e2');
+    await new Promise((r) => setTimeout(r, 120));
+    expect(screen.getByText(/no players on this roster yet/i)).toBeTruthy();
+    expect(screen.queryByRole('option', { name: /Ada Striker/ })).toBeNull();
   });
 });
 
