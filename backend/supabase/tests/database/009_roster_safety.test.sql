@@ -76,10 +76,11 @@ SELECT rm.id, rm.season_id FROM public.roster_memberships rm
 JOIN public.season_player_stats s ON s.player_id = rm.player_id AND s.season_id = rm.season_id AND s.goals > 0 LIMIT 1;
 SELECT throws_ok($$UPDATE public.roster_memberships SET player_id = (SELECT p FROM _og) WHERE id = (SELECT id FROM _h)$$,
   '23503', NULL, 'a roster place with goals cannot be handed to another player');
-SELECT lives_ok($$UPDATE public.roster_memberships SET team_entry_id = (SELECT e.id FROM public.team_entries e WHERE e.season_id = (SELECT season_id FROM _h)
-                    AND NOT EXISTS (SELECT 1 FROM public.roster_memberships x WHERE x.team_entry_id = e.id AND x.jersey_number =
-                      (SELECT jersey_number FROM public.roster_memberships WHERE id = (SELECT id FROM _h))) LIMIT 1)
-                  WHERE id = (SELECT id FROM _h)$$,
+-- An empty team in the same season to move to (so no jersey number can clash).
+INSERT INTO public.teams (id, name) VALUES ('a9100000-0000-4000-8000-000000000001', 'Safety Movers');
+INSERT INTO public.team_entries (id, team_id, season_id)
+SELECT 'a9200000-0000-4000-8000-000000000001', 'a9100000-0000-4000-8000-000000000001', season_id FROM _h;
+SELECT lives_ok($$UPDATE public.roster_memberships SET team_entry_id = 'a9200000-0000-4000-8000-000000000001' WHERE id = (SELECT id FROM _h)$$,
   'moving it to another team in the same season is still allowed');
 SELECT lives_ok($$UPDATE public.roster_memberships SET jersey_number = 88 WHERE id = (SELECT id FROM _h)$$, 'and so is changing its jersey number');
 
