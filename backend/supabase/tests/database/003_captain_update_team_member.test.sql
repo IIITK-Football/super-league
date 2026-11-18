@@ -22,10 +22,14 @@ UPDATE public.user_roles SET role = 'editor'   WHERE user_id = 'c0000000-0000-40
 UPDATE public.user_roles SET role = 'admin'    WHERE user_id = 'c0000000-0000-4000-8000-000000000006';
 -- user 4 (normal) and user 7 (assigned.norole) keep the default role
 
-INSERT INTO public.team_registrations (id, captain_id, team_name, division) VALUES
-  ('d0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'RPC Team A', 'freshers'),
-  ('d0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000002', 'RPC Team B', 'freshers'),
-  ('d0000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000007', 'RPC Team C', 'freshers');
+INSERT INTO public.team_registrations (id, captain_id, team_name, season_id)
+SELECT r.id, r.captain_id, r.team_name,
+       (SELECT s.id FROM public.seasons s JOIN public.divisions d ON d.id = s.division_id WHERE d.slug = 'freshers' AND s.is_current)
+FROM (VALUES
+  ('d0000000-0000-4000-8000-000000000001'::uuid, 'c0000000-0000-4000-8000-000000000001'::uuid, 'RPC Team A'),
+  ('d0000000-0000-4000-8000-000000000002'::uuid, 'c0000000-0000-4000-8000-000000000002'::uuid, 'RPC Team B'),
+  ('d0000000-0000-4000-8000-000000000003'::uuid, 'c0000000-0000-4000-8000-000000000007'::uuid, 'RPC Team C')
+) AS r(id, captain_id, team_name);
 
 INSERT INTO public.team_members (id, registration_id, name, email, position, jersey_number, overall_rating, attributes, image_url) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'Player A', 'player.a@iiitkottayam.ac.in', 'CM', 7, 60, '{}', 'old-a'),

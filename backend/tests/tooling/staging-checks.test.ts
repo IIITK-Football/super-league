@@ -245,6 +245,17 @@ describe('runChecks against a healthy staging', () => {
     expect(s.sections.size).toBe(0);
   });
 
+  it('registers synthetic teams in the current Freshers season, never by a division string', async () => {
+    const s = fakeStaging();
+    await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
+    const regs = s.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/rest/v1/team_registrations'));
+    expect(regs.length).toBeGreaterThan(0);
+    for (const c of regs) {
+      expect(c.body.season_id).toBe('s2'); // the fake's current Freshers season
+      expect(c.body).not.toHaveProperty('division');
+    }
+  });
+
   it('only ever talks to the staging host', async () => {
     const s = fakeStaging();
     await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });

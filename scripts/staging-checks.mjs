@@ -92,8 +92,19 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     return { id: r.data.id, email };
   };
   const setRole = (id, role) => admin('/rest/v1/user_roles?on_conflict=user_id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', body: { user_id: id, role } });
+  // Synthetic registrations join the current Freshers season (registrations belong to a season, not a division string).
+  let freshersSeason = null;
+  const currentFreshersSeason = async () => {
+    if (freshersSeason) return freshersSeason;
+    const division = await admin('/rest/v1/divisions?slug=eq.freshers&select=id');
+    const divisionId = division.data?.[0]?.id;
+    const season = divisionId ? await admin(`/rest/v1/seasons?division_id=eq.${divisionId}&is_current=eq.true&select=id`) : null;
+    freshersSeason = season?.data?.[0]?.id ?? null;
+    if (!freshersSeason) throw new Error('the Freshers division has no current season on this project');
+    return freshersSeason;
+  };
   const makeTeam = async (captain, name) => {
-    const reg = await admin('/rest/v1/team_registrations', { method: 'POST', prefer: 'return=representation', body: { captain_id: captain.id, team_name: `SL CHECK ${name}`, division: 'freshers' } });
+    const reg = await admin('/rest/v1/team_registrations', { method: 'POST', prefer: 'return=representation', body: { captain_id: captain.id, team_name: `SL CHECK ${name}`, season_id: await currentFreshersSeason() } });
     if (!reg.ok) throw new Error(`could not create the ${name} team entry (${message(reg)})`);
     const mem = await admin('/rest/v1/team_members', {
       method: 'POST',

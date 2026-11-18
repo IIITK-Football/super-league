@@ -20,8 +20,9 @@ function run(setup: string) {
   const script = `BEGIN;
     INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
       VALUES ('${USER}', 'authenticated', 'authenticated', 'guard.captain@iiitkottayam.ac.in', '', now(), now());
-    INSERT INTO public.team_registrations (id, captain_id, team_name, division)
-      VALUES ('b1000000-0000-4000-8000-0000000000aa', '${USER}', 'Guard Team', 'freshers');
+    INSERT INTO public.team_registrations (id, captain_id, team_name, season_id)
+      SELECT 'b1000000-0000-4000-8000-0000000000aa', '${USER}', 'Guard Team', s.id
+      FROM public.seasons s JOIN public.divisions d ON d.id = s.division_id WHERE d.slug = 'freshers' AND s.is_current;
     ${setup}
     ${guardBlock()}
     ROLLBACK;`;

@@ -11,7 +11,8 @@ BEGIN READ ONLY;
 
 SELECT r.id AS team_entry_id,
        r.team_name,
-       r.division,
+       d.slug AS division,
+       s.name AS season,
        r.captain_id,
        u.email AS captain_email,
        COALESCE(ur.role, '(no role row)') AS current_role,
@@ -20,9 +21,11 @@ SELECT r.id AS team_entry_id,
          ELSE 'review by hand: this role is not changed automatically (no role implies another)'
        END AS suggestion
 FROM public.team_registrations r
+JOIN public.seasons s ON s.id = r.season_id
+JOIN public.divisions d ON d.id = s.division_id
 LEFT JOIN public.user_roles ur ON ur.user_id = r.captain_id
 LEFT JOIN auth.users u ON u.id = r.captain_id
 WHERE ur.role IS DISTINCT FROM 'captain' AND ur.role IS DISTINCT FROM 'dictator'
-ORDER BY r.division, r.team_name;
+ORDER BY d.slug, s.name, r.team_name;
 
 ROLLBACK;

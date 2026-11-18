@@ -55,11 +55,8 @@ SELECT ok((SELECT is_current FROM public.seasons WHERE id = 'f5000000-0000-4000-
           AND NOT (SELECT is_current FROM public.seasons WHERE id = (SELECT id FROM old_current)),
   'the previous current season is cleared in the same step');
 
-INSERT INTO public.matches (id, home_team_id, away_team_id, division)
-SELECT 'f5100000-0000-4000-8000-000000000001', (SELECT id FROM public.teams WHERE division = 'mens' LIMIT 1),
-       (SELECT id FROM public.teams WHERE division = 'mens' OFFSET 1 LIMIT 1), 'mens';
-SELECT is((SELECT season_id FROM public.matches WHERE id = 'f5100000-0000-4000-8000-000000000001'),
-  'f5000000-0000-4000-8000-000000000001'::uuid, 'new legacy rows of that division attach to the new current season');
+SELECT is((SELECT count(*) FROM public.seasons WHERE is_current)::int, 3,
+  'other divisions keep their own current season');
 
 SELECT * FROM finish();
 ROLLBACK;

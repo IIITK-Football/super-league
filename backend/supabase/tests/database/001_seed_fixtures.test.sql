@@ -19,7 +19,7 @@ CREATE TEMP VIEW seed_users AS
 SELECT is((SELECT count(*) FROM public.user_profiles p JOIN seed_users s ON s.id = p.id)::int, 50, 'profiles: 4 named + 46 fans');
 SELECT is((SELECT count(*) FROM seed_users)::int, 50, 'seed auth users match seed profiles');
 SELECT is((SELECT count(*) FROM public.newsletter)::int, 24, 'news articles');
-SELECT is((SELECT count(*) FROM public.polls)::int, 6, 'polls');
+SELECT hasnt_table('public', 'polls', 'the unused polls feature is gone');
 SELECT is((SELECT count(*) FROM public.team_registrations)::int, 2, 'team registrations');
 SELECT is((SELECT count(*) FROM public.wc_teams)::int, 16, 'World Cup teams');
 SELECT is((SELECT count(*) FROM public.wc_matches)::int, 40, 'World Cup matches');
@@ -27,9 +27,10 @@ SELECT is((SELECT count(*) FROM public.wc_leaderboard w JOIN seed_users s ON s.i
 
 -- Divisions each have the same shape
 SELECT results_eq(
-  $$SELECT division::text, count(*)::int FROM public.teams GROUP BY division ORDER BY division$$,
-  $$VALUES ('freshers', 8), ('mens', 8), ('womens', 8)$$,
-  'eight teams per division');
+  $$SELECT d.slug, count(*)::int FROM public.team_entries e JOIN public.seasons s ON s.id = e.season_id
+    JOIN public.divisions d ON d.id = s.division_id WHERE s.slug = '2026' GROUP BY d.slug ORDER BY d.slug$$,
+  $$VALUES ('freshers', 8), ('super-league', 8), ('wsl', 8)$$,
+  'eight teams in each division''s 2026 season');
 
 -- Roles: legacy role values present for the current schema (see SL-003 mapping)
 SELECT results_eq(

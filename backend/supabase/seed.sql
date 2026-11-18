@@ -216,6 +216,45 @@ INSERT INTO _mega_division_shows VALUES
   ('womens', 'The Penguin'),
   ('freshers', 'The Bear');
 
+-- Divisions are data records, each with one current season (2026). The `division` text above is only this seed's
+-- internal key for choosing a show. Matched by slug, so a rerun (and staging data) reuses the existing rows.
+CREATE TEMP TABLE _mega_division_defs (
+  division text PRIMARY KEY,
+  slug text NOT NULL,
+  name text NOT NULL,
+  short_name text NOT NULL,
+  sort_order integer NOT NULL,
+  format text NOT NULL
+) ON COMMIT DROP;
+
+INSERT INTO _mega_division_defs VALUES
+  ('mens', 'super-league', 'Super League', 'SL', 1, 'league'),
+  ('womens', 'wsl', 'WSL', 'WSL', 2, 'knockout'),
+  ('freshers', 'freshers', 'Freshers', 'Freshers', 3, 'knockout');
+
+INSERT INTO public.divisions (slug, name, short_name, sort_order, created_by)
+SELECT slug, name, short_name, sort_order, NULL FROM _mega_division_defs
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO public.seasons (division_id, slug, name, status, is_current, format, created_by)
+SELECT d.id, '2026', '2026', 'active', NOT EXISTS (SELECT 1 FROM public.seasons c WHERE c.division_id = d.id AND c.is_current), def.format, NULL
+FROM _mega_division_defs def JOIN public.divisions d ON d.slug = def.slug
+ON CONFLICT (division_id, slug) DO NOTHING;
+
+INSERT INTO public.season_sections (season_id, section_key, enabled, nav_visible, sort_order)
+SELECT s.id, t.key, t.default_enabled, t.default_enabled, t.default_sort_order
+FROM _mega_division_defs def
+JOIN public.divisions d ON d.slug = def.slug
+JOIN public.seasons s ON s.division_id = d.id AND s.slug = '2026'
+CROSS JOIN public.section_types t
+ON CONFLICT (season_id, section_key) DO NOTHING;
+
+CREATE TEMP TABLE _mega_seasons ON COMMIT DROP AS
+SELECT def.division, s.id AS season_id
+FROM _mega_division_defs def
+JOIN public.divisions d ON d.slug = def.slug
+JOIN public.seasons s ON s.division_id = d.id AND s.slug = '2026';
+
 CREATE TEMP TABLE _mega_teams ON COMMIT DROP AS
 SELECT
   md5('mega-team:' || d.division || ':' || c.short_name)::uuid AS id,
@@ -228,10 +267,15 @@ SELECT
 FROM _mega_club_defs c
 JOIN _mega_division_shows d USING (show_name);
 
-INSERT INTO public.teams (id, name, logo_url, division, short_name, team_color)
-SELECT id, team_name, logo_url, division, short_name, team_color
+INSERT INTO public.teams (id, name, logo_url, short_name, team_color)
+SELECT id, team_name, logo_url, short_name, team_color
 FROM _mega_teams
 ON CONFLICT (id) DO NOTHING;
+
+-- Each team plays the 2026 season of its division.
+INSERT INTO public.team_entries (team_id, season_id)
+SELECT t.id, s.season_id FROM _mega_teams t JOIN _mega_seasons s USING (division)
+ON CONFLICT (team_id, season_id) DO NOTHING;
 
 -- 24 teams × 8 players = 192 players.
 INSERT INTO public.players (
@@ -309,7 +353,7 @@ FROM pairs;
 
 INSERT INTO public.matches (
   id, home_team_id, away_team_id, home_score, away_score,
-  status, date, venue, division, scorers, assists, own_goals,
+  status, date, venue, season_id, scorers, assists, own_goals,
   minute, is_graded, timer_start_time, timer_calibration
 )
 SELECT
@@ -325,7 +369,7 @@ SELECT
     WHEN 'Slow Horses' THEN 'London'
     ELSE 'Gotham'
   END,
-  m.division,
+  (SELECT season_id FROM _mega_seasons s WHERE s.division = m.division),
   '[]'::jsonb,
   '[]'::jsonb,
   '[]'::jsonb,
@@ -421,8 +465,8 @@ INSERT INTO _mega_registrations VALUES
     md5('mega-team:freshers:EVER')::uuid
   );
 
-INSERT INTO public.team_registrations (id, captain_id, team_name, division, team_id)
-SELECT id, captain_id, team_name, 'freshers', team_id
+INSERT INTO public.team_registrations (id, captain_id, team_name, season_id, team_id)
+SELECT id, captain_id, team_name, (SELECT season_id FROM _mega_seasons WHERE division = 'freshers'), team_id
 FROM _mega_registrations
 ON CONFLICT (id) DO NOTHING;
 
@@ -494,40 +538,6 @@ SELECT
 FROM generate_series(1, 24) AS n
 ON CONFLICT (id) DO NOTHING;
 
--- Polls: this schema accepts mens, womens, and both (not freshers).
-CREATE TEMP TABLE _mega_poll_defs (
-  poll_no integer PRIMARY KEY,
-  division text NOT NULL,
-  question_text text NOT NULL
-) ON COMMIT DROP;
-
-INSERT INTO _mega_poll_defs VALUES
-  (1, 'mens', 'Which mens fixture should be highlighted?'),
-  (2, 'mens', 'Which team has the strongest form?'),
-  (3, 'womens', 'Which womens fixture should be highlighted?'),
-  (4, 'womens', 'Which team has the strongest form?'),
-  (5, 'both', 'Which fixture should be scheduled first?'),
-  (6, 'both', 'Which match should be featured next?');
-
-INSERT INTO public.polls (id, question_text, is_active, division)
-SELECT md5('mega-poll:' || poll_no)::uuid, question_text, true, division
-FROM _mega_poll_defs
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.poll_options (id, poll_id, option_text, vote_count)
-SELECT
-  md5('mega-poll-option:' || p.poll_no || ':' || o.option_no)::uuid,
-  md5('mega-poll:' || p.poll_no)::uuid,
-  o.option_text,
-  mod(p.poll_no * 3 + o.option_no * 2, 17)
-FROM _mega_poll_defs p
-CROSS JOIN (VALUES
-  (1, 'The Beef'),
-  (2, 'Slough House'),
-  (3, 'Falcone Family'),
-  (4, 'Regent''s Park')
-) AS o(option_no, option_text)
-ON CONFLICT (id) DO NOTHING;
 
 -- Fantasy tables have no division column, so this is a separate mixed-show sample.
 CREATE TEMP TABLE _mega_wc_clubs (
@@ -729,8 +739,14 @@ SELECT
 FROM _mega_users u
 ON CONFLICT (id) DO NOTHING;
 
--- Divisions and seasons come from the legacy rows above through the same idempotent backfill the migration
--- runs on hosted data (docs/decisions/D-01-division-season-mapping.md). Re-seeding changes nothing.
-SELECT public.backfill_legacy_divisions();
+-- Season dates follow the season's matches (docs/decisions/D-01-division-season-mapping.md).
+UPDATE public.seasons s
+SET starts_on = d.first_day, ends_on = d.last_day
+FROM (
+  SELECT m.season_id, min((m.date AT TIME ZONE 'Asia/Kolkata')::date) AS first_day, max((m.date AT TIME ZONE 'Asia/Kolkata')::date) AS last_day
+  FROM public.matches m JOIN _mega_seasons ms ON ms.season_id = m.season_id
+  GROUP BY m.season_id
+) d
+WHERE s.id = d.season_id AND (s.starts_on IS DISTINCT FROM d.first_day OR s.ends_on IS DISTINCT FROM d.last_day);
 
 COMMIT;

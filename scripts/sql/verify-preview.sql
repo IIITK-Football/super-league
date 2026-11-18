@@ -10,12 +10,13 @@ FROM (
          (SELECT count(*) FROM public.players) >= 192
   UNION ALL SELECT 3, 'matches: at least 168',
          (SELECT count(*) FROM public.matches) >= 168
-  UNION ALL SELECT 4, 'every division has a live match',
-         (SELECT count(DISTINCT division) FROM public.matches WHERE status = 'live' AND division IN ('mens', 'womens', 'freshers')) = 3
+  UNION ALL SELECT 4, 'every division has a live match in its current season',
+         (SELECT count(DISTINCT s.division_id) FROM public.matches m JOIN public.seasons s ON s.id = m.season_id
+          WHERE m.status = 'live' AND s.is_current) >= 3
   UNION ALL SELECT 5, 'goals exist for completed matches',
          (SELECT count(*) FROM public.goals) > 0
-  UNION ALL SELECT 6, 'no fixture match is duplicated (same division and same two teams)',
-         NOT EXISTS (SELECT 1 FROM public.matches GROUP BY division, home_team_id, away_team_id HAVING count(*) > 1)
+  UNION ALL SELECT 6, 'no fixture match is duplicated (same season and same two teams)',
+         NOT EXISTS (SELECT 1 FROM public.matches GROUP BY season_id, home_team_id, away_team_id HAVING count(*) > 1)
   UNION ALL SELECT 7, 'fixture dictator exists with the dictator role',
          EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = '60000000-0000-4000-8000-000000000001' AND role = 'dictator')
   UNION ALL SELECT 8, 'fixture editor exists with the editor role',
@@ -29,8 +30,9 @@ FROM (
          (SELECT count(*) FROM public.team_registrations) >= 2 AND (SELECT count(*) FROM public.team_members) > 0
   UNION ALL SELECT 12, 'league predictions exist',
          (SELECT count(*) FROM public.predictions) > 0
-  UNION ALL SELECT 13, 'newsletter items and polls exist',
-         (SELECT count(*) FROM public.newsletter) >= 24 AND (SELECT count(*) FROM public.polls) > 0 AND (SELECT count(*) FROM public.poll_options) > 0
+  UNION ALL SELECT 13, 'newsletter items exist and every division has a current season with its teams',
+         (SELECT count(*) FROM public.newsletter) >= 24
+         AND (SELECT count(*) FROM public.seasons s JOIN public.team_entries e ON e.season_id = s.id WHERE s.is_current) >= 24
   UNION ALL SELECT 14, 'World Cup fantasy data exists (teams and players and matches and predictions and leaderboard)',
          (SELECT count(*) FROM public.wc_teams) > 0 AND (SELECT count(*) FROM public.wc_players) > 0
          AND (SELECT count(*) FROM public.wc_matches) >= 40 AND (SELECT count(*) FROM public.wc_predictions) > 0
