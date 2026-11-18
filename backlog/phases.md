@@ -24,6 +24,6 @@ Each backlog item file declares its phase. A phase is complete when every item i
 
 ### Phase 9 — Frontend consolidation and full design-system redesign
 
-**Start condition:** Phases 0–8 have stable data/API contracts, role capabilities, media paths, and release gates. This is intentionally the final major implementation phase. The user-reported tablet and visual defects should be reproduced here.
+**Start condition:** Phases 0–8 have stable data/API contracts, role capabilities, media paths, and release gates. This is intentionally the final major implementation phase: it consolidates, visually redesigns and refines flows that earlier phases already made usable (rule R10); it does not make a built feature usable for the first time. The user-reported tablet and visual defects should be reproduced here.
 
 ### Phase 10 — Controlled migration, release, and legacy retirement

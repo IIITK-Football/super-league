@@ -52,7 +52,7 @@ Enforce these boundaries in server authorization and Supabase RLS wherever direc
 4. Configurable league-only, knockout-only, or combined formats. Bracket positions map explicitly to matches and remain editable.
 5. A distinct World Cup fantasy page, reached from home content.
 6. A configurable home page with current-season video presentation, news carousel, share metadata, and later sections.
-7. Grouped tests, local-first contribution instructions, safe migration automation, role-specific dashboards, and a complete design system before frontend redesign is considered done.
+7. Grouped tests, local-first contribution instructions, safe migration automation, role-specific dashboards (each first delivered, minimally usable, with the capability it serves), and a complete design system before the frontend redesign is considered done.
 
 ## Required sequence
 
@@ -66,10 +66,14 @@ Follow the backlog in order. The key dependencies are:
 6. Home metadata, sharing, and external schedule/score integration.
 7. R2 configuration and Wrangler local emulation only after the Worker and storage boundaries exist.
 8. CI, security, migration, and release workflows.
-9. Frontend consolidation, design system, responsive fixes, and product redesign. Frontend product work remains last.
+9. Frontend consolidation, design system, responsive fixes, and visual redesign of flows that are already usable from earlier phases. The redesign remains last; first usable flows do not wait for it (see "Usable in its own phase").
 10. Separately reviewed production cutover and legacy retirement.
 
 The order is enforced: no item in a later phase can become ready while an earlier phase still has unfinished items (`pnpm work` phase gating).
+
+### Usable in its own phase
+
+When a product capability is meant to be used or configured by a person (a dictator, captain, scorer, editor, player or visitor), the item and phase that build it also deliver a **minimally usable flow in the existing frontend**. Do not defer the first usable UI to the Phase 9 redesign; Phase 9 consolidates, visually designs and refines flows that already work. The minimal flow follows the current frontend patterns (no redesign), exposes the real authorized action (never a hidden control standing in for authorization), and handles loading, empty, success and error states. Verify the real UI → API → database path with tests (allowed and denied cases), locally and then on staging, as for any other cross-layer behavior. Database or API support alone does not complete such an item. This applies only to user-facing capabilities: backend infrastructure, runtime, storage, security and tooling changes need no arbitrary UI. World Cup fantasy stays a separate page and is not folded into division flows.
 
 Do not perform a giant rewrite. Work in small, coherent increments, completing and checking one backlog item or user-visible behavior before broadening scope. Preserve compatibility until replacement behavior passes parity checks. Avoid speculative abstractions and duplicate sources of truth; where temporary duplication is necessary for compatibility, identify the authoritative writer and add checks for drift.
 
@@ -100,7 +104,7 @@ These are also enforced by the Claude Code guard (`.claude/settings.json`, `scri
 - **Pushes to `develop`** also run a light CI pass for visibility (hygiene, backlog records, the audit and the cheap mapped-and-covered rule); it is not a merge requirement.
 - **Completing a phase (rigid, slow, once):** `pnpm work phase N --base <commit before the phase began>` checks every item's prerequisites together (test groups and acceptance checks defined, test files exist, the owner's attestations of manual checks), applies the strict test rules to everything the phase changed (every changed file mapped, covered by an active group, and with a changed test), runs **every** test group once, and writes evidence and a walkthrough for each item. Finish the walkthroughs and run it again. `main` is protected: it is reached only by a pull request, which must pass the required `gate` running the same full rules and the whole suite, and the owner approves the production database job.
 - **Owner-only:** `pnpm work attest` records the owner's attestation of a manual check (a hosted step). It is the owner's statement, so when the agent runs it the owner gets a confirmation prompt, and the agent attests only what the recorded evidence supports; `pnpm work approve` is optional and stays the owner's. Anything touching `main`, production or GitHub and Supabase settings is the owner's.
-- There is no bypass flag, variable or switch for any of this, and the safety boundaries above are enforced by the guard in `.claude/settings.json`. At the start of a session read this file and `pnpm work status`; state the issue, narrow scope and acceptance checks before editing. If a genuinely blocking product choice remains, make independent progress elsewhere and ask one focused question. Do not start frontend product redesign before its phase.
+- There is no bypass flag, variable or switch for any of this, and the safety boundaries above are enforced by the guard in `.claude/settings.json`. At the start of a session read this file and `pnpm work status`; state the issue, narrow scope and acceptance checks before editing. If a genuinely blocking product choice remains, make independent progress elsewhere and ask one focused question. Do not start the Phase 9 consolidation and visual redesign before its phase; the first usable flow of a capability belongs to the capability's own item.
 
 ## Plans, walkthroughs and plugins
 
