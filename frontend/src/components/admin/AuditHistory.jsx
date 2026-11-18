@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { History, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -60,6 +60,8 @@ export default function AuditHistory() {
   const [loading, setLoading] = useState(true);
   const [more, setMore] = useState(false);
   const [error, setError] = useState('');
+  // Each load is numbered; only the newest one may update the list, so a slow answer for an old filter is dropped.
+  const latestLoad = useRef(0);
 
   const load = async ({ append = false } = {}) => {
     setLoading(true);
@@ -72,7 +74,9 @@ export default function AuditHistory() {
       .range(from, from + PAGE_SIZE - 1);
     if (table) query = query.eq('table_name', table);
     if (actor) query = query.eq('actor_id', actor);
+    const request = ++latestLoad.current;
     const { data, error: err } = await query;
+    if (request !== latestLoad.current) return;
     if (err) {
       setError(err.message || 'Could not load the audit history.');
       setLoading(false);
@@ -87,7 +91,7 @@ export default function AuditHistory() {
       const { data: profiles } = await supabase.from('user_profiles').select('id, email').in('id', unknown);
       setEmails((known) => ({ ...known, ...Object.fromEntries((profiles || []).map((p) => [p.id, p.email])) }));
     }
-    setLoading(false);
+    if (request === latestLoad.current) setLoading(false);
   };
 
   // The actor filter offers the people who appear in the recent history.

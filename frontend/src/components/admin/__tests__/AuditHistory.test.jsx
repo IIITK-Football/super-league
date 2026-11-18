@@ -5,7 +5,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = { rows: [], profiles: [], calls: [], fail: null };
+const db = { rows: [], profiles: [], calls: [], fail: null, slow: null };
 
 function from(table) {
   const q = { filters: [], range: null, ins: null };
@@ -15,7 +15,8 @@ function from(table) {
     eq: (c, v) => { q.filters.push([c, v]); return b; },
     in: (c, v) => { q.ins = [c, v]; return b; },
     range: (a, z) => { q.range = [a, z]; return b; },
-    then: (resolve, reject) => Promise.resolve().then(() => {
+    then: (resolve, reject) => (db.slow && q.filters.some(([, v]) => v === db.slow)
+      ? new Promise((r) => setTimeout(r, 50)) : Promise.resolve()).then(() => {
       db.calls.push({ table, filters: q.filters, range: q.range });
       if (table === 'user_profiles') return { data: db.profiles.filter((p) => q.ins[1].includes(p.id)), error: null };
       if (db.fail) return { data: null, error: db.fail };
@@ -40,6 +41,7 @@ beforeEach(() => {
   db.profiles = [{ id: 'u1', email: 'lamb@iiitkottayam.ac.in' }, { id: 'u2', email: 'diana@iiitkottayam.ac.in' }];
   db.calls = [];
   db.fail = null;
+  db.slow = null;
 });
 afterEach(cleanup);
 
@@ -68,6 +70,18 @@ describe('AuditHistory', () => {
     expect(items[1].textContent).toMatch(/diana@iiitkottayam\.ac\.in.*Roles.*role: default → captain/);
     expect(items[2].textContent).toMatch(/System \(postgres\).*insert.*Seasons/);
     expect(db.calls[0]).toMatchObject({ table: 'audit_log', range: [0, PAGE_SIZE - 1] });
+  });
+
+  it('shows the entries of the filter chosen last, even when an earlier filter answers later', async () => {
+    render(<AuditHistory />);
+    await screen.findByRole('list', { name: 'Audit entries' });
+    db.slow = 'seasons';
+    fireEvent.change(screen.getByLabelText('Table'), { target: { value: 'seasons' } });
+    fireEvent.change(screen.getByLabelText('Table'), { target: { value: 'user_roles' } });
+    await new Promise((r) => setTimeout(r, 120));
+    const items = within(screen.getByRole('list', { name: 'Audit entries' })).getAllByRole('listitem');
+    expect(items.map((li) => li.textContent).join(' ')).toMatch(/role: default → captain/);
+    expect(items.map((li) => li.textContent).join(' ')).not.toMatch(/Seasons/);
   });
 
   it('filters by table and by the person who made the change', async () => {
