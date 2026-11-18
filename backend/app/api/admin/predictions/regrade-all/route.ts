@@ -148,45 +148,11 @@ export async function POST(request: Request) {
       console.log(`✅ [DONE] Match ${match.id} regraded.`);
     }
 
-    // --- 4. GLOBAL LEADERBOARD SYNC ---
-    console.log("--- Starting Global Leaderboard Sync for ALL Users ---");
-    
-    // Fetch all user ids who have ever predicted
-    const { data: allUsersData, error: usersError } = await supabaseAdmin
-      .from('predictions')
-      .select('user_id');
-
-    if (usersError) throw usersError;
-    const uniqueUsers = [...new Set((allUsersData || []).map(p => p.user_id))];
-
-    // SEQUENTIAL SYNC: Process users one by one to avoid 500 errors/timeout
-    let syncCount = 0;
-    for (const userId of uniqueUsers) {
-      const { data: userPreds } = await supabaseAdmin
-        .from('predictions')
-        .select('points_awarded')
-        .eq('user_id', userId);
-        
-      const totalScore = (userPreds || []).reduce((acc, curr) => acc + (curr.points_awarded || 0), 0);
-      
-      const { error: profileErr } = await supabaseAdmin
-        .from('user_profiles')
-        .update({ points: totalScore })
-        .eq('id', userId);
-        
-      if (profileErr) {
-        console.error(`❌ [ERROR] Failed to sync profile for user ${userId}:`, profileErr.message);
-      } else {
-        syncCount++;
-        if (syncCount % 10 === 0) console.log(`Synced ${syncCount}/${uniqueUsers.length} users...`);
-      }
-    }
-    
-    console.log(`--- Finished Global Sync. Total processed: ${syncCount} users. ---`);
+    // Season fantasy points are the sums of points_awarded (season_fantasy_points), so there is no total to sync.
 
     return NextResponse.json({ 
       success: true, 
-      message: `Successfully regraded matches and synced the global leaderboard!` 
+      message: `Successfully regraded matches; season leaderboards follow the new points.` 
     });
 
   } catch (error: any) {

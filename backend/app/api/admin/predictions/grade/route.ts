@@ -152,32 +152,7 @@ export async function POST(request: Request) {
     });
 
     await Promise.all(gradePromises);
-    console.log("--- Finished Grading Predictions. Starting Leaderboard Sync ---");
-
-    // --- 5. AUTOMATIC GLOBAL LEADERBOARD UPDATE ---
-    const uniqueUsers = [...new Set(predictions.map(p => p.user_id))];
-    
-    const profilePromises = uniqueUsers.map(async (userId) => {
-      const { data: userPreds } = await supabaseAdmin
-        .from('predictions')
-        .select('points_awarded')
-        .eq('user_id', userId);
-        
-      const totalScore = (userPreds || []).reduce((acc, curr) => acc + (curr.points_awarded || 0), 0);
-      
-      const { error: profileErr } = await supabaseAdmin
-        .from('user_profiles')
-        .update({ points: totalScore })
-        .eq('id', userId);
-        
-      if (profileErr) {
-        console.error(`❌ [ERROR] Failed to sync profile for user ${userId}:`, profileErr.message);
-      } else {
-        console.log(`📈 [SYNC] Updated user ${userId} to ${totalScore} total points.`);
-      }
-    });
-
-    await Promise.all(profilePromises);
+    // Season fantasy points are the sums of points_awarded (season_fantasy_points), so there is no total to sync.
     console.log("--- Grading Run Complete! ---\n");
     // 6. Mark match as graded (Safe update)
     const { error: matchUpdateErr } = await supabaseAdmin.from('matches').update({ is_graded: true }).eq('id', body.match_id);
@@ -189,7 +164,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      message: `Successfully graded ${predictions.length} predictions and updated the global leaderboard!` 
+      message: `Successfully graded ${predictions.length} predictions and updated the season leaderboard!` 
     });
 
   } catch (error) {

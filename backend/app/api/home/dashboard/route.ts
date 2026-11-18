@@ -153,11 +153,14 @@ export async function GET(request: Request) {
                 awayScorers: awayGoals
             };
         }
-        const { data: fantasyUsers } = await supabase
-            .from('user_profiles')
-            .select('id, nickname, points')
-            .order('points', { ascending: false })
-            .limit(5);
+        // The season's fantasy leaders (points from graded predictions on this season's matches)
+        const { data: ranked } = await supabase.rpc('season_fantasy_leaderboard', { p_season: seasonId, p_limit: 5 });
+        const rankedIds = (ranked ?? []).map((r: any) => r.user_id);
+        const { data: names } = rankedIds.length
+            ? await supabase.from('user_profiles').select('id, nickname').in('id', rankedIds)
+            : { data: [] as { id: string; nickname: string | null }[] };
+        const nicknameById = new Map((names ?? []).map((n: any) => [n.id, n.nickname]));
+        const fantasyUsers = (ranked ?? []).map((r: any) => ({ id: r.user_id, nickname: nicknameById.get(r.user_id), points: r.points }));
 
         // Each user's flair for this division.
         const userIds = (fantasyUsers ?? []).map((u: any) => u.id);

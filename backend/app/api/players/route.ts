@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { secretKey } from '@/lib/supabase/keys';
+import { publishableKey, secretKey } from '@/lib/supabase/keys';
+import { resolveScope } from '@/lib/scope';
 import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../lib/errorHandler';
 
@@ -10,10 +11,15 @@ const supabase = createClient(
   secretKey()
 );
 
+// The season is resolved with the public key, so a hidden or archived season cannot be read through this route.
+const publicClient = createClient(process.env.SUPABASE_URL!, publishableKey());
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const teamId = searchParams.get('team_id');
+    // The season roster (?division=<slug>&season=<slug or id>; default the division's current season)
+    const scope = await resolveScope(publicClient, { division: searchParams.get('division'), season: searchParams.get('season') });
 
     let query = supabase
       .from('players')
@@ -26,8 +32,10 @@ export async function GET(request: Request) {
         image_url,
         assists,
         team_id,
-        teams ( id, name )
-      `);
+        teams ( id, name ),
+        team_entries!inner ( season_id )
+      `)
+      .eq('team_entries.season_id', scope.season.id);
 
     let freshersQuery = supabase
       .from('team_members')
@@ -39,8 +47,9 @@ export async function GET(request: Request) {
         position,
         jersey_number,
         image_url,
-        team_registrations!inner ( team_id, team_name )
-      `);
+        team_registrations!inner ( team_id, team_name, season_id )
+      `)
+      .eq('team_registrations.season_id', scope.season.id);
 
     if (teamId) {
       query = query.eq('team_id', teamId);

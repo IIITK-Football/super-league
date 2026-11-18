@@ -5,6 +5,7 @@ import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
+import { resolveScope } from '@/lib/scope';
 
 async function getSupabaseClient(request: Request) {
   const cookieStore = await cookies();
@@ -148,6 +149,10 @@ export async function GET(request: Request) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw { status: 401, message: "Unauthorized" };
 
+    // This user's predictions in the selected season (?division=<slug>&season=<slug or id>; default current)
+    const { searchParams } = new URL(request.url);
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+
     // Fetch all predictions for this user, joined with match data + team names via FK join
     const { data: predictions, error } = await supabase
       .from('predictions')
@@ -161,8 +166,9 @@ export async function GET(request: Request) {
         points_awarded,
         status,
         created_at,
-        matches (
+        matches!inner (
           id,
+          season_id,
           home_team_id,
           away_team_id,
           home_score,
@@ -176,6 +182,7 @@ export async function GET(request: Request) {
         )
       `)
       .eq('user_id', user.id)
+      .eq('matches.season_id', scope.season.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;

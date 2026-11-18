@@ -238,7 +238,13 @@
         "backend/app/api/captain/team-branding/**",
         "backend/app/api/polls/**",
         "backend/supabase/migrations/*flairs*",
-        "backend/supabase/migrations/*legacy*"
+        "backend/supabase/migrations/*legacy*",
+        "backend/app/api/schedule/**",
+        "backend/app/api/predictions/history/**",
+        "backend/app/api/players/**",
+        "backend/app/api/admin/predictions/grade/**",
+        "backend/app/api/admin/predictions/regrade-all/**",
+        "backend/supabase/migrations/*fantasy*"
       ],
       "run": [
         {
@@ -283,7 +289,13 @@
         "backend/app/api/captain/team-branding/**",
         "backend/app/api/polls/**",
         "backend/supabase/migrations/*flairs*",
-        "backend/supabase/migrations/*legacy*"
+        "backend/supabase/migrations/*legacy*",
+        "backend/app/api/schedule/**",
+        "backend/app/api/predictions/history/**",
+        "backend/app/api/players/**",
+        "backend/app/api/admin/predictions/grade/**",
+        "backend/app/api/admin/predictions/regrade-all/**",
+        "backend/supabase/migrations/*fantasy*"
       ],
       "testPaths": [
         "backend/tests/divisions/**",

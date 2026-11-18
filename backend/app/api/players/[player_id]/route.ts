@@ -22,7 +22,8 @@ export async function GET(
             .select(`
         id, first_name, last_name, position, jersey_number, image_url, assists, 
         overall_rating, attributes,
-        teams ( id, name )
+        teams ( id, name ),
+        team_entries ( season:seasons ( slug, name, division:divisions ( slug, name ) ) )
       `)
             .eq('id', player_id)
             .maybeSingle();
@@ -32,10 +33,18 @@ export async function GET(
         let player;
 
         if (data) {
+            // A player row is one season's roster place, so these are that season's goals and assists.
             const { count: goalCount } = await supabase
                 .from('goals')
                 .select('*', { count: 'exact', head: true })
-                .eq('player_id', player_id);
+                .eq('player_id', player_id)
+                .eq('is_own_goal', false);
+            const { count: assistCount } = await supabase
+                .from('goals')
+                .select('*', { count: 'exact', head: true })
+                .eq('assist_id', player_id);
+            const entry = (data as any).team_entries;
+            const season = (Array.isArray(entry) ? entry[0] : entry)?.season ?? null;
 
             player = {
                 id: data.id,
@@ -45,8 +54,9 @@ export async function GET(
                 position: data.position,
                 jersey_number: data.jersey_number,
                 image_url: data.image_url,
-                assists: data.assists ?? 0,
+                assists: assistCount ?? 0,
                 goals: goalCount ?? 0,
+                season: season ? { slug: season.slug, name: season.name, division: season.division } : null,
                 overall_rating: data.overall_rating ?? 50,
                 attributes: data.attributes || null,
                 team: (data as any).teams?.name || null,
