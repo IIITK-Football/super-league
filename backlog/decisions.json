@@ -4,10 +4,11 @@
     {
       "id": "D-01",
       "question": "How the division/season schema maps existing division values and historical data without loss.",
-      "status": "open",
+      "status": "resolved",
       "items": [
         "SL-020"
-      ]
+      ],
+      "resolution": "docs/decisions/D-01-division-season-mapping.md"
     },
     {
       "id": "D-02",

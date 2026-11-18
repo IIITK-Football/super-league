@@ -1,0 +1,34 @@
+# D-01: Mapping legacy division values and history to divisions and seasons
+
+**Status:** Resolved by the owner on 2026-11-18. Applies to the division and season model (SL-020). It refines the mapping table in `SL-004-migration-and-cutover-strategy.md` §2.
+
+## Decision
+
+1. **One initial season per populated division.** A legacy value is *populated* when at least one team, match or team registration carries it. All of that value's existing data goes into that single season and is never split.
+2. **The season name is the competition year taken from the match dates:**
+   - `2026` when the first and last match fall in the same calendar year;
+   - `2025–26` (an en dash with a two-digit end year) when they span two consecutive years;
+   - `2024–2026` (full years) for a longer span, which is not expected.
+
+   A dictator can rename any season later.
+3. **Season dates:** `starts_on` is the date of the first match and `ends_on` the date of the last.
+4. **No matches** (teams or registrations only): the dates stay NULL. The name is the year of the earliest `team_registrations.created_at`, or the year the backfill runs if there is no registration.
+5. **Status:** the initial season is `active`, `public` and `is_current`.
+
+## Value mapping
+
+| Legacy value | Division slug | Division name | Notes |
+|---|---|---|---|
+| `mens` | `super-league` | Super League | Matches the current `/super-league` route |
+| `womens` | `wsl` | WSL | Matches `/wsl` |
+| `freshers` | `freshers` | Freshers | Matches `/freshers` |
+| `inter` (matches only) | none | none | Inter has not started. No division is created; any such row is reported as an anomaly by `division_model_drift()` |
+| `polls.division` (`both`) | not mapped here | | Polls → divisions belongs to the home configuration work (SL-060) |
+
+These slugs and names are only the initial data. Nothing in the schema or code depends on them: divisions have no enum and no value-list constraint.
+
+## How it is applied
+
+- `public.backfill_legacy_divisions()` is idempotent. The migration calls it to backfill existing hosted data, and `seed.sql` calls it after the synthetic legacy rows are inserted, so local, staging and production all run the same code.
+- `public.legacy_division_map` records the value → division → season mapping. It exists only for the expand period and is removed with the legacy columns (SL-102).
+- While legacy writers still exist, triggers fill whichever side of a row is missing (`division` ↔ `season_id`), and `public.division_model_drift()` must return no rows.
