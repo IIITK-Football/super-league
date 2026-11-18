@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     const adminClient = createClient(supabaseUrl, secret);
     const { data: registration, error: registrationError } = await adminClient
       .from('team_registrations')
-      .select('id, team_id, team_name, division, teams!inner(id, name, logo_url, team_color)')
+      .select('id, team_id, team_name, season:seasons!inner(slug, division:divisions!inner(slug)), teams!inner(id, name, logo_url, team_color)')
       .eq('captain_id', user.id)
       .maybeSingle();
 
@@ -125,9 +125,10 @@ export async function POST(request: Request) {
         .replace(/-+/g, '-')
         .replace(/^[.-]+|[.-]+$/g, '') || registration.team_id;
 
-      const folder = registration.division === 'freshers' || !registration.division
-        ? 'freshers'
-        : registration.division;
+      // Logos are stored per division (Freshers logos keep their existing "freshers/" folder).
+      const season = (Array.isArray(registration.season) ? registration.season[0] : registration.season) as any;
+      const divisionSlug = (Array.isArray(season?.division) ? season.division[0] : season?.division)?.slug as string | undefined;
+      const folder = divisionSlug || 'freshers';
 
       uploadedKey = `${folder}/${teamSlug}.png`;
       await r2.send(new PutObjectCommand({

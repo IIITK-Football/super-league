@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ScopeError } from './scope';
 
 export function handleError(error: any, context: string) {
   // 1. VERCEL LOGGING: Log the raw, highly-detailed error to the server console.
@@ -10,7 +11,11 @@ export function handleError(error: any, context: string) {
   let statusCode = 500;
 
   // We can safely pass 400 (Bad Request) or 401 (Unauthorized) messages to the client
-  if (error.name === 'ZodError' || error.status === 400) {
+  if (error instanceof ScopeError) {
+    // An unknown or malformed division/season: the message names only what the caller asked for.
+    statusCode = error.status;
+    safeMessage = error.message;
+  } else if (error.name === 'ZodError' || error.status === 400) {
     statusCode = 400;
     safeMessage = "Bad Request: Invalid payload.";
   } else if (error.status === 401) {

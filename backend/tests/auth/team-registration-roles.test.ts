@@ -46,6 +46,14 @@ function fakeAdmin() {
 vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [] }) }));
 vi.mock('@supabase/ssr', () => ({ createServerClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: DICTATOR } } }) } }) }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => fakeAdmin() }));
+// The division/season lookup is covered against the real database in tests/divisions; here it is fixed.
+vi.mock('@/lib/scope', () => ({
+  ScopeError: class ScopeError extends Error {},
+  resolveScope: async () => ({
+    division: { id: 'd-freshers', slug: 'freshers', name: 'Freshers' },
+    season: { id: 's-2026', slug: '2026', name: '2026', is_current: true, format: 'knockout' },
+  }),
+}));
 
 import { POST } from '../../app/api/admin/team-registrations/route';
 

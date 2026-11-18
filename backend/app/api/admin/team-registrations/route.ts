@@ -3,6 +3,7 @@ import { publishableKey, secretKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { ScopeError, resolveScope } from '@/lib/scope';
 
 const supabase = createClient(process.env.SUPABASE_URL!, secretKey());
 
@@ -40,22 +41,33 @@ export async function POST(request: Request) {
       );
     }
 
+    // The team is registered for body.season (slug or id) of body.division (slug), default the current season.
+    let scope;
+    try {
+      scope = await resolveScope(supabase, { division: body.division, season: body.season });
+    } catch (scopeError) {
+      if (scopeError instanceof ScopeError) return NextResponse.json({ success: false, message: scopeError.message }, { status: scopeError.status });
+      throw scopeError;
+    }
+
     let leagueTeamId = body.team_id;
     if (!leagueTeamId) {
       const { data: leagueTeam, error: leagueTeamError } = await supabase.from('teams').insert({
         name: body.team_name.trim(),
         short_name: body.team_name.trim().replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase(),
-        division: body.division,
       }).select('id').single();
       if (leagueTeamError) throw leagueTeamError;
       leagueTeamId = leagueTeam.id;
     }
+    const { error: entryError } = await supabase.from('team_entries')
+      .upsert({ team_id: leagueTeamId, season_id: scope.season.id }, { onConflict: 'team_id,season_id', ignoreDuplicates: true });
+    if (entryError) throw entryError;
 
     const { data: registration, error: registrationError } = await supabase.from('team_registrations').upsert({
       ...(body.id ? { id: body.id } : {}),
       team_id: leagueTeamId,
       team_name: body.team_name.trim(),
-      division: body.division,
+      season_id: scope.season.id,
       captain_id: body.captain_id,
     }, { onConflict: 'captain_id' }).select('id').single();
     if (registrationError) throw registrationError;

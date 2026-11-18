@@ -3,6 +3,7 @@ import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
+import { resolveScope } from '@/lib/scope';
 
 // Turn off caching so the admin sees live updates instantly!
 export const revalidate = 0;
@@ -27,9 +28,10 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
-    const division = searchParams.get('division') || 'mens';
 
     const supabase = await getSupabaseClient(request); 
+    // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
 
     let query = supabase
       .from('matches')
@@ -40,13 +42,13 @@ export async function GET(request: Request) {
         home_score, 
         away_score, 
         status, 
-        division,
+        season_id,
         minute,
         is_graded,
         home:teams!home_team_id(id, name),
         away:teams!away_team_id(id, name)
       `)
-      .eq('division', division);
+      .eq('season_id', scope.season.id);
 
     if (status) {
       const statusArray = status.split(',');
@@ -67,7 +69,9 @@ export async function GET(request: Request) {
         home_team_id: homeData?.id || m.home_team_id,
         away_team_id: awayData?.id || m.away_team_id,
         home_team_name: homeData?.name || 'Unknown',
-        away_team_name: awayData?.name || 'Unknown'
+        away_team_name: awayData?.name || 'Unknown',
+        division_name: scope.division.name,
+        season_name: scope.season.name
       };
     });
 
@@ -82,6 +86,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const supabase = await getSupabaseClient(request); 
+    // The match belongs to body.season (slug or id) of body.division (slug), or that division's current season.
+    const scope = await resolveScope(supabase, { division: body.division, season: body.season });
 
     const isWalkover = body.is_walkover === true;
     const walkoverWinner = body.walkover_winner; // 'home' or 'away'
@@ -102,7 +108,7 @@ export async function POST(request: Request) {
         away_team_id: body.away_team_id,
         date: body.date,
         venue: body.venue,
-        division: body.division,
+        season_id: scope.season.id,
         status: initialStatus, 
         home_score: initialHomeScore,
         away_score: initialAwayScore

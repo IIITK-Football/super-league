@@ -215,7 +215,7 @@
       ]
     },
     "divisions": {
-      "description": "Division, season and section model: the dictator path through the local Auth and Data API, and the dictator dashboard flow driven through the real local Data API (allowed and denied cases, hidden and archived records)",
+      "description": "Division, season and section model: the dictator path and the season-scoped public and admin API routes against the local Auth and Data API, and the dictator dashboard flow (allowed and denied cases, hidden and archived records)",
       "owner": "backend",
       "requiresLocalDb": true,
       "paths": [
@@ -223,7 +223,22 @@
         "backend/supabase/migrations/*division*",
         "backend/supabase/migrations/*current_season*",
         "frontend/src/components/admin/ManageDivisions.jsx",
-        "frontend/src/components/admin/__tests__/ManageDivisions.local.test.jsx"
+        "frontend/src/components/admin/__tests__/ManageDivisions.local.test.jsx",
+        "backend/lib/scope.ts",
+        "backend/lib/errorHandler.ts",
+        "backend/app/api/home/dashboard/**",
+        "backend/app/api/standings/**",
+        "backend/app/api/teams/**",
+        "backend/app/api/leaderboard/**",
+        "backend/app/api/legends/**",
+        "backend/app/api/predictions/leaderboard/**",
+        "backend/app/api/admin/matches/route.ts",
+        "backend/app/api/admin/teams/**",
+        "backend/app/api/admin/stats/**",
+        "backend/app/api/captain/team-branding/**",
+        "backend/app/api/polls/**",
+        "backend/supabase/migrations/*flairs*",
+        "backend/supabase/migrations/*legacy*"
       ],
       "run": [
         {
@@ -233,6 +248,7 @@
             "exec",
             "vitest",
             "run",
+            "--no-file-parallelism",
             "tests/divisions"
           ]
         },
@@ -252,7 +268,22 @@
       "covers": [
         "backend/supabase/migrations/*division*",
         "backend/supabase/migrations/*current_season*",
-        "frontend/src/components/admin/ManageDivisions.jsx"
+        "frontend/src/components/admin/ManageDivisions.jsx",
+        "backend/lib/scope.ts",
+        "backend/lib/errorHandler.ts",
+        "backend/app/api/home/dashboard/**",
+        "backend/app/api/standings/**",
+        "backend/app/api/teams/**",
+        "backend/app/api/leaderboard/**",
+        "backend/app/api/legends/**",
+        "backend/app/api/predictions/leaderboard/**",
+        "backend/app/api/admin/matches/route.ts",
+        "backend/app/api/admin/teams/**",
+        "backend/app/api/admin/stats/**",
+        "backend/app/api/captain/team-branding/**",
+        "backend/app/api/polls/**",
+        "backend/supabase/migrations/*flairs*",
+        "backend/supabase/migrations/*legacy*"
       ],
       "testPaths": [
         "backend/tests/divisions/**",

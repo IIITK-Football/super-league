@@ -3,15 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../lib/errorHandler'; 
+import { resolveScope } from '@/lib/scope';
 
 // Turn off caching temporarily so you can test the Mens/Womens toggle instantly!
 export const revalidate = 0; 
 
 export async function GET(request: Request) {
   try {
-    // Grab the division from the URL (e.g., ?division=mens)
+    // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
     const { searchParams } = new URL(request.url);
-    const division = searchParams.get('division') || 'mens';
 
     const cookieStore = await cookies();
     const supabase = createServerClient(
@@ -27,7 +27,17 @@ export async function GET(request: Request) {
       }
     );
 
-    if (division === 'freshers') {
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+
+    // Seasons played with registration rosters (team_members, e.g. Freshers) record scorers on the match by member
+    // id; seasons played with the players roster use the goals table (season_player_stats).
+    const { count: registrations, error: registrationsErr } = await supabase
+      .from('team_registrations')
+      .select('id', { count: 'exact', head: true })
+      .eq('season_id', scope.season.id);
+    if (registrationsErr) throw registrationsErr;
+
+    if ((registrations ?? 0) > 0) {
       const secret = process.env.SUPABASE_SECRET_KEY;
       if (!secret) {
         throw new Error('SUPABASE_SECRET_KEY is required to fetch Freshers player stats.');
@@ -45,12 +55,12 @@ export async function GET(request: Request) {
       const [{ data: members, error: membersErr }, { data: matches, error: matchesErr }] = await Promise.all([
         adminSupabase
           .from('team_members')
-          .select('id, name, first_name, last_name, team_registrations!inner(team_name, division)')
-          .eq('team_registrations.division', 'freshers'),
+          .select('id, name, first_name, last_name, team_registrations!inner(team_name, season_id)')
+          .eq('team_registrations.season_id', scope.season.id),
         adminSupabase
           .from('matches')
           .select('scorers, assists')
-          .eq('division', 'freshers'),
+          .eq('season_id', scope.season.id),
       ]);
 
       if (membersErr) throw membersErr;
@@ -97,25 +107,29 @@ export async function GET(request: Request) {
       });
     }
 
-    // 1. Fetch Top 10 Scorers for the specific division
-    const { data: topScorers, error: scorersErr } = await supabase
-      .from('top_scorers')
-      .select('*')
-      .eq('division', division)
-      .order('goalsScored', { ascending: false })
+    // Top 10 scorers and assisters of this season
+    const shape = (r: any) => ({ id: r.player_id, name: r.name, club: r.club, goalsScored: r.goals, assists: r.assists });
+    const { data: scorerRows, error: scorersErr } = await supabase
+      .from('season_player_stats')
+      .select('player_id, name, club, goals, assists')
+      .eq('season_id', scope.season.id)
+      .order('goals', { ascending: false })
+      .order('name', { ascending: true })
       .limit(10); 
 
     if (scorersErr) throw scorersErr;
 
-    // 2. Fetch Top 10 Assists for the specific division
-    const { data: topAssists, error: assistsErr } = await supabase
-      .from('top_scorers')
-      .select('*')
-      .eq('division', division)
+    const { data: assistRows, error: assistsErr } = await supabase
+      .from('season_player_stats')
+      .select('player_id, name, club, goals, assists')
+      .eq('season_id', scope.season.id)
       .order('assists', { ascending: false })
+      .order('name', { ascending: true })
       .limit(10); 
 
     if (assistsErr) throw assistsErr;
+    const topScorers = (scorerRows ?? []).map(shape);
+    const topAssists = (assistRows ?? []).map(shape);
 
     // Send both lists neatly packaged together!
     return NextResponse.json({

@@ -22,14 +22,24 @@ export async function GET() {
       }
     );
 
-    const { data, error } = await supabase
-      .from('top_scorers')
-      .select('*')
-      .order('goalsScored', { ascending: false })
-      .limit(10); 
+    // All-time leaders: each player's goals and assists added up across every season.
+    const { data: rows, error } = await supabase
+      .from('season_player_stats')
+      .select('player_id, name, club, goals, assists');
 
     // If Supabase throws an error, it gets caught immediately by the catch block
     if (error) throw error;
+
+    const byPlayer = new Map<string, { id: string; name: string; club: string | null; goalsScored: number; assists: number }>();
+    for (const r of rows ?? []) {
+      const p = byPlayer.get(r.player_id) ?? { id: r.player_id, name: r.name, club: r.club, goalsScored: 0, assists: 0 };
+      p.goalsScored += r.goals;
+      p.assists += r.assists;
+      byPlayer.set(r.player_id, p);
+    }
+    const data = [...byPlayer.values()]
+      .sort((a, b) => b.goalsScored - a.goalsScored || a.name.localeCompare(b.name))
+      .slice(0, 10);
 
     return NextResponse.json({
       success: true,

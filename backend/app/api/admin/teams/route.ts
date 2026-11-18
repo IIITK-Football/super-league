@@ -3,6 +3,7 @@ import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
+import { resolveScope } from '@/lib/scope';
 
 // The Magic Fix for Middleware
 async function getSupabaseClient(request: Request) {
@@ -20,19 +21,22 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const supabase = await getSupabaseClient(request);
+    // The team is entered in body.season (slug or id) of body.division (slug), default the current season.
+    const scope = await resolveScope(supabase, { division: body.division, season: body.season });
 
     const { data, error } = await supabase
       .from('teams')
       .insert([{
         name: body.name,
         short_name: body.short_name,
-        division: body.division,
         logo_url: body.logo_url || null
       }])
       .select()
       .single();
 
     if (error) throw error;
+    const { error: entryError } = await supabase.from('team_entries').insert({ team_id: data.id, season_id: scope.season.id });
+    if (entryError) throw entryError;
     return NextResponse.json({ success: true, message: "Team created successfully", data });
   } catch (error) {
     return handleError(error, "Admin Create Team");

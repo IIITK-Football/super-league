@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
+import { scopeFromUrl, seasonTeamIds } from '@/lib/scope';
+import { handleError } from '@/lib/errorHandler';
 
 export const revalidate = 0; 
 
@@ -10,14 +12,14 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const division = searchParams.get('division') || 'mens';
+    // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
+    const scope = await scopeFromUrl(supabase, request);
 
-    // 1. Fetch all teams in this division
-    const { data: teams, error: teamsError } = await supabase
-      .from('teams')
-      .select('id, name, short_name, logo_url')
-      .eq('division', division);
+    // 1. The teams entered in this season
+    const teamIds = await seasonTeamIds(supabase, scope.season.id);
+    const { data: teams, error: teamsError } = teamIds.length
+      ? await supabase.from('teams').select('id, name, short_name, logo_url').in('id', teamIds)
+      : { data: [] as { id: string; name: string; short_name: string | null; logo_url: string | null }[], error: null };
 
     if (teamsError) throw teamsError;
 
@@ -26,7 +28,7 @@ export async function GET(request: Request) {
     const { data: allMatches, error: matchesError } = await supabase
       .from('matches')
       .select('id, home_team_id, away_team_id, home_score, away_score, home_penalties, away_penalties, status, date, home:teams!home_team_id(name), away:teams!away_team_id(name)')
-      .eq('division', division)
+      .eq('season_id', scope.season.id)
       .order('date', { ascending: true }); // MUST BE ASCENDING FOR CORRECT FORM
 
     if (matchesError) throw matchesError;
@@ -93,13 +95,13 @@ export async function GET(request: Request) {
       success: true,
       message: "Data retrieved successfully",
       data: {
+        scope: { division: scope.division, season: scope.season },
         standings: standingsArray,
         bracketMatches: allMatches // <-- WE SEND THE FULL SCHEDULE FOR THE WOMEN'S BRACKET!
       }
     });
 
   } catch (error) {
-    console.error("Database error:", error);
-    return NextResponse.json({ success: false, message: "Failed to fetch standings" }, { status: 500 });
+    return handleError(error, 'Standings');
   }
 }
