@@ -77,8 +77,8 @@ UPDATE public.season_sections SET enabled = NOT enabled WHERE section_key = 'fan
 SELECT is((SELECT record_id FROM pg_temp.last('season_sections')),
   (SELECT id::text FROM public.seasons WHERE is_current ORDER BY id LIMIT 1) || ':fantasy', 'a section is identified by season and key');
 SELECT is((SELECT actor_role FROM pg_temp.last('season_sections')), 'postgres', 'server and migration work is recorded under its database session');
-UPDATE public.player_private_details SET email = 'changed.address@iiitkottayam.ac.in' WHERE player_id = (SELECT player_id FROM public.player_private_details LIMIT 1);
-SELECT is((SELECT changes FROM pg_temp.last('player_private_details')), '{"email": {"changed": true}}'::jsonb, 'a private email change is recorded without the address');
+UPDATE public.player_link_keys SET email = 'changed.address@iiitkottayam.ac.in' WHERE player_id = (SELECT player_id FROM public.player_link_keys ORDER BY player_id LIMIT 1);
+SELECT is((SELECT changes FROM pg_temp.last('player_link_keys')), '{"email": {"changed": true}}'::jsonb, 'a match key change is recorded without the address');
 SELECT ok(NOT EXISTS (SELECT 1 FROM public.audit_log WHERE changes::text LIKE '%@%'), 'no email address appears anywhere in the history');
 UPDATE public.matches SET minute = '17', timer_calibration = 3 WHERE id = (SELECT id FROM public.matches ORDER BY id LIMIT 1);
 SELECT is((SELECT count(*) FROM public.audit_log WHERE table_name = 'matches' AND id > (SELECT id FROM _mark))::int, 0, 'the running match clock is not recorded');

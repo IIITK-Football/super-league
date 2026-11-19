@@ -50,7 +50,6 @@ INSERT INTO public.players (id, first_name, last_name, overall_rating, attribute
   ('e0000000-0000-4000-8000-000000000002', 'Player', 'B', 55, '{}', 'old-b'),
   ('e0000000-0000-4000-8000-000000000003', 'Player', 'C', 50, '{}', 'old-c'),
   ('e0000000-0000-4000-8000-000000000004', 'Player', 'D', 50, '{}', 'old-d');
-INSERT INTO public.player_private_details (player_id, email) VALUES ('e0000000-0000-4000-8000-000000000001', 'player.a@iiitkottayam.ac.in');
 INSERT INTO public.roster_memberships (id, player_id, team_entry_id, season_id, jersey_number, position) VALUES
   ('a1000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'f1000000-0000-4000-8000-000000000001', (SELECT id FROM _season), 7, 'CM'),
   ('a1000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000002', 'f1000000-0000-4000-8000-000000000002', (SELECT id FROM _season), 4, 'CB'),
@@ -114,8 +113,8 @@ SELECT results_eq(
     FROM public.roster_memberships rm JOIN public.players p ON p.id = rm.player_id WHERE rm.id = 'a1000000-0000-4000-8000-000000000001'$$,
   $$VALUES ('ST'::text, 9, 80, 'Power Shot'::text, 'new-a'::text, 'Player'::text, 'A'::text)$$,
   'position and jersey on the roster place, rating, play style and portrait on the card changed; the name did not');
-SELECT is((SELECT email FROM public.player_private_details WHERE player_id = 'e0000000-0000-4000-8000-000000000001'), 'player.a@iiitkottayam.ac.in',
-  'the private email is untouched');
+SELECT is((SELECT user_id FROM public.players WHERE id = 'e0000000-0000-4000-8000-000000000001'), NULL::uuid,
+  'the account link is untouched');
 SELECT lives_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001',
   NULL, NULL, 70, '{}'::jsonb, NULL)$$,
   'a missing position and jersey number are allowed (partial saving)');

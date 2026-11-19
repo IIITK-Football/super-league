@@ -82,9 +82,12 @@ SELECT lives_ok($$SELECT pg_temp.save(2, 'c1a00000-0000-4000-8000-000000000001',
 -- Ratings stay unset until entered -----------------------------------------------------------------------------------
 SELECT lives_ok($$SELECT pg_temp.save(1, 'c1a00000-0000-4000-8000-000000000001', 'NULL', 9, '{}')$$, 'a captain may save with the rating not set');
 SELECT is((SELECT overall_rating FROM public.players WHERE id = 'c1900000-0000-4000-8000-000000000001'), NULL::integer, 'and it stays not set');
+SELECT set_config('request.jwt.claims', '', true); -- a fixture written as the seed writes it
 INSERT INTO public.players (id, first_name, last_name) VALUES ('c1900000-0000-4000-8000-000000000003', 'No', 'Rating');
+INSERT INTO auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+VALUES ('c1b00000-0000-4000-8000-000000000009', 'authenticated', 'authenticated', 'cs.fresh@iiitkottayam.ac.in', '', now(), now(), now());
 SELECT is((SELECT overall_rating FROM public.players WHERE id = 'c1900000-0000-4000-8000-000000000003'), NULL::integer, 'a new player row has no rating by default');
-SELECT is(pg_temp.as_user(2, $q$SELECT overall_rating::text FROM public.players WHERE id = public.create_rostered_player('c1e00000-0000-4000-8000-000000000001', 'Fresh', 'Face')$q$),
+SELECT is(pg_temp.as_user(2, $q$SELECT overall_rating::text FROM public.players WHERE id = (SELECT public.create_player_for_account('c1b00000-0000-4000-8000-000000000009', 'c1e00000-0000-4000-8000-000000000001', 'Fresh', 'Face'))$q$),
   NULL, 'a player created without a rating has none (no 50)');
 SELECT lives_ok($$SELECT pg_temp.as_user(2, $q$SELECT public.update_rostered_player('c1a00000-0000-4000-8000-000000000003', 'Only', 'Blue', NULL, '{}', 7, NULL)::text$q$)$$,
   'a dictator clears a rating');

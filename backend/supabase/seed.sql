@@ -496,11 +496,6 @@ JOIN public.team_entries e ON e.team_id = md5('mega-team:freshers:BEEF')::uuid
   AND e.season_id = (SELECT season_id FROM _mega_seasons WHERE division = 'freshers')
 ON CONFLICT (player_id, season_id) DO NOTHING;
 
--- One player's private contact detail (dictators only).
-INSERT INTO public.player_private_details (player_id, email)
-SELECT md5('mega-player:' || mens.id::text || ':1')::uuid, 'roster.fixture@iiitkottayam.ac.in'
-FROM (SELECT id FROM _mega_teams WHERE division = 'mens' ORDER BY team_name LIMIT 1) mens
-ON CONFLICT (player_id) DO NOTHING;
 
 -- Four users predict all 168 league matches.
 INSERT INTO public.predictions (
@@ -767,5 +762,27 @@ UPDATE public.players SET user_id = (SELECT id FROM auth.users WHERE email = 'fa
 WHERE id = (SELECT id FROM public.players WHERE first_name = 'Jackson' AND last_name = 'Lamb' ORDER BY id LIMIT 1)
   AND user_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM public.players p JOIN auth.users u ON u.id = p.user_id WHERE u.email = 'fan01@iiitkottayam.ac.in');
+
+-- Account matching (private match keys of unlinked legacy players; no contact emails exist any more). Five WSL players
+-- of the first WSL team, one per case the dictator's matching preview shows:
+--   slot 2  fan02 (verified)                 ready: linked by the dictator's "link all ready matches"
+--   slot 3  fan03, and slot 4 fan03 too      duplicate: resolved by hand
+--   slot 5  fan04 (unverified)               waiting for verification: linked automatically when fan04 verifies
+--   slot 6  fan01 (already linked to Lamb)   conflict
+--   slot 7  roster.fixture@…                 no account
+-- fan02 is verified BEFORE its key is added, as for a legacy player whose person signed up long ago. A key is only
+-- (re)added while its player is unlinked and its account has no player, so a re-run never undoes a link.
+UPDATE auth.users SET email_confirmed_at = now()
+WHERE email = 'fan02@iiitkottayam.ac.in' AND email_confirmed_at IS NULL;
+INSERT INTO public.player_link_keys (player_id, email)
+SELECT p.id, k.email
+FROM (VALUES (2, 'fan02@iiitkottayam.ac.in'), (3, 'fan03@iiitkottayam.ac.in'), (4, 'fan03@iiitkottayam.ac.in'),
+             (5, 'fan04@iiitkottayam.ac.in'), (6, 'fan01@iiitkottayam.ac.in'), (7, 'roster.fixture@iiitkottayam.ac.in')) AS k(slot, email)
+CROSS JOIN (SELECT id FROM _mega_teams WHERE division = 'womens' ORDER BY team_name LIMIT 1) wsl
+JOIN public.players p ON p.id = md5('mega-player:' || wsl.id::text || ':' || k.slot)::uuid
+WHERE p.user_id IS NULL
+  AND (k.email = 'fan01@iiitkottayam.ac.in'
+       OR NOT EXISTS (SELECT 1 FROM public.players o JOIN auth.users u ON u.id = o.user_id WHERE u.email = k.email))
+ON CONFLICT (player_id) DO NOTHING;
 
 COMMIT;

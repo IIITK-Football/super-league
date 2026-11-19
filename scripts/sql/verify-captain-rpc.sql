@@ -4,7 +4,7 @@
 -- the Freshers member table became season roster memberships (20261124000000, 20261125000000); the retired
 -- overloads must be gone. Check 11 reads only a count of registrations. Checks 12-16 cover the dictator roster
 -- functions and the roster history guard (20261127000000) and the audit history's write protection (20261126000000).
--- Checks 17-18 cover the account-linked players (20261130000005).
+-- Checks 17-20 cover the account-linked players and verified-email matching (20261130000005-7).
 BEGIN READ ONLY;
 
 WITH f AS (
@@ -45,19 +45,19 @@ FROM (
   UNION ALL
   SELECT 12, 'the dictator roster functions exist (new team in a season / save a player / remove an unplayed player / history check)',
          to_regprocedure('public.create_team_in_season(uuid,text)') IS NOT NULL
-         AND to_regprocedure('public.update_rostered_player(uuid,text,text,integer,jsonb,integer,text,boolean,text)') IS NOT NULL
+         AND to_regprocedure('public.update_rostered_player(uuid,text,text,integer,jsonb,integer,text)') IS NOT NULL
          AND to_regprocedure('public.delete_unplayed_player(uuid)') IS NOT NULL
          AND to_regprocedure('public.player_has_match_history(uuid,uuid)') IS NOT NULL
   UNION ALL
   SELECT 13, 'anonymous callers cannot execute the dictator roster functions',
          NOT EXISTS (SELECT 1 FROM unnest(ARRAY['public.create_team_in_season(uuid,text)',
-                                                'public.update_rostered_player(uuid,text,text,integer,jsonb,integer,text,boolean,text)',
+                                                'public.update_rostered_player(uuid,text,text,integer,jsonb,integer,text)',
                                                 'public.delete_unplayed_player(uuid)', 'public.player_has_match_history(uuid,uuid)']) sig
                      WHERE to_regprocedure(sig) IS NULL OR has_function_privilege('anon', to_regprocedure(sig), 'EXECUTE'))
   UNION ALL
   SELECT 14, 'signed-in users can call them (each then requires the dictator role)',
          NOT EXISTS (SELECT 1 FROM unnest(ARRAY['public.create_team_in_season(uuid,text)',
-                                                'public.update_rostered_player(uuid,text,text,integer,jsonb,integer,text,boolean,text)',
+                                                'public.update_rostered_player(uuid,text,text,integer,jsonb,integer,text)',
                                                 'public.delete_unplayed_player(uuid)']) sig
                      WHERE to_regprocedure(sig) IS NULL OR NOT has_function_privilege('authenticated', to_regprocedure(sig), 'EXECUTE'))
   UNION ALL
@@ -77,9 +77,10 @@ FROM (
          (SELECT bool_and(fn IS NOT NULL AND NOT has_function_privilege('anon', fn, 'EXECUTE') AND has_function_privilege('authenticated', fn, 'EXECUTE')
                           AND p.prosecdef AND p.proconfig @> ARRAY['search_path=""']
                           AND NOT EXISTS (SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee = 0))
-          FROM unnest(ARRAY['public.link_player_account(uuid,uuid)', 'public.unlink_player_account(uuid)', 'public.player_link_candidates(text)',
-                            'public.player_link_status(uuid[])', 'public.preview_player_account_links(jsonb)', 'public.apply_player_account_links(jsonb)',
-                            'public.my_player()', 'public.update_my_player(text,text)']) AS name
+          FROM unnest(ARRAY['public.link_player_account(uuid,uuid)', 'public.unlink_player_account(uuid)', 'public.verified_accounts_for_linking(text)',
+                            'public.player_link_status(uuid[])', 'public.account_link_matches()', 'public.apply_account_link_matches(jsonb)',
+                            'public.dismiss_player_link_key(uuid)', 'public.create_player_for_account(uuid,uuid,text,text,integer,text,integer,jsonb,text)',
+                            'public.add_player_to_roster(uuid,uuid,integer,text)', 'public.my_player()', 'public.update_my_player(text,text)']) AS name
           CROSS JOIN LATERAL (SELECT to_regprocedure(name) AS fn) r
           LEFT JOIN pg_proc p ON p.oid = r.fn) IS TRUE
   UNION ALL
@@ -87,6 +88,18 @@ FROM (
          EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.players'::regclass AND tgname = 'players_account_link_guard' AND NOT tgisinternal)
          AND NOT has_column_privilege('anon', 'public.players', 'user_id', 'SELECT')
          AND NOT has_column_privilege('authenticated', 'public.players', 'user_id', 'SELECT')
+  UNION ALL
+  SELECT 19, 'new players need an account and new roster places a linked player; verified accounts are linked to their matching player',
+         (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND (tgrelid, tgname) IN (
+            ('public.players'::regclass, 'players_require_account'),
+            ('public.roster_memberships'::regclass, 'roster_memberships_require_linked_player'),
+            ('auth.users'::regclass, 'on_auth_user_verified_link_player'))) = 3
+         AND to_regclass('public.player_private_details') IS NULL
+  UNION ALL
+  SELECT 20, 'private match keys are unreadable by anonymous visitors and signed-in users',
+         to_regclass('public.player_link_keys') IS NOT NULL
+         AND NOT has_table_privilege('anon', 'public.player_link_keys', 'SELECT')
+         AND NOT has_table_privilege('authenticated', 'public.player_link_keys', 'SELECT')
 ) c
 ORDER BY n;
 

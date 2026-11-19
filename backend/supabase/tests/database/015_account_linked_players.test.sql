@@ -4,7 +4,7 @@
 -- a linked player edits only their own portrait and preferred foot, the account-link import never writes on a problem
 -- row, and the audit history records it all without emails. Rolled back.
 BEGIN;
-SELECT plan(33);
+SELECT plan(29);
 
 -- Accounts: 1 dictator, 2 captain, 3 verified fan, 4 another verified fan, 5 unverified, 6 verified (to delete).
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -19,7 +19,6 @@ INSERT INTO public.players (id, first_name, last_name, overall_rating, attribute
   ('d1900000-0000-4000-8000-000000000002', 'Second', 'Player', 60, '{}'),
   ('d1900000-0000-4000-8000-000000000003', 'Gone', 'Account', 61, '{}'),
   ('d1900000-0000-4000-8000-000000000004', 'Fourth', 'Player', 62, '{}');
-INSERT INTO public.player_private_details (player_id, email) VALUES ('d1900000-0000-4000-8000-000000000001', 'al.fan@iiitkottayam.ac.in');
 
 CREATE FUNCTION pg_temp.as_user(p_n integer, p_sql text)
 RETURNS text LANGUAGE plpgsql AS $$
@@ -84,7 +83,7 @@ SELECT is(pg_temp.link_of('d1900000-0000-4000-8000-000000000002'), NULL::uuid, '
 
 -- C5: self-service ----------------------------------------------------------------------------------------------------
 SELECT is(pg_temp.as_user(3, $q$SELECT (public.my_player() ->> 'first_name')$q$), 'Linked', 'a linked player reads their own card');
-SELECT is(pg_temp.as_user(3, $q$SELECT (public.my_player() ->> 'email')$q$), 'al.fan@iiitkottayam.ac.in', 'and their own contact email');
+SELECT is(pg_temp.as_user(3, $q$SELECT (public.my_player() ->> 'email')$q$), 'al.fan@iiitkottayam.ac.in', 'and their own Auth email');
 SELECT lives_ok($$SELECT pg_temp.as_user(3, $q$SELECT public.update_my_player('https://media.example/players/d1900000-0000-4000-8000-000000000001.png', 'Left')::text$q$)$$,
   'a linked player sets their own portrait and preferred foot');
 SELECT results_eq($$SELECT image_url, attributes FROM public.players WHERE id = 'd1900000-0000-4000-8000-000000000001'$$,
@@ -104,28 +103,15 @@ SELECT ok(EXISTS (SELECT 1 FROM public.audit_log WHERE table_name = 'players' AN
                     AND actor_id = 'd1000000-0000-4000-8000-000000000003' AND changes ? 'image_url'), 'the self-edit is in the audit history with the player as actor');
 SELECT is((SELECT count(*)::int FROM public.audit_log WHERE table_name = 'players' AND changes::text ILIKE '%@iiitkottayam%'), 0, 'no email appears in the players history');
 
--- C7: account-link import ---------------------------------------------------------------------------------------------
-SELECT is(pg_temp.as_user(1, $q$SELECT string_agg(status, ',' ORDER BY n) FROM public.preview_player_account_links(
-  '[{"player_id": "d1900000-0000-4000-8000-000000000002", "email": "AL.OTHER@iiitkottayam.ac.in"},
-    {"player_id": "d1900000-0000-4000-8000-000000000003", "email": "al.unverified@iiitkottayam.ac.in"},
-    {"player_id": "d1900000-0000-4000-8000-000000000004", "email": "nobody@iiitkottayam.ac.in"},
-    {"player_id": "00000000-0000-4000-8000-000000000000", "email": "al.boss@iiitkottayam.ac.in"},
-    {"player_id": "d1900000-0000-4000-8000-000000000001", "email": "al.fan@iiitkottayam.ac.in"}]'::jsonb)$q$),
-  'ready,unverified_account,no_account,unknown_player,already_linked', 'the preview reports every row and matches verified emails only');
-SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.apply_player_account_links('[{"player_id": "d1900000-0000-4000-8000-000000000002", "email": "al.other@iiitkottayam.ac.in"},
-  {"player_id": "d1900000-0000-4000-8000-000000000003", "email": "al.unverified@iiitkottayam.ac.in"}]'::jsonb)::text$q$)$$,
-  'P0001', NULL, 'applying with a problem row is refused');
-SELECT is(pg_temp.link_of('d1900000-0000-4000-8000-000000000002'), NULL::uuid, 'and writes nothing');
-SELECT is(pg_temp.as_user(1, $q$SELECT public.apply_player_account_links('[{"player_id": "d1900000-0000-4000-8000-000000000002", "email": "al.other@iiitkottayam.ac.in"}]'::jsonb)::text$q$),
-  '1', 'a clean file links its players');
-SELECT is(pg_temp.as_user(1, $q$SELECT public.apply_player_account_links('[{"player_id": "d1900000-0000-4000-8000-000000000002", "email": "al.other@iiitkottayam.ac.in"}]'::jsonb)::text$q$),
-  '0', 'and re-applying changes nothing');
+-- C7: the CSV import is replaced by verified-email matching (017) ---------------------------------------------------
+SELECT ok(to_regprocedure('public.preview_player_account_links(jsonb)') IS NULL AND to_regprocedure('public.apply_player_account_links(jsonb)') IS NULL
+          AND to_regprocedure('public.player_link_candidates(text)') IS NULL, 'the CSV import and the name-or-email account search are gone');
 
 -- C4 and the account-deletion path ----------------------------------------------------------------------------------
 SELECT lives_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.unlink_player_account('d1900000-0000-4000-8000-000000000001')::text$q$)$$, 'a dictator unlinks');
-SELECT results_eq($$SELECT user_id, first_name::text, image_url, (SELECT email FROM public.player_private_details WHERE player_id = p.id)::text FROM public.players p
+SELECT results_eq($$SELECT user_id, first_name::text, image_url FROM public.players p
                     WHERE id = 'd1900000-0000-4000-8000-000000000001'$$,
-  $$VALUES (NULL::uuid, 'Linked'::text, 'https://media.example/players/d1900000-0000-4000-8000-000000000001.png'::text, 'al.fan@iiitkottayam.ac.in'::text)$$,
+  $$VALUES (NULL::uuid, 'Linked'::text, 'https://media.example/players/d1900000-0000-4000-8000-000000000001.png'::text)$$,
   'unlinking clears only the link');
 UPDATE public.players SET user_id = 'd1000000-0000-4000-8000-000000000006' WHERE id = 'd1900000-0000-4000-8000-000000000003'; -- as the owner (seed path)
 DELETE FROM auth.users WHERE id = 'd1000000-0000-4000-8000-000000000006';

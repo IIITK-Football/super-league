@@ -54,6 +54,7 @@ INSERT INTO public.teams (id, name) VALUES ('ad000000-0000-4000-8000-00000000000
 INSERT INTO public.team_entries (id, team_id, season_id)
 SELECT 'ae000000-0000-4000-8000-000000000001'::uuid, 'ad000000-0000-4000-8000-000000000001'::uuid, old_season FROM _sp
 UNION ALL SELECT 'ae000000-0000-4000-8000-000000000002'::uuid, 'ad000000-0000-4000-8000-000000000002'::uuid, new_season FROM _sp;
+SELECT set_config('request.jwt.claims', '', true); -- fixtures below are written as the seed writes them
 INSERT INTO public.players (id, first_name, last_name) VALUES
   ('af000000-0000-4000-8000-000000000001', 'Quentin', 'Zebulon'),
   ('af000000-0000-4000-8000-000000000002', 'Quentin', 'Zebulon'),

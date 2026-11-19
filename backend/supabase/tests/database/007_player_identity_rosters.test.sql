@@ -1,5 +1,5 @@
 -- Group: database. Player identity and season rosters: one reusable identity (the FUT card) per person, a roster
--- membership per season, private details for dictators only, history that cannot be erased by deleting a player,
+-- membership per season, private match keys reachable only through dictator functions, history that cannot be erased by deleting a player,
 -- season statistics derived from match events (never stored on the identity or membership), and access by role.
 -- Rolled back.
 BEGIN;
@@ -54,7 +54,7 @@ $$;
 
 -- Schema ------------------------------------------------------------------------------------------------------
 SELECT has_table('public', 'roster_memberships', 'season roster memberships exist');
-SELECT has_table('public', 'player_private_details', 'private player details exist');
+SELECT has_table('public', 'player_link_keys', 'private match keys exist (the contact-email table is gone)');
 SELECT has_table('public', 'legacy_roster_map', 'the Freshers member mapping is recorded');
 SELECT has_table('public', 'legacy_player_assist_counts', 'the retired assists counter is snapshotted');
 SELECT hasnt_column('public', 'players', 'goals', 'the identity stores no goals');
@@ -70,7 +70,7 @@ SELECT hasnt_column('public', 'players', 'position', 'the position belongs to th
 SELECT hasnt_column('public', 'players', 'assists', 'no cross-season assists counter on the identity');
 SELECT hasnt_function('public', 'captain_update_team_member', 'the member-table RPC is retired (both overloads)');
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.roster_memberships'::regclass), 'memberships have row level security');
-SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.player_private_details'::regclass), 'private details have row level security');
+SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.player_link_keys'::regclass), 'match keys have row level security');
 
 -- Constraints -------------------------------------------------------------------------------------------------
 SELECT throws_ok($$INSERT INTO public.roster_memberships (player_id, team_entry_id, season_id)
@@ -143,13 +143,12 @@ SELECT is((SELECT assists FROM public.season_player_stats WHERE player_id = (SEL
 -- Access: reading ---------------------------------------------------------------------------------------------
 SELECT is(pg_temp.as_user(NULL, 'SELECT count(*) FROM public.players'), (SELECT count(*)::int FROM public.players), 'anyone can read player cards');
 SELECT ok(pg_temp.as_user(NULL, 'SELECT count(*) FROM public.roster_memberships') > 0, 'anyone can read public season rosters');
-SELECT throws_ok($$SELECT pg_temp.as_user(NULL, 'SELECT count(*) FROM public.player_private_details')$$, '42501', NULL,
-  'anon cannot read private details');
-SELECT is(pg_temp.as_user(1, 'SELECT count(*) FROM public.player_private_details'), 0, 'a normal user sees no private details');
-SELECT is(pg_temp.as_user(2, 'SELECT count(*) FROM public.player_private_details'), 0, 'a captain sees no private details');
-SELECT is(pg_temp.as_user(3, 'SELECT count(*) FROM public.player_private_details'), 0, 'an editor sees no private details');
-SELECT is(pg_temp.as_user(4, 'SELECT count(*) FROM public.player_private_details'), 0, 'a former legacy admin, now an ordinary user, sees no private details');
-SELECT ok(pg_temp.as_user(5, 'SELECT count(*) FROM public.player_private_details') > 0, 'a dictator reads private details');
+SELECT throws_ok($$SELECT pg_temp.as_user(NULL, 'SELECT count(*) FROM public.player_link_keys')$$, '42501', NULL, 'anon cannot read match keys directly');
+SELECT throws_ok($$SELECT pg_temp.as_user(1, 'SELECT count(*) FROM public.player_link_keys')$$, '42501', NULL, 'a normal user cannot read match keys directly');
+SELECT throws_ok($$SELECT pg_temp.as_user(2, 'SELECT count(*) FROM public.player_link_keys')$$, '42501', NULL, 'a captain cannot read match keys directly');
+SELECT throws_ok($$SELECT pg_temp.as_user(3, 'SELECT count(*) FROM public.player_link_keys')$$, '42501', NULL, 'an editor cannot read match keys directly');
+SELECT throws_ok($$SELECT pg_temp.as_user(4, 'SELECT count(*) FROM public.player_link_keys')$$, '42501', NULL, 'a former legacy admin cannot read match keys directly');
+SELECT throws_ok($$SELECT pg_temp.as_user(5, 'SELECT count(*) FROM public.player_link_keys')$$, '42501', NULL, 'even a dictator (only through the matching functions) cannot read match keys directly');
 SELECT is(pg_temp.as_user(2, 'SELECT count(*) FROM public.legacy_roster_map'), 0, 'only dictators read the roster mapping');
 
 -- Access: writing ---------------------------------------------------------------------------------------------
@@ -164,7 +163,7 @@ SELECT is(pg_temp.as_user(2, $q$UPDATE public.players SET first_name = 'Renamed'
 SELECT is(pg_temp.as_user(2, $q$DELETE FROM public.roster_memberships WHERE id = (SELECT membership_id FROM _fx)$q$), 0,
   'a captain cannot remove a player from their roster');
 SELECT throws_ok($$SELECT pg_temp.as_user(2, $q$INSERT INTO public.roster_memberships (player_id, team_entry_id, season_id)
-                   SELECT 'b7100000-0000-4000-8000-000000000002', entry_id, season_id FROM _fx$q$)$$, '42501', NULL,
+                   SELECT 'b7100000-0000-4000-8000-000000000002', entry_id, season_id FROM _fx$q$)$$, NULL, NULL,
   'a captain cannot add a player to their roster');
 SELECT is(pg_temp.as_user(3, $q$UPDATE public.roster_memberships SET jersey_number = 98 WHERE id = (SELECT membership_id FROM _fx)$q$), 0,
   'an editor cannot change a roster');
@@ -172,21 +171,22 @@ SELECT throws_ok($$SELECT pg_temp.as_user(NULL, $q$UPDATE public.players SET fir
   'anon cannot write players');
 SELECT is(pg_temp.as_user(5, $q$UPDATE public.players SET first_name = 'Edited' WHERE id = (SELECT player_id FROM _fx)$q$), 1,
   'a dictator edits a player');
-SELECT is(pg_temp.as_user(5, $q$INSERT INTO public.player_private_details (player_id, email)
-                              SELECT 'b7100000-0000-4000-8000-000000000002', 'unlinked.one@iiitkottayam.ac.in'$q$), 1,
-  'a dictator records a private detail');
+SELECT throws_ok($$SELECT pg_temp.as_user(5, $q$INSERT INTO public.player_link_keys (player_id, email)
+                              SELECT 'b7100000-0000-4000-8000-000000000002', 'unlinked.one@iiitkottayam.ac.in'$q$)$$, '42501', NULL,
+  'a dictator cannot write a match key directly');
 
--- create_rostered_player ----------------------------------------------------------------------------------------
-SELECT ok(pg_temp.as_user(5, $q$SELECT count(*) FROM (SELECT public.create_rostered_player(entry_id, 'Dictator', 'Made', 77, 'ST', 60, '{}'::jsonb, NULL, 'Made@IIITKottayam.ac.in') FROM _fx) x$q$) = 1,
-  'a dictator creates a player on a season roster in one step');
-SELECT results_eq($$SELECT rm.jersey_number, rm.position, d.email FROM public.players p
+-- create_player_for_account (the only creator) ------------------------------------------------------------------
+INSERT INTO auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+VALUES ('b7000000-0000-4000-8000-000000000006', 'authenticated', 'authenticated', 'r.newplayer@iiitkottayam.ac.in', '', now(), now(), now());
+SELECT ok(pg_temp.as_user(5, $q$SELECT count(*) FROM (SELECT public.create_player_for_account('b7000000-0000-4000-8000-000000000006', entry_id, 'Dictator', 'Made', 77, 'ST', 60) FROM _fx) x$q$) = 1,
+  'a dictator creates a player for a verified account on a season roster in one step');
+SELECT results_eq($$SELECT rm.jersey_number, rm.position, p.user_id FROM public.players p
                     JOIN public.roster_memberships rm ON rm.player_id = p.id
-                    JOIN public.player_private_details d ON d.player_id = p.id
                     WHERE p.first_name = 'Dictator' AND p.last_name = 'Made'$$,
-  $$VALUES (77, 'ST'::text, 'made@iiitkottayam.ac.in'::text)$$, 'the new player has its roster place and private email');
-SELECT throws_ok($$SELECT pg_temp.as_user(2, $q$SELECT count(*) FROM (SELECT public.create_rostered_player(entry_id, 'Captain', 'Made') FROM _fx) x$q$)$$,
+  $$VALUES (77, 'ST'::text, 'b7000000-0000-4000-8000-000000000006'::uuid)$$, 'the new player has its roster place and its account');
+SELECT throws_ok($$SELECT pg_temp.as_user(2, $q$SELECT count(*) FROM (SELECT public.create_player_for_account('b7000000-0000-4000-8000-000000000006', entry_id, 'Captain', 'Made') FROM _fx) x$q$)$$,
   '42501', 'Only a dictator can create players', 'a captain cannot create a player through the function');
-SELECT throws_ok($$SELECT pg_temp.as_user(NULL, $q$SELECT count(*) FROM (SELECT public.create_rostered_player(entry_id, 'Anon', 'Made') FROM _fx) x$q$)$$,
+SELECT throws_ok($$SELECT pg_temp.as_user(NULL, $q$SELECT count(*) FROM (SELECT public.create_player_for_account('b7000000-0000-4000-8000-000000000006', entry_id, 'Anon', 'Made') FROM _fx) x$q$)$$,
   '42501', NULL, 'anon cannot call the function');
 
 SELECT * FROM finish();
