@@ -28,7 +28,7 @@ function seed({ roster = true, pastSeason = false } = {}) {
     roster_memberships: [
       ...(roster ? [
         { id: 'm1', team_entry_id: 'e1', jersey_number: 9, position: 'ST', player: { id: 'p1', first_name: 'Ada', last_name: 'Striker', image_url: null, overall_rating: 70, attributes: {} } },
-        { id: 'm2', team_entry_id: 'e1', jersey_number: 1, position: 'GK', player: { id: 'p2', first_name: 'Bea', last_name: 'Keeper', image_url: null, overall_rating: 65, attributes: { stats: { Pace: { total: 81, sprint: 79 } }, bio: { preferredFoot: 'Left' }, playStyles: [{ name: 'Power Shot' }, { name: 'Mystery Move' }], extra: 1 } } },
+        { id: 'm2', team_entry_id: 'e1', jersey_number: 1, position: 'GK', player: { id: 'p2', first_name: 'Bea', last_name: 'Keeper', image_url: null, overall_rating: 65, attributes: { stats: { Pace: { total: 81, sprint: 79 } }, bio: { preferredFoot: 'Left' }, playStyle: 'Power Shot', extra: 1 } } },
       ] : []),
       // Another team's player in the same season, and the same team's player in an earlier season.
       { id: 'm-other-team', team_entry_id: 'e2', jersey_number: 7, position: 'CM', player: { id: 'p3', first_name: 'Wrong', last_name: 'Team', image_url: null, overall_rating: 60, attributes: {} } },
@@ -146,7 +146,7 @@ describe('TeamBuilder on season rosters', () => {
     expect(attributesForSave(bea).value).toEqual(db.tables.roster_memberships[1].player.attributes);
     expect(attributesForSave({ ...bea, stats: { ...bea.stats, Shooting: '70' } }).value).toEqual({
       stats: { Pace: { total: 81, sprint: 79 }, Shooting: { total: 70 } }, bio: { preferredFoot: 'Left' },
-      playStyles: [{ name: 'Power Shot' }, { name: 'Mystery Move' }], extra: 1,
+      playStyle: 'Power Shot', extra: 1,
     });
   });
 

@@ -3,10 +3,10 @@ import { CARD_STATS, canonicalAttributes, catalogStyle, statValue } from '../../
 import styles from '../PlayerProfile.module.css';
 
 // The player's FUT card, shared by the Clubs player page and the dictator's Teams & Rosters forms. It shows the
-// reusable player identity (portrait, name, overall rating, card stats, the first play style's icon). `position` is
+// reusable player identity (portrait, name, overall rating, card stats, the play style's icon). `position` is
 // optional season context for the corner (the Clubs page shows it); the dictator forms show season data beside the
 // card instead. `player` may be a saved player or an unsaved draft.
-// `details` adds the preferred foot and play-style names under the card (the dictator forms use it).
+// `details` adds the preferred foot and play style under the card (the dictator forms use it).
 // `portrait` previews a picture that is not saved yet: { url, status: 'local' | 'uploading' | 'failed' }.
 // Empty values show as a dash: the card never invents a number.
 const PORTRAIT_NOTES = {
@@ -37,8 +37,7 @@ export default function FutCard({ player, position, portrait, details = false })
   const name = String(player.first_name || player.last_name || '').trim();
   const fullName = [player.first_name, player.last_name].map((p) => String(p || '').trim()).filter(Boolean).join(' ') || 'Unnamed player';
   const image = portrait?.url || player.image_url;
-  const firstStyle = Array.isArray(attributes.playStyles) ? attributes.playStyles[0] : null;
-  const styleIcon = firstStyle && (firstStyle.icon_url || catalogStyle(firstStyle.name)?.imageUrl);
+  const style = catalogStyle(attributes.playStyle);
   const noDrag = { onContextMenu: (e) => e.preventDefault(), draggable: 'false' };
 
   return (
@@ -69,12 +68,12 @@ export default function FutCard({ player, position, portrait, details = false })
             </dl>
           </div>
         </div>
-        {styleIcon && <img src={styleIcon} alt={firstStyle.name}
+        {style && <img src={style.imageUrl} alt={style.name}
           className="absolute left-[26px] top-[48%] z-20 h-8 w-8 -translate-x-1/2 -translate-y-1/2 object-contain" {...noDrag} />}
       </div>
       {details && <figcaption className="max-w-[260px] text-center text-xs text-zinc-400">
         <span>Preferred foot: {attributes.bio?.preferredFoot || 'not set'}</span><br />
-        <span>Play styles: {Array.isArray(attributes.playStyles) && attributes.playStyles.length ? attributes.playStyles.map((st) => st.name).join(', ') : 'none'}</span>
+        <span>Play style: {style?.name || 'not set'}</span>
       </figcaption>}
       {portrait?.status && <figcaption className={`text-xs ${portrait.status === 'failed' ? 'text-red-300' : 'text-amber-200'}`}>{PORTRAIT_NOTES[portrait.status]}</figcaption>}
     </figure>

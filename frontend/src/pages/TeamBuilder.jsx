@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPlayStyle, PLAY_STYLES } from '../data/playStyles';
-import { CARD_STATS, FEET, applyCardDraft, cardDraft, storedPlayStyle } from '../lib/playerCard';
+import { CARD_STATS, FEET, applyCardDraft, cardDraft } from '../lib/playerCard';
 import { API_BASE_URL } from '../lib/api';
 import { rosterPlayerRpcArgs } from '../lib/rosterPlayerUpdate';
 import './TeamBuilder.css';
@@ -27,7 +27,7 @@ export const fromMember = (member) => {
         jerseyNumber: member.jersey_number ?? '',
         imageUrl: member.image_url || '',
         preferredFoot: card.preferredFoot,
-        playStyleId: card.playStyles[0] ? getPlayStyleId(card.playStyles[0].name) : '',
+        playStyleId: getPlayStyleId(card.playStyle),
         overallRating: member.overall_rating == null ? '' : String(member.overall_rating),
         attributes: member.attributes || {},
         stats: card.stats,
@@ -35,17 +35,11 @@ export const fromMember = (member) => {
     return { ...player, saved: editable(player) };
 };
 
-// The attributes to save for an edited player: the stored card with the form's values applied. Only the first play
-// style is chosen here; the others are kept.
-export const attributesForSave = (player) => {
-    let playStyles = cardDraft(player.attributes).playStyles;
-    if (player.playStyleId !== JSON.parse(player.saved)[5]) {
-        const style = getPlayStyle(player.playStyleId);
-        const rest = playStyles.slice(1);
-        playStyles = style ? [storedPlayStyle(style), ...rest.filter((s) => s.name !== style.name)] : rest;
-    }
-    return applyCardDraft(player.attributes, { stats: player.stats, preferredFoot: player.preferredFoot, playStyles });
-};
+// The attributes to save for an edited player: the stored card with the form's values applied (one play style, or
+// none).
+export const attributesForSave = (player) => applyCardDraft(player.attributes, {
+    stats: player.stats, preferredFoot: player.preferredFoot, playStyle: getPlayStyle(player.playStyleId)?.name || '',
+});
 export const isChanged = (player) => editable(player) !== player.saved;
 
 function PlayStylePicker({ value, onChange }) {

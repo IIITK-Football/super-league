@@ -5,7 +5,7 @@ import { Loader } from './Loader';
 import styles from './PlayerProfile.module.css';
 import { API_BASE_URL } from '../lib/api';
 import FutCard from './players/FutCard';
-import { canonicalAttributes, statValue } from '../lib/playerCard';
+import { canonicalAttributes, catalogStyle, statValue } from '../lib/playerCard';
 
 
 const getStatColor = (val) => {
@@ -87,10 +87,11 @@ useEffect(() => {
         );
     }
 
-    // The canonical card fields (stats, preferred foot, play styles); empty stays empty.
+    // The canonical card fields (stats, preferred foot, the one play style); empty stays empty.
     const attrs = canonicalAttributes(player.attributes);
     const bio = attrs.bio || {};
-    const stylesArr = attrs.playStyles || [];
+    const playStyle = catalogStyle(attrs.playStyle);
+    const stylesArr = playStyle ? [{ name: playStyle.name, icon_url: playStyle.imageUrl, description: playStyle.description }] : [];
 
     return (
         <div className="w-full bg-[#0F0E13] min-h-screen text-white p-4 md:p-8 font-sans pb-20 animate-in fade-in duration-300">

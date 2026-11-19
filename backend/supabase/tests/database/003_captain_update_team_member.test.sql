@@ -107,12 +107,12 @@ SELECT is((SELECT image_url FROM public.players WHERE id = 'e0000000-0000-4000-8
 
 -- A captain: holding the team's registration for the season AND the captain role ---------------------------
 SELECT lives_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001',
-  'ST', 9, 80, '{"playStyles":[{"name":"Finisher"}]}'::jsonb, 'new-a')$$,
+  'ST', 9, 80, '{"playStyle":"Power Shot"}'::jsonb, 'new-a')$$,
   'the captain can update an existing player of their own team');
 SELECT results_eq(
-  $$SELECT rm.position, rm.jersey_number, p.overall_rating, p.attributes->'playStyles'->0->>'name', p.image_url, p.first_name::text, p.last_name::text
+  $$SELECT rm.position, rm.jersey_number, p.overall_rating, p.attributes->>'playStyle', p.image_url, p.first_name::text, p.last_name::text
     FROM public.roster_memberships rm JOIN public.players p ON p.id = rm.player_id WHERE rm.id = 'a1000000-0000-4000-8000-000000000001'$$,
-  $$VALUES ('ST'::text, 9, 80, 'Finisher'::text, 'new-a'::text, 'Player'::text, 'A'::text)$$,
+  $$VALUES ('ST'::text, 9, 80, 'Power Shot'::text, 'new-a'::text, 'Player'::text, 'A'::text)$$,
   'position and jersey on the roster place, rating, play style and portrait on the card changed; the name did not');
 SELECT is((SELECT email FROM public.player_private_details WHERE player_id = 'e0000000-0000-4000-8000-000000000001'), 'player.a@iiitkottayam.ac.in',
   'the private email is untouched');

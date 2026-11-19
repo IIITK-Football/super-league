@@ -9,9 +9,9 @@ SELECT is(public.canonical_player_attributes('{"pace": 59, "passing": 57, "shoot
   'flat numbers move into stats');
 SELECT is(public.canonical_player_attributes(
   '{"pace": 59, "stats": {"Pace": {"total": 60}, "Speed": {"total": 1}, "Passing": {"total": 120}}, "shooting": "high",
-    "bio": {"preferredFoot": "left", "height": 170}, "playStyles": "Power Shot", "other": [1]}'),
+    "bio": {"preferredFoot": "left", "height": 170}, "other": [1]}'),
   '{"stats": {"Pace": {"total": 60}}, "bio": {"preferredFoot": "Left", "height": 170}, "other": [1],
-    "legacy": {"pace": 59, "shooting": "high", "stats_Speed": {"total": 1}, "stats_Passing": {"total": 120}, "playStyles": "Power Shot"}}'::jsonb,
+    "legacy": {"pace": 59, "shooting": "high", "stats_Speed": {"total": 1}, "stats_Passing": {"total": 120}}}'::jsonb,
   'what cannot take its canonical place is kept under legacy, nothing is dropped');
 SELECT is(public.canonical_player_attributes('{"bio": {"preferredFoot": "sideways"}}'), '{"bio": {}, "legacy": {"preferredFoot": "sideways"}}'::jsonb,
   'an unknown foot is kept under legacy');
@@ -25,7 +25,7 @@ SELECT throws_ok($$UPDATE public.players SET attributes = '{"pace": 80}' WHERE i
   '23514', NULL, 'a flat stat is refused');
 SELECT throws_ok($$UPDATE public.players SET attributes = '{"stats": {"Pace": {"total": 120}}}' WHERE id = 'b0000000-0000-4000-8000-0000000000a1'$$,
   '23514', NULL, 'an out-of-range stat is refused');
-SELECT lives_ok($$UPDATE public.players SET attributes = '{"stats": {"Pace": {"total": 80}}, "bio": {"preferredFoot": "Both"}, "playStyles": [{"name": "Power Shot"}]}'
+SELECT lives_ok($$UPDATE public.players SET attributes = '{"stats": {"Pace": {"total": 80}}, "bio": {"preferredFoot": "Both"}, "playStyle": "Power Shot"}'
   WHERE id = 'b0000000-0000-4000-8000-0000000000a1'$$, 'the canonical shape is accepted');
 
 SELECT * FROM finish();

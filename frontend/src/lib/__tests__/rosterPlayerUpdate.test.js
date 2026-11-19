@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { rosterPlayerRpcArgs } from '../rosterPlayerUpdate';
 
-const attributes = { stats: { Pace: { total: 70 } }, playStyles: [{ name: 'Finisher' }] };
+const attributes = { stats: { Pace: { total: 70 } }, playStyle: 'Power Shot' };
 
 describe('rosterPlayerRpcArgs', () => {
   it('maps the allow-listed fields onto the roster place', () => {

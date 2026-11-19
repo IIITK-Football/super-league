@@ -7,7 +7,7 @@ import { applyCardDraft, blankCardDraft, canonicalAttributes, cardDraft, statVal
 const canonical = {
   stats: { Pace: { total: 81, sprint: 80 }, Shooting: { total: 70 } },
   bio: { preferredFoot: 'Left', height: 180 },
-  playStyles: [{ name: 'Power Shot', description: 'x', icon_url: 'u' }],
+  playStyle: 'Power Shot',
   custom: { keep: true },
 };
 
@@ -16,7 +16,7 @@ describe('reading the card', () => {
     expect(cardDraft(canonical)).toEqual({
       stats: { Pace: '81', Shooting: '70', Passing: '', Dribbling: '', Defending: '', Physicality: '' },
       preferredFoot: 'Left',
-      playStyles: [{ name: 'Power Shot', description: 'x', icon_url: 'u' }],
+      playStyle: 'Power Shot',
     });
     expect(statValue({ pace: 59, passing: 57 }, 'Pace')).toBe(59);
     expect(cardDraft({ pace: 59 }).stats.Pace).toBe('59');
@@ -24,7 +24,7 @@ describe('reading the card', () => {
 
   it('invents nothing for an empty card', () => {
     expect(cardDraft(null)).toEqual(blankCardDraft());
-    expect(blankCardDraft()).toEqual({ stats: { Pace: '', Shooting: '', Passing: '', Dribbling: '', Defending: '', Physicality: '' }, preferredFoot: '', playStyles: [] });
+    expect(blankCardDraft()).toEqual({ stats: { Pace: '', Shooting: '', Passing: '', Dribbling: '', Defending: '', Physicality: '' }, preferredFoot: '', playStyle: '' });
     expect(applyCardDraft({}, blankCardDraft()).value).toEqual({});
   });
 });
@@ -39,7 +39,7 @@ describe('saving the card', () => {
     expect(value).toEqual({
       stats: { Pace: { total: 84, sprint: 80 }, Shooting: { total: 70 }, Defending: { total: 40 } },
       bio: { preferredFoot: 'Both', height: 180 },
-      playStyles: canonical.playStyles,
+      playStyle: 'Power Shot',
       custom: { keep: true },
     });
   });
@@ -67,12 +67,12 @@ describe('converting older attributes to the canonical shape', () => {
   it('keeps under legacy whatever cannot take its canonical place, dropping nothing', () => {
     expect(canonicalAttributes({
       pace: 59, stats: { Pace: { total: 60 }, Speed: { total: 1 }, Passing: { total: 120 } }, shooting: 'high',
-      bio: { preferredFoot: 'left', height: 170 }, playStyles: 'Power Shot', other: [1],
+      bio: { preferredFoot: 'left', height: 170 }, other: [1],
     })).toEqual({
       stats: { Pace: { total: 60 } },
       bio: { preferredFoot: 'Left', height: 170 },
       other: [1],
-      legacy: { pace: 59, shooting: 'high', stats_Speed: { total: 1 }, stats_Passing: { total: 120 }, playStyles: 'Power Shot' },
+      legacy: { pace: 59, shooting: 'high', stats_Speed: { total: 1 }, stats_Passing: { total: 120 } },
     });
     expect(canonicalAttributes({ bio: { preferredFoot: 'sideways' } })).toEqual({ bio: {}, legacy: { preferredFoot: 'sideways' } });
     expect(canonicalAttributes([1, 2])).toEqual({ legacy: { attributes: [1, 2] } });
@@ -81,7 +81,7 @@ describe('converting older attributes to the canonical shape', () => {
   it('is idempotent, and an unedited save round-trips every value', () => {
     for (const stored of [
       { pace: 59, passing: 57 },
-      { stats: { Pace: { total: 81, sprint: 80 } }, bio: { preferredFoot: 'Both', height: 1 }, playStyles: [{ name: 'Power Shot', icon_url: 'u' }], x: { y: 1 } },
+      { stats: { Pace: { total: 81, sprint: 80 } }, bio: { preferredFoot: 'Both', height: 1 }, playStyle: 'Power Shot', x: { y: 1 } },
       { pace: 59, stats: { Pace: { total: 60 } }, legacy: { earlier: true } },
       {},
     ]) {

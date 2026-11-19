@@ -5,7 +5,7 @@ import { PLAY_STYLES } from '../data/playStyles';
 // the dictator form:
 //   { stats: { Pace | Shooting | Passing | Dribbling | Defending | Physicality: { total: 1..99, ... } },
 //     bio: { preferredFoot: 'Right' | 'Left' | 'Both', ... },
-//     playStyles: [{ name, description, icon_url }, ...],
+//     playStyle: '<one catalog name>' (absent when not set; icons and descriptions come from the catalog),
 //     ...any other key }
 // canonicalAttributes mirrors public.canonical_player_attributes: older flat numbers ({ pace: 59 }) move into stats,
 // and anything that cannot take its canonical place is kept under `legacy`, never dropped. Nothing is invented.
@@ -60,10 +60,6 @@ export function canonicalAttributes(stored) {
     }
   }
 
-  if ('playStyles' in result && (!Array.isArray(result.playStyles) || result.playStyles.some((s) => !isObject(s) || typeof s.name !== 'string'))) {
-    legacy.playStyles = result.playStyles;
-    delete result.playStyles;
-  }
 
   if (Object.keys(legacy).length) result.legacy = legacy; else delete result.legacy;
   return result;
@@ -80,15 +76,14 @@ export function cardDraft(stored) {
   return {
     stats: Object.fromEntries(STAT_KEYS.map((key) => [key, isStat(a.stats?.[key]?.total) ? String(a.stats[key].total) : ''])),
     preferredFoot: a.bio?.preferredFoot || '',
-    playStyles: Array.isArray(a.playStyles) ? a.playStyles : [],
+    playStyle: catalogStyle(a.playStyle)?.name || '',
   };
 }
 
 export const blankCardDraft = () => cardDraft({});
 
-// A play style as stored on the card, from the project's catalog.
-export const storedPlayStyle = (style) => ({ name: style.name, description: style.description, icon_url: style.imageUrl });
-export const catalogStyle = (name) => PLAY_STYLES.find((s) => s.name.toLowerCase() === String(name).replace(/\+$/, '').toLowerCase()) || null;
+// The catalog entry for a stored play-style name (a player has one play style, or none).
+export const catalogStyle = (name) => (typeof name === 'string' ? PLAY_STYLES.find((s) => s.name === name) : null) || null;
 
 // The attributes to save: the stored value in canonical form with the form's card fields applied. Every other key is
 // kept. Returns { error } for invalid input.
@@ -114,6 +109,6 @@ export function applyCardDraft(stored, draft) {
   const next = { ...a };
   if (Object.keys(stats).length) next.stats = stats; else delete next.stats;
   if (Object.keys(bio).length) next.bio = bio; else delete next.bio;
-  if (draft.playStyles.length || Array.isArray(a.playStyles)) next.playStyles = draft.playStyles;
+  if (draft.playStyle) next.playStyle = draft.playStyle; else delete next.playStyle;
   return { value: next };
 }

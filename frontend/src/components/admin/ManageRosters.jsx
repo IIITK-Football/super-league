@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
 import FutCard from '../players/FutCard';
-import { CARD_STATS, FEET, applyCardDraft, blankCardDraft, cardDraft, storedPlayStyle } from '../../lib/playerCard';
+import { CARD_STATS, FEET, applyCardDraft, blankCardDraft, cardDraft } from '../../lib/playerCard';
 import { PLAY_STYLES } from '../../data/playStyles';
 
 // Dictator flow for season teams and rosters: division -> season -> team entry, then that team's players.
@@ -76,7 +76,6 @@ function playerFields(value, onChange, idPrefix) {
 function cardFields(value, onChange, idPrefix) {
   const card = value.card || blankCardDraft();
   const setCard = (next) => onChange({ ...value, card: { ...card, ...next } });
-  const chosen = new Set(card.playStyles.map((s) => s.name.toLowerCase()));
   return <fieldset className="space-y-3 rounded-lg border border-white/10 p-3 md:col-span-4">
     <legend className={`${labelClass} px-1`}>FUT card (every season)</legend>
     <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
@@ -91,22 +90,12 @@ function cardFields(value, onChange, idPrefix) {
           <option value="">Not set</option>{FEET.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
       </label>
-      <label className={labelClass}>Add a play style
-        <select aria-label={`${idPrefix} add play style`} value="" onChange={(e) => {
-          const style = PLAY_STYLES.find((s) => s.id === e.target.value);
-          if (style) setCard({ playStyles: [...card.playStyles, storedPlayStyle(style)] });
-        }} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">Choose a play style</option>
-          {PLAY_STYLES.filter((s) => !chosen.has(s.name.toLowerCase())).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+      <label className={labelClass}>Play style
+        <select aria-label={`${idPrefix} play style`} value={card.playStyle} onChange={(e) => setCard({ playStyle: e.target.value })} className={`${inputClass} mt-1 normal-case tracking-normal`}>
+          <option value="">Not set</option>{PLAY_STYLES.map((style) => <option key={style.id} value={style.name}>{style.name}</option>)}
         </select>
       </label>
     </div>
-    {card.playStyles.length
-      ? <ul aria-label={`${idPrefix} play styles`} className="flex flex-wrap gap-2">{card.playStyles.map((style) => <li key={style.name} title={style.description || ''} className="flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-xs normal-case tracking-normal text-zinc-200">
-        {style.name}
-        <button type="button" aria-label={`Remove ${style.name}`} onClick={() => setCard({ playStyles: card.playStyles.filter((s) => s.name !== style.name) })} className="text-zinc-500 hover:text-white">×</button>
-      </li>)}</ul>
-      : <p className="text-xs normal-case tracking-normal text-zinc-500">No play styles yet.</p>}
   </fieldset>;
 }
 

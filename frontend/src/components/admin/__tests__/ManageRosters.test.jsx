@@ -210,7 +210,7 @@ describe('choosing a division, season and team', () => {
     expect(screen.getByLabelText('Edit Pace').value).toBe('80'); // an older flat value is shown in the structured field
     expect(screen.getByLabelText('Edit Shooting').value).toBe('');
     expect(screen.getByLabelText('Edit preferred foot').value).toBe('');
-    expect(within(screen.getByLabelText('Edit player')).getByText('No play styles yet.')).toBeTruthy();
+    expect(screen.getByLabelText('Edit play style').value).toBe(''); // no play style: not set
     expect(screen.getByLabelText('Edit email').value).toBe('ada@iiitkottayam.ac.in');
   });
   it('shows the roster of the team chosen last, even when an earlier team answers later', async () => {
@@ -428,34 +428,34 @@ describe('the FUT card in the player forms', () => {
   const editCard = () => within(screen.getByLabelText('Edit player')).getByRole('figure');
   const png = () => new File(['png'], 'face.png', { type: 'image/png' });
 
-  it('previews a new player while it is typed: name, rating, stats, foot and play styles, with no invented values', async () => {
+  it('previews a new player while it is typed: name, rating, stats, foot and play style, with no invented values', async () => {
     await openTeam();
     expect(newCard().getAttribute('aria-label')).toBe('FUT card: Unnamed player');
     expect(within(newCard()).getByTestId('card-rating').textContent).toBe('—'); // no rating until one is entered
     expect(screen.getByLabelText('New rating').value).toBe('');
     expect(newCard().textContent).toMatch(/PAC—.*PHY—/);
     expect(newCard().textContent).toMatch(/Preferred foot: not set/);
-    expect(newCard().textContent).toMatch(/Play styles: none/);
+    expect(newCard().textContent).toMatch(/Play style: not set/);
     pick('New first name', 'Bea');
     pick('New last name', 'Keeper');
     pick('New rating', '64');
     pick('New Pace', '71');
     pick('New preferred foot', 'Left');
-    pick('New add play style', 'power-shot');
+    pick('New play style', 'Power Shot');
     expect(newCard().getAttribute('aria-label')).toBe('FUT card: Bea Keeper');
     expect(within(newCard()).getByTestId('card-rating').textContent).toBe('64');
     expect(newCard().textContent).toMatch(/PAC71/);
     expect(newCard().textContent).toMatch(/Preferred foot: Left/);
-    expect(newCard().textContent).toMatch(/Play styles: Power Shot/);
+    expect(newCard().textContent).toMatch(/Play style: Power Shot/);
     expect(within(newCard()).getByRole('img', { name: 'Power Shot' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Power Shot' }));
-    expect(newCard().textContent).toMatch(/Play styles: none/);
-    pick('New add play style', 'tiki-taka');
+    pick('New play style', '');
+    expect(newCard().textContent).toMatch(/Play style: not set/);
+    pick('New play style', 'Tiki Taka');
     fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Bea Keeper added to Alpha/));
     expect(rpc.mock.calls.find(([name]) => name === 'create_rostered_player')[1].p_attributes).toEqual({
       stats: { Pace: { total: 71 } }, bio: { preferredFoot: 'Left' },
-      playStyles: [expect.objectContaining({ name: 'Tiki Taka', description: expect.any(String), icon_url: expect.stringMatching(/tikitaka/) })],
+      playStyle: 'Tiki Taka',
     });
   });
 
@@ -490,18 +490,18 @@ describe('the FUT card in the player forms', () => {
   });
 
   it('edits the card with structured fields, previewing the draft and keeping values the form does not show', async () => {
-    db.tables.players[0].attributes = { pace: 80, stats: { Shooting: { total: 66, finishing: 70 } }, bio: { height: 170 }, playStyles: [{ name: 'Mystery Move' }], custom: 1 };
+    db.tables.players[0].attributes = { pace: 80, stats: { Shooting: { total: 66, finishing: 70 } }, bio: { height: 170 }, playStyle: 'Power Shot', custom: 1 };
     await openTeam();
     await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
     pick('Player', 'm1');
     expect(screen.getByLabelText('Edit Shooting').value).toBe('66');
-    expect(within(screen.getByRole('list', { name: 'Edit play styles' })).getByText('Mystery Move')).toBeTruthy();
+    expect(screen.getByLabelText('Edit play style').value).toBe('Power Shot');
     pick('Edit Shooting', '75');
     pick('Edit preferred foot', 'Right');
-    pick('Edit add play style', 'finesse-shot');
+    pick('Edit play style', 'Finesse Shot');
     expect(editCard().textContent).toMatch(/SHO75/);
     expect(editCard().textContent).toMatch(/Preferred foot: Right/);
-    expect(editCard().textContent).toMatch(/Play styles: Mystery Move, Finesse Shot/);
+    expect(editCard().textContent).toMatch(/Play style: Finesse Shot/);
     expect(editCard().textContent).not.toMatch(/#9/);
     fireEvent.click(screen.getByRole('button', { name: /save player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada saved/));
@@ -509,7 +509,7 @@ describe('the FUT card in the player forms', () => {
       custom: 1, // the older flat pace moved into its canonical place
       stats: { Pace: { total: 80 }, Shooting: { total: 75, finishing: 70 } },
       bio: { height: 170, preferredFoot: 'Right' },
-      playStyles: [{ name: 'Mystery Move' }, expect.objectContaining({ name: 'Finesse Shot' })],
+      playStyle: 'Finesse Shot',
     });
   });
 
