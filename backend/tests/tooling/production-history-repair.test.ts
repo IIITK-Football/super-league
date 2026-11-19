@@ -1,5 +1,5 @@
 // Group: tooling. scripts/production-history-repair.sh marks the two baseline migrations as applied on the PRODUCTION
-// project and checks that exactly the two new migrations remain pending. The owner runs it; it reads the connection
+// project and checks that exactly the repository's later migrations remain pending. The owner runs it; it reads the connection
 // string with hidden input, verifies the target project, never prints or stores the string, and stops on any surprise.
 // Tested with a fake Supabase CLI: nothing here touches a real database.
 import { spawnSync } from 'node:child_process';
@@ -16,13 +16,15 @@ const PASSWORD = 'Sup3rS3cret-pw';
 const POOLER = `postgresql://postgres.${PROD}:${PASSWORD}@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres`;
 const DIRECT = `postgresql://postgres:${PASSWORD}@db.${PROD}.supabase.co:5432/postgres`;
 
+// Every repository migration after the baseline is pending on production until the first production deploy.
+const LATER = readdirSync(join(root, 'backend/supabase/migrations')).filter((f) => f.endsWith('.sql'))
+  .map((f) => f.split('_')[0]).filter((v) => !['20261106000000', '20261106180125'].includes(v)).sort();
 const LIST_GOOD = [
   '        Local        |       Remote        | Time (UTC)',
   '---------------------|---------------------|---------------------',
   ' 20261106000000      | 20261106000000      | 2026-11-06 00:00:00',
   ' 20261106180125      | 20261106180125      | 2026-11-06 18:01:25',
-  ' 20261117000000      |                     | 2026-11-17 00:00:00',
-  ' 20261118000000      |                     | 2026-11-18 00:00:00',
+  ...LATER.map((v) => ` ${v}      |                     | 2026-11-17 00:00:00`),
 ].join('\n');
 
 let dir: string;
@@ -123,19 +125,26 @@ describe('the repair', () => {
     expect(c).not.toMatch(/--linked|db push|db reset/);
   });
 
-  it('succeeds only when exactly the two new migrations are pending', () => {
+  it('succeeds only when exactly the repository\'s later migrations are pending', () => {
     const r = run(POOLER);
     expect(r.status).toBe(0);
-    expect(everything(r)).toMatch(/20261117000000/);
-    expect(everything(r)).toMatch(/20261118000000/);
-    expect(everything(r)).toMatch(/exactly the two expected/i);
+    expect(LATER.length).toBeGreaterThan(2);
+    for (const v of LATER) expect(everything(r)).toMatch(new RegExp(v));
+    expect(everything(r)).toMatch(new RegExp(`exactly the ${LATER.length} expected migrations`, 'i'));
+  });
+
+  it('stops when a later migration is missing from the pending list', () => {
+    const missing = LIST_GOOD.split('\n').filter((l) => !l.includes(LATER[LATER.length - 1])).join('\n');
+    const r = run(POOLER, missing);
+    expect(r.status).not.toBe(0);
+    expect(everything(r)).toMatch(/does not match/i);
   });
 
   it('stops and says what differs when anything else is pending', () => {
-    const extra = `${LIST_GOOD}\n 20261120000000      |                     | 2026-11-20 00:00:00`;
+    const extra = `${LIST_GOOD}\n 20271231000000      |                     | 2027-12-31 00:00:00`;
     const r = run(POOLER, extra);
     expect(r.status).not.toBe(0);
-    expect(everything(r)).toMatch(/20261120000000/);
+    expect(everything(r)).toMatch(/20271231000000/);
     expect(everything(r)).toMatch(/does not match/i);
   });
 

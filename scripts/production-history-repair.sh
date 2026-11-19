@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Marks the two baseline migrations as already applied on the PRODUCTION Supabase project and checks that exactly the two
-# new migrations remain pending. Run by the owner, once, before the first production deploy:
+# Marks the two baseline migrations as already applied on the PRODUCTION Supabase project and checks that exactly the
+# repository's later migrations (every file in backend/supabase/migrations after the baseline) remain pending. Run by the
+# owner, once, before the first production deploy:
 #
 #   bash scripts/production-history-repair.sh
 #
@@ -16,9 +17,13 @@ set -euo pipefail
 PROD_REF="obkxfepdpdufxawhzaen"
 STAGING_REF="yecozsiccsfwphlmxozt"
 BASELINES=(20261106000000 20261106180125)
-EXPECTED_PENDING=(20261117000000 20261118000000)
-
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Every migration after the baseline is expected to be pending: they have never run on production.
+EXPECTED_PENDING=()
+for f in "$ROOT"/backend/supabase/migrations/*.sql; do
+  v="$(basename "$f")"; v="${v%%_*}"
+  case " ${BASELINES[*]} " in *" $v "*) ;; *) EXPECTED_PENDING+=("$v") ;; esac
+done
 cd "$ROOT/backend"
 if [ -n "${PRODUCTION_REPAIR_SUPABASE_CMD:-}" ]; then SB=("$PRODUCTION_REPAIR_SUPABASE_CMD"); else SB=(pnpm exec supabase); fi
 
@@ -154,5 +159,5 @@ if [ "$sorted_pending" != "$sorted_expected" ]; then
   die "the result does not match what was expected; stopping before anything else changes."
 fi
 
-echo "OK: exactly the two expected migrations are pending on production: $sorted_expected"
+echo "OK: exactly the ${#EXPECTED_PENDING[@]} expected migrations are pending on production: $sorted_expected"
 echo "The baseline is recorded as applied. Next: merge the release pull request and approve the Database Production job."
