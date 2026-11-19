@@ -10,6 +10,7 @@ import teamStyles from './Teams.module.css';
 import { cn } from '../utils/cn';
 import { API_BASE_URL } from '../lib/api';
 import { useDivisions } from '../hooks/useDivisions';
+import MyPlayerCard from '../components/players/MyPlayerCard';
 
 const getTeamColorClass = (teamName) => {
     if (!teamName) return teamStyles.defaultTeam;
@@ -287,6 +288,10 @@ export function UserProfile() {
                         <LogOut size={16} /> Log Out
                     </button>
                 </div>
+            </GlassPanel>
+
+            <GlassPanel className="p-8 sm:p-10 relative z-10 border border-white/10 bg-black/60 backdrop-blur-2xl">
+                <MyPlayerCard />
             </GlassPanel>
         </div>
     );
