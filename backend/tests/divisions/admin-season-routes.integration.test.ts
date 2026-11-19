@@ -13,7 +13,7 @@ vi.mock('@aws-sdk/client-s3', () => ({ S3Client: class { send = vi.fn(); }, PutO
 let admin: SupabaseClient;
 let anon: () => SupabaseClient;
 const users: string[] = [];
-const made = { matches: [] as string[], teams: [] as string[], regs: [] as string[] };
+const made = { matches: [] as string[], teams: [] as string[], regs: [] as string[], seasons: [] as string[] };
 let current: Record<string, string>;
 let dictatorToken: string;
 
@@ -53,6 +53,7 @@ afterAll(async () => {
   for (const id of made.regs) await admin.from('team_registrations').delete().eq('id', id);
   if (made.teams.length) await admin.from('team_entries').delete().in('team_id', made.teams);
   for (const id of made.teams) await admin.from('teams').delete().eq('id', id);
+  for (const id of made.seasons) await admin.from('seasons').delete().eq('id', id);
   for (const id of users) await admin.auth.admin.deleteUser(id);
 }, 60000);
 
@@ -105,6 +106,41 @@ describe('captain team branding', () => {
     const res = await POST(new Request('http://localhost/api/captain/team-branding', { method: 'POST', headers: { Authorization: `Bearer ${captain.token}` }, body: form }));
     expect(res.status).toBe(200);
     expect((await admin.from('teams').select('team_color').eq('id', team!.id).single()).data!.team_color).toBe('#123456');
+  });
+});
+
+describe('captain team branding refusals', () => {
+  const brand = async (token: string) => {
+    const { POST } = await import('../../app/api/captain/team-branding/route');
+    const form = new FormData();
+    form.set('team_color', '#654321');
+    return POST(new Request('http://localhost/api/captain/team-branding', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form }));
+  };
+  const registeredTeam = async (captainId: string, seasonId: string) => {
+    const stamp = `${Date.now()}${Math.floor(performance.now() * 1000) % 1000}`;
+    const { data: team, error } = await admin.from('teams').insert({ name: `Branding Refused ${stamp}`, short_name: `R${stamp.slice(-3)}`, logo_url: 'data:image/png;base64,AA==', team_color: '#000000' }).select('id').single();
+    if (error) throw error;
+    made.teams.push(team!.id);
+    const { data: reg, error: regError } = await admin.from('team_registrations').insert({ captain_id: captainId, team_name: 'Branding Refused', season_id: seasonId, team_id: team!.id }).select('id').single();
+    if (regError) throw regError;
+    made.regs.push(reg!.id);
+    return team!.id;
+  };
+
+  it('refuses a registration holder without the captain role, changing nothing', async () => {
+    const holder = await tokenFor('default');
+    const teamId = await registeredTeam(holder.id, current.freshers);
+    expect((await brand(holder.token)).status).toBe(403);
+    expect((await admin.from('teams').select('team_color').eq('id', teamId).single()).data!.team_color).toBe('#000000');
+  });
+
+  it('refuses a captain whose registration is not in the current season, changing nothing', async () => {
+    const captain = await tokenFor('captain');
+    const { data: past } = await admin.from('seasons').insert({ division_id: (await admin.from('seasons').select('division_id').eq('id', current.freshers).single()).data!.division_id, slug: `past-${Date.now()}`, name: 'Past', is_current: false }).select('id').single();
+    made.seasons.push(past!.id);
+    const teamId = await registeredTeam(captain.id, past!.id);
+    expect((await brand(captain.token)).status).toBe(409);
+    expect((await admin.from('teams').select('team_color').eq('id', teamId).single()).data!.team_color).toBe('#000000');
   });
 });
 

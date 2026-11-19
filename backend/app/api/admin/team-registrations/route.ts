@@ -57,6 +57,14 @@ export async function POST(request: Request) {
     }
 
     let leagueTeamId = body.team_id;
+    // An existing team's registration always carries the team's own name (never a name typed by the client).
+    let teamName = body.team_name.trim();
+    if (leagueTeamId) {
+      const { data: existingTeam, error: teamError } = await supabase.from('teams').select('name').eq('id', leagueTeamId).maybeSingle();
+      if (teamError) throw teamError;
+      if (!existingTeam) return NextResponse.json({ success: false, message: 'That team no longer exists.' }, { status: 404 });
+      teamName = existingTeam.name;
+    }
     if (!leagueTeamId) {
       const { data: leagueTeam, error: leagueTeamError } = await supabase.from('teams').insert({
         name: body.team_name.trim(),
@@ -71,7 +79,7 @@ export async function POST(request: Request) {
 
     // An existing registration is updated in place (changing its captain never inserts a second row); a new one is
     // inserted. An account captains one team at a time.
-    const row = { team_id: leagueTeamId, team_name: body.team_name.trim(), season_id: scope.season.id, captain_id: body.captain_id };
+    const row = { team_id: leagueTeamId, team_name: teamName, season_id: scope.season.id, captain_id: body.captain_id };
     const { data: registration, error: registrationError } = body.id
       ? await supabase.from('team_registrations').update(row).eq('id', body.id).select('id').single()
       : await supabase.from('team_registrations').insert(row).select('id').single();

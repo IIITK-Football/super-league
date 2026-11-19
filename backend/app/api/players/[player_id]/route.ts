@@ -90,7 +90,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ play
         first_name: card.first_name,
         last_name: card.last_name,
         image_url: card.image_url,
-        overall_rating: card.overall_rating ?? 50,
+        overall_rating: card.overall_rating ?? null, // not set stays not set
         attributes: card.attributes || null,
         // The season shown on the card.
         season: current ? { ...current.season, division: current.division } : null,

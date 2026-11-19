@@ -24,7 +24,9 @@ function fakeAdmin() {
         filterId = id;
         return api;
       },
-      maybeSingle: async () => ({ data: filterId && state.roles[filterId] ? { role: state.roles[filterId] } : null, error: null }),
+      maybeSingle: async () => (name === 'teams'
+        ? { data: filterId ? { name: `Team record ${filterId}` } : null, error: null }
+        : { data: filterId && state.roles[filterId] ? { role: state.roles[filterId] } : null, error: null }),
       single: async () => (name === 'team_registrations' && state.registrationError
         ? { data: null, error: state.registrationError }
         : { data: { id: `${name}-1` }, error: null }),
@@ -34,7 +36,7 @@ function fakeAdmin() {
       },
       update: (row: any) => {
         state.writes.push(`update:${name}`);
-        if (name === 'team_registrations') state.writes.push(`captain=${row.captain_id}`);
+        if (name === 'team_registrations') state.writes.push(`captain=${row.captain_id}`, `name=${row.team_name}`);
         return api;
       },
       upsert: (row: any) => {
@@ -139,6 +141,7 @@ describe('POST /api/admin/team-registrations: changing a captain', () => {
     expect(res.status).toBe(200);
     expect(state.writes).toContain('update:team_registrations');
     expect(state.writes).toContain('captain=p7');
+    expect(state.writes).toContain('name=Team record team-1'); // the team's own name, not the client's 'Test FC'
     expect(state.writes.filter((w) => /^(insert|upsert):team_registrations/.test(w))).toEqual([]);
   });
 

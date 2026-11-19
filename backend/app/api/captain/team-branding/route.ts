@@ -69,19 +69,32 @@ export async function POST(request: Request) {
     }
 
     const adminClient = createClient(supabaseUrl, secret);
-    const { data: registration, error: registrationError } = await adminClient
+    const formData = await request.formData();
+    // Branding is a captain's (or a dictator's) change to a team they captain in the current season. A captain with
+    // several such teams names the registration; the team is always the registration's own team.
+    const { data: roleRow } = await adminClient.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
+    if (!['captain', 'dictator'].includes(String(roleRow?.role))) {
+      return NextResponse.json({ error: 'Only the team\'s captain can change its branding.' }, { status: 403 });
+    }
+    const registrationId = String(formData.get('registration_id') || '').trim();
+    let query = adminClient
       .from('team_registrations')
-      .select('id, team_id, team_name, season:seasons!inner(slug, division:divisions!inner(slug)), teams!inner(id, name, logo_url, team_color)')
+      .select('id, team_id, team_name, season:seasons!inner(slug, is_current, division:divisions!inner(slug)), teams!inner(id, name, logo_url, team_color)')
       .eq('captain_id', user.id)
-      .maybeSingle();
+      .eq('season.is_current', true);
+    if (registrationId) query = query.eq('id', registrationId);
+    const { data: registrations, error: registrationError } = await query;
 
     if (registrationError) throw registrationError;
-    if (!registration?.team_id) {
-      return NextResponse.json({ error: 'Your team has not been assigned yet. Contact your dictator.' }, { status: 409 });
+    if (!registrations?.length) {
+      return NextResponse.json({ error: 'You do not captain a team in the current season. Contact your dictator.' }, { status: 409 });
     }
+    if (registrations.length > 1) {
+      return NextResponse.json({ error: 'Choose which of your teams to brand.' }, { status: 400 });
+    }
+    const registration = registrations[0];
 
     const team = Array.isArray(registration.teams) ? registration.teams[0] : registration.teams;
-    const formData = await request.formData();
     const teamColor = String(formData.get('team_color') || '').trim();
     const logo = formData.get('logo');
 
@@ -117,7 +130,7 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
 
-      const rawName = registration.team_name || team.name || 'team';
+      const rawName = team.name || 'team';
       const teamSlug = rawName
         .toLowerCase()
         .trim()
