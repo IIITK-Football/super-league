@@ -1,0 +1,76 @@
+{
+  "head": "4b0dfce57c959065286948e65f26663c7becc538",
+  "tree": "2eebeb17704d42739b5e91c652c103f651ae7bdb",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-19T05:32:44.913Z",
+  "groups": [
+    {
+      "name": "database",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": ".",
+          "cmd": "bash scripts/local-db.sh test",
+          "exit": 0,
+          "ms": 3366
+        }
+      ]
+    },
+    {
+      "name": "audit",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/audit",
+          "exit": 0,
+          "ms": 2944
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/AuditHistory.local.test.jsx",
+          "exit": 0,
+          "ms": 3272
+        }
+      ]
+    },
+    {
+      "name": "frontend-components",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run --passWithNoTests",
+          "exit": 0,
+          "ms": 6730
+        }
+      ]
+    },
+    {
+      "name": "tooling",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/tooling",
+          "exit": 0,
+          "ms": 10482
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "database",
+    "audit",
+    "frontend-components",
+    "tooling"
+  ],
+  "commandChecks": {},
+  "id": "SL-027",
+  "base": "f7bb736f01ce3051ea0fc3bb7b6668a321068bf4"
+}

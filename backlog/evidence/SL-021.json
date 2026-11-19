@@ -1,0 +1,126 @@
+{
+  "head": "4b0dfce57c959065286948e65f26663c7becc538",
+  "tree": "2eebeb17704d42739b5e91c652c103f651ae7bdb",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-19T05:33:42.481Z",
+  "groups": [
+    {
+      "name": "database",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": ".",
+          "cmd": "bash scripts/local-db.sh test",
+          "exit": 0,
+          "ms": 3321
+        }
+      ]
+    },
+    {
+      "name": "rosters",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/rosters",
+          "exit": 0,
+          "ms": 6666
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageRosters.local.test.jsx src/pages/__tests__/TeamBuilder.local.test.jsx",
+          "exit": 0,
+          "ms": 4108
+        }
+      ]
+    },
+    {
+      "name": "tooling",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/tooling",
+          "exit": 0,
+          "ms": 10658
+        }
+      ]
+    },
+    {
+      "name": "frontend-components",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run --passWithNoTests",
+          "exit": 0,
+          "ms": 6138
+        }
+      ]
+    },
+    {
+      "name": "divisions",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/divisions",
+          "exit": 0,
+          "ms": 10049
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageDivisions.local.test.jsx",
+          "exit": 0,
+          "ms": 3375
+        }
+      ]
+    },
+    {
+      "name": "config",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/config",
+          "exit": 0,
+          "ms": 981
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run src/lib",
+          "exit": 0,
+          "ms": 1194
+        },
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec tsc --noEmit",
+          "exit": 0,
+          "ms": 1671
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "database",
+    "rosters",
+    "tooling",
+    "frontend-components",
+    "divisions",
+    "config"
+  ],
+  "commandChecks": {
+    "C2": {
+      "exit": 0
+    }
+  },
+  "id": "SL-021",
+  "base": "ae183ff2928e60639e45f03ebd45cde01d3e749d"
+}
