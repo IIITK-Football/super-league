@@ -196,6 +196,7 @@
         "backend/lib/auth/**",
         "backend/app/api/auth/**",
         "backend/app/api/admin/team-registrations/**",
+      "backend/app/api/admin/newsletter/**",
         "backend/supabase/migrations/*auth*",
         "frontend/src/lib/authApi.js",
         "frontend/src/lib/authRules.js",
