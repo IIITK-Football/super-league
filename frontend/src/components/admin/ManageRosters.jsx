@@ -6,6 +6,9 @@ import { useLatestSearch } from '../../hooks/useLatestSearch';
 import FutCard from '../players/FutCard';
 import { CARD_STATS, FEET, applyCardDraft, blankCardDraft, cardDraft } from '../../lib/playerCard';
 import { PLAY_STYLES } from '../../data/playStyles';
+import { ghostButton, inputClass, labelClass, primaryButton } from './adminStyles';
+import PlayerAccountLink from './PlayerAccountLink';
+import AccountLinkImport from './AccountLinkImport';
 
 // Dictator flow for season teams and rosters: division -> season -> team entry, then that team's players.
 // A player is one reusable identity (the FUT card: name, portrait, rating, attributes); a roster place puts the
@@ -52,10 +55,6 @@ export function describeError(error) {
   return error.message || 'Something went wrong. Try again.';
 }
 
-const inputClass = 'w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-[#d9ff4a]/60';
-const labelClass = 'text-[10px] font-black uppercase tracking-widest text-zinc-500';
-const ghostButton = 'flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/5 disabled:opacity-40';
-const primaryButton = 'flex items-center gap-2 rounded-lg bg-[#d9ff4a] px-3 py-2 text-xs font-black uppercase text-black disabled:opacity-40';
 
 // The player form fields, shared by the edit and create forms (a render helper, not a component).
 function playerFields(value, onChange, idPrefix) {
@@ -133,6 +132,9 @@ export default function ManageRosters() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [contactsLoaded, setContactsLoaded] = useState(false);
+  // Account link of each player on the roster: { [playerId]: { linked, account_label } }, from player_link_status.
+  const [links, setLinks] = useState({});
+  const [linksError, setLinksError] = useState('');
   // Pictures chosen but not (yet) saved, previewed on the card: 'edit' for the chosen player, 'new' for the new-player
   // form. { file, url (a local preview), status: 'local' | 'uploading' | 'failed', membershipId, playerId, name }.
   const [portraits, setPortraits] = useState({});
@@ -204,17 +206,20 @@ export default function ManageRosters() {
     if (latestEntry.current !== eId) return;
     if (err) { setError(describeError(err)); isLoading('roster', false); return; }
     const ids = (places || []).map((p) => p.player_id);
-    const [{ data: players, error: playersError }, { data: privates, error: privatesError }] = ids.length
+    const [{ data: players, error: playersError }, { data: privates, error: privatesError }, { data: linkRows, error: linkError }] = ids.length
       ? await Promise.all([
         supabase.from('players').select('id, first_name, last_name, image_url, overall_rating, attributes').in('id', ids),
         supabase.from('player_private_details').select('player_id, email').in('player_id', ids),
+        supabase.rpc('player_link_status', { p_player_ids: ids }),
       ])
-      : [{ data: [], error: null }, { data: [], error: null }];
+      : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
     if (latestEntry.current !== eId) return;
     if (playersError) setError(describeError(playersError));
     // Without the contact details the form cannot show the email, so saving must leave it alone.
     if (privatesError) setError(`Contact details could not be loaded (${describeError(privatesError)}); saving will not change any email.`);
     setContactsLoaded(!privatesError);
+    setLinksError(linkError ? describeError(linkError) : '');
+    setLinks(Object.fromEntries((linkRows || []).map((l) => [l.player_id, l])));
     const byId = new Map((players || []).map((p) => [p.id, p]));
     const emails = new Map((privates || []).map((p) => [p.player_id, p.email]));
     setRoster((places || []).map((p) => ({ ...p, player: byId.get(p.player_id) || null, email: emails.get(p.player_id) || '' }))
@@ -467,7 +472,7 @@ export default function ManageRosters() {
         : <label className={labelClass}>Player
           <select aria-label="Player" value={selectedPlace} onChange={(e) => choosePlace(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
             <option value="">Choose a player to edit ({roster.length} on the roster)</option>
-            {roster.map((r) => <option key={r.id} value={r.id}>{r.jersey_number ?? '–'} · {r.player ? `${r.player.first_name} ${r.player.last_name}` : 'Unknown player'}{r.position ? ` · ${r.position}` : ''}</option>)}
+            {roster.map((r) => <option key={r.id} value={r.id}>{r.jersey_number ?? '–'} · {r.player ? `${r.player.first_name} ${r.player.last_name}` : 'Unknown player'}{r.position ? ` · ${r.position}` : ''}{links[r.player_id]?.linked ? ' · linked account' : ''}</option>)}
           </select>
         </label>}
 
@@ -477,6 +482,7 @@ export default function ManageRosters() {
           {seasonPlace(editing, entry?.name)}
         </div>
         {playerFields(editing, setEditing, 'Edit')}
+        {place.player && <PlayerAccountLink key={place.player_id} player={place.player} status={links[place.player_id] || (linksError ? null : { linked: false })} statusError={linksError} onChanged={() => loadRoster(entryId)} />}
         <div className="flex flex-wrap items-end gap-2">
           <button type="button" onClick={savePlayer} disabled={busy === `save-${place.id}`} className={primaryButton}>{busy === `save-${place.id}` ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save player</button>
           <label className={ghostButton}>
@@ -553,6 +559,8 @@ export default function ManageRosters() {
         <button type="submit" disabled={busy === 'create-player'} className={primaryButton}>{busy === 'create-player' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Create player</button>
       </form>
     </section>}
+
+    <AccountLinkImport onApplied={() => entryId && loadRoster(entryId)} />
 
     {!divisionId && !loading.divisions && divisions.length > 0 && <p className="text-zinc-500">Choose a division to see its seasons and teams.</p>}
     <p className="text-[10px] text-zinc-600">Players who have scored or assisted in a season keep their place on that season&apos;s roster, and a player who has played is never deleted.</p>

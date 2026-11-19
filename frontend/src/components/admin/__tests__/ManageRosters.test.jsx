@@ -22,6 +22,7 @@ function seed() {
   db.tables.seasons.push({ id: 's0', division_id: 'd1', slug: '2025', name: '2025', is_current: false, sort_order: 0 });
   db.calls = [];
   db.fail = {};
+  db.linkedPlayer = null;
   db.slow = null;
   // What search_players returns: identities with their latest roster place and the season flag.
   db.searchPlayers = [
@@ -101,6 +102,7 @@ const rpc = vi.fn(async (name, args) => {
     db.tables.team_entries.push({ id: `e-${nextId++}`, team_id: team, season_id: args.p_season_id });
     return { data: team, error: null };
   }
+  if (name === 'player_link_status') return { data: args.p_player_ids.map((id) => ({ player_id: id, linked: id === db.linkedPlayer, account_label: id === db.linkedPlayer ? 'Ada (ada@iiitkottayam.ac.in)' : null })), error: null };
   if (name === 'search_players') {
     if (db.fail['rpc.search_players']) return { data: null, error: db.fail['rpc.search_players'] };
     const words = args.p_query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -137,7 +139,8 @@ import ManageRosters, { describeError, validatePlayer, blankPlayer } from '../Ma
 beforeEach(() => { seed(); rpc.mockClear(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-const writes = () => db.calls.filter((c) => (c.rpc && c.rpc !== 'search_players') || ['insert', 'update', 'delete', 'upsert'].includes(c.op));
+const READS = new Set(['search_players', 'player_link_status']);
+const writes = () => db.calls.filter((c) => (c.rpc && !READS.has(c.rpc)) || ['insert', 'update', 'delete', 'upsert'].includes(c.op));
 const pick = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
 async function openTeam(team = 'e1') {
@@ -199,6 +202,16 @@ describe('choosing a division, season and team', () => {
     await waitFor(() => expect(screen.getByText(/no players on this roster yet/i)).toBeTruthy());
   });
 
+  it('marks a player linked to an account and shows the account in the player panel', async () => {
+    db.linkedPlayer = 'p1';
+    await openTeam();
+    await waitFor(() => expect(screen.getByRole('option', { name: /9 · Ada Striker · ST · linked account/ })).toBeTruthy());
+    expect(rpc).toHaveBeenCalledWith('player_link_status', { p_player_ids: expect.arrayContaining(['p1']) });
+    pick('Player', 'm1');
+    expect(within(screen.getByRole('group', { name: 'Player account' })).getByText(/Linked to/).textContent).toMatch(/ada@iiitkottayam/);
+    expect(screen.getByText('Import account links')).toBeTruthy();
+  });
+
   it('lists the team\'s players in a dropdown and opens the chosen one with its card, roster place and private email', async () => {
     await openTeam();
     await waitFor(() => expect(screen.getByRole('option', { name: /9 · Ada Striker · ST/ })).toBeTruthy());
@@ -255,7 +268,7 @@ describe('players', () => {
     pick('New rating', '150');
     fireEvent.click(within(form).getByRole('button', { name: /create player/i }));
     expect(screen.getByRole('alert').textContent).toMatch(/1 and 99/);
-    expect(rpc).not.toHaveBeenCalled();
+    expect(writes()).toEqual([]);
     pick('New rating', '64');
     pick('New last name', 'Keeper');
     pick('New jersey', '1');
