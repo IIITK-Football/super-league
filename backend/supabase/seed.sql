@@ -453,7 +453,8 @@ SET
   ), '[]'::jsonb)
 WHERE m.id IN (SELECT id FROM _mega_match_defs);
 
--- Two freshers team-builder registrations, both using The Bear teams.
+-- Two freshers team-builder registrations. A registration's team_name is the team's own name (the captain's name
+-- here once made The Beef's registration read "Cartwright").
 CREATE TEMP TABLE _mega_registrations (
   id uuid PRIMARY KEY,
   captain_id uuid NOT NULL,
@@ -465,13 +466,13 @@ INSERT INTO _mega_registrations VALUES
   (
     '70000000-0000-4000-8000-000000000001',
     '60000000-0000-4000-8000-000000000002',
-    'Cartwright',
+    'The Beef',
     md5('mega-team:freshers:BEEF')::uuid
   ),
   (
     '70000000-0000-4000-8000-000000000002',
     '60000000-0000-4000-8000-000000000004',
-    'Sydney',
+    'Ever',
     md5('mega-team:freshers:EVER')::uuid
   );
 
