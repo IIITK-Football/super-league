@@ -3,6 +3,7 @@ import { publishableKey, secretKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { ScopeError, resolveScope } from '@/lib/scope';
 
 const supabase = createClient(process.env.SUPABASE_URL!, secretKey());
 
@@ -16,7 +17,7 @@ async function getDictator(request: Request) {
   const { data: { user } } = await authClient.auth.getUser();
   if (!user) return null;
   const { data: role } = await supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
-  return role?.role === 'admin' || role?.role === 'dictator' ? user : null;
+  return role?.role === 'dictator' ? user : null; // the legacy admin role grants nothing
 }
 
 export async function POST(request: Request) {
@@ -25,6 +26,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     if (!body.team_name?.trim() || !body.captain_id) {
       return NextResponse.json({ success: false, message: 'Team and captain are required.' }, { status: 400 });
+    }
+    // Players and roster places are managed through /api/admin/players and /api/admin/roster; this route only
+    // registers the team for a season and assigns its captain. A request that still sends members is refused
+    // rather than silently dropping them.
+    if (Array.isArray(body.members) && body.members.length) {
+      return NextResponse.json({ success: false, message: 'Add players through the season roster, not the registration.' }, { status: 400 });
     }
 
     // Captain access needs the assignment AND the captain role, but assigning a captain must never silently
@@ -40,24 +47,48 @@ export async function POST(request: Request) {
       );
     }
 
+    // The team is registered for body.season (slug or id) of body.division (slug), default the current season.
+    let scope;
+    try {
+      scope = await resolveScope(supabase, { division: body.division, season: body.season });
+    } catch (scopeError) {
+      if (scopeError instanceof ScopeError) return NextResponse.json({ success: false, message: scopeError.message }, { status: scopeError.status });
+      throw scopeError;
+    }
+
     let leagueTeamId = body.team_id;
+    // An existing team's registration always carries the team's own name (never a name typed by the client).
+    let teamName = body.team_name.trim();
+    if (leagueTeamId) {
+      const { data: existingTeam, error: teamError } = await supabase.from('teams').select('name').eq('id', leagueTeamId).maybeSingle();
+      if (teamError) throw teamError;
+      if (!existingTeam) return NextResponse.json({ success: false, message: 'That team no longer exists.' }, { status: 404 });
+      teamName = existingTeam.name;
+    }
     if (!leagueTeamId) {
       const { data: leagueTeam, error: leagueTeamError } = await supabase.from('teams').insert({
         name: body.team_name.trim(),
         short_name: body.team_name.trim().replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase(),
-        division: body.division,
       }).select('id').single();
       if (leagueTeamError) throw leagueTeamError;
       leagueTeamId = leagueTeam.id;
     }
+    const { error: entryError } = await supabase.from('team_entries')
+      .upsert({ team_id: leagueTeamId, season_id: scope.season.id }, { onConflict: 'team_id,season_id', ignoreDuplicates: true });
+    if (entryError) throw entryError;
 
-    const { data: registration, error: registrationError } = await supabase.from('team_registrations').upsert({
-      ...(body.id ? { id: body.id } : {}),
-      team_id: leagueTeamId,
-      team_name: body.team_name.trim(),
-      division: body.division,
-      captain_id: body.captain_id,
-    }, { onConflict: 'captain_id' }).select('id').single();
+    // An existing registration is updated in place (changing its captain never inserts a second row); a new one is
+    // inserted. An account captains one team at a time.
+    const row = { team_id: leagueTeamId, team_name: teamName, season_id: scope.season.id, captain_id: body.captain_id };
+    const { data: registration, error: registrationError } = body.id
+      ? await supabase.from('team_registrations').update(row).eq('id', body.id).select('id').single()
+      : await supabase.from('team_registrations').insert(row).select('id').single();
+    if (registrationError?.code === '23505') {
+      return NextResponse.json({ success: false, message: 'This account already captains another team. Revoke that captaincy first.' }, { status: 409 });
+    }
+    if (registrationError?.code === 'PGRST116') {
+      return NextResponse.json({ success: false, message: 'That registration no longer exists. Reload and try again.' }, { status: 404 });
+    }
     if (registrationError) throw registrationError;
 
     if (currentRole !== 'captain' && currentRole !== 'dictator') {
@@ -65,23 +96,6 @@ export async function POST(request: Request) {
       if (roleError) throw roleError;
     }
 
-    const members = (body.members || []).map((member: any) => ({
-      id: member.id || crypto.randomUUID(),
-      registration_id: registration.id,
-      name: member.name.trim(),
-      first_name: member.name.trim().split(/\s+/)[0],
-      last_name: member.name.trim().split(/\s+/).slice(1).join(' '),
-      email: member.email?.trim() || null,
-      position: member.position || null,
-      jersey_number: Number(member.jersey_number) || null,
-      image_url: member.image_url || null,
-      overall_rating: Number(member.overall_rating) || 50,
-      attributes: member.attributes || {},
-    }));
-    if (members.length) {
-      const { error: membersError } = await supabase.from('team_members').upsert(members, { onConflict: 'id' });
-      if (membersError) throw membersError;
-    }
     return NextResponse.json({ success: true, data: registration });
   } catch (error: any) {
     console.error('Admin team registration error:', error);

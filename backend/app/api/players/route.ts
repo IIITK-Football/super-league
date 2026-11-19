@@ -1,95 +1,69 @@
 import { NextResponse } from 'next/server';
-import { secretKey } from '@/lib/supabase/keys';
+import { publishableKey } from '@/lib/supabase/keys';
+import { resolveScope } from '@/lib/scope';
 import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../lib/errorHandler';
 
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  secretKey()
-);
+// Public data only: player cards, season rosters and season statistics are readable by anyone (RLS), and a hidden
+// or archived season cannot be resolved with the public key.
+const supabase = createClient(process.env.SUPABASE_URL!, publishableKey());
 
+type Membership = {
+  id: string;
+  jersey_number: number | null;
+  position: string | null;
+  player: { id: string; first_name: string; last_name: string; image_url: string | null; overall_rating: number | null } | null;
+  entry: { team: { id: string; name: string } | null } | null;
+};
+
+// The season roster (?division=<slug>&season=<slug or id>; default the division's current season), optionally one
+// team (?team_id=). Each player appears once, with that season's jersey, position, goals and assists.
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const teamId = searchParams.get('team_id');
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
 
     let query = supabase
-      .from('players')
+      .from('roster_memberships')
       .select(`
-        id,
-        first_name,
-        last_name,
-        position,
-        jersey_number,
-        image_url,
-        assists,
-        team_id,
-        teams ( id, name )
-      `);
+        id, jersey_number, position,
+        player:players ( id, first_name, last_name, image_url, overall_rating ),
+        entry:team_entries!inner ( team_id, team:teams ( id, name ) )
+      `)
+      .eq('season_id', scope.season.id);
+    if (teamId) query = query.eq('entry.team_id', teamId);
 
-    let freshersQuery = supabase
-      .from('team_members')
-      .select(`
-        id,
-        first_name,
-        last_name,
-        name,
-        position,
-        jersey_number,
-        image_url,
-        team_registrations!inner ( team_id, team_name )
-      `);
+    const [{ data: roster, error }, { data: lines, error: statsError }] = await Promise.all([
+      query,
+      supabase.from('season_player_stats').select('player_id, goals, assists').eq('season_id', scope.season.id),
+    ]);
+    if (error) throw error;
+    if (statsError) throw statsError;
 
-    if (teamId) {
-      query = query.eq('team_id', teamId);
-      freshersQuery = freshersQuery.eq('team_registrations.team_id', teamId);
-    }
+    const stats = new Map((lines ?? []).map((l) => [l.player_id, l]));
+    const players = ((roster ?? []) as unknown as Membership[])
+      .filter((m) => m.player)
+      .map((m) => ({
+        id: m.player!.id,
+        membership_id: m.id,
+        name: `${m.player!.first_name} ${m.player!.last_name}`.trim(),
+        first_name: m.player!.first_name,
+        last_name: m.player!.last_name,
+        position: m.position,
+        jersey_number: m.jersey_number,
+        image_url: m.player!.image_url,
+        overall_rating: m.player!.overall_rating,
+        goals: stats.get(m.player!.id)?.goals ?? 0,
+        assists: stats.get(m.player!.id)?.assists ?? 0,
+        team_id: m.entry?.team?.id ?? null,
+        team: m.entry?.team?.name ?? null,
+      }))
+      .sort((a, b) => (a.position || '').localeCompare(b.position || '') || (a.last_name || '').localeCompare(b.last_name || ''));
 
-    const [playersRes, freshersRes] = await Promise.all([query, freshersQuery]);
-
-    if (playersRes.error) throw playersRes.error;
-    if (freshersRes.error) throw freshersRes.error;
-
-    // Shape regular players
-    const regularPlayers = (playersRes.data || []).map((p: any) => ({
-      id: p.id,
-      name: `${p.first_name} ${p.last_name}`,
-      first_name: p.first_name,
-      last_name: p.last_name,
-      position: p.position,
-      jersey_number: p.jersey_number,
-      image_url: p.image_url,
-      assists: p.assists ?? 0,
-      team_id: p.team_id,
-      team: p.teams?.name || null,
-    }));
-
-    // Shape freshers
-    const freshers = (freshersRes.data || []).map((p: any) => ({
-      id: p.id,
-      name: p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
-      first_name: p.first_name,
-      last_name: p.last_name,
-      position: p.position,
-      jersey_number: p.jersey_number,
-      image_url: p.image_url,
-      assists: 0,
-      team_id: p.team_registrations?.team_id || null,
-      team: p.team_registrations?.team_name || null,
-    }));
-
-    // Combine and sort
-    const allPlayers = [...regularPlayers, ...freshers].sort((a, b) => {
-      // Basic sorting by position then last name to match previous behavior
-      if (a.position !== b.position) {
-        return (a.position || '').localeCompare(b.position || '');
-      }
-      return (a.last_name || '').localeCompare(b.last_name || '');
-    });
-
-    return NextResponse.json({ success: true, data: allPlayers });
+    return NextResponse.json({ success: true, data: players });
   } catch (error) {
     return handleError(error, 'Fetch Players');
   }

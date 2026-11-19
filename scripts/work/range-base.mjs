@@ -19,8 +19,14 @@ export function rangeBase(ref, { root = ROOT } = {}) {
   const refSha = resolved.stdout.trim();
   const file = join(root, 'tests/gate-baseline.json');
   if (!existsSync(file)) return refSha;
-  const adoptedAt = JSON.parse(readFileSync(file, 'utf8')).adoptedAt;
+  const baseline = JSON.parse(readFileSync(file, 'utf8'));
   const isAncestor = (a, b) => git(root, ['merge-base', '--is-ancestor', a, b]).status === 0;
+  let adoptedAt = baseline.adoptedAt;
+  // If history was rewritten the recorded hash is gone, but the adoption commit's TREE (its content) is not: find it.
+  if ((!adoptedAt || !isAncestor(adoptedAt, 'HEAD')) && baseline.tree) {
+    const found = git(root, ['log', '--format=%H %T', 'HEAD']).stdout.split('\n').find((l) => l.endsWith(` ${baseline.tree}`));
+    if (found) adoptedAt = found.split(' ')[0];
+  }
   // An adoption commit that is not part of this history is ignored rather than silently judging nothing.
   if (!adoptedAt || !isAncestor(adoptedAt, 'HEAD')) return refSha;
   // Once the target already contains the adoption commit, its own tip is the base.

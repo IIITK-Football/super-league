@@ -1,0 +1,29 @@
+{
+  "id": "SL-020",
+  "attestations": [
+    {
+      "checkId": "C9",
+      "by": "oreoruuser",
+      "at": "2026-11-18T08:05:50.199Z",
+      "note": "Staging deploy 44255270383 passed; staging checks passed 16/16"
+    },
+    {
+      "checkId": "C13",
+      "by": "oreoruuser",
+      "at": "2026-11-18T08:05:50.477Z",
+      "note": "Verified Divisions & Seasons dashboard on staging"
+    },
+    {
+      "checkId": "C17",
+      "by": "oreoruuser",
+      "at": "2026-11-18T08:05:50.743Z",
+      "note": "Selected another WSL season on staging; URL and season content matched"
+    },
+    {
+      "checkId": "C21",
+      "by": "oreoruuser",
+      "at": "2026-11-18T08:05:51.012Z",
+      "note": "Compared staging statistics, fantasy points and leaderboard across seasons"
+    }
+  ]
+}

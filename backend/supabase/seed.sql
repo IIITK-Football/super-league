@@ -92,11 +92,12 @@ SELECT id, 'authenticated', 'authenticated', email, '',
 FROM _mega_fans
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.user_profiles (id, email, real_name, nickname, points)
-SELECT id, email, full_name, nickname, points FROM _mega_fans
+-- Fantasy points are not stored on profiles: they are the season sums of graded predictions (season_fantasy_points).
+INSERT INTO public.user_profiles (id, email, real_name, nickname)
+SELECT id, email, full_name, nickname FROM _mega_fans
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email, real_name = EXCLUDED.real_name,
-    nickname = EXCLUDED.nickname, points = EXCLUDED.points;
+    nickname = EXCLUDED.nickname;
 
 INSERT INTO public.user_roles (user_id, role)
 SELECT id, 'default' FROM _mega_fans
@@ -106,14 +107,13 @@ INSERT INTO public.wc_leaderboard (user_id, points, updated_at)
 SELECT id, points, now() FROM _mega_fans
 ON CONFLICT (user_id) DO UPDATE SET points = EXCLUDED.points, updated_at = now();
 
-INSERT INTO public.user_profiles (id, email, real_name, nickname, points)
-SELECT id, email, full_name, nickname, points
+INSERT INTO public.user_profiles (id, email, real_name, nickname)
+SELECT id, email, full_name, nickname
 FROM _mega_users
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email,
     real_name = EXCLUDED.real_name,
-    nickname = EXCLUDED.nickname,
-    points = EXCLUDED.points;
+    nickname = EXCLUDED.nickname;
 
 INSERT INTO public.user_roles (user_id, role)
 SELECT id, role FROM _mega_users
@@ -216,6 +216,45 @@ INSERT INTO _mega_division_shows VALUES
   ('womens', 'The Penguin'),
   ('freshers', 'The Bear');
 
+-- Divisions are data records, each with one current season (2026). The `division` text above is only this seed's
+-- internal key for choosing a show. Matched by slug, so a rerun (and staging data) reuses the existing rows.
+CREATE TEMP TABLE _mega_division_defs (
+  division text PRIMARY KEY,
+  slug text NOT NULL,
+  name text NOT NULL,
+  short_name text NOT NULL,
+  sort_order integer NOT NULL,
+  format text NOT NULL
+) ON COMMIT DROP;
+
+INSERT INTO _mega_division_defs VALUES
+  ('mens', 'super-league', 'Super League', 'SL', 1, 'league'),
+  ('womens', 'wsl', 'WSL', 'WSL', 2, 'knockout'),
+  ('freshers', 'freshers', 'Freshers', 'Freshers', 3, 'knockout');
+
+INSERT INTO public.divisions (slug, name, short_name, sort_order, created_by)
+SELECT slug, name, short_name, sort_order, NULL FROM _mega_division_defs
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO public.seasons (division_id, slug, name, status, is_current, format, created_by)
+SELECT d.id, '2026', '2026', 'active', NOT EXISTS (SELECT 1 FROM public.seasons c WHERE c.division_id = d.id AND c.is_current), def.format, NULL
+FROM _mega_division_defs def JOIN public.divisions d ON d.slug = def.slug
+ON CONFLICT (division_id, slug) DO NOTHING;
+
+INSERT INTO public.season_sections (season_id, section_key, enabled, nav_visible, sort_order)
+SELECT s.id, t.key, t.default_enabled, t.default_enabled, t.default_sort_order
+FROM _mega_division_defs def
+JOIN public.divisions d ON d.slug = def.slug
+JOIN public.seasons s ON s.division_id = d.id AND s.slug = '2026'
+CROSS JOIN public.section_types t
+ON CONFLICT (season_id, section_key) DO NOTHING;
+
+CREATE TEMP TABLE _mega_seasons ON COMMIT DROP AS
+SELECT def.division, s.id AS season_id
+FROM _mega_division_defs def
+JOIN public.divisions d ON d.slug = def.slug
+JOIN public.seasons s ON s.division_id = d.id AND s.slug = '2026';
+
 CREATE TEMP TABLE _mega_teams ON COMMIT DROP AS
 SELECT
   md5('mega-team:' || d.division || ':' || c.short_name)::uuid AS id,
@@ -228,35 +267,50 @@ SELECT
 FROM _mega_club_defs c
 JOIN _mega_division_shows d USING (show_name);
 
-INSERT INTO public.teams (id, name, logo_url, division, short_name, team_color)
-SELECT id, team_name, logo_url, division, short_name, team_color
+INSERT INTO public.teams (id, name, logo_url, short_name, team_color)
+SELECT id, team_name, logo_url, short_name, team_color
 FROM _mega_teams
 ON CONFLICT (id) DO NOTHING;
 
--- 24 teams × 8 players = 192 players.
+-- Each team plays the 2026 season of its division.
+INSERT INTO public.team_entries (team_id, season_id)
+SELECT t.id, s.season_id FROM _mega_teams t JOIN _mega_seasons s USING (division)
+ON CONFLICT (team_id, season_id) DO NOTHING;
+
+-- 24 teams × 8 players = 192 player identities (the reusable FUT card: name, rating, attributes, portrait).
 INSERT INTO public.players (
-  id, team_id, first_name, last_name, position,
-  jersey_number, assists, overall_rating, image_url, attributes
+  id, first_name, last_name, overall_rating, image_url, attributes
 )
 SELECT
   md5('mega-player:' || t.id::text || ':' || r.slot)::uuid,
-  t.id,
   r.first_name,
   r.last_name,
-  r.position,
-  r.slot,
-  mod(r.slot * 7, 9),
   55 + mod(r.slot * 11 + length(t.team_name), 40),
   portrait.image_url,
-  jsonb_build_object(
-    'pace', 50 + mod(r.slot * 9, 45),
-    'passing', 50 + mod(r.slot * 7, 45),
-    'shooting', 50 + mod(r.slot * 13, 45)
-  )
+  jsonb_build_object('stats', jsonb_build_object(
+    'Pace', jsonb_build_object('total', 50 + mod(r.slot * 9, 45)),
+    'Passing', jsonb_build_object('total', 50 + mod(r.slot * 7, 45)),
+    'Shooting', jsonb_build_object('total', 50 + mod(r.slot * 13, 45))
+  ))
 FROM _mega_teams t
 JOIN _mega_roster r ON r.show_name = t.show_name
 JOIN _mega_portraits portrait ON portrait.slot = r.slot
 ON CONFLICT (id) DO NOTHING;
+
+-- Each player is on the 2026 roster of their team (a roster membership on the team's 2026 entry), with the
+-- season's jersey number and position. Goals and assists are never stored here: they come from match events.
+INSERT INTO public.roster_memberships (player_id, team_entry_id, season_id, jersey_number, position)
+SELECT
+  md5('mega-player:' || t.id::text || ':' || r.slot)::uuid,
+  e.id,
+  e.season_id,
+  r.slot,
+  r.position
+FROM _mega_teams t
+JOIN _mega_seasons ms ON ms.division = t.division
+JOIN public.team_entries e ON e.team_id = t.id AND e.season_id = ms.season_id
+JOIN _mega_roster r ON r.show_name = t.show_name
+ON CONFLICT (player_id, season_id) DO NOTHING;
 
 -- 8 teams per division, home and away: 56 matches per division.
 CREATE TEMP TABLE _mega_match_defs ON COMMIT DROP AS
@@ -309,7 +363,7 @@ FROM pairs;
 
 INSERT INTO public.matches (
   id, home_team_id, away_team_id, home_score, away_score,
-  status, date, venue, division, scorers, assists, own_goals,
+  status, date, venue, season_id, scorers, assists, own_goals,
   minute, is_graded, timer_start_time, timer_calibration
 )
 SELECT
@@ -325,7 +379,7 @@ SELECT
     WHEN 'Slow Horses' THEN 'London'
     ELSE 'Gotham'
   END,
-  m.division,
+  (SELECT season_id FROM _mega_seasons s WHERE s.division = m.division),
   '[]'::jsonb,
   '[]'::jsonb,
   '[]'::jsonb,
@@ -399,7 +453,8 @@ SET
   ), '[]'::jsonb)
 WHERE m.id IN (SELECT id FROM _mega_match_defs);
 
--- Two freshers team-builder registrations, both using The Bear teams.
+-- Two freshers team-builder registrations. A registration's team_name is the team's own name (the captain's name
+-- here once made The Beef's registration read "Cartwright").
 CREATE TEMP TABLE _mega_registrations (
   id uuid PRIMARY KEY,
   captain_id uuid NOT NULL,
@@ -411,42 +466,36 @@ INSERT INTO _mega_registrations VALUES
   (
     '70000000-0000-4000-8000-000000000001',
     '60000000-0000-4000-8000-000000000002',
-    'Cartwright',
+    'The Beef',
     md5('mega-team:freshers:BEEF')::uuid
   ),
   (
     '70000000-0000-4000-8000-000000000002',
     '60000000-0000-4000-8000-000000000004',
-    'Sydney',
+    'Ever',
     md5('mega-team:freshers:EVER')::uuid
   );
 
-INSERT INTO public.team_registrations (id, captain_id, team_name, division, team_id)
-SELECT id, captain_id, team_name, 'freshers', team_id
+INSERT INTO public.team_registrations (id, captain_id, team_name, season_id, team_id)
+SELECT id, captain_id, team_name, (SELECT season_id FROM _mega_seasons WHERE division = 'freshers'), team_id
 FROM _mega_registrations
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.team_members (
-  id, registration_id, name, email, position, first_name, last_name,
-  jersey_number, image_url, overall_rating, attributes
-)
+-- The Freshers team-builder rosters are the season rosters above (no separate member table).
+-- History fixture: the first Super League team's slot-1 player also plays the Freshers 2026 season for The Beef,
+-- so one identity has roster places in two divisions' seasons.
+INSERT INTO public.roster_memberships (player_id, team_entry_id, season_id, jersey_number, position)
 SELECT
-  md5('mega-member:' || reg.id::text || ':' || roster.slot)::uuid,
-  reg.id,
-  roster.first_name || ' ' || roster.last_name,
-  NULL,
-  roster.position,
-  roster.first_name,
-  roster.last_name,
-  roster.slot,
-  portrait.image_url,
-  55 + mod(roster.slot * 11, 40),
-  jsonb_build_object('pace', 50 + roster.slot * 4, 'passing', 55 + roster.slot * 3)
-FROM _mega_registrations reg
-JOIN _mega_teams team ON team.id = reg.team_id
-JOIN _mega_roster roster ON roster.show_name = team.show_name
-JOIN _mega_portraits portrait ON portrait.slot = roster.slot
-ON CONFLICT (id) DO NOTHING;
+  md5('mega-player:' || mens.id::text || ':1')::uuid,
+  e.id,
+  e.season_id,
+  99,
+  'Forward'
+FROM (SELECT id FROM _mega_teams WHERE division = 'mens' ORDER BY team_name LIMIT 1) mens
+JOIN public.team_entries e ON e.team_id = md5('mega-team:freshers:BEEF')::uuid
+  AND e.season_id = (SELECT season_id FROM _mega_seasons WHERE division = 'freshers')
+ON CONFLICT (player_id, season_id) DO NOTHING;
+
 
 -- Four users predict all 168 league matches.
 INSERT INTO public.predictions (
@@ -494,40 +543,6 @@ SELECT
 FROM generate_series(1, 24) AS n
 ON CONFLICT (id) DO NOTHING;
 
--- Polls: this schema accepts mens, womens, and both (not freshers).
-CREATE TEMP TABLE _mega_poll_defs (
-  poll_no integer PRIMARY KEY,
-  division text NOT NULL,
-  question_text text NOT NULL
-) ON COMMIT DROP;
-
-INSERT INTO _mega_poll_defs VALUES
-  (1, 'mens', 'Which mens fixture should be highlighted?'),
-  (2, 'mens', 'Which team has the strongest form?'),
-  (3, 'womens', 'Which womens fixture should be highlighted?'),
-  (4, 'womens', 'Which team has the strongest form?'),
-  (5, 'both', 'Which fixture should be scheduled first?'),
-  (6, 'both', 'Which match should be featured next?');
-
-INSERT INTO public.polls (id, question_text, is_active, division)
-SELECT md5('mega-poll:' || poll_no)::uuid, question_text, true, division
-FROM _mega_poll_defs
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.poll_options (id, poll_id, option_text, vote_count)
-SELECT
-  md5('mega-poll-option:' || p.poll_no || ':' || o.option_no)::uuid,
-  md5('mega-poll:' || p.poll_no)::uuid,
-  o.option_text,
-  mod(p.poll_no * 3 + o.option_no * 2, 17)
-FROM _mega_poll_defs p
-CROSS JOIN (VALUES
-  (1, 'The Beef'),
-  (2, 'Slough House'),
-  (3, 'Falcone Family'),
-  (4, 'Regent''s Park')
-) AS o(option_no, option_text)
-ON CONFLICT (id) DO NOTHING;
 
 -- Fantasy tables have no division column, so this is a separate mixed-show sample.
 CREATE TEMP TABLE _mega_wc_clubs (
@@ -728,5 +743,64 @@ SELECT
   101
 FROM _mega_users u
 ON CONFLICT (id) DO NOTHING;
+
+-- Season dates follow the season's matches (docs/decisions/D-01-division-season-mapping.md).
+UPDATE public.seasons s
+SET starts_on = d.first_day, ends_on = d.last_day
+FROM (
+  SELECT m.season_id, min((m.date AT TIME ZONE 'Asia/Kolkata')::date) AS first_day, max((m.date AT TIME ZONE 'Asia/Kolkata')::date) AS last_day
+  FROM public.matches m JOIN _mega_seasons ms ON ms.season_id = m.season_id
+  GROUP BY m.season_id
+) d
+WHERE s.id = d.season_id AND (s.starts_on IS DISTINCT FROM d.first_day OR s.ends_on IS DISTINCT FROM d.last_day);
+
+-- Seed accounts are written straight into auth.users, so give them what Auth itself writes: the default instance and
+-- empty (not NULL) token columns. Without these, the Auth API cannot load the account (it is missing from the admin
+-- listing and cannot be confirmed or updated). Repairs accounts seeded before this rule; re-running changes nothing.
+UPDATE auth.users
+SET instance_id = COALESCE(instance_id, '00000000-0000-0000-0000-000000000000'),
+    confirmation_token = COALESCE(confirmation_token, ''), recovery_token = COALESCE(recovery_token, ''),
+    email_change_token_new = COALESCE(email_change_token_new, ''), email_change = COALESCE(email_change, ''),
+    email_change_token_current = COALESCE(email_change_token_current, ''), phone_change = COALESCE(phone_change, ''),
+    phone_change_token = COALESCE(phone_change_token, ''), reauthentication_token = COALESCE(reauthentication_token, '')
+WHERE email ~ '^(lamb|river|diana|sydney|fan[0-9]{2})@iiitkottayam\.ac\.in$'
+  AND (instance_id IS NULL OR confirmation_token IS NULL OR recovery_token IS NULL OR email_change_token_new IS NULL
+       OR email_change IS NULL OR email_change_token_current IS NULL OR phone_change IS NULL OR phone_change_token IS NULL
+       OR reauthentication_token IS NULL);
+
+-- Account-linked players: one verified fan account (fan01) linked to one player, Jackson Lamb, who plays for two
+-- teams. Every other seed account stays unverified, so linking one shows the refusal. Re-running changes nothing.
+UPDATE auth.users SET email_confirmed_at = now()
+WHERE email = 'fan01@iiitkottayam.ac.in' AND email_confirmed_at IS NULL;
+UPDATE public.players SET user_id = (SELECT id FROM auth.users WHERE email = 'fan01@iiitkottayam.ac.in')
+WHERE id = (SELECT id FROM public.players WHERE first_name = 'Jackson' AND last_name = 'Lamb' ORDER BY id LIMIT 1)
+  AND user_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM public.players p JOIN auth.users u ON u.id = p.user_id WHERE u.email = 'fan01@iiitkottayam.ac.in');
+
+-- Account matching (private match keys of unlinked legacy players; no contact emails exist any more). Seven WSL players
+-- of the first WSL team, one per case the dictator's matching preview shows:
+--   slot 2  fan02 (verified)                 ready: linked by the dictator's "link all ready matches"
+--   slot 3  fan03, and slot 4 fan03 too      duplicate: resolved by hand
+--   slot 5  fan04 (unverified)               waiting for verification: linked automatically when fan04 verifies
+--   slot 6  fan01 (already linked to Lamb)   conflict
+--   slot 7  roster.fixture@…                 no account (on a project converted from the old seed, this address also
+--                                            belonged to a men's player's contact email, so it shows as a duplicate)
+--   slot 8  auto.link.fixture@…              no account; the staging checks confirm an account with this address to
+--                                            test the automatic link, then delete it (the next seed run restores the key)
+-- fan02 is verified BEFORE its key is added, as for a legacy player whose person signed up long ago. A key is only
+-- (re)added while its player is unlinked and its account has no player, so a re-run never undoes a link.
+UPDATE auth.users SET email_confirmed_at = now()
+WHERE email = 'fan02@iiitkottayam.ac.in' AND email_confirmed_at IS NULL;
+INSERT INTO public.player_link_keys (player_id, email)
+SELECT p.id, k.email
+FROM (VALUES (2, 'fan02@iiitkottayam.ac.in'), (3, 'fan03@iiitkottayam.ac.in'), (4, 'fan03@iiitkottayam.ac.in'),
+             (5, 'fan04@iiitkottayam.ac.in'), (6, 'fan01@iiitkottayam.ac.in'), (7, 'roster.fixture@iiitkottayam.ac.in'),
+             (8, 'auto.link.fixture@iiitkottayam.ac.in')) AS k(slot, email)
+CROSS JOIN (SELECT id FROM _mega_teams WHERE division = 'womens' ORDER BY team_name LIMIT 1) wsl
+JOIN public.players p ON p.id = md5('mega-player:' || wsl.id::text || ':' || k.slot)::uuid
+WHERE p.user_id IS NULL
+  AND (k.email = 'fan01@iiitkottayam.ac.in'
+       OR NOT EXISTS (SELECT 1 FROM public.players o JOIN auth.users u ON u.id = o.user_id WHERE u.email = k.email))
+ON CONFLICT (player_id) DO NOTHING;
 
 COMMIT;

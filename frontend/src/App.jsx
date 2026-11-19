@@ -16,7 +16,6 @@ import { Fantasy } from './pages/Fantasy';
 import { Leaderboard } from './pages/Leaderboard';
 import { ArticleView } from './pages/ArticleView';
 import { AdminLogin } from './pages/AdminLogin';
-import { AdminDashboard } from './pages/AdminDashboard';
 import { Onboarding } from './pages/Onboarding';
 import { UserProfile } from './pages/UserProfile'; // <-- FIXED: Added this missing import!
 
@@ -27,6 +26,8 @@ import { Rules } from './pages/Rules';
 import { LeagueLanding } from './pages/LeagueLanding';
 import { TeamBuilder } from './pages/TeamBuilder';
 import { RoleWorkspace } from './pages/RoleWorkspace';
+import { LEGACY_REDIRECTS, LegacyRedirect } from './routes/legacyRedirects';
+import { DivisionHomeRoute } from './pages/DivisionHomeRoute';
 import MatchTimeline from './components/MatchTimeline';
 
 import { useEffect } from 'react';
@@ -72,13 +73,7 @@ function WcRoute() {
 }
 
 function LeagueDashboardRoute({ division }) {
-  const { setDivision } = useLeague();
-
-  useEffect(() => {
-    setDivision(division);
-  }, [division, setDivision]);
-
-  return <PublicRoute><Home /></PublicRoute>;
+  return <DivisionHomeRoute division={division}><PublicRoute><Home /></PublicRoute></DivisionHomeRoute>;
 }
 
 function AuthenticatedRoute({ children }) {
@@ -100,17 +95,20 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/hq-login" element={<AdminLogin />} />
-            <Route path="/admin" element={<AdminDashboard />} />
+            {LEGACY_REDIRECTS.map(({ from, to }) => <Route key={from} path={from} element={<LegacyRedirect to={to} />} />)}
 
             {/* Public App Routes */}
             <Route path="/" element={<LeagueLanding />} />
-            <Route path="/super-league" element={<LeagueDashboardRoute division="mens" />} />
-            <Route path="/wsl" element={<LeagueDashboardRoute division="womens" />} />
+            <Route path="/super-league" element={<LeagueDashboardRoute division="super-league" />} />
+            <Route path="/super-league/:season" element={<LeagueDashboardRoute division="super-league" />} />
+            <Route path="/wsl" element={<LeagueDashboardRoute division="wsl" />} />
+            <Route path="/wsl/:season" element={<LeagueDashboardRoute division="wsl" />} />
             <Route path="/freshers" element={<LeagueDashboardRoute division="freshers" />} />
+            <Route path="/freshers/:season" element={<LeagueDashboardRoute division="freshers" />} />
             <Route path="/team-builder" element={<RoleWorkspace requiredRole="captain" />} />
             <Route path="/editor" element={<RoleWorkspace requiredRole="editor" />} />
             <Route path="/dictator" element={<RoleWorkspace requiredRole="dictator" />} />
-            <Route path="/standings" element={<Navigate to="/standings/mens" replace />} />
+            <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
             <Route path="/standings/:division" element={<PublicRoute><Standings /></PublicRoute>} />
             <Route path="/teams" element={<PublicRoute><Teams /></PublicRoute>} />
             

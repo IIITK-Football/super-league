@@ -99,6 +99,7 @@
       "owner": "platform",
       "paths": [
         ".claude/settings.json",
+        ".github/actions/**",
         ".githooks/**",
         ".github/workflows/**",
         ".gitmessage",
@@ -125,6 +126,7 @@
       ],
       "covers": [
         ".claude/settings.json",
+        ".github/actions/**",
         ".githooks/**",
         ".github/workflows/**",
         ".gitmessage",
@@ -196,6 +198,7 @@
         "backend/lib/auth/**",
         "backend/app/api/auth/**",
         "backend/app/api/admin/team-registrations/**",
+        "backend/app/api/admin/newsletter/**",
         "backend/supabase/migrations/*auth*",
         "frontend/src/lib/authApi.js",
         "frontend/src/lib/authRules.js",
@@ -212,6 +215,205 @@
         "frontend/src/lib/__tests__/auth*",
         "frontend/src/pages/__tests__/**",
         "frontend/src/components/__tests__/**"
+      ]
+    },
+    "divisions": {
+      "description": "Division, season and section model: the dictator path and the season-scoped public and admin API routes against the local Auth and Data API, and the dictator dashboard flow (allowed and denied cases, hidden and archived records)",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": [
+        "backend/tests/divisions/**",
+        "backend/supabase/migrations/*division*",
+        "backend/supabase/migrations/*current_season*",
+        "frontend/src/components/admin/ManageDivisions.jsx",
+        "frontend/src/components/admin/__tests__/ManageDivisions.local.test.jsx",
+        "backend/lib/scope.ts",
+        "backend/lib/errorHandler.ts",
+        "backend/app/api/home/dashboard/**",
+        "backend/app/api/standings/**",
+        "backend/app/api/teams/**",
+        "backend/app/api/leaderboard/**",
+        "backend/app/api/legends/**",
+        "backend/app/api/predictions/leaderboard/**",
+        "backend/app/api/admin/matches/route.ts",
+        "backend/app/api/admin/teams/**",
+        "backend/app/api/admin/stats/**",
+        "backend/app/api/captain/team-branding/**",
+        "backend/app/api/polls/**",
+        "backend/supabase/migrations/*flairs*",
+        "backend/supabase/migrations/*legacy*",
+        "backend/app/api/schedule/**",
+        "backend/app/api/predictions/history/**",
+        "backend/app/api/players/**",
+        "backend/app/api/admin/predictions/grade/**",
+        "backend/app/api/admin/predictions/regrade-all/**",
+        "backend/supabase/migrations/*fantasy*"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/divisions"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "env",
+            "SL_LOCAL_SUPABASE=1",
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "src/components/admin/__tests__/ManageDivisions.local.test.jsx"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/supabase/migrations/*division*",
+        "backend/supabase/migrations/*current_season*",
+        "frontend/src/components/admin/ManageDivisions.jsx",
+        "backend/lib/scope.ts",
+        "backend/lib/errorHandler.ts",
+        "backend/app/api/home/dashboard/**",
+        "backend/app/api/standings/**",
+        "backend/app/api/teams/**",
+        "backend/app/api/leaderboard/**",
+        "backend/app/api/legends/**",
+        "backend/app/api/predictions/leaderboard/**",
+        "backend/app/api/admin/matches/route.ts",
+        "backend/app/api/admin/teams/**",
+        "backend/app/api/admin/stats/**",
+        "backend/app/api/captain/team-branding/**",
+        "backend/app/api/polls/**",
+        "backend/supabase/migrations/*flairs*",
+        "backend/supabase/migrations/*legacy*",
+        "backend/app/api/schedule/**",
+        "backend/app/api/predictions/history/**",
+        "backend/app/api/players/**",
+        "backend/app/api/admin/predictions/grade/**",
+        "backend/app/api/admin/predictions/regrade-all/**",
+        "backend/supabase/migrations/*fantasy*"
+      ],
+      "testPaths": [
+        "backend/tests/divisions/**",
+        "frontend/src/components/admin/__tests__/ManageDivisions.local.test.jsx"
+      ]
+    },
+    "rosters": {
+      "description": "Player identity and season rosters: one reusable FUT card per person, roster places per season, season-specific statistics from one source, dictator roster management and captain roster edits, against the local Auth and Data API (allowed and denied cases)",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": [
+        "backend/tests/rosters/**",
+        "backend/supabase/migrations/*roster*",
+        "backend/supabase/rehearsal/**",
+        "backend/app/api/players/**",
+        "backend/app/api/leaderboard/**",
+        "backend/app/api/legends/**",
+        "backend/app/api/home/dashboard/**",
+        "backend/app/api/admin/matches/live/**",
+        "backend/lib/roster/**",
+        "backend/app/api/admin/freshers/**",
+        "frontend/src/components/admin/ManageRosters.jsx",
+        "frontend/src/components/admin/__tests__/ManageRosters.local.test.jsx",
+        "frontend/src/pages/TeamBuilder.jsx",
+        "frontend/src/lib/rosterPlayerUpdate.js",
+        "frontend/src/pages/__tests__/TeamBuilder.local.test.jsx"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/rosters"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "env",
+            "SL_LOCAL_SUPABASE=1",
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "src/components/admin/__tests__/ManageRosters.local.test.jsx",
+            "src/pages/__tests__/TeamBuilder.local.test.jsx"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/supabase/migrations/*roster*",
+        "backend/supabase/rehearsal/**",
+        "backend/app/api/players/**",
+        "backend/app/api/leaderboard/**",
+        "backend/app/api/legends/**",
+        "backend/app/api/home/dashboard/**",
+        "backend/app/api/admin/matches/live/**",
+        "backend/lib/roster/**",
+        "backend/app/api/admin/freshers/**",
+        "frontend/src/components/admin/ManageRosters.jsx",
+        "frontend/src/pages/TeamBuilder.jsx",
+        "frontend/src/lib/rosterPlayerUpdate.js"
+      ],
+      "testPaths": [
+        "backend/tests/rosters/**",
+        "frontend/src/components/admin/__tests__/ManageRosters.local.test.jsx",
+        "frontend/src/pages/__tests__/TeamBuilder.local.test.jsx"
+      ]
+    },
+    "audit": {
+      "description": "Append-only audit history: sensitive changes recorded with their actor and a safe summary through the local Auth and Data API, read by dictators only, unchangeable by any role, and the dictator Audit History view against the real stack",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": [
+        "backend/tests/audit/**",
+        "backend/supabase/migrations/*audit*",
+        "frontend/src/components/admin/AuditHistory.jsx",
+        "frontend/src/components/admin/__tests__/AuditHistory.local.test.jsx"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/audit"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "env",
+            "SL_LOCAL_SUPABASE=1",
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "src/components/admin/__tests__/AuditHistory.local.test.jsx"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/supabase/migrations/*audit*",
+        "frontend/src/components/admin/AuditHistory.jsx"
+      ],
+      "testPaths": [
+        "backend/tests/audit/**",
+        "frontend/src/components/admin/__tests__/AuditHistory.local.test.jsx"
       ]
     },
     "auth-roles": {
@@ -243,7 +445,7 @@
       "description": "Scorer workspace, match events, cards, lineups, brackets, statistics",
       "owner": "backend",
       "status": "pending",
-      "pendingFor": "SL-050..SL-055",
+      "pendingFor": "SL-022/SL-050/SL-053/SL-054",
       "paths": [
         "backend/app/api/matches/**",
         "backend/app/api/admin/matches/**",
@@ -255,7 +457,7 @@
       "description": "Division fantasy and World Cup fantasy scoring and predictions",
       "owner": "backend",
       "status": "pending",
-      "pendingFor": "SL-043/SL-055",
+      "pendingFor": "SL-022/SL-043",
       "paths": [
         "backend/app/api/leaderboard/**",
         "backend/app/api/predictions/**",
@@ -305,6 +507,57 @@
         "frontend/**"
       ],
       "run": []
+    },
+    "player-accounts": {
+      "description": "Account-linked players and the self-service player card: dictator matching, manual links, automatic links on verification and account-first players through the local Auth and Data API, self-service limits, and the real-stack Teams & Rosters and profile flows",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": [
+        "backend/tests/player-accounts/**",
+        "backend/supabase/migrations/*account_linked*",
+        "backend/app/api/profile/**",
+        "backend/tests/local-fixtures.ts",
+        "frontend/src/components/admin/__tests__/ManageRosters.links.local.test.jsx",
+        "frontend/src/pages/__tests__/UserProfile.player.local.test.jsx"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/player-accounts"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "env",
+            "SL_LOCAL_SUPABASE=1",
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "src/components/admin/__tests__/ManageRosters.links.local.test.jsx",
+            "src/pages/__tests__/UserProfile.player.local.test.jsx"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/supabase/migrations/*account_linked*",
+        "backend/app/api/profile/**",
+        "backend/tests/local-fixtures.ts",
+        "frontend/src/pages/UserProfile.jsx"
+      ],
+      "testPaths": [
+        "backend/tests/player-accounts/**",
+        "frontend/src/components/admin/__tests__/ManageRosters.links.local.test.jsx",
+        "frontend/src/pages/__tests__/UserProfile.player.local.test.jsx"
+      ]
     }
   },
   "allGroupsTriggers": [

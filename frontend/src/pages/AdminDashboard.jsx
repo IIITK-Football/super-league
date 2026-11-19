@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { Users, Shield, Calendar, Newspaper, Activity, LogOut, Menu, X ,Calculator} from 'lucide-react';
+import { Users, Shield, Calendar, Newspaper, Activity, LogOut, Menu, X ,Calculator, Layers, History} from 'lucide-react';
 import { GlassPanel } from '../components/GlassPanel';
 import LiveController from '../components/admin/LiveController';
-import ManagePlayers from '../components/admin/ManagePlayers';
 import ScheduleMatches from '../components/admin/ScheduleMatches';
 import ManageNews from '../components/admin/ManageNews';
 import GradePredictions from '../components/admin/GradePredictions';
 import ManageRegistrations from '../components/admin/ManageRegistrations';
 import ManageRoles from '../components/admin/ManageRoles';
+import ManageDivisions from '../components/admin/ManageDivisions';
+import ManageRosters from '../components/admin/ManageRosters';
+import AuditHistory from '../components/admin/AuditHistory';
 export function AdminDashboard() {
   const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('live');
   const [isAdmin, setIsAdmin] = useState(false);
+  // The stored role, not the UI label: only a real dictator gets dictator-only tabs (RLS enforces the same rule).
+  const [storedRole, setStoredRole] = useState(null);
   const [checkingRole, setCheckingRole] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // NEW: Mobile menu state
 
@@ -29,11 +33,12 @@ export function AdminDashboard() {
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .in('role', ['admin', 'dictator'])
+        .eq('role', 'dictator')
         .maybeSingle();
 
       if (data) {
         setIsAdmin(true);
+        setStoredRole(data.role);
       }
       setCheckingRole(false);
     }
@@ -54,11 +59,15 @@ export function AdminDashboard() {
   const tabs = [
     { id: 'live', label: 'Live Matches', icon: Activity, color: 'text-red-500' },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
-    { id: 'registrations', label: 'Teams & Rosters', icon: Users },
+    { id: 'registrations', label: 'Captains', icon: Users },
     { id: 'roles', label: 'Access Control', icon: Shield },
-    { id: 'players', label: 'Players', icon: Users },
     { id: 'grading', label: 'Grade Fantasy', icon: Calculator, color: 'text-[#E8C881]' },
     { id: 'news', label: 'Newsletter', icon: Newspaper },
+    ...(storedRole === 'dictator' ? [
+      { id: 'divisions', label: 'Divisions & Seasons', icon: Layers },
+      { id: 'rosters', label: 'Teams & Rosters', icon: Users },
+      { id: 'audit', label: 'Audit History', icon: History },
+    ] : []),
   ];
 
   return (
@@ -147,9 +156,11 @@ export function AdminDashboard() {
           {activeTab === 'schedule' && <ScheduleMatches />}
           {activeTab === 'registrations' && <ManageRegistrations />}
           {activeTab === 'roles' && <ManageRoles currentUserId={user.id} />}
-          {activeTab === 'players' && <ManagePlayers />}
           {activeTab === 'grading' && <GradePredictions />}
           {activeTab === 'news' && <ManageNews />}
+          {activeTab === 'divisions' && storedRole === 'dictator' && <ManageDivisions />}
+          {activeTab === 'rosters' && storedRole === 'dictator' && <ManageRosters />}
+          {activeTab === 'audit' && storedRole === 'dictator' && <AuditHistory />}
         </GlassPanel>
       </div>
 

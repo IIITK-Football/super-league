@@ -45,10 +45,7 @@ const ELEVATED: Record<string, string> = {
   // Role-checked writes: to be replaced by RLS and role policies in the authorization work
   'app/api/admin/team-registrations/route.ts': 'role-checked write (to downscope)',
   'app/api/captain/team-branding/route.ts': 'role-checked write (to downscope)',
-  'app/api/players/route.ts': 'role-checked write (to downscope)',
-  'app/api/players/[player_id]/route.ts': 'role-checked write (to downscope)',
   // User-facing routes that use the elevated key today (candidates to downscope; see audit notes)
-  'app/api/leaderboard/route.ts': 'to downscope',
   'app/api/wc/leaderboard/route.ts': 'to downscope',
   'app/api/wc/teams/route.ts': 'to downscope',
   'app/api/wc/players/route.ts': 'to downscope',

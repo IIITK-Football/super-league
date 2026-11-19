@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
+import { scopeFromUrl, seasonTeamIds } from '@/lib/scope';
+import { handleError } from '@/lib/errorHandler';
 
 export const revalidate = 0;
 
@@ -10,9 +12,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET(request: Request) {
     try {
-        const { searchParams } = new URL(request.url);
-        const requestedDivision = searchParams.get('division') || 'mens';
-        const division = ['mens', 'womens', 'freshers'].includes(requestedDivision) ? requestedDivision : 'mens';
+        // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
+        const scope = await scopeFromUrl(supabase, request);
+        const seasonId = scope.season.id;
 
         // 1. Fetch Latest News
         const { data: news } = await supabase
@@ -21,31 +23,35 @@ export async function GET(request: Request) {
             .order('date', { ascending: false })
             .limit(5);
 
-        // 2. Fetch Top Scorer & Assist
+        // 2. Top scorer and top assist of this season
         const { data: scorers } = await supabase
-            .from('top_scorers')
-            .select('*')
-            .eq('division', division)
-            .order('goalsScored', { ascending: false })
+            .from('season_player_stats')
+            .select('player_id, name, club, goals')
+            .eq('season_id', seasonId)
+            .gt('goals', 0)
+            .order('goals', { ascending: false })
+            .order('name', { ascending: true })
             .limit(1);
 
         const { data: assists } = await supabase
-            .from('top_scorers')
-            .select('*')
-            .eq('division', division)
+            .from('season_player_stats')
+            .select('player_id, name, club, assists')
+            .eq('season_id', seasonId)
+            .gt('assists', 0)
             .order('assists', { ascending: false })
+            .order('name', { ascending: true })
             .limit(1);
 
-        // --- 3. FETCH ALL TEAMS AND ALL MATCHES TO CALCULATE REAL FORM & STANDINGS ---
-        const { data: teams } = await supabase
-            .from('teams')
-            .select('id, name, logo_url')
-            .eq('division', division);
+        // --- 3. The season's teams and matches, to calculate form and standings ---
+        const teamIds = await seasonTeamIds(supabase, seasonId);
+        const { data: teams } = teamIds.length
+            ? await supabase.from('teams').select('id, name, logo_url').in('id', teamIds)
+            : { data: [] as { id: string; name: string; logo_url: string | null }[] };
 
         const { data: allMatches } = await supabase
             .from('matches')
             .select('id, home_team_id, away_team_id, home_score, away_score, status, date, minute, home:teams!home_team_id(name), away:teams!away_team_id(name), goals ( player_id, team_id, minute, is_own_goal, player:players!goals_player_id_fkey ( first_name, last_name ) )')
-            .eq('division', division)
+            .eq('season_id', seasonId)
             .order('date', { ascending: true }); // MUST BE ASCENDING FOR CORRECT FORM
 
         // Initialize the scoreboard map
@@ -147,20 +153,27 @@ export async function GET(request: Request) {
                 awayScorers: awayGoals
             };
         }
-        const { data: fantasyUsers } = await supabase
-            .from('user_profiles')
-            .select('id, nickname, points, mens_team_flair, womens_team_flair')
-            .order('points', { ascending: false })
-            .limit(5);
+        // The season's fantasy leaders (points from graded predictions on this season's matches)
+        const { data: ranked } = await supabase.rpc('season_fantasy_leaderboard', { p_season: seasonId, p_limit: 5 });
+        const rankedIds = (ranked ?? []).map((r: any) => r.user_id);
+        const { data: names } = rankedIds.length
+            ? await supabase.from('user_profiles').select('id, nickname').in('id', rankedIds)
+            : { data: [] as { id: string; nickname: string | null }[] };
+        const nicknameById = new Map((names ?? []).map((n: any) => [n.id, n.nickname]));
+        const fantasyUsers = (ranked ?? []).map((r: any) => ({ id: r.user_id, nickname: nicknameById.get(r.user_id), points: r.points }));
 
-        // Map the database response to match what the frontend expects.
-        // If there is no data, it safely defaults to an empty array [] !
+        // Each user's flair for this division.
+        const userIds = (fantasyUsers ?? []).map((u: any) => u.id);
+        const { data: flairs } = userIds.length
+            ? await supabase.from('division_flairs').select('user_id, team_name').eq('division_id', scope.division.id).in('user_id', userIds)
+            : { data: [] as { user_id: string; team_name: string }[] };
+        const flairByUser = new Map((flairs ?? []).map((f: any) => [f.user_id, f.team_name]));
+
         const fantasyTop = fantasyUsers?.map((user: any) => ({
             id: user.id,
             name: user.nickname || 'Unknown User',
             points: user.points || 0,
-            womens_team_flair: user.womens_team_flair || null,
-            mens_team_flair: user.mens_team_flair || null
+            flair: flairByUser.get(user.id) || null
         })) || [];
 
         return NextResponse.json({
@@ -168,15 +181,15 @@ export async function GET(request: Request) {
             data: {
                 standings: top4,
                 news: news || [],
-                topScorer: scorers?.[0] ? (() => { console.log('RAW SCORER ROW:', JSON.stringify(scorers[0])); return { playerId: scorers[0].playerId || scorers[0].id || scorers[0].player_id, name: scorers[0].name || scorers[0].playerName, club: scorers[0].club || scorers[0].teamName, stat: scorers[0].goalsScored }; })() : null,
-                topAssist: assists?.[0] ? { playerId: assists[0].playerId || assists[0].id || assists[0].player_id, name: assists[0].name || assists[0].playerName, club: assists[0].club || assists[0].teamName, stat: assists[0].assists || 0 } : null,
+                scope: { division: scope.division, season: scope.season },
+                topScorer: scorers?.[0] ? { playerId: scorers[0].player_id, name: scorers[0].name, club: scorers[0].club, stat: scorers[0].goals } : null,
+                topAssist: assists?.[0] ? { playerId: assists[0].player_id, name: assists[0].name, club: assists[0].club, stat: assists[0].assists } : null,
                 liveMatch: liveMatchData,
                 fantasyTop: fantasyTop // Now fully dynamic! Will be empty if no users exist.
             }
         });
 
     } catch (error) {
-        console.error("Dashboard Aggregation Error:", error);
-        return NextResponse.json({ success: false, message: "Failed to aggregate dashboard data" }, { status: 500 });
+        return handleError(error, 'Dashboard Aggregation');
     }
 }

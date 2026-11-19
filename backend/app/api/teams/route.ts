@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../lib/errorHandler';
+import { resolveScope, seasonTeamIds } from '@/lib/scope';
 
 export const revalidate = 0; 
 
@@ -14,7 +15,6 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const division = searchParams.get('division');
     const all = searchParams.get('all');
 
     let query = supabase
@@ -23,7 +23,9 @@ export async function GET(request: Request) {
       .order('name', { ascending: true });
 
     if (!all) {
-      query = query.eq('division', division || 'mens');
+      // The teams entered in ?division=<slug>&season=<slug or id> (default: the current season).
+      const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+      query = query.in('id', await seasonTeamIds(supabase, scope.season.id));
     }
 
     const { data, error } = await query;

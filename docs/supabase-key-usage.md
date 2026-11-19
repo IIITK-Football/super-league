@@ -13,9 +13,11 @@ Where each Supabase API key is used and why. The list of files using the **secre
 | Cron sync, protected by `CRON_SECRET` | `wc/sync/{groups,matches,players,single,teams}` | Server-to-server, no user |
 | Cron grading, protected by `CRON_SECRET` | `wc/grade/{awards,champion,finals,groups,quarter-finals,round-of-16,semi-finals}` | Grades every user's predictions |
 | Admin grading | `admin/predictions/{grade,regrade-all}` | Writes other users' rows |
-| Role-checked writes | `admin/team-registrations`, `captain/team-branding`, `players`, `players/[player_id]` | Verify the caller, then write with elevated access. **To downscope** once RLS and role policies are redesigned |
-| User-facing routes | `leaderboard`, `wc/{leaderboard,teams,players,champion-predictors,flair}`, `wc/predictions/{awards,groups,knockouts,knockouts/submit}` | Use elevated access today although most could run as the user under RLS. **Candidates to downscope** |
+| Role-checked writes | `admin/team-registrations`, `captain/team-branding` | Verify the caller, then write with elevated access. **To downscope** once RLS and role policies are redesigned |
+| User-facing routes | `wc/{leaderboard,teams,players,champion-predictors,flair}`, `wc/predictions/{awards,groups,knockouts,knockouts/submit}` | Use elevated access today although most could run as the user under RLS. **Candidates to downscope** |
 | **Unauthenticated today** | `wc/sync/manual`, `wc/sync/brazil` | Use elevated access with **no authentication check** |
+
+The public roster, player and statistics routes (`players`, `players/[player_id]`, `leaderboard`) read only public data under RLS with the publishable key (2026-11-18).
 
 The secret key is never used by `middleware.ts`, shared `lib` code, or anything in the frontend (tested).
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useLeague } from '../context/LeagueContext';
+import { scopeQuery, useLeague } from '../context/LeagueContext';
 import { useAuth } from '../context/AuthContext';
 import { FifaPrediction } from './FifaPrediction';
 import { useApi } from '../hooks/useApi';
@@ -35,7 +35,7 @@ const getTeamColorClass = (teamName) => {
 };
 
 export function Fantasy() {
-    const { division, fantasySection, setFantasySection } = useLeague();
+    const { division, seasonScope, fantasySection, setFantasySection } = useLeague();
     const { user, profile } = useAuth();
     
 
@@ -73,7 +73,8 @@ export function Fantasy() {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) return;
                 const API_URL = API_BASE_URL;
-                const res = await fetch(`${API_URL}/predictions/history`, {
+                // This season's predictions only
+                const res = await fetch(`${API_URL}/predictions/history?${scopeQuery(seasonScope)}`, {
                     headers: { 'Authorization': `Bearer ${session.access_token}` }
                 });
                 const result = await res.json();
@@ -84,8 +85,8 @@ export function Fantasy() {
                 setPredLoading(false);
             }
         };
-        if (user && (activeTab === 'history' || activeTab === 'pending')) fetchHistory();
-    }, [user, activeTab]);
+        if (user && seasonScope.ready && (activeTab === 'history' || activeTab === 'pending')) fetchHistory();
+    }, [user, activeTab, seasonScope.ready, seasonScope.division, seasonScope.season?.slug]);
 
     const pendingPredictions = predictions.filter(p => p.status === 'pending');
     const gradedPredictions = predictions.filter(p => p.status === 'graded');
@@ -100,16 +101,16 @@ export function Fantasy() {
 
     const displayedPredictions = showAll ? filteredPredictions : filteredPredictions.slice(0, 5);
 
-    // REDIRECT TO ONBOARDING IF MISSING NEW DUAL FLAIRS
+    // The signed-in user's flair for the selected division (division_flairs).
+    const [myActiveFlair, setMyActiveFlair] = useState(null);
     useEffect(() => {
-        if (user && profile) {
-            if (!profile.mens_team_flair || !profile.womens_team_flair) {
-                // Safely update the view state without reloading the page!
-                // NOTE: If this still causes issues, delete this useEffect entirely 
-                // and rely on the UI block we are adding below!
-            }
-        }
-    }, [user, profile]);
+        const divisionId = seasonScope.divisionRecord?.id;
+        if (!user || !divisionId) { setMyActiveFlair(null); return; }
+        let cancelled = false;
+        supabase.from('division_flairs').select('team_name').eq('user_id', user.id).eq('division_id', divisionId).maybeSingle()
+            .then(({ data }) => { if (!cancelled) setMyActiveFlair(data?.team_name || null); });
+        return () => { cancelled = true; };
+    }, [user, seasonScope.divisionRecord?.id]);
 
     // Reset form when division changes
     useEffect(() => {
@@ -286,9 +287,7 @@ export function Fantasy() {
     const myEntry = leaderboard.find(entry => entry.user_id === user?.id);
     const myPoints = myEntry ? myEntry.total_points : 0;
     const myName = profile?.nickname || user?.user_metadata?.full_name || user?.user_metadata?.name || 'Player';
-    
-    // Determine which flair to show for the current user based on the active division
-    const myActiveFlair = division === 'mens' ? profile?.mens_team_flair : profile?.womens_team_flair;
+
 
     if (scheduleLoading) {
         return <Loader text="Loading Predictor Engine..." />;
@@ -662,7 +661,7 @@ export function Fantasy() {
                                                     
                                                     {/* DYNAMIC FLAIR BASED ON DIVISION */}
                                                     {(() => {
-                                                        const activeLbFlair = division === 'mens' ? entry.mens_team_flair : entry.womens_team_flair;
+                                                        const activeLbFlair = entry.flair;
                                                         if (!activeLbFlair) return null;
                                                         return (
                                                             <span className={cn("px-2 py-[2px] mt-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10", getTeamColorClass(activeLbFlair))}>

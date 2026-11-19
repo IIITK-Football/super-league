@@ -31,7 +31,7 @@ const header = text.slice(0, text.indexOf('\njobs:\n') < 0 ? undefined : text.in
 describe('db-deploy workflow', () => {
   it('exists and defines verify, staging and production jobs', () => {
     expect(existsSync(path)).toBe(true);
-    expect(Object.keys(j).sort()).toEqual(['production', 'staging', 'verify']);
+    expect(Object.keys(j).sort()).toEqual(['production', 'production-backup', 'staging', 'verify']);
   });
 
   it('triggers only on pushes to develop and main (and manual runs), never on pull requests', () => {
@@ -126,8 +126,8 @@ describe('db-deploy workflow', () => {
 
   describe('production', () => {
     const p = j.production ?? '';
-    it('runs only for main, behind the Database Production environment and after verify', () => {
-      expect(p).toMatch(/needs: verify/);
+    it('runs only for main, behind the Database Production environment, after verify and the verified backup', () => {
+      expect(p).toMatch(/needs: \[verify, production-backup\]/);
       expect(p).toMatch(/if:.*refs\/heads\/main/);
       expect(p).toMatch(/^\s*environment: Database Production\s*$/m);
       expect(p).not.toMatch(/refs\/heads\/develop/);
@@ -190,7 +190,7 @@ describe('db-deploy workflow', () => {
 
   it('uses dedicated database environments and never the ones the Vercel integration owns', () => {
     const names = [...text.matchAll(/^\s*environment:\s*(.+?)\s*$/gm)].map((m) => m[1]);
-    expect(names.sort()).toEqual(['Database Preview', 'Database Production']);
+    expect(names.sort()).toEqual(['Database Backup', 'Database Preview', 'Database Production']);
     // `Preview` and `Production` belong to the Vercel integration; `staging` was never created.
     for (const forbidden of ['Preview', 'Production', 'preview', 'production', 'staging']) {
       expect(names).not.toContain(forbidden);

@@ -46,6 +46,35 @@ function gitShow(root, ref, path) {
   return r.status === 0 ? r.stdout : null;
 }
 
+// The statuses an item file had at each commit after `base` that changed it, oldest first. A pull request carries many
+// commits, so an item may move not-started -> in-progress -> done across them: each step is judged, not only the ends.
+function statusPath(root, base, itemId) {
+  const rel = `backlog/items/${itemId}.md`;
+  const path = [];
+  for (const commit of gitLines(root, ['log', '--reverse', '--format=%H', `${base}..HEAD`, '--', rel])) {
+    const text = gitShow(root, commit, rel);
+    if (text === null) continue;
+    try {
+      path.push(parseItem(text).meta.status);
+    } catch {
+      // an unreadable intermediate version is skipped; its neighbours are still judged
+    }
+  }
+  return path;
+}
+
+// Problems with the sequence of statuses an item went through (consecutive repeats ignored); [] when every step is allowed.
+function pathProblems(from, steps, bootstrap) {
+  let prev = from;
+  for (const status of steps) {
+    if (status === prev) continue;
+    const p = transitionProblems(prev, status, { bootstrap });
+    if (p.length) return p;
+    prev = status;
+  }
+  return [];
+}
+
 function gitLines(root, args) {
   const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   return r.status === 0 ? r.stdout.split('\n').filter(Boolean) : [];
@@ -95,7 +124,9 @@ export function doneItemProblems(item, bl, root) {
     else if (ran.state !== 'passed') problems.push(`${id}: required group ${g} did not pass in the evidence`);
   }
   const ancestor = spawnSync('git', ['merge-base', '--is-ancestor', evidence.head ?? '', 'HEAD'], { cwd: root });
-  if (ancestor.status !== 0) problems.push(`${id}: the evidence commit ${String(evidence.head).slice(0, 7)} is not part of this history`);
+  // If history was rewritten the commit hash is gone but the tree (the content the tests ran on) is still in the history.
+  const treeKnown = evidence.tree && gitLines(root, ['log', '--format=%T', 'HEAD']).includes(evidence.tree);
+  if (ancestor.status !== 0 && !treeKnown) problems.push(`${id}: the evidence commit ${String(evidence.head).slice(0, 7)} is not part of this history`);
   problems.push(...walkthroughProblems(readFileSync(walkthroughPath, 'utf8'), { item, bl, evidence, attestations }).map((p) => `${id}: ${p}`));
   return problems;
 }
@@ -115,6 +146,8 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
   const need = () => {
     if (!id) return { error: fail(`usage: work ${cmd} SL-xxx`) };
     const item = bl.items.get(id);
+    const gone = (bl.superseded ?? []).find((s) => s.id === id);
+    if (!item && gone) return { error: fail(`${id}: superseded by ${gone.by.join(', ')} (${gone.date ?? 'undated'}): ${gone.note}`) };
     if (!item) return { error: fail(`${id}: no such backlog item`) };
     return { item };
   };
@@ -264,6 +297,55 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
     return 0;
   }
 
+  // Re-record the evidence of a finished item whose evidence is unusable (for example recorded while an exempt file
+  // was uncommitted, so it is not from a clean tree). Only on a fully clean tree; it re-runs every required group and
+  // writes nothing unless all pass. Status, checks and the owner's attestations are not touched, and the walkthrough
+  // must still be complete.
+  if (cmd === 'rerecord') {
+    const { item, error } = need();
+    if (error) return error;
+    if (item.meta.status !== 'done') return fail(`${id}: status is ${item.meta.status}; only a done item's evidence can be re-recorded (finish an item with: pnpm work done ${id})`);
+    const unclean = gitLines(root, ['status', '--porcelain', '--untracked-files=no']);
+    if (unclean.length) return fail([`${id}: the tree must be fully clean (evidence is recorded against a commit); commit or stash:`, ...unclean.map((l) => `- ${l.slice(3)}`)]);
+    const evidencePath = join(root, `backlog/evidence/${id}.json`);
+    const previous = readJson(evidencePath, {});
+    const base = previous?.base ?? item.meta.startCommit;
+    if (!base) return fail(`${id}: no recorded base for this item's evidence`);
+    const groups = item.meta.groups ?? [];
+    const evidence = runGroups(groups, { root });
+    const problems = [];
+    if (evidence.clean !== true) problems.push(`${id}: the tree changed while the groups ran`);
+    for (const g of groups) if (!evidence.groups.some((x) => x.name === g && x.state === 'passed')) problems.push(`${id}: group ${g} did not pass`);
+    evidence.commandChecks = {};
+    for (const c of item.meta.checks ?? []) {
+      const [kind, ...restParts] = c.verify.split(':');
+      if (kind !== 'command') continue;
+      const r = runCommand(restParts.join(':'), { root });
+      evidence.commandChecks[c.id] = { exit: r.exit };
+      if (r.exit !== 0) problems.push(`${id}: ${c.id}: command failed (exit ${r.exit})`);
+    }
+    if (problems.length) return fail(['Evidence not re-recorded (nothing was written):', ...problems.map((p) => `- ${p}`)]);
+    const record = { ...evidence, id, base };
+    const walkthroughRel = item.meta.walkthrough ?? `docs/walkthroughs/${id}.md`;
+    const walkthroughPath = join(root, walkthroughRel);
+    if (!existsSync(walkthroughPath)) return fail(`${id}: the walkthrough ${walkthroughRel} is missing`);
+    const ctx = {
+      item,
+      bl,
+      evidence: record,
+      attestations: readJson(join(root, `backlog/attestations/${id}.json`), { attestations: [] }).attestations,
+      commits: gitLines(root, ['log', '--reverse', '--format=%H%x09%s', `${base}..HEAD`]).map((l) => ({ sha: l.split('\t')[0], subject: l.split('\t').slice(1).join('\t') })),
+      files: gitLines(root, ['diff', '--name-only', `${base}..HEAD`]),
+    };
+    const text = refreshGenerated(readFileSync(walkthroughPath, 'utf8'), ctx);
+    const open = walkthroughProblems(text, ctx);
+    if (open.length) return fail([`Evidence not re-recorded: the walkthrough ${walkthroughRel} is not complete:`, ...open.map((p) => `- ${p}`)]);
+    writeJson(evidencePath, record);
+    writeFileSync(walkthroughPath, text);
+    out(`${id}: evidence re-recorded on a clean tree. Commit the evidence and walkthrough together.`);
+    return 0;
+  }
+
   // Phase completion: the one place where validation is rigid and slow. Everything is checked up front, every active
   // test group runs once, and every item gets its evidence and walkthrough together. Run again after the walkthroughs
   // are written to finish the phase.
@@ -344,7 +426,12 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
           }
         }
         const to = item.meta.status;
-        const tp = transitionProblems(from, to, { bootstrap: !hadBacklog });
+        let tp = transitionProblems(from, to, { bootstrap: !hadBacklog });
+        // Across several commits (a pull request), the change is allowed when every committed step is.
+        if (tp.length) {
+          const steps = [...statusPath(root, base, itemId), to];
+          if (steps.length > 1 && pathProblems(from, steps, !hadBacklog).length === 0) tp = [];
+        }
         problems.push(...tp.map((p) => `${itemId}: ${p}`));
         if (tp.length || from === to) continue;
         if (to === 'ready' && item.meta.legacy !== true) problems.push(...readyProblems(item, bl, { root }));
@@ -356,7 +443,7 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
     return 0;
   }
 
-  return fail('usage: work {status [id] | approve id | ready id | start id | attest id check [note] | done id [--base ref] | check [--base ref] | audit}');
+  return fail('usage: work {status [id] | approve id | ready id | start id | attest id check [note] | done id [--base ref] | rerecord id | check [--base ref] | audit}');
 }
 
 if (process.argv[1] && join(process.argv[1]) === fileURLToPath(import.meta.url)) {

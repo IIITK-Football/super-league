@@ -1,0 +1,17 @@
+{
+  "id": "SL-042",
+  "attestations": [
+    {
+      "checkId": "C14",
+      "by": "oreoruuser",
+      "at": "2026-11-19T11:00:25.665Z",
+      "note": "Staging (yecozsiccsfwphlmxozt), 2026-11-19: develop deploys applied 20261130000006/7 and the seed; verification passed (41 checks, run for 3a39f59). node scripts/staging-checks.mjs: PASSED 31/31 (manual link and unlink, unverified account and server key refused, server key cannot create a player, unlinked player refused a roster place, match keys and user_id unreadable, automatic link on confirmation audited as auto-link). Player-account and roster UI tests with SL_UI_TARGET=staging: 13 passed, 1 skipped by design (apply-all runs locally only)."
+    },
+    {
+      "checkId": "C15",
+      "by": "oreoruuser",
+      "at": "2026-11-19T11:00:39.858Z",
+      "note": "Staging (yecozsiccsfwphlmxozt), 2026-11-19, on the owner's instruction: seeded fan04@iiitkottayam.ac.in confirmed through the server-side Auth Admin API; Salvatore Maroni became linked to fan04 automatically, the matching preview's waiting-for-verification count dropped 1 -> 0, and the audit history records the link with actor role auto-link and no actor or address (shown as 'Automatic link (email verified)'). Matching preview and apply, manual link through division/season/team/player, account-first creation and the existing-player offer verified on staging by the real-UI tests (13 passed) and staging-checks.mjs (31/31)."
+    }
+  ]
+}

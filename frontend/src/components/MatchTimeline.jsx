@@ -22,7 +22,7 @@ export default function MatchTimeline() {
       try {
         const { data: match } = await supabase
           .from('matches')
-          .select('id, status, date, home_score, away_score, minute, home_team_id, away_team_id, home:teams!home_team_id(name), away:teams!away_team_id(name)')
+          .select('id, season_id, status, date, home_score, away_score, minute, home_team_id, away_team_id, home:teams!home_team_id(name), away:teams!away_team_id(name)')
           .eq('id', baseMatch.id)
           .single();
 
@@ -31,9 +31,16 @@ export default function MatchTimeline() {
           .select('*')
           .eq('match_id', baseMatch.id);
 
-        const { data: players } = await supabase
-          .from('players')
-          .select('id, first_name, last_name, jersey_number, position');
+        // The players in this match, with their number and position in the match's season (a roster place).
+        const ids = [...new Set((rawGoals || []).flatMap((g) => [g.player_id, g.assist_id]).filter(Boolean))];
+        const [{ data: cards }, { data: places }] = ids.length
+          ? await Promise.all([
+            supabase.from('players').select('id, first_name, last_name').in('id', ids),
+            supabase.from('roster_memberships').select('player_id, jersey_number, position').in('player_id', ids).eq('season_id', match?.season_id ?? ''),
+          ])
+          : [{ data: [] }, { data: [] }];
+        const placeOf = new Map((places || []).map((r) => [r.player_id, r]));
+        const players = (cards || []).map((p) => ({ ...p, jersey_number: placeOf.get(p.id)?.jersey_number, position: placeOf.get(p.id)?.position }));
         
         const mappedGoals = (rawGoals || []).map(g => {
           const scorer = players?.find(p => p.id === g.player_id);

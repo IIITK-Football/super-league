@@ -6,10 +6,10 @@ import { Loader2 } from 'lucide-react';
 import { Loader } from '../components/Loader';
 
 export function Leaderboard() {
-    const { division } = useLeague();
+    const { seasonScope } = useLeague();
 
     // Pass the division to the backend so it knows which stats to grab!
-    const { data: apiResponse, loading } = useApi(`/leaderboard?division=${division}`);
+    const { data: apiResponse, loading } = useApi('/leaderboard');
 
     // Extract the separated lists directly from the new backend response
     const scorersData = apiResponse?.data?.topScorers || [];
@@ -28,7 +28,7 @@ export function Leaderboard() {
             {/* Header */}
             <div className="text-center space-y-4">
                 <h1 className="text-4xl sm:text-5xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
-                    {division === 'mens' ? "Super League" : division === 'freshers' ? "Freshers" : "WSL"} Player Stats
+                    {seasonScope.divisionRecord?.name || 'Division'}{seasonScope.season && seasonScope.seasons.length > 1 ? ` ${seasonScope.season.name}` : ''} Player Stats
                 </h1>
             </div>
 

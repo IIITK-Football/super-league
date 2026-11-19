@@ -3,11 +3,12 @@ import { useApi } from '../../hooks/useApi';
 import { API_BASE_URL } from '../../lib/api';
 import { Activity, Trophy, CheckCircle, CheckCircle2, X, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { DivisionSwitch } from './DivisionSwitch';
 
 export default function LiveController() {
-  const [division, setDivision] = useState('mens');
+  const [division, setDivision] = useState('super-league');
   const { data: resp, refetch } = useApi(`/admin/matches?status=live,scheduled&division=${division}`);
-  const { data: playersResp } = useApi('/players?all=true'); 
+  const { data: playersResp } = useApi(`/players?division=${division}`); // the selected division's current season roster 
   
   const matches = resp?.data || [];
   const allPlayers = playersResp?.data || [];
@@ -169,11 +170,7 @@ export default function LiveController() {
     <div className="p-6 space-y-8">
       
       <div className="flex justify-center mb-4">
-        <div className="bg-black/50 p-1 rounded-full border border-white/10 flex">
-          <button onClick={() => handleDivisionSwitch('mens')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'mens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Men's</button>
-          <button onClick={() => handleDivisionSwitch('womens')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'womens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Women's</button>
-          <button onClick={() => handleDivisionSwitch('freshers')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'freshers' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Freshers</button>
-        </div>
+        <DivisionSwitch value={division} onChange={handleDivisionSwitch} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -184,7 +181,7 @@ export default function LiveController() {
             className={`p-4 rounded-xl border transition-all ${selectedMatch?.id === m.id ? 'border-white bg-white/10' : 'border-white/10 bg-black/40 hover:bg-white/5'}`}
           >
             <div className="flex justify-between text-xs uppercase font-black text-zinc-500 mb-2">
-              <span>{m.division}</span>
+              <span>{m.division_name} {m.season_name}</span>
               <span className={m.status === 'live' ? 'text-red-500 animate-pulse' : ''}>{m.status}</span>
             </div>
             <div className="font-bold text-lg">{m.home_team_name} vs {m.away_team_name}</div>

@@ -39,7 +39,7 @@ async function requireRole(request: Request, allowedRoles: string[]) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { supabase, user } = await requireRole(request, ['editor', 'dictator', 'admin']);
+    const { supabase, user } = await requireRole(request, ['editor', 'dictator']);
 
     const { data, error } = await supabase
       .from('newsletter')
@@ -70,7 +70,7 @@ export async function DELETE(request: Request) {
 
     if (!id) throw { status: 400, message: "Article ID is required for deletion." };
 
-    const { supabase } = await requireRole(request, ['dictator', 'admin']);
+    const { supabase } = await requireRole(request, ['dictator']);
 
     const { error } = await supabase
       .from('newsletter')

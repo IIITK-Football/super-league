@@ -47,8 +47,8 @@
     },
     {
       "id": "R10",
-      "text": "Frontend implementation remains last; backend/API tasks should preserve a compatibility surface until then.",
-      "enforcement": "attest: phase ordering is enforced by phase gating"
+      "text": "A capability a person uses or configures ships a minimally usable flow in the existing frontend in its own item and phase (real authorized action; loading, empty, success and error states; UI-to-API-to-database path tested locally and on staging). The Phase 9 redesign consolidates and refines; it is never where a feature first becomes usable. Backend infrastructure and security changes need no UI. World Cup stays separate from division flows.",
+      "enforcement": "attest: n/a for items with no user-facing capability"
     }
   ]
 }

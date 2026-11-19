@@ -50,19 +50,22 @@ function MatchCard({ match, onClick }) {
 }
 
 export function Matches() {
-  const { division } = useLeague();
+  const { seasonScope } = useLeague();
+  const seasonId = seasonScope.season?.id;
   const navigate = useNavigate();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchMatches = async () => {
+      if (!seasonScope.ready) return;
+      if (!seasonId) { setMatches([]); setLoading(false); return; }
       setLoading(true);
       try {
         const { data, error } = await supabase
           .from('matches')
-          .select('id, status, date, home_score, away_score, minute, home_team_id, away_team_id, division, home:teams!home_team_id(name), away:teams!away_team_id(name)')
-          .eq('division', division)
+          .select('id, status, date, home_score, away_score, minute, home_team_id, away_team_id, season_id, home:teams!home_team_id(name), away:teams!away_team_id(name)')
+          .eq('season_id', seasonId)
           .order('date', { ascending: false }); // Sort newest to oldest
 
         if (error) throw error;
@@ -75,7 +78,7 @@ export function Matches() {
     };
 
     fetchMatches();
-  }, [division]); // Refetch if the user toggles between Mens/Womens
+  }, [seasonScope.ready, seasonId]); // Refetch when the division or season changes
 
   const handleSelectMatch = (match) => {
     sessionStorage.setItem('selectedMatch', JSON.stringify(match));
@@ -100,7 +103,7 @@ export function Matches() {
       {matches.length === 0 ? (
         <div className="flex flex-col items-center justify-center min-h-[30vh] text-zinc-500 space-y-4 bg-white/5 border border-white/10 rounded-3xl">
           <Shield className="w-12 h-12 text-zinc-700" />
-          <span className="font-black tracking-[0.3em] uppercase text-sm">No matches found for this division</span>
+          <span className="font-black tracking-[0.3em] uppercase text-sm">No matches found for this season</span>
         </div>
       ) : (
         <div className="space-y-12">

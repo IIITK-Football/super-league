@@ -1,0 +1,432 @@
+#!/usr/bin/env node
+// Security and sign-in checks against the STAGING project (yecozsiccsfwphlmxozt) with SYNTHETIC accounts.
+//
+//   node scripts/staging-checks.mjs
+//
+// Reads backend/.env.staging.local (git-ignored): SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY,
+// ALLOW_REMOTE_SUPABASE=true. It REFUSES any other project (production, local, unknown) before making a request. Accounts
+// are created through the admin API already confirmed, so no email is sent; sessions are obtained from generated links
+// (never emailed). Every synthetic account and row is removed at the end, even if a check fails or a request throws.
+// Keys and passwords are never printed. What it cannot do: complete a Turnstile challenge or a Google login (those need
+// a browser), and it does not test email delivery.
+import { randomBytes } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { probeAll } from './verify-rpc-closed.mjs';
+
+// The seed's legacy player without an account waits for this synthetic address (backend/supabase/seed.sql).
+export const AUTO_LINK_EMAIL = 'auto.link.fixture@iiitkottayam.ac.in';
+export const STAGING_REF = 'yecozsiccsfwphlmxozt';
+const DOMAIN = 'iiitkottayam.ac.in';
+const PREFIX = 'sl-check-';
+
+export function loadEnvText(text) {
+  const env = {};
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const m = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (m) env[m[1]] = m[2].trim().replace(/^(["'])(.*)\1$/, '$2');
+  }
+  return env;
+}
+
+// Returns the reasons this configuration must not be used (empty = fine). Messages never contain a key.
+export function verifyTarget(env) {
+  const errors = [];
+  let host = '';
+  try {
+    const u = new URL(env.SUPABASE_URL ?? '');
+    host = u.host;
+    if (u.protocol !== 'https:') errors.push('SUPABASE_URL must be an https address');
+  } catch {
+    errors.push('SUPABASE_URL is missing or not a valid address');
+  }
+  if (host && host !== `${STAGING_REF}.supabase.co`) errors.push(`SUPABASE_URL does not point at the staging project (${STAGING_REF}); production, local and other projects are refused`);
+  if (env.ALLOW_REMOTE_SUPABASE !== 'true') errors.push('ALLOW_REMOTE_SUPABASE must be exactly "true" to run against a remote project');
+  if (!(env.SUPABASE_PUBLISHABLE_KEY ?? '').startsWith('sb_publishable_')) errors.push('SUPABASE_PUBLISHABLE_KEY is missing or is not a publishable key');
+  if (!(env.SUPABASE_SECRET_KEY ?? '').startsWith('sb_secret_')) errors.push('SUPABASE_SECRET_KEY is missing or is not a secret key');
+  return errors;
+}
+
+const rand = (bytes = 12) => randomBytes(bytes).toString('hex');
+
+export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
+  const problems = verifyTarget(env);
+  if (problems.length) throw new Error(`refusing to run: ${problems.join('; ')}`);
+
+  const base = `https://${STAGING_REF}.supabase.co`;
+  const SECRET = env.SUPABASE_SECRET_KEY;
+  const PUBLISHABLE = env.SUPABASE_PUBLISHABLE_KEY;
+  const results = [];
+  const record = (name, status, detail = '') => {
+    results.push({ name, status, detail });
+    log(`${status.padEnd(4)} ${name}${detail ? ` - ${detail}` : ''}`);
+  };
+
+  // The secret key travels as `apikey` only (new-format keys are not JWTs); user-level calls use the publishable key.
+  const call = async (path, { method = 'GET', key, token, body, prefer } = {}) => {
+    const headers = { apikey: key, 'content-type': 'application/json' };
+    if (token) headers.authorization = `Bearer ${token}`;
+    if (prefer) headers.prefer = prefer;
+    const res = await fetchImpl(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    let data = null;
+    const text = await res.text();
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
+    return { status: res.status, data, ok: res.status >= 200 && res.status < 300 };
+  };
+  const admin = (path, opts) => call(path, { ...opts, key: SECRET });
+  const anon = (path, opts) => call(path, { ...opts, key: PUBLISHABLE });
+  const message = (r) => String(r.data?.message ?? r.data?.msg ?? r.data?.error_description ?? r.data?.code ?? `HTTP ${r.status}`);
+
+  const created = [];
+  const tag = `${PREFIX}${rand(4)}`;
+  const makeUser = async (label, confirmed = true) => {
+    const email = `${tag}-${label}@${DOMAIN}`;
+    const r = await admin('/auth/v1/admin/users', { method: 'POST', body: { email, password: rand(16), email_confirm: confirmed } });
+    if (!r.ok || !r.data?.id) throw new Error(`could not create synthetic account ${label} (${message(r)})`);
+    created.push(r.data.id);
+    return { id: r.data.id, email };
+  };
+  const setRole = (id, role) => admin('/rest/v1/user_roles?on_conflict=user_id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', body: { user_id: id, role } });
+  // Synthetic registrations join the current Freshers season (registrations belong to a season, not a division string).
+  let freshersSeason = null;
+  const currentFreshersSeason = async () => {
+    if (freshersSeason) return freshersSeason;
+    const division = await admin('/rest/v1/divisions?slug=eq.freshers&select=id');
+    const divisionId = division.data?.[0]?.id;
+    const season = divisionId ? await admin(`/rest/v1/seasons?division_id=eq.${divisionId}&is_current=eq.true&select=id`) : null;
+    freshersSeason = season?.data?.[0]?.id ?? null;
+    if (!freshersSeason) throw new Error('the Freshers division has no current season on this project');
+    return freshersSeason;
+  };
+  // A synthetic team in the current Freshers season: the team, its season entry, the captain's registration and one
+  // player on the season roster (a roster place). Names carry the run's prefix so cleanup can find them.
+  // Players are created as the app creates them: for a verified synthetic account, by the run's dictator.
+  let dictatorToken = null;
+  const makeTeam = async (captain, name, seasonId = null) => {
+    const season = seasonId ?? await currentFreshersSeason();
+    const post = async (path, body, what) => {
+      const r = await admin(path, { method: 'POST', prefer: 'return=representation', body });
+      if (!r.ok) throw new Error(`could not create the ${name} ${what} (${message(r)})`);
+      return r.data[0].id;
+    };
+    const team = await post('/rest/v1/teams', { name: `${tag} ${name}` }, 'team');
+    const entry = await post('/rest/v1/team_entries', { team_id: team, season_id: season }, 'season entry');
+    await post('/rest/v1/team_registrations', { captain_id: captain.id, team_name: `SL CHECK ${name}`, season_id: season, team_id: team }, 'registration');
+    const account = await makeUser(`player-${name.toLowerCase()}`);
+    const made = await call('/rest/v1/rpc/create_player_for_account', {
+      method: 'POST', key: PUBLISHABLE, token: dictatorToken,
+      body: { p_user: account.id, p_team_entry_id: entry, p_first_name: `${tag}-player`, p_last_name: name, p_overall_rating: 60, p_jersey_number: 7, p_position: 'CM' },
+    });
+    if (!made.ok) throw new Error(`could not create the ${name} player (${message(made)})`);
+    const player = made.data;
+    const member = (await admin(`/rest/v1/roster_memberships?player_id=eq.${player}&team_entry_id=eq.${entry}&select=id`)).data?.[0]?.id;
+    if (!member) throw new Error(`the ${name} player has no roster place`);
+    return { member, player, entry };
+  };
+  const session = async (user, type = 'magiclink') => {
+    const link = await admin('/auth/v1/admin/generate_link', { method: 'POST', body: { type, email: user.email } });
+    const hashed = link.data?.hashed_token;
+    if (!link.ok || !hashed) throw new Error(`could not generate a ${type} link (${message(link)})`);
+    const v = await anon('/auth/v1/verify', { method: 'POST', body: { type, token_hash: hashed } });
+    if (!v.ok || !v.data?.access_token) throw new Error(`could not turn the ${type} link into a session (${message(v)})`);
+    return v.data.access_token;
+  };
+  const rpc = (token, membershipId, extra = {}) =>
+    call('/rest/v1/rpc/captain_update_roster_player', {
+      method: 'POST',
+      key: PUBLISHABLE,
+      token,
+      body: { p_membership_id: membershipId, p_position: 'ST', p_jersey_number: 9, p_overall_rating: 61, p_attributes: {}, p_image_url: null, ...extra },
+    });
+  const expectRefused = (name, r, pattern) => {
+    if (r.ok) record(name, 'FAIL', 'the call was ALLOWED');
+    else if (pattern.test(message(r))) record(name, 'PASS', message(r));
+    else record(name, 'FAIL', `refused, but with an unexpected answer: ${message(r)}`);
+  };
+
+  // Remove synthetic divisions (slug prefix) and their seasons, then synthetic accounts (address prefix), left by an
+  // earlier aborted run. Seeded and real divisions never carry the prefix.
+  const sweepDivisions = async () => {
+    const list = await admin(`/rest/v1/divisions?slug=like.${PREFIX}*&select=id`);
+    const ids = (list.data ?? []).map((d) => d.id);
+    if (!ids.length) return;
+    await admin(`/rest/v1/seasons?division_id=in.(${ids.join(',')})`, { method: 'DELETE' });
+    await admin(`/rest/v1/divisions?id=in.(${ids.join(',')})`, { method: 'DELETE' });
+  };
+  // Remove synthetic rosters: roster places, players, season entries and teams.
+  const sweepRosters = async () => {
+    const teams = ((await admin(`/rest/v1/teams?name=like.${PREFIX}*&select=id`)).data ?? []).map((t) => t.id);
+    const entries = teams.length ? ((await admin(`/rest/v1/team_entries?team_id=in.(${teams.join(',')})&select=id`)).data ?? []).map((e) => e.id) : [];
+    if (entries.length) await admin(`/rest/v1/roster_memberships?team_entry_id=in.(${entries.join(',')})`, { method: 'DELETE' });
+    const players = ((await admin(`/rest/v1/players?first_name=like.${PREFIX}*&select=id`)).data ?? []).map((p) => p.id);
+    if (players.length) {
+      await admin(`/rest/v1/roster_memberships?player_id=in.(${players.join(',')})`, { method: 'DELETE' });
+      await admin(`/rest/v1/players?id=in.(${players.join(',')})`, { method: 'DELETE' });
+    }
+    if (entries.length) await admin(`/rest/v1/team_entries?id=in.(${entries.join(',')})`, { method: 'DELETE' });
+    if (teams.length) await admin(`/rest/v1/teams?id=in.(${teams.join(',')})`, { method: 'DELETE' });
+  };
+  const sweep = async () => {
+    await sweepRosters();
+    await sweepDivisions();
+    const list = await admin('/auth/v1/admin/users?per_page=1000');
+    for (const u of list.data?.users ?? []) {
+      if ((u.email?.startsWith(PREFIX) && u.email.endsWith(`@${DOMAIN}`)) || u.email === AUTO_LINK_EMAIL) await admin(`/auth/v1/admin/users/${u.id}`, { method: 'DELETE' });
+    }
+  };
+
+  try {
+    await sweep();
+
+    const probe = await probeAll(base, PUBLISHABLE, fetchImpl);
+    const open = probe.filter((p) => p.verdict !== 'closed' && p.verdict !== 'retired');
+    record('Anonymous callers cannot execute the captain roster function, and the retired overloads are gone (probe: CLOSED)', open.length ? 'FAIL' : 'PASS', probe.map((p) => `${p.overload} ${p.verdict}`).join(', '));
+
+    const captainA = await makeUser('captain-a');
+    const captainB = await makeUser('captain-b');
+    const assigned = await makeUser('assigned-no-role');
+    const normal = await makeUser('normal');
+    const dictator = await makeUser('dictator');
+    await setRole(captainA.id, 'captain');
+    await setRole(captainB.id, 'captain');
+    await setRole(assigned.id, 'default');
+    await setRole(dictator.id, 'dictator');
+    dictatorToken = await session(dictator);
+    const teamA = await makeTeam(captainA, 'A');
+    const teamB = await makeTeam(captainB, 'B');
+    const teamC = await makeTeam(assigned, 'C');
+    record('Synthetic test accounts and teams created (confirmed on creation, no mail is sent)', 'PASS', `${created.length} accounts`);
+
+    const captcha = await anon('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: normal.email, password: 'wrong-on-purpose' } });
+    if (captcha.ok) record('Password sign-in without a Turnstile token is rejected (CAPTCHA enforced)', 'FAIL', 'sign-in was accepted without a CAPTCHA token');
+    else if (/captcha/i.test(JSON.stringify(captcha.data ?? {}))) record('Password sign-in without a Turnstile token is rejected (CAPTCHA enforced)', 'PASS', message(captcha));
+    else record('Password sign-in without a Turnstile token is rejected (CAPTCHA enforced)', 'FAIL', `rejected, but not by CAPTCHA: ${message(captcha)}`);
+
+    const tokenA = await session(captainA);
+    const own = await rpc(tokenA, teamA.member);
+    const readBack = own.ok ? await admin(`/rest/v1/roster_memberships?id=eq.${teamA.member}&select=jersey_number,position`) : null;
+    const saved = readBack?.data?.[0]?.jersey_number === 9;
+    record('A captain can save a player on their own team', own.ok && saved ? 'PASS' : 'FAIL', own.ok ? (saved ? 'saved and read back' : 'accepted but the change is not there') : message(own));
+
+    expectRefused('A captain cannot change a player on another team', await rpc(tokenA, teamB.member), /not part of your assigned roster/i);
+    // A captain has no direct write path to players or rosters: a rename through the Data API changes nothing.
+    await call(`/rest/v1/players?id=eq.${teamA.player}`, { method: 'PATCH', key: PUBLISHABLE, token: tokenA, prefer: 'return=minimal', body: { first_name: `${tag}-renamed` } });
+    await call(`/rest/v1/roster_memberships?id=eq.${teamA.member}`, { method: 'DELETE', key: PUBLISHABLE, token: tokenA });
+    const afterRename = await admin(`/rest/v1/players?id=eq.${teamA.player}&select=first_name,roster_memberships(id)`);
+    const untouched = afterRename.data?.[0]?.first_name === `${tag}-player` && (afterRename.data?.[0]?.roster_memberships ?? []).length === 1;
+    record('A captain cannot rename a player or remove them from the roster directly', untouched ? 'PASS' : 'FAIL', untouched ? 'unchanged' : 'the player or roster place changed');
+    // A player's email is their account's Auth email; the only other addresses are the private match keys.
+    const keysAnon = await anon(`/rest/v1/player_link_keys?select=email`);
+    const keysCaptain = await call(`/rest/v1/player_link_keys?select=email`, { key: PUBLISHABLE, token: tokenA });
+    const keysHidden = !keysAnon.ok && !keysCaptain.ok;
+    record('Private player match keys are hidden from visitors and captains', keysHidden ? 'PASS' : 'FAIL', keysHidden ? 'refused' : 'a match key was readable');
+    expectRefused('An assigned user without the captain role is refused', await rpc(await session(assigned), teamC.member), /captain access is required/i);
+    expectRefused('A normal user cannot change a player', await rpc(await session(normal), teamA.member), /not part of your assigned roster/i);
+
+    const dict = await rpc(await session(dictator), teamB.member, { p_jersey_number: 11 });
+    record('A dictator can update a player on any team', dict.ok ? 'PASS' : 'FAIL', dict.ok ? 'accepted' : message(dict));
+
+    // Divisions and seasons are data (docs/decisions/D-01-division-season-mapping.md): the seeded legacy values are
+    // ordinary records, a new division with two seasons is created through the Data API by the managing role only,
+    // and a hidden division stays private.
+    const divisions = await admin('/rest/v1/divisions?select=slug');
+    const current = await admin('/rest/v1/seasons?is_current=eq.true&select=division_id');
+    const slugs = (divisions.data ?? []).map((d) => d.slug);
+    const legacyOk = ['super-league', 'wsl', 'freshers'].every((x) => slugs.includes(x)) && (current.data ?? []).length >= 3;
+    record('Legacy divisions are ordinary division records with a current season each', legacyOk ? 'PASS' : 'FAIL', `${slugs.length} divisions, ${(current.data ?? []).length} current seasons`);
+
+    const managerToken = dictatorToken;
+    const userToken = await session(normal);
+    const asUser = (token) => (path, opts) => call(path, { ...opts, key: PUBLISHABLE, token });
+    const division = await asUser(managerToken)('/rest/v1/divisions', { method: 'POST', prefer: 'return=representation', body: { slug: tag, name: 'SL Check Division', visibility: 'hidden' } });
+    const divisionId = division.data?.[0]?.id;
+    const seasons = divisionId
+      ? await asUser(managerToken)('/rest/v1/seasons?select=id,slug', { method: 'POST', prefer: 'return=representation', body: [{ division_id: divisionId, slug: '2026', name: '2026', is_current: true }, { division_id: divisionId, slug: '2027', name: '2027', is_current: false }] }) // PostgREST requires every row of a bulk insert to have the same keys
+      : division;
+    const seasonsCreated = divisionId && seasons.ok && (seasons.data ?? []).length === 2;
+    record('A new hidden division with two coexisting seasons is created through the Data API, with no schema change', seasonsCreated ? 'PASS' : 'FAIL', seasonsCreated ? 'created' : message(seasons));
+
+    // The dashboard switches the current season with one function call and saves sections by upsert.
+    const nextSeason = (seasons.data ?? []).find((x) => x.slug === '2027') ?? (seasons.data ?? [])[1];
+    if (seasonsCreated && nextSeason?.id) {
+      const refused = await asUser(userToken)('/rest/v1/rpc/set_current_season', { method: 'POST', body: { p_season: nextSeason.id } });
+      const switched = await asUser(managerToken)('/rest/v1/rpc/set_current_season', { method: 'POST', body: { p_season: nextSeason.id } });
+      const current = await admin(`/rest/v1/seasons?division_id=eq.${divisionId}&is_current=eq.true&select=id`);
+      const section = await asUser(managerToken)('/rest/v1/season_sections?on_conflict=season_id,section_key', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates,return=representation',
+        body: { season_id: nextSeason.id, section_key: 'fantasy', enabled: false, nav_visible: false, sort_order: 80, settings: { note: 'sl-check' } },
+      });
+      const configOk = !refused.ok && switched.ok && (current.data ?? []).length === 1 && current.data[0].id === nextSeason.id && section.ok;
+      record('The current season switches in one step and a season section is configured; an account without the role cannot switch it', configOk ? 'PASS' : 'FAIL',
+        configOk ? 'switched and saved' : `refused=${!refused.ok}, switched=${switched.ok ? 'yes' : message(switched)}, current=${(current.data ?? []).length}, section=${section.ok ? 'saved' : message(section)}`);
+    } else {
+      record('The current season switches in one step and a season section is configured; an account without the role cannot switch it', 'FAIL', 'no seasons to switch');
+    }
+
+    // Audit history: the dictator's division insert is recorded with them as the actor, only dictators can read the
+    // history, and nobody can change or remove it, the server key included.
+    const auditName = 'A dictator\'s change is recorded in the audit history with them as the actor';
+    const entry = divisionId
+      ? await asUser(managerToken)(`/rest/v1/audit_log?table_name=eq.divisions&record_id=eq.${divisionId}&action=eq.insert&select=id,actor_id`)
+      : null;
+    const auditRow = entry?.ok ? entry.data?.[0] : null;
+    record(auditName, auditRow?.actor_id === dictator.id ? 'PASS' : 'FAIL',
+      auditRow ? (auditRow.actor_id === dictator.id ? 'recorded' : 'recorded with another actor') : (entry ? message(entry) : 'no division was created'));
+    const auditByUser = await asUser(userToken)('/rest/v1/audit_log?select=id&limit=1');
+    const auditByAnon = await anon('/rest/v1/audit_log?select=id&limit=1');
+    const auditHidden = [auditByUser, auditByAnon].every((r) => !r.ok || (r.data ?? []).length === 0);
+    record('The audit history is hidden from visitors and accounts without the dictator role', auditHidden ? 'PASS' : 'FAIL', auditHidden ? 'hidden' : 'audit entries were readable');
+    if (auditRow) {
+      await admin(`/rest/v1/audit_log?id=eq.${auditRow.id}`, { method: 'PATCH', prefer: 'return=minimal', body: { action: 'delete' } });
+      await admin(`/rest/v1/audit_log?id=eq.${auditRow.id}`, { method: 'DELETE' });
+      const kept = await admin(`/rest/v1/audit_log?id=eq.${auditRow.id}&select=action`);
+      const unchanged = kept.data?.[0]?.action === 'insert';
+      record('Nobody can change or remove audit history, the server key included', unchanged ? 'PASS' : 'FAIL', unchanged ? 'unchanged' : 'the entry was changed or removed');
+    } else {
+      record('Nobody can change or remove audit history, the server key included', 'FAIL', 'no audit entry to test');
+    }
+
+    // A captain edits only the current season's roster: a registration and roster place in a past season of the
+    // check division are refused, so an old captain cannot change a player who has since moved team.
+    const pastName = 'A captain cannot change a player on their team in a season that is not current';
+    const past = divisionId ? await admin(`/rest/v1/seasons?division_id=eq.${divisionId}&is_current=eq.false&select=id`) : null;
+    const pastSeason = past?.data?.[0]?.id;
+    if (pastSeason) {
+      // A separate captain: an account holds one registration at a time.
+      const captainPast = await makeUser('captain-past');
+      await setRole(captainPast.id, 'captain');
+      const teamD = await makeTeam(captainPast, 'D', pastSeason);
+      expectRefused(pastName, await rpc(await session(captainPast), teamD.member), /only the current season/i);
+    }
+    else record(pastName, 'FAIL', 'the check division has no past season');
+
+    const seenByUser = await asUser(userToken)(`/rest/v1/divisions?slug=eq.${tag}&select=id`);
+    const seenByAnon = await anon(`/rest/v1/divisions?slug=eq.${tag}&select=id`);
+    const hiddenOk = seenByUser.ok && seenByAnon.ok && (seenByUser.data ?? []).length === 0 && (seenByAnon.data ?? []).length === 0;
+    record('A hidden division is invisible to a signed-in account without the role and to anonymous visitors', hiddenOk ? 'PASS' : 'FAIL', `${(seenByUser.data ?? []).length} and ${(seenByAnon.data ?? []).length} rows visible`);
+
+    const byUser = await asUser(userToken)('/rest/v1/divisions', { method: 'POST', prefer: 'return=minimal', body: { slug: `${tag}-x`, name: 'SL Check Refused' } });
+    expectRefused('An account without the managing role cannot create a division', byUser, /row-level security|permission denied|42501/i);
+
+    // Account-linked players: only a dictator links, only a verified account, and not even the server key can write the
+    // link; nobody signed in or anonymous can read it; unlinking clears it.
+    // Every new player needs a verified account, on every path: the server key cannot create one.
+    const serverPlayer = await admin('/rest/v1/players', { method: 'POST', prefer: 'return=minimal', body: { first_name: `${tag}-player`, last_name: 'Server' } });
+    expectRefused('The server key cannot create a player without an account', serverPlayer, /verified account|42501/i);
+    // An unlinked player to link: created for an account, then unlinked by the dictator (only the link is cleared).
+    const linkAccount = await makeUser('link-owner');
+    const linkTarget = await call('/rest/v1/rpc/create_player_for_account', {
+      method: 'POST', key: PUBLISHABLE, token: managerToken,
+      body: { p_user: linkAccount.id, p_team_entry_id: teamA.entry, p_first_name: `${tag}-player`, p_last_name: 'Link' },
+    });
+    if (!linkTarget.ok) throw new Error(`could not create the account-link player (${message(linkTarget)})`);
+    const linkPlayer = linkTarget.data;
+    const firstUnlink = await call('/rest/v1/rpc/unlink_player_account', { method: 'POST', key: PUBLISHABLE, token: managerToken, body: { p_player: linkPlayer } });
+    if (!firstUnlink.ok) throw new Error(`could not unlink the account-link player (${message(firstUnlink)})`);
+    expectRefused('A player without an account cannot join a roster', await call('/rest/v1/rpc/add_player_to_roster', {
+      method: 'POST', key: PUBLISHABLE, token: managerToken, body: { p_player: linkPlayer, p_team_entry_id: teamB.entry },
+    }), /not linked to an account/i);
+    const linkOf = async () => (await admin(`/rest/v1/players?id=eq.${linkPlayer}&select=user_id`)).data?.[0]?.user_id ?? null;
+    const linkRpc = (token, name, body) => call(`/rest/v1/rpc/${name}`, { method: 'POST', key: PUBLISHABLE, token, body });
+    const unverified = await makeUser('unverified', false);
+    expectRefused('An unverified account cannot be linked to a player', await linkRpc(managerToken, 'link_player_account', { p_player: linkPlayer, p_user: unverified.id }), /verified/i);
+    expectRefused('A normal user cannot link a player to an account', await linkRpc(userToken, 'link_player_account', { p_player: linkPlayer, p_user: normal.id }), /only a dictator|42501/i);
+    const linked = await linkRpc(managerToken, 'link_player_account', { p_player: linkPlayer, p_user: normal.id });
+    const nowLinked = await linkOf();
+    record('A dictator links a player to a verified account', linked.ok && nowLinked === normal.id ? 'PASS' : 'FAIL', linked.ok ? `linked: ${nowLinked === normal.id}` : message(linked));
+    const byServer = await admin(`/rest/v1/players?id=eq.${linkPlayer}`, { method: 'PATCH', prefer: 'return=minimal', body: { user_id: dictator.id } });
+    if (byServer.ok || (await linkOf()) !== normal.id) record('The server key cannot write the account link', 'FAIL', 'the link was changed with the secret key');
+    else expectRefused('The server key cannot write the account link', byServer, /only a dictator|42501/i);
+    expectRefused('Anonymous visitors cannot read the account link', await anon(`/rest/v1/players?id=eq.${linkPlayer}&select=user_id`), /permission denied|42501/i);
+    expectRefused('A signed-in account cannot read the account link', await asUser(userToken)(`/rest/v1/players?id=eq.${linkPlayer}&select=user_id`), /permission denied|42501/i);
+    const unlinked = await linkRpc(managerToken, 'unlink_player_account', { p_player: linkPlayer });
+    const afterUnlink = await linkOf();
+    record('A dictator unlinks a player, clearing only the link', unlinked.ok && afterUnlink === null ? 'PASS' : 'FAIL', unlinked.ok ? `cleared: ${afterUnlink === null}` : message(unlinked));
+
+    // Automatic link on verification, on the real hosted Auth: the seed's legacy player waiting for AUTO_LINK_EMAIL is
+    // linked when a synthetic account with that email confirms it. Deleting the account afterwards clears the link,
+    // and the next seed run restores the key.
+    const waitingKey = await admin(`/rest/v1/player_link_keys?email=eq.${encodeURIComponent(AUTO_LINK_EMAIL)}&select=player_id`);
+    const waitingPlayer = waitingKey.data?.[0]?.player_id;
+    if (!waitingPlayer) record('An account is linked automatically when its matching email is confirmed', 'FAIL', `no seed player waits for ${AUTO_LINK_EMAIL} (re-run the seed)`);
+    else {
+      const signup = await admin('/auth/v1/admin/users', { method: 'POST', body: { email: AUTO_LINK_EMAIL, password: rand(16), email_confirm: false } });
+      if (!signup.ok || !signup.data?.id) throw new Error(`could not create the auto-link account (${message(signup)})`);
+      created.push(signup.data.id);
+      const before = (await admin(`/rest/v1/players?id=eq.${waitingPlayer}&select=user_id`)).data?.[0]?.user_id ?? null;
+      await session({ email: AUTO_LINK_EMAIL }); // the confirmation link: GoTrue marks the email confirmed
+      const after = (await admin(`/rest/v1/players?id=eq.${waitingPlayer}&select=user_id`)).data?.[0]?.user_id ?? null;
+      const audited = (await admin(`/rest/v1/audit_log?table_name=eq.players&record_id=eq.${waitingPlayer}&actor_role=eq.auto-link&select=id`)).data ?? [];
+      const ok = before === null && after === signup.data.id && audited.length > 0;
+      // When it fails, say why: was the email confirmed, and what does the dictator's matching preview show for it?
+      let why = '';
+      if (!ok) {
+        const confirmedAt = (await admin(`/auth/v1/admin/users/${signup.data.id}`)).data?.email_confirmed_at ?? null;
+        const preview = await call('/rest/v1/rpc/account_link_matches', { method: 'POST', key: PUBLISHABLE, token: managerToken, body: {} });
+        const row = (preview.data ?? []).find?.((m) => m.player_id === waitingPlayer);
+        why = `; email confirmed: ${Boolean(confirmedAt)}; preview: ${row ? row.status : preview.ok ? 'not listed' : message(preview)}`;
+      }
+      record('An account is linked automatically when its matching email is confirmed', ok ? 'PASS' : 'FAIL',
+        `before: ${before === null ? 'unlinked' : 'linked'}, after: ${after === signup.data.id ? 'linked to the account' : 'not linked'}, audited as auto-link: ${audited.length > 0}${why}`);
+    }
+
+    // Recovery: the one-time token flow, without sending any mail (this does not test email delivery or redirect URLs).
+    const recoveryToken = await session(normal, 'recovery');
+    const reset = await call('/auth/v1/user', { method: 'PUT', key: PUBLISHABLE, token: recoveryToken, body: { password: rand(16) } });
+    record('Password recovery token flow works (a recovery session can set a new password; no mail is sent)', reset.ok ? 'PASS' : 'FAIL', reset.ok ? 'password updated' : message(reset));
+  } catch (e) {
+    record('Run completed without an unexpected error', 'FAIL', String(e.message ?? e).slice(0, 200));
+  } finally {
+    try {
+      for (const id of created) await admin(`/auth/v1/admin/users/${id}`, { method: 'DELETE' });
+      await sweep();
+      const gone = [];
+      for (const id of created) gone.push((await admin(`/auth/v1/admin/users/${id}`)).status === 404);
+      const ids = created.join(',');
+      const leftoverRegs = created.length ? (await admin(`/rest/v1/team_registrations?captain_id=in.(${ids})&select=id`)).data ?? [] : [];
+      const leftoverRoles = created.length ? (await admin(`/rest/v1/user_roles?user_id=in.(${ids})&select=user_id`)).data ?? [] : [];
+      const leftoverDivisions = (await admin(`/rest/v1/divisions?slug=like.${PREFIX}*&select=id`)).data ?? [];
+      const leftoverPlayers = (await admin(`/rest/v1/players?first_name=like.${PREFIX}*&select=id`)).data ?? [];
+      const leftoverAutoLink = (await admin('/auth/v1/admin/users?per_page=1000')).data?.users?.filter((u) => u.email === AUTO_LINK_EMAIL) ?? [];
+      const leftoverTeams = (await admin(`/rest/v1/teams?name=like.${PREFIX}*&select=id`)).data ?? [];
+      const clean = gone.every(Boolean) && leftoverRegs.length === 0 && leftoverRoles.length === 0 && leftoverDivisions.length === 0
+        && leftoverPlayers.length === 0 && leftoverTeams.length === 0 && leftoverAutoLink.length === 0;
+      record('Cleanup removed every synthetic account and row', clean ? 'PASS' : 'FAIL', `${created.length} accounts removed; ${leftoverRegs.length} registrations, ${leftoverRoles.length} role rows, ${leftoverDivisions.length} divisions, ${leftoverPlayers.length} players and ${leftoverTeams.length} teams left over`);
+    } catch (e) {
+      record('Cleanup removed every synthetic account and row', 'FAIL', `cleanup error: ${String(e.message ?? e).slice(0, 160)} (accounts are prefixed ${PREFIX} and removed by the next run)`);
+    }
+  }
+  return results;
+}
+
+async function main() {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const file = join(root, 'backend/.env.staging.local');
+  if (!existsSync(file)) {
+    console.error('backend/.env.staging.local is missing (see docs/release.md). Nothing was run.');
+    return 2;
+  }
+  const env = loadEnvText(readFileSync(file, 'utf8'));
+  console.log(`Target: the staging project (${STAGING_REF}). Production and local are refused.`);
+  let results;
+  try {
+    results = await runChecks({ env });
+  } catch (e) {
+    console.error(String(e.message ?? e));
+    return 2;
+  }
+  const failed = results.filter((r) => r.status === 'FAIL').length;
+  console.log(failed === 0 ? `\nRESULT: PASSED (${results.length} checks)` : `\nRESULT: FAILED (${failed} of ${results.length})`);
+  console.log('Not covered here (need a browser): a Turnstile challenge with a valid token, a real Google login, and email delivery.');
+  return failed === 0 ? 0 : 1;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exit(await main());

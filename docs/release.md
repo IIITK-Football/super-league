@@ -46,7 +46,23 @@ Production was created from the legacy migrations by hand. **It has no migration
 1. **Read-only: compare production's schema with the baseline.** Run the read-only inventory (`scripts/sql/schema-inventory.sql`) in the **production** SQL Editor (it starts with `BEGIN READ ONLY`, so it cannot write), export the result to a file **outside the repository**, and give the assistant the path. The same inventory is produced from the local database with `pnpm db:inventory <file>`; the assistant then compares the two offline. Do not mark the baseline applied until the two agree or every difference is understood.
 2. **Review the differences** with the assistant. Objects only in production, objects only in the baseline and different function bodies or policies each have a separate decision (see "Comparison outcomes" below). Because the baseline has not been applied to any hosted project yet, it can still be amended before its first hosted run.
 3. **Manual export (no backup exists on the free plan):** see the export gate in `docs/auth.md`. Do this immediately before the first production run.
-4. **Repair the history** (separate approval; history rows only, no schema change). Run from `backend/` with a production connection string kept in an environment variable (percent-encoded, never typed into a shared place and never `--linked`):
+   - **Then correct the legacy league totals** (data only; run once, in the production SQL Editor, after the export and before approving the production database job): `scripts/sql/reconcile-league-points.sql`. Around 13 June 2026, World Cup group-stage points were added to `user_profiles.points` outside the application, and never removed. They are also counted in `wc_leaderboard`. `20261123000000` stops while any league total differs from the graded predictions.
+     - The script resets only accounts whose excess is explained by their group-stage points; it stops with nothing changed if any difference is not explained.
+     - It lists each correction (account id, old, new, excess); export that list.
+     - The production-shaped rehearsal (2026-11-19) corrected 84 accounts and 10,930 points; a second run corrects 0.
+   - **Then clear invalid jersey numbers:** `scripts/sql/clear-invalid-jersey-numbers.sql` (same timing). `20261124000000` allows 0–99 and one number per team. The March admin API accepted any number, and the registration form never checked duplicates.
+     - It clears to "not set" every number outside 0–99, and every number two people share on a team; you decided this on 2026-11-19. Each change is listed; export the list.
+     - The rehearsal cleared 10 out-of-range numbers (100–102, 600) and 6 duplicates (13, 15, 55 in two Freshers registrations).
+   - **Then convert legacy free-text play styles:** `scripts/sql/normalize-legacy-play-styles.sql` (same timing). `20261130000004` accepts catalog names only. Until 8 October 2026, play styles were typed as free text.
+     - It maps the unambiguous names to the catalog; the goalkeeper leftovers become Deflector and the rest Technical (your decision, 2026-11-19).
+     - It stops on any other name, and each change is listed.
+     - The rehearsal converted 16 players.
+   - **Back up first, and wait for it:** run Actions → "Database backup" on `main` (target `production`, a note naming the scripts) and wait for "Uploaded object verified: yes" before any of the scripts below (`docs/backups.md`). Production migrations take their own verified backup automatically before they can be approved.
+   - **Preview each script first:** run it with its `COMMIT` line changed to `ROLLBACK`. Nothing is written and the list is shown.
+     - Proceed only if the counts match the rehearsal (84 accounts and 10,930 points; 16 jersey numbers: 10 out of range and 6 shared; 16 play styles), or every difference is understood. Production data may have changed since the archive of 2026-11-07.
+     - Then run each script as is, and export its list: it is that script's rollback record.
+   - **Rehearsal result** (2026-11-19, production-shaped local clone, after these three scripts): every pending migration applied (`20261117000000`–`20261130000007`). The account-matching report showed 58 contact emails kept as match keys: 22 ready to link and 36 waiting for an account. The RPC verification passed all 20 checks.
+4. **Repair the history** (separate approval; history rows only, no schema change). The simplest way is `bash scripts/production-history-repair.sh`: it asks for the Session pooler connection string and the password with hidden input, fixes common problems (stray quotes, a password that needs percent-encoding, the `[YOUR-PASSWORD]` placeholder), verifies the target is the production project before changing anything, runs the two repairs below, and stops unless exactly the two new migrations remain pending. By hand, run from `backend/` with a production connection string kept in an environment variable (percent-encoded, never typed into a shared place and never `--linked`):
    ```bash
    # production has no row for the baseline: record it as already applied
    pnpm exec supabase migration repair --status applied 20261106000000 --db-url "$PRODUCTION_DB_URL"
@@ -136,3 +152,13 @@ After the migrations, the `staging` job runs, in order: `scripts/preview-seed.sh
 - **Production job fails:** each migration runs in a transaction, so a failing one changes nothing. Read the job log, fix forward with a new migration, and use `docs/rollback/` for the auth triggers if needed.
 - **Seed refuses to run:** the seed aborts if the database has more than 20 accounts outside its own fixtures. That is the safeguard against seeding real data; it should never trigger on staging.
 - **Rolling back:** database changes are forward-fix only, backed by your manual export. There is no automatic revert.
+
+## Player identity and season rosters (2026-11-18)
+
+- **What changes:** migrations `20261124000000_player_identity_rosters.sql` (expand) and `20261125000000_retire_team_bound_rosters.sql` (contract) turn players into reusable identities with season roster places and retire the Freshers member table. They also replace `captain_update_team_member` with `captain_update_roster_player`. The mapping is in `docs/decisions/SL-021-player-identity-mapping.md`.
+- **Before the `main` release:** run `scripts/sql/roster-mapping-dryrun.sql` on a **local restore** of production. It must list no blockers. Review each linked member's replaced values. The migration stops by itself on any blocker and changes nothing.
+- **Rehearsal (local only):** `pnpm db:rehearse-rosters --yes` rebuilds the local database from the pre-SL-021 schema, its seed and edge cases, applies both migrations and checks the result and the stop path, then resets normally.
+- **The anonymous probe** (`scripts/verify-rpc-closed.mjs`) now checks `captain_update_roster_player` and the two retired overloads:
+  - after these migrations it prints `roster player ... CLOSED`, and `RETIRED` for both old overloads;
+  - before them, the roster function does not exist yet, so it reports `INCONCLUSIVE`.
+- **The staging deploy's read-only check** `scripts/sql/verify-captain-rpc.sql` expects the new function and the old overloads gone.

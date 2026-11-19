@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { resolveScope } from '@/lib/scope';
+import { handleError } from '@/lib/errorHandler';
 
 export async function GET(request: Request) {
   try {
@@ -26,6 +28,9 @@ export async function GET(request: Request) {
       }
     );
 
+    // The selected division's season (?division=<slug>&season=<slug or id>; default its current season)
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+
     // Fetch upcoming/live matches from the matches table directly
     // (includes team IDs needed for player filtering)
     const { data, count, error } = await supabase
@@ -35,6 +40,7 @@ export async function GET(request: Request) {
         home_team:teams!matches_home_team_id_fkey ( id, name ),
         away_team:teams!matches_away_team_id_fkey ( id, name )
       `, { count: 'exact' })
+      .eq('season_id', scope.season.id)
       .in('status', ['upcoming', 'live', 'scheduled'])
       .order('date', { ascending: true })
       .range(from, to);
@@ -68,10 +74,6 @@ export async function GET(request: Request) {
     });
 
   } catch (error) {
-    console.error("Schedule fetch error:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to fetch schedule" },
-      { status: 500 }
-    );
+    return handleError(error, 'Schedule');
   }
 }

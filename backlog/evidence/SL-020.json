@@ -1,0 +1,76 @@
+{
+  "head": "947d0749ce7051a758a81c960f6abbab1825d128",
+  "tree": "a5bbdb338bd2f1652049bdbed2b4b05d3cde7b58",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-18T08:12:49.772Z",
+  "groups": [
+    {
+      "name": "database",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": ".",
+          "cmd": "bash scripts/local-db.sh test",
+          "exit": 0,
+          "ms": 3263
+        }
+      ]
+    },
+    {
+      "name": "divisions",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/divisions",
+          "exit": 0,
+          "ms": 9887
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageDivisions.local.test.jsx",
+          "exit": 0,
+          "ms": 3622
+        }
+      ]
+    },
+    {
+      "name": "tooling",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/tooling",
+          "exit": 0,
+          "ms": 9147
+        }
+      ]
+    },
+    {
+      "name": "frontend-components",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run --passWithNoTests",
+          "exit": 0,
+          "ms": 3642
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "database",
+    "divisions",
+    "tooling",
+    "frontend-components"
+  ],
+  "commandChecks": {},
+  "id": "SL-020",
+  "base": "025213fe58fdbdfabfa993ca100dbdb4464113fe"
+}

@@ -36,7 +36,9 @@ const RuleSection = ({ title, icon: Icon, items, colorClass }) => (
 );
 
 export function Rules() {
-  const { division } = useLeague();
+  const { division, seasonScope } = useLeague();
+  // A season's own rules (set by a dictator) replace the standing text below; the rules builder is SL-044.
+  const seasonRules = seasonScope.season?.rules_md?.trim() || '';
 
   // --- WOMEN'S LEAGUE RULES DATA ---
   const womensRules = [
@@ -129,7 +131,7 @@ export function Rules() {
     }
   ];
 
-  const isWomens = division === 'womens';
+  const isWomens = division === 'wsl';
   const activeRules = isWomens ? womensRules : mensRules;
   const themeColor = isWomens ? 'text-pink-400' : 'text-[#E8C881]';
   const gradientClass = isWomens ? 'from-pink-400 to-purple-500' : 'from-[#E8C881] to-yellow-600';
@@ -148,11 +150,19 @@ export function Rules() {
             : "The Super League is designed to improve the quality and intensity of the existing 9v9 tournament by creating a format for top players to compete on a regular basis. With the qualifiers officially concluded, the following regulations govern the League phase."
           }
         </p>
+        {seasonRules && (
+          <p className="text-xs font-black uppercase tracking-widest text-zinc-500">{seasonScope.season.name} season rules</p>
+        )}
       </div>
 
       {/* Rules Grid */}
       <div className="space-y-6">
-        {activeRules.map((section, idx) => (
+        {seasonRules && (
+          <div className="rounded-2xl border border-white/10 bg-white/[.03] p-6 sm:p-8 text-sm leading-relaxed text-zinc-300 whitespace-pre-line">
+            {seasonRules}
+          </div>
+        )}
+        {!seasonRules && activeRules.map((section, idx) => (
           <RuleSection 
             key={idx} 
             title={section.title} 

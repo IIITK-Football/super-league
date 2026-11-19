@@ -4,10 +4,11 @@ import { API_BASE_URL } from '../../lib/api';
 import { Calendar, Swords } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { WomensBracket, FreshersBracket } from '../../pages/Standings';
+import { DivisionSwitch } from './DivisionSwitch';
 const API_URL = API_BASE_URL;
 
 export default function ScheduleMatches() {
-  const [division, setDivision] = useState('mens');
+  const [division, setDivision] = useState('super-league');
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ home_team_id: '', away_team_id: '', date: '', venue: '', is_walkover: false, walkover_winner: '' });
 
@@ -60,11 +61,7 @@ export default function ScheduleMatches() {
       
       {/* LEAGUE TOGGLE */}
       <div className="flex justify-center mb-8">
-        <div className="bg-black/50 p-1 rounded-full border border-white/10 flex">
-          <button onClick={() => setDivision('mens')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'mens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Men's League</button>
-          <button onClick={() => setDivision('womens')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'womens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Women's League</button>
-          <button onClick={() => setDivision('freshers')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'freshers' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Freshers</button>
-        </div>
+        <DivisionSwitch value={division} onChange={setDivision} />
       </div>
 
       <div className="bg-white/5 border border-white/10 rounded-2xl p-8 max-w-2xl mx-auto">
@@ -148,7 +145,7 @@ export default function ScheduleMatches() {
       </div>
 
       {/* RENDER THE SCHEDULE MAP FOR BRACKET DIVISIONS */}
-      {(division === 'womens' || division === 'freshers') && (
+      {(division === 'wsl' || division === 'freshers') && (
         <div className="mt-16 pt-8 border-t border-white/10">
           <div className="text-center mb-8">
             <h3 className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2">Live Preview</h3>
@@ -156,7 +153,7 @@ export default function ScheduleMatches() {
           </div>
           
           <div className="opacity-90 scale-95 origin-top">
-            {division === 'womens' ? (
+            {division === 'wsl' ? (
               <WomensBracket matches={bracketMatches} title="Bracket Preview" buttonText="Current mapping of slots" />
             ) : (
               <FreshersBracket matches={bracketMatches} title="Bracket Preview" buttonText="Current mapping of slots" />

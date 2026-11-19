@@ -16,6 +16,8 @@ The rules below are **enforced by scripts, hooks and CI**, not by instructions. 
 | Pull request into `main` | The full strict rules and the whole test suite, plus the same hygiene, records and audit | CI `gate` (required by the GitHub ruleset on `main`, with no bypass); nightly and manual runs use the whole suite too |
 | Always | The safety boundaries (no hosted Supabase commands, no Docker removal, nothing touching the backup project, no reading `.env` files, no hook bypass, no GitHub settings changes, no merging into `main`) | The Claude Code guard (`.claude/settings.json`, `scripts/work/claude-guard.mjs`) |
 
+For an item that builds a capability a person uses or configures, done includes its minimally usable flow in the existing frontend, verified through the real UI, API and database path (rule R10); database or API support alone is not done.
+
 A finished item still needs, at phase completion: test groups that pass on a **clean tree** (evidence records the commit, tree and each command's exit code), each manual check **attested by the owner**, all ten cross-cutting rules marked `pass` or `n/a: <reason>`, and a complete walkthrough (`docs/walkthroughs/SL-xxx.md`: generated facts plus the author's Summary, Hosted actions, Assumptions and deviations, Risks and follow-ups, Rollback; no `TODO`, no stale evidence).
 
 ## Working on items
@@ -24,7 +26,7 @@ A finished item still needs, at phase completion: test groups that pass on a **c
 pnpm work status                     what is open
 pnpm work start SL-020               begin (order is checked; nothing else)
 # implement, commit and push directly on develop (no branch, no pull request)
-pnpm work attest SL-020 C5 "note"    OWNER: attest a manual check (a hosted step)
+pnpm work attest SL-020 C5 "note"    OWNER: attest a manual check (a hosted step); if the agent runs it, the owner confirms
 pnpm work phase 2 --base <ref>       complete the phase: all the rigid validation, once
 # fill in every TODO in the walkthroughs, commit, run `pnpm work phase 2 --base <ref>` again
 pnpm work done SL-020 --base <ref>   (one item only; `phase` does this for all of them)

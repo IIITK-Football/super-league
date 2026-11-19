@@ -18,12 +18,10 @@ export async function GET(request: Request) {
     // 2. PARALLEL QUERIES: Fire all counts at the exact same time!
     const [
       { count: totalPlayers },
-      { count: upcomingMatches },
-      { count: activePolls }
+      { count: upcomingMatches }
     ] = await Promise.all([
-      supabase.from('players').select('*', { count: 'exact', head: true }),
-      supabase.from('matches').select('*', { count: 'exact', head: true }).eq('status', 'scheduled'),
-      supabase.from('polls').select('*', { count: 'exact', head: true }).eq('is_active', true)
+      supabase.from('players').select('id', { count: 'exact', head: true }),
+      supabase.from('matches').select('*', { count: 'exact', head: true }).eq('status', 'scheduled')
     ]);
 
     // 3. RETURN THE DASHBOARD PAYLOAD
@@ -32,8 +30,7 @@ export async function GET(request: Request) {
       message: "Admin stats retrieved",
       data: {
         totalPlayers: totalPlayers || 0,
-        upcomingMatches: upcomingMatches || 0,
-        activePolls: activePolls || 0
+        upcomingMatches: upcomingMatches || 0
       }
     });
 

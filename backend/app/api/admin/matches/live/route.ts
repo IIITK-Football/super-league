@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
-      .in('role', ['admin', 'dictator', 'captain'])
+      .in('role', ['dictator', 'captain'])
       .limit(1)
       .single();
 
@@ -93,9 +93,7 @@ export async function POST(request: Request) {
           if (body.assist_id) {
             const currentAssists = match.assists || [];
             updatePayload.assists = [...currentAssists, body.assist_id];
-
-            const { data: assistPlayer } = await supabase.from('players').select('assists').eq('id', body.assist_id).single();
-            await supabase.from('players').update({ assists: (assistPlayer?.assists || 0) + 1 }).eq('id', body.assist_id);
+            // Assists are season statistics derived from the match (season_player_stats); nothing is counted on the player.
           }
           responseMessage = "Goal registered successfully!";
         }
@@ -188,10 +186,6 @@ export async function POST(request: Request) {
                 const newAssists = [...match.assists];
                 newAssists.splice(assistIndex, 1);
                 updatePayload.assists = newAssists;
-             }
-             const { data: aPlayer } = await supabase.from('players').select('assists').eq('id', goalToDelete.assist_id).single();
-             if (aPlayer) {
-                await supabase.from('players').update({ assists: Math.max(0, (aPlayer.assists || 0) - 1) }).eq('id', goalToDelete.assist_id);
              }
           }
         }

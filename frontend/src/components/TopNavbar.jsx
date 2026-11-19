@@ -20,7 +20,7 @@ export function TopNavbar() {
         { path: '/', label: 'Home' },
         { path: '/wc', id: 'fifa', label: 'Fantasy' }, 
         { path: '/matches', label: 'Matches' },
-        { path: `/standings/${division}`, label: division === 'womens' || division === 'freshers' ? 'Road to Final' : 'Standings' },
+        { path: `/standings/${division}`, label: division === 'wsl' || division === 'freshers' ? 'Road to Final' : 'Standings' },
         { path: '/teams', label: 'Clubs' },
         { path: '/leaderboard', label: 'Statistics' },
         { path: '/vault', label: 'Newsletter' },
@@ -48,7 +48,7 @@ export function TopNavbar() {
                             to="/"
                             className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity"
                         >
-                            {division === 'womens' ? (
+                            {division === 'wsl' ? (
                                 <>
                                     <img src="/slk-womens.png" alt="WSL" className="w-14 h-14 sm:w-20 sm:h-20 object-contain relative -ml-2" />
                                     <span className="text-lg sm:text-2xl font-black italic tracking-tighter text-white">

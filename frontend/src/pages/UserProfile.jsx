@@ -9,6 +9,8 @@ import { Send, User, LogOut, Trophy, Medal } from 'lucide-react';
 import teamStyles from './Teams.module.css';
 import { cn } from '../utils/cn';
 import { API_BASE_URL } from '../lib/api';
+import { useDivisions } from '../hooks/useDivisions';
+import MyPlayerCard from '../components/players/MyPlayerCard';
 
 const getTeamColorClass = (teamName) => {
     if (!teamName) return teamStyles.defaultTeam;
@@ -40,25 +42,36 @@ export function UserProfile() {
     const myRank = myEntry ? leaderboard.findIndex(e => e.user_id === user?.id) + 1 : null;
 
     const [nickname, setNickname] = useState(profile?.nickname || '');
-    const [mensFlair, setMensFlair] = useState(profile?.mens_team_flair || '');
-    const [womensFlair, setWomensFlair] = useState(profile?.womens_team_flair || '');
+    // The club the user supports in each division (division_flairs), keyed by division id.
+    const { divisions } = useDivisions();
+    const [flairs, setFlairs] = useState({});
+    const [savedFlairs, setSavedFlairs] = useState({});
     const [wcFlair, setWcFlair] = useState(profile?.wc_team_flair || ''); // NEW WC FLAIR STATE
 
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState(null);
 
-    const [mensTeams, setMensTeams] = useState([]);
-    const [womensTeams, setWomensTeams] = useState([]);
+    const [teamsByDivision, setTeamsByDivision] = useState({});
     const [wcTeams, setWcTeams] = useState([]); // NEW WC TEAMS LIST
 
     useEffect(() => {
         const fetchAllTeams = async () => {
-            // Fetch League Teams
-            const { data: leagueData } = await supabase.from('teams').select('*').order('name');
-            if (leagueData) {
-                setMensTeams(leagueData.filter(t => t.division === 'mens'));
-                setWomensTeams(leagueData.filter(t => t.division === 'womens'));
+            // The clubs of each division's current season
+            const { data: currentSeasons } = await supabase.from('seasons')
+                .select('division_id, team_entries(team:teams(id, name))').eq('is_current', true);
+            const byDivision = {};
+            for (const season of currentSeasons || []) {
+                byDivision[season.division_id] = (season.team_entries || []).map((e) => e.team).filter(Boolean)
+                    .sort((a, b) => a.name.localeCompare(b.name));
+            }
+            setTeamsByDivision(byDivision);
+
+            if (user) {
+                const { data: mine } = await supabase.from('division_flairs').select('division_id, team_name').eq('user_id', user.id);
+                const map = Object.fromEntries((mine || []).map((f) => [f.division_id, f.team_name]));
+                setFlairs(map);
+                setSavedFlairs(map);
             }
 
             // Fetch World Cup Teams (Assuming they are in 'wc_teams' table or similar from your API)
@@ -75,12 +88,12 @@ export function UserProfile() {
             }
         };
         fetchAllTeams();
-    }, []);
+    }, [user]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         // Require WC flair now too!
-        if (!nickname.trim() || !mensFlair || !womensFlair || !wcFlair) return;
+        if (!nickname.trim() || !wcFlair) return;
 
         setSaving(true);
         setError(null);
@@ -88,8 +101,6 @@ export function UserProfile() {
 
         const updatedProfile = {
             nickname: nickname.trim(),
-            mens_team_flair: mensFlair,
-            womens_team_flair: womensFlair,
             wc_team_flair: wcFlair, // SAVE WC FLAIR
         };
 
@@ -105,6 +116,22 @@ export function UserProfile() {
             return;
         }
 
+        // Division clubs: save the chosen ones, remove the cleared ones.
+        const chosen = Object.entries(flairs).filter(([, team]) => team);
+        const cleared = Object.keys(savedFlairs).filter((id) => !flairs[id]);
+        const { error: flairError } = chosen.length
+            ? await supabase.from('division_flairs').upsert(chosen.map(([division_id, team_name]) => ({ user_id: user.id, division_id, team_name })), { onConflict: 'user_id,division_id' })
+            : { error: null };
+        const { error: clearError } = cleared.length
+            ? await supabase.from('division_flairs').delete().eq('user_id', user.id).in('division_id', cleared)
+            : { error: null };
+        if (flairError || clearError) {
+            setError("Your profile was saved, but your clubs were not. Please try again.");
+            setSaving(false);
+            return;
+        }
+        setSavedFlairs(Object.fromEntries(chosen));
+
         setProfile({ ...profile, id: user.id, email: user.email, ...updatedProfile });
         setSaving(false);
         setSuccess(true);
@@ -114,8 +141,7 @@ export function UserProfile() {
 
     const hasChanges =
         nickname !== (profile?.nickname || '') ||
-        mensFlair !== (profile?.mens_team_flair || '') ||
-        womensFlair !== (profile?.womens_team_flair || '') ||
+        divisions.some((d) => (flairs[d.id] || '') !== (savedFlairs[d.id] || '')) ||
         wcFlair !== (profile?.wc_team_flair || ''); // CHECK FOR WC CHANGES
 
     if (!user) return null;
@@ -138,16 +164,11 @@ export function UserProfile() {
                     </div>
 
                     <div className="flex flex-wrap justify-center gap-2 mt-3">
-                        {profile?.mens_team_flair && (
-                            <span className={cn("px-3 py-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-custom border border-white/10", getTeamColorClass(profile.mens_team_flair))}>
-                                {profile.mens_team_flair}
+                        {divisions.filter((d) => savedFlairs[d.id]).map((d) => (
+                            <span key={d.id} title={d.name} className={cn("px-3 py-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-custom border border-white/10", getTeamColorClass(savedFlairs[d.id]))}>
+                                {savedFlairs[d.id]}
                             </span>
-                        )}
-                        {profile?.womens_team_flair && (
-                            <span className={cn("px-3 py-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-custom border border-white/10", getTeamColorClass(profile.womens_team_flair))}>
-                                {profile.womens_team_flair}
-                            </span>
-                        )}
+                        ))}
                         {/* Display WC Flair Badge */}
                         {profile?.wc_team_flair && (
                             <span className="px-3 py-1 rounded-full text-[10px] text-black bg-[var(--fifa-gold)] font-black leading-none tracking-wide shadow-custom border border-white/10 uppercase">
@@ -170,7 +191,7 @@ export function UserProfile() {
                                     <Medal size={14} className="text-zinc-400" />
                                     <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400">{myPoints.toLocaleString()}</span>
                                 </div>
-                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Fantasy Pts</p>
+                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Season Fantasy Pts</p>
                             </div>
                         </div>
                     )}
@@ -208,35 +229,22 @@ export function UserProfile() {
 
                     {/* Team Flair Grid - Now 3 Columns on large screens */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
-                                Men's Club
-                            </label>
-                            <select
-                                value={mensFlair}
-                                onChange={(e) => setMensFlair(e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none cursor-pointer"
-                                required
-                            >
-                                <option value="" disabled>Select Club...</option>
-                                {mensTeams.map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
-                                Women's Club
-                            </label>
-                            <select
-                                value={womensFlair}
-                                onChange={(e) => setWomensFlair(e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none cursor-pointer"
-                                required
-                            >
-                                <option value="" disabled>Select Club...</option>
-                                {womensTeams.map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
-                            </select>
-                        </div>
+                        {divisions.map((d) => (
+                            <div key={d.id}>
+                                <label htmlFor={`flair-${d.slug}`} className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
+                                    {d.name} Club
+                                </label>
+                                <select
+                                    id={`flair-${d.slug}`}
+                                    value={flairs[d.id] || ''}
+                                    onChange={(e) => setFlairs((current) => ({ ...current, [d.id]: e.target.value }))}
+                                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none cursor-pointer"
+                                >
+                                    <option value="">No club</option>
+                                    {(teamsByDivision[d.id] || []).map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
+                                </select>
+                            </div>
+                        ))}
 
                         {/* NEW WORLD CUP FLAIR DROPDOWN */}
                         <div>
@@ -257,7 +265,7 @@ export function UserProfile() {
 
                     <button
                         type="submit"
-                        disabled={saving || !nickname || !mensFlair || !womensFlair || !wcFlair || !hasChanges}
+                        disabled={saving || !nickname || !wcFlair || !hasChanges}
                         className="w-full group h-14 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
                     >
                         {saving ? "Saving..." : hasChanges ? "Save Changes" : "No Changes"}
@@ -280,6 +288,10 @@ export function UserProfile() {
                         <LogOut size={16} /> Log Out
                     </button>
                 </div>
+            </GlassPanel>
+
+            <GlassPanel className="p-8 sm:p-10 relative z-10 border border-white/10 bg-black/60 backdrop-blur-2xl">
+                <MyPlayerCard />
             </GlassPanel>
         </div>
     );

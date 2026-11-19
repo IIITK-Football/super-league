@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkStagedFiles, scanAddedLines, validateCommitMessage } from './lib.mjs';
+import { AI_NAME, checkStagedFiles, scanAddedLines, validateCommitMessage } from './lib.mjs';
 
 const ZERO = /^0+$/;
 
@@ -21,6 +21,9 @@ export function checkRange(base, head, { cwd = process.cwd() } = {}) {
     const short = sha.slice(0, 7);
     const parents = git(['rev-list', '--parents', '-n', '1', sha], cwd).trim().split(' ').length - 1;
     if (parents > 1) problems.push(`${short}: merge commit. Keep history linear: rebase instead of merging.`);
+    const [an, ae, cn, ce] = git(['log', '-1', '--format=%an%n%ae%n%cn%n%ce', sha], cwd).split('\n');
+    if (AI_NAME.test(`${an} ${ae}`)) problems.push(`${short}: AI author identity. Commits are authored by the owner only.`);
+    if (AI_NAME.test(`${cn} ${ce}`)) problems.push(`${short}: AI committer identity. Commits are committed by the owner only.`);
     const message = git(['log', '-1', '--format=%B', sha], cwd);
     const result = validateCommitMessage(message, { strict: true });
     for (const e of result.errors) problems.push(`${short}: ${e}`);

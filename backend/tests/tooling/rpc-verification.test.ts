@@ -1,6 +1,7 @@
-// Group: tooling. Tools that confirm the team member function is closed to anonymous callers on a given project.
-//  - scripts/verify-rpc-closed.mjs: calls the function with the PUBLIC (publishable) key and a random player id,
-//    so it cannot change any data even if the function were open.
+// Group: tooling. Tools that confirm the captain roster function is closed to anonymous callers on a given project,
+// and that the retired member-table function (both overloads) is closed or gone.
+//  - scripts/verify-rpc-closed.mjs: calls each function with the PUBLIC (publishable) key and a random id, so it
+//    cannot change any data even if a function were open.
 //  - scripts/sql/verify-captain-rpc.sql: read-only catalog checks, PASS/FAIL per row.
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -36,20 +37,24 @@ describe('classify', () => {
 });
 
 describe('probeAll', () => {
-  it('probes both overloads with a random id, never sends the key anywhere but the apikey header, and reports closed', async () => {
+  it('probes the roster function and both retired overloads with random ids, sending the key only as apikey', async () => {
     const calls: { url: string; init: any }[] = [];
     const fetchImpl = vi.fn(async (url: string, init: any) => {
       calls.push({ url, init });
       return res(401, { code: '42501', message: 'permission denied' });
     });
     const out = await probeAll('https://project.example.test', 'publishable-placeholder', fetchImpl as any);
-    expect(out.every((o: any) => o.verdict === 'closed')).toBe(true);
-    expect(out).toHaveLength(2);
+    expect(out.map((o: any) => o.verdict)).toEqual(['closed', 'closed', 'closed']);
+    expect(calls.map((c) => c.url)).toEqual([
+      'https://project.example.test/rest/v1/rpc/captain_update_roster_player',
+      'https://project.example.test/rest/v1/rpc/captain_update_team_member',
+      'https://project.example.test/rest/v1/rpc/captain_update_team_member',
+    ]);
+    expect(JSON.parse(calls[0].init.body).p_membership_id).toMatch(/^[0-9a-f-]{36}$/); // a random id that matches nothing
+    expect(JSON.parse(calls[1].init.body).p_member_id).toMatch(/^[0-9a-f-]{36}$/);
     for (const c of calls) {
-      expect(c.url).toBe('https://project.example.test/rest/v1/rpc/captain_update_team_member');
       expect(c.init.headers.apikey).toBe('publishable-placeholder');
       expect(Object.keys(c.init.headers).map((h) => h.toLowerCase())).not.toContain('authorization');
-      expect(JSON.parse(c.init.body).p_member_id).toMatch(/^[0-9a-f-]{36}$/); // a random id that matches no player
     }
     expect(JSON.stringify(out)).not.toContain('publishable-placeholder');
   });
@@ -58,20 +63,26 @@ describe('probeAll', () => {
     const out = await probeAll('https://p.example.test', 'k', (async () => res(204, '')) as any);
     expect(out.some((o: any) => o.verdict === 'open')).toBe(true);
   });
+
+  it('counts a retired overload that no longer exists as retired, but a missing roster function as inconclusive', async () => {
+    const out = await probeAll('https://p.example.test', 'k', (async () => res(404, { code: 'PGRST202' })) as any);
+    expect(out.map((o: any) => o.verdict)).toEqual(['inconclusive', 'retired', 'retired']);
+  });
 });
 
 describe('against the local stack (this project, 127.0.0.1:54321)', () => {
-  it('reports both overloads closed to anonymous callers', async () => {
+  it('reports the roster function closed and the retired overloads gone', async () => {
     const keys = localKeys();
     const out = await probeAll(keys.url, keys.publishable);
-    expect(out.map((o: any) => `${o.overload}:${o.verdict}`)).toEqual(['7-argument:closed', '5-argument:closed']);
-  });
+    expect(out.map((o: any) => `${o.overload}:${o.verdict}`)).toEqual(['roster player:closed', '7-argument (retired):retired', '5-argument (retired):retired']);
+  }, 20000); // three sequential requests to the local API; the default 5 s is tight under a full-suite run
 
-  it('the command prints one verdict per overload, never prints the key, and refuses to run without arguments', () => {
+  it('the command prints one verdict per function, never prints the key, and refuses to run without arguments', () => {
     const keys = localKeys();
     const r = spawnSync('node', [join(__dirname, '../../../scripts/verify-rpc-closed.mjs'), keys.url, keys.publishable], { encoding: 'utf8' });
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/7-argument.*CLOSED/);
+    expect(r.stdout).toMatch(/roster player.*CLOSED/);
+    expect(r.stdout).toMatch(/RESULT: CLOSED/);
     expect(r.stdout + r.stderr).not.toContain(keys.publishable);
     expect(spawnSync('node', [join(__dirname, '../../../scripts/verify-rpc-closed.mjs')], { encoding: 'utf8' }).status).not.toBe(0);
   });

@@ -45,7 +45,7 @@ export function AdminLogin() {
       setLoading(false);
     } else {
       // Success! Redirect to the dashboard
-      window.location.href = '/admin'; 
+      window.location.href = '/dictator';
     }
   };
 

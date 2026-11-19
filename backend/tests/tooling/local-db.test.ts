@@ -39,6 +39,8 @@ function backendDir(port = '54322', project = 'backend') {
   const b = join(dir, 'backend');
   mkdirSync(join(b, 'supabase'), { recursive: true });
   writeFileSync(join(b, 'supabase/config.toml'), `project_id = "${project}"\n[api]\nport = 54321\n[db]\nport = ${port}\nshadow_port = 54320\n`);
+  mkdirSync(join(b, 'supabase/migrations'), { recursive: true });
+  writeFileSync(join(b, 'supabase/migrations/20261123000000_example.sql'), '-- example\n');
   return b;
 }
 
@@ -108,6 +110,21 @@ describe('local-db.sh', () => {
     expect(r.status).toBe(0);
     expect(calls()).toContain('db reset --local');
     expect(calls()).not.toContain('--linked');
+  });
+
+  it('reset can stop at a migration without the seed, for migration rehearsals', () => {
+    const r = run(['reset', '--yes', '--version', '20261123000000', '--no-seed']);
+    expect(r.status).toBe(0);
+    expect(calls()).toContain('db reset --local --version 20261123000000 --no-seed');
+  });
+
+  it('reset refuses a malformed or unknown version, and still needs confirmation', () => {
+    expect(run(['reset', '--yes', '--version', 'latest']).status).not.toBe(0);
+    expect(run(['reset', '--yes', '--version', '20991231000000']).status).not.toBe(0);
+    expect(run(['reset', '--yes', '--version']).status).not.toBe(0);
+    const unconfirmed = run(['reset', '--version', '20261123000000', '--no-seed']);
+    expect(unconfirmed.status).not.toBe(0);
+    expect(calls()).not.toContain('db reset');
   });
 
   it('start works without Google credentials by passing placeholders to the CLI', () => {

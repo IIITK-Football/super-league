@@ -5,6 +5,13 @@ name: Database deploy
 # main    -> production project, GitHub environment "Database Production" (migrations only; never
 #            seeded; waits for a required reviewer)
 #
+# Backup gate (docs/backups.md): on main, the production-backup job (environment "Database Backup", no reviewer) first
+# dumps production, proves the dump restores, encrypts it, uploads it under automated-prod/pre-migration/ and reads it
+# back. The production job needs it, so if the backup or its verification fails, the production job is skipped: no
+# approval is requested and no migration starts. After approval, production's first database step confirms that same
+# object again (checksum, manifest, at most 6 hours old) and prints "Production migration permitted: yes" before it
+# links to the project. There is no input or variable that skips the backup.
+#
 # These two environments are dedicated to this workflow. The environments named "Preview" and
 # "Production" belong to the Vercel integration and are deliberately not used here.
 #
@@ -166,8 +173,51 @@ jobs:
           node scripts/verify-rpc-closed.mjs "https://${SUPABASE_PROJECT_REF}.supabase.co" "$PREVIEW_PUBLISHABLE_KEY" | tee probe.txt
           { echo '### Preview: public API probe'; echo '```'; cat probe.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-  production:
+  production-backup:
     needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: Database Backup
+    concurrency:
+      group: db-backup-production
+      cancel-in-progress: false
+    outputs:
+      key: ${{ steps.backup.outputs.key }}
+      sha256: ${{ steps.backup.outputs.sha256 }}
+      created-at: ${{ steps.backup.outputs.created-at }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (frozen lockfile; the Supabase CLI runs the restore test)
+        run: pnpm install --frozen-lockfile
+
+      - name: Back up production before any migration
+        id: backup
+        uses: ./.github/actions/database-backup
+        with:
+          target: production
+          reason: pre-migration
+          note: before production migrations at ${{ github.sha }}
+          db-url: ${{ secrets.PRODUCTION_BACKUP_DB_URL }}
+          expected-ref: ${{ vars.PRODUCTION_PROJECT_REF }}
+          production-ref: ${{ vars.PRODUCTION_PROJECT_REF }}
+          age-recipient: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          r2-bucket: ${{ secrets.R2_BUCKET }}
+          r2-endpoint: ${{ secrets.R2_ENDPOINT }}
+          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+  production:
+    needs: [verify, production-backup]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -202,6 +252,17 @@ jobs:
           set -euo pipefail
           [ -n "$PRODUCTION_PROJECT_REF" ] || { echo "The PRODUCTION_PROJECT_REF repository variable is not set; refusing to continue"; exit 1; }
           [ "$SUPABASE_PROJECT_REF" = "$PRODUCTION_PROJECT_REF" ] || { echo "The production environment's reference does not match PRODUCTION_PROJECT_REF; refusing to continue"; exit 1; }
+
+      - name: Confirm the pre-migration backup
+        env:
+          BACKUP_KEY: ${{ needs.production-backup.outputs.key }}
+          BACKUP_SHA256: ${{ needs.production-backup.outputs.sha256 }}
+          MAX_AGE_HOURS: '6'
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: bash scripts/backup/confirm-backup.sh
 
       - name: Link to the production project
         working-directory: backend

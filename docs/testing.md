@@ -9,10 +9,12 @@ Tests are organised by domain so a change runs only the groups it can affect. Th
 | `tooling` | platform | scripts, group runner, hooks, workflows | active |
 | `auth-identity` | backend | college email rule, password and Google same-user behavior, reset (local Auth) | active |
 | `frontend-components` | frontend | React components/pages (Vitest) | active (no tests yet beyond config) |
+| `rosters` | backend | player identity, season rosters, season statistics, dictator and captain roster flows (local Auth and Data API) | active |
+| `audit` | backend | append-only audit history: recording, dictator-only reads, no changes by any role, the dictator view (local Auth and Data API) | active |
 | `auth-roles` | backend | five-role API checks and RLS | pending (SL-024/025) |
 | `api-services` | backend | API services and contracts | pending (SL-026/030) |
-| `match-operations` | backend | scorer, events, cards, lineups, brackets | pending (SL-050..055) |
-| `fantasy` | backend | division and World Cup fantasy | pending (SL-043/055) |
+| `match-operations` | backend | scorer, events, cards, lineups, brackets | pending (SL-022/050/053/054) |
+| `fantasy` | backend | division and World Cup fantasy | pending (SL-022/043) |
 | `e2e` | frontend | Playwright flows; scheduled/release only | pending (SL-100) |
 
 A **pending** group has no tests yet. It is listed in every report, never failed, and the backlog item named in `tests/groups.json` must add its tests. Each acceptance item later adds tests to the relevant group.
@@ -56,7 +58,7 @@ There is no per-change opt-out. `tests/gate-exemptions.json` lists whole categor
 `pnpm install` installs the hooks (the root `prepare` script runs `scripts/install-hooks.sh --auto`; it never fails an install and never overrides a hooks path you configured yourself). They share their logic with CI (`scripts/hooks/lib.mjs`, `scripts/hooks/hygiene.mjs`), so a local result and the CI result cannot disagree.
 
 - **pre-commit:** blocks `.env` and key files and secret-looking additions. It takes well under a second and runs no tests.
-- **commit-msg:** Conventional Commits, 72 characters, no backlog references.
+- **commit-msg:** Conventional Commits, 72 characters, no backlog references, and no AI attribution (an assistant co-author trailer or a "generated with" line). CI hygiene also rejects a commit whose author or committer is an AI identity, so the history shows the owner as the only author.
 - **pre-push:** `develop` may be pushed directly; a direct push to `main` and deleting a remote branch are refused, and the outgoing commits must pass Git hygiene (conventional messages, no fixup/squash/WIP commits, no merge commits, no env or key files, no secrets). No tests run here.
 
 The strict rules and the test groups run at **phase completion** (`pnpm work phase N --base <ref>`) and in CI for pull requests into `main`, the nightly run and manual runs. A push to `develop` gets a light CI pass with only the cheap rules (every changed file mapped and covered by an active group).
