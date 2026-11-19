@@ -754,6 +754,20 @@ FROM (
 ) d
 WHERE s.id = d.season_id AND (s.starts_on IS DISTINCT FROM d.first_day OR s.ends_on IS DISTINCT FROM d.last_day);
 
+-- Seed accounts are written straight into auth.users, so give them what Auth itself writes: the default instance and
+-- empty (not NULL) token columns. Without these, the Auth API cannot load the account (it is missing from the admin
+-- listing and cannot be confirmed or updated). Repairs accounts seeded before this rule; re-running changes nothing.
+UPDATE auth.users
+SET instance_id = COALESCE(instance_id, '00000000-0000-0000-0000-000000000000'),
+    confirmation_token = COALESCE(confirmation_token, ''), recovery_token = COALESCE(recovery_token, ''),
+    email_change_token_new = COALESCE(email_change_token_new, ''), email_change = COALESCE(email_change, ''),
+    email_change_token_current = COALESCE(email_change_token_current, ''), phone_change = COALESCE(phone_change, ''),
+    phone_change_token = COALESCE(phone_change_token, ''), reauthentication_token = COALESCE(reauthentication_token, '')
+WHERE email ~ '^(lamb|river|diana|sydney|fan[0-9]{2})@iiitkottayam\.ac\.in$'
+  AND (instance_id IS NULL OR confirmation_token IS NULL OR recovery_token IS NULL OR email_change_token_new IS NULL
+       OR email_change IS NULL OR email_change_token_current IS NULL OR phone_change IS NULL OR phone_change_token IS NULL
+       OR reauthentication_token IS NULL);
+
 -- Account-linked players: one verified fan account (fan01) linked to one player, Jackson Lamb, who plays for two
 -- teams. Every other seed account stays unverified, so linking one shows the refusal. Re-running changes nothing.
 UPDATE auth.users SET email_confirmed_at = now()

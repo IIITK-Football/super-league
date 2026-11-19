@@ -52,5 +52,8 @@ FROM (
          NOT EXISTS (SELECT 1 FROM public.player_link_keys k JOIN public.players p ON p.id = k.player_id WHERE p.user_id IS NOT NULL)
   UNION ALL SELECT 20, 'the old player contact table is gone (Auth holds every player address)',
          to_regclass('public.player_private_details') IS NULL
+  UNION ALL SELECT 21, 'every account has the Auth instance and token columns Auth needs to load it',
+         NOT EXISTS (SELECT 1 FROM auth.users WHERE instance_id IS NULL OR confirmation_token IS NULL OR recovery_token IS NULL
+                     OR email_change_token_new IS NULL OR reauthentication_token IS NULL)
 ) c
 ORDER BY n;
