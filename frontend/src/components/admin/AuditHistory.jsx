@@ -18,7 +18,8 @@ export const AUDITED_TABLES = [
   { value: 'goals', label: 'Goals' },
   { value: 'players', label: 'Players' },
   { value: 'roster_memberships', label: 'Rosters' },
-  { value: 'player_private_details', label: 'Player contacts' },
+  { value: 'player_link_keys', label: 'Player account matching (no addresses shown)' },
+  { value: 'player_private_details', label: 'Player contacts (before accounts)' },
 ];
 export const PAGE_SIZE = 50;
 const tableLabel = (name) => AUDITED_TABLES.find((t) => t.value === name)?.label ?? name;
@@ -47,6 +48,7 @@ export const UNKNOWN_ACCOUNT = 'Unknown account';
 export function describeActor(entry, labels) {
   if (entry.actor_id) return labels[entry.actor_id] || UNKNOWN_ACCOUNT;
   if (entry.actor_role === 'service_role') return 'Server';
+  if (entry.actor_role === 'auto-link') return 'Automatic link (email verified)';
   return `System (${entry.actor_role})`;
 }
 

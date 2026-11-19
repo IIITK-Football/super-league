@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 // Group: rosters. The real dictator Teams & Rosters flow: the ManageRosters component, driven like a person would,
 // talks to a REAL Supabase Data API through a real supabase-js client signed in as a dictator, and every write is
-// checked in the database. It chooses division -> season -> team, adds a team to the season, creates, edits and
-// moves a player, adds a player from another season (one identity, two seasons) and removes a roster place. It
+// checked in the database. It chooses division -> season -> team, adds a team to the season, creates a player for a
+// chosen verified account (linked in the same step), edits and moves a player, adds a player from another season (one
+// identity, two seasons) and removes a roster place. It
 // also creates a new team in the season (create_team_in_season: team and season entry together) and deletes a
 // player who never played (delete_unplayed_player: player and roster place together). A normal user using the same
-// screen is refused (creating a player or a team) and nothing is written.
+// screen finds no account to create a player for, cannot create a team, and nothing is written.
 //
 // Targets (skipped unless one is chosen):
 //   SL_LOCAL_SUPABASE=1     this repository's local stack only (127.0.0.1:54321); run by the rosters test group
@@ -79,7 +80,16 @@ const must = (r) => {
   return r.data;
 };
 
-async function fixtures() {
+// A verified synthetic account for a new player (every player needs one).
+async function verifiedAccount(label) {
+  const email = `${tag}-ui-${label}@${DOMAIN}`;
+  const { data, error } = await admin.auth.admin.createUser({ email, password: randomBytes(16).toString('hex'), email_confirm: true });
+  if (error) throw error;
+  users.push(data.user.id);
+  return { id: data.user.id, email };
+}
+
+async function fixtures(dictatorClient) {
   made.division = must(await admin.from('divisions').insert({ slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
   for (const [key, slug, current] of [['now', '2026', true], ['old', '2025', false]]) {
     made.seasons[key] = must(await admin.from('seasons').insert({ division_id: made.division, slug, name: `${tag} ${slug}`, is_current: current, sort_order: current ? 2 : 1 }).select('id').single()).id;
@@ -88,9 +98,11 @@ async function fixtures() {
   for (const [team, season] of [['Alpha', 'now'], ['Beta', 'now'], ['Gamma', 'old']]) {
     made.entries[team] = must(await admin.from('team_entries').insert({ team_id: made.teams[team], season_id: made.seasons[season] }).select('id').single()).id;
   }
-  // A player who played last season for Gamma.
-  made.veteran = must(await admin.from('players').insert({ first_name: `${tag}Vera`, last_name: 'Veteran' }).select('id').single()).id;
-  must(await admin.from('roster_memberships').insert({ player_id: made.veteran, team_entry_id: made.entries.Gamma, season_id: made.seasons.old, jersey_number: 4 }).select('id'));
+  // A player (with an account) who played last season for Gamma.
+  const vera = await verifiedAccount('vera');
+  made.veteran = must(await dictatorClient.rpc('create_player_for_account', {
+    p_user: vera.id, p_team_entry_id: made.entries.Gamma, p_first_name: `${tag}Vera`, p_last_name: 'Veteran', p_jersey_number: 4,
+  }));
 }
 
 async function removeFixtures() {
@@ -110,6 +122,13 @@ const type = (label, value) => fireEvent.change(screen.getByLabelText(label), { 
 const statusText = async (re) => waitFor(() => expect(screen.getByRole('status').textContent).toMatch(re), { timeout: 15000 });
 const option = (name) => waitFor(() => expect(screen.getByRole('option', { name })).toBeTruthy(), { timeout: 15000 });
 
+// The new player's account comes first: searched by email and chosen in the form.
+async function chooseNewAccount(email) {
+  type('New player email search', email);
+  const list = await screen.findByRole('list', { name: 'New player matches' }, { timeout: 15000 });
+  fireEvent.click(within(list).getByRole('button', { name: `Choose ${email}` }));
+}
+
 async function openTeam(team) {
   await option(`SL Check ${tag}`);
   type('Division', made.division);
@@ -126,9 +145,9 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
   beforeAll(async () => {
     conn = connection();
     admin = createClient(conn.url, conn.secret, opts);
-    await fixtures();
     dictator = await signedInAs('dictator');
     normal = await signedInAs('default');
+    await fixtures(dictator.client);
   }, 90000);
 
   afterEach(() => {
@@ -156,20 +175,21 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     await statusText(/Gamma added to/);
     expect(must(await admin.from('team_entries').select('id').eq('team_id', made.teams.Gamma).eq('season_id', made.seasons.now))).toHaveLength(1);
 
-    // Create a player on Alpha's roster.
+    // Create a player on Alpha's roster for Ada's verified account.
+    const adaAccount = await verifiedAccount('ada');
     const form = screen.getByRole('form', { name: 'New player' });
+    await chooseNewAccount(adaAccount.email);
     type('New first name', `${tag}Ada`);
     type('New last name', 'Striker');
     type('New jersey', '9');
     type('New position', 'ST');
     type('New rating', '74');
-    type('New email', 'Ada.Striker@IIITKottayam.ac.in');
     fireEvent.click(within(form).getByRole('button', { name: /create player/i }));
-    await statusText(/Ada Striker added to/);
-    const ada = must(await admin.from('players').select('id, overall_rating, roster_memberships(id, team_entry_id, jersey_number, position), player_private_details(email)').eq('first_name', `${tag}Ada`).single());
+    await statusText(/Ada Striker added to .*linked to/);
+    const ada = must(await admin.from('players').select('id, overall_rating, user_id, roster_memberships(id, team_entry_id, jersey_number, position)').eq('first_name', `${tag}Ada`).single());
     expect(ada.overall_rating).toBe(74);
+    expect(ada.user_id).toBe(adaAccount.id);
     expect(ada.roster_memberships).toEqual([expect.objectContaining({ team_entry_id: made.entries.Alpha, jersey_number: 9, position: 'ST' })]);
-    expect(ada.player_private_details).toMatchObject({ email: 'ada.striker@iiitkottayam.ac.in' });
 
     // Edit the card and the roster place.
     await option(/9 · .*Ada Striker · ST/);
@@ -225,6 +245,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     // Give Delta a player who never plays, then delete them for good (delete_unplayed_player).
     type('Team', delta.team_entries[0].id);
     await screen.findByText(/no players on this roster yet/i, {}, { timeout: 15000 });
+    await chooseNewAccount((await verifiedAccount('temp')).email);
     type('New first name', `${tag}Temp`);
     type('New last name', 'Trialist');
     fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
@@ -244,9 +265,13 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     holder.client = normal.client;
     render(<ManageRosters />);
     await openTeam('Alpha');
-    type('New first name', `${tag}Refused`);
-    fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/only a dictator/i), { timeout: 15000 });
+    // No account is offered to a normal user, and the creator itself refuses them.
+    const spare = await verifiedAccount('refused');
+    type('New player email search', spare.email);
+    await screen.findByText(/No verified account matches/, {}, { timeout: 15000 });
+    expect(screen.queryByLabelText('New first name')).toBeNull();
+    const direct = await normal.client.rpc('create_player_for_account', { p_user: spare.id, p_team_entry_id: made.entries.Alpha, p_first_name: `${tag}Refused`, p_last_name: 'User' });
+    expect(direct.error?.code).toBe('42501');
     expect(must(await admin.from('players').select('id').eq('first_name', `${tag}Refused`))).toEqual([]);
 
     // Creating a team is refused as well, and no team is written.

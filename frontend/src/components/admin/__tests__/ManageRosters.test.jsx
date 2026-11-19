@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Group: frontend-components. The dictator's Teams & Rosters flow against an in-memory Data API fake: loading,
 // empty, success and error states; validation before any write; and the exact writes it sends (one reusable player
-// card, one roster place per season). The real UI -> Data API -> database path is ManageRosters.local.test.jsx.
+// card, one roster place per season). Every new player starts from a verified account (an account that already has a
+// player is offered as that player), only linked players join a roster, and a player's email is their account's. The real UI -> Data API -> database path is ManageRosters.local.test.jsx.
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,12 +18,18 @@ function seed() {
     roster_memberships: [{ id: 'm1', player_id: 'p1', team_entry_id: 'e1', season_id: 's1', jersey_number: 9, position: 'ST' }],
     players: [{ id: 'p1', first_name: 'Ada', last_name: 'Striker', image_url: null, overall_rating: 70, attributes: { pace: 80 } },
       { id: 'p2', first_name: 'Adam', last_name: 'Other', image_url: null, overall_rating: 60, attributes: {} }],
-    player_private_details: [{ player_id: 'p1', email: 'ada@iiitkottayam.ac.in' }],
   };
+  // Linked players and their account's Auth email (player_link_status); p2 is a legacy player without an account.
+  db.linked = { p1: 'ada@iiitkottayam.ac.in', p3: 'adam.three@iiitkottayam.ac.in' };
+  // Verified accounts (verified_accounts_for_linking).
+  db.accounts = [
+    { user_id: 'u-bea', email: 'bea@iiitkottayam.ac.in', linked_player_id: null, linked_player_name: null, linked_player_place: null, key_player_id: null },
+    { user_id: 'u-ada', email: 'ada@iiitkottayam.ac.in', linked_player_id: 'p1', linked_player_name: 'Ada Striker', linked_player_place: 'Alpha · 2026 (WSL)', key_player_id: null },
+    { user_id: 'u-wait', email: 'adam.two@iiitkottayam.ac.in', linked_player_id: null, key_player_id: 'p2', key_player_name: 'Adam Other', key_player_place: null },
+  ];
   db.tables.seasons.push({ id: 's0', division_id: 'd1', slug: '2025', name: '2025', is_current: false, sort_order: 0 });
   db.calls = [];
   db.fail = {};
-  db.linkedPlayer = null;
   db.slow = null;
   // What search_players returns: identities with their latest roster place and the season flag.
   db.searchPlayers = [
@@ -102,7 +109,17 @@ const rpc = vi.fn(async (name, args) => {
     db.tables.team_entries.push({ id: `e-${nextId++}`, team_id: team, season_id: args.p_season_id });
     return { data: team, error: null };
   }
-  if (name === 'player_link_status') return { data: args.p_player_ids.map((id) => ({ player_id: id, linked: id === db.linkedPlayer, account_label: id === db.linkedPlayer ? 'Ada (ada@iiitkottayam.ac.in)' : null })), error: null };
+  if (name === 'player_link_status') return { data: args.p_player_ids.map((id) => ({ player_id: id, linked: Boolean(db.linked[id]), email: db.linked[id] ?? null, has_key: false })), error: null };
+  if (name === 'verified_accounts_for_linking') return { data: db.accounts.filter((a) => a.email.includes(args.p_query.toLowerCase())), error: null };
+  if (name === 'account_link_matches') return { data: [], error: null };
+  if (name === 'link_player_account') { db.linked[args.p_player] = db.accounts.find((a) => a.user_id === args.p_user)?.email; return { data: null, error: null }; }
+  if (name === 'add_player_to_roster') {
+    if (!db.linked[args.p_player]) return { data: null, error: { code: '23514', message: 'This player is not linked to an account yet. Link them to a verified account before adding them to a roster.' } };
+    const entry = db.tables.team_entries.find((e) => e.id === args.p_team_entry_id);
+    const id = `m-${nextId++}`;
+    db.tables.roster_memberships.push({ id, player_id: args.p_player, team_entry_id: entry.id, season_id: entry.season_id, jersey_number: args.p_jersey_number ?? null, position: args.p_position ?? null });
+    return { data: id, error: null };
+  }
   if (name === 'search_players') {
     if (db.fail['rpc.search_players']) return { data: null, error: db.fail['rpc.search_players'] };
     const words = args.p_query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -112,10 +129,6 @@ const rpc = vi.fn(async (name, args) => {
     const place = db.tables.roster_memberships.find((m) => m.id === args.p_membership_id);
     Object.assign(db.tables.players.find((p) => p.id === place.player_id), { first_name: args.p_first_name, last_name: args.p_last_name, overall_rating: args.p_overall_rating, attributes: args.p_attributes });
     Object.assign(place, { jersey_number: args.p_jersey_number, position: args.p_position });
-    if (args.p_set_email) {
-      db.tables.player_private_details = db.tables.player_private_details.filter((d) => d.player_id !== place.player_id);
-      if (args.p_email) db.tables.player_private_details.push({ player_id: place.player_id, email: args.p_email });
-    }
     return { data: null, error: null };
   }
   if (name === 'delete_unplayed_player') {
@@ -123,11 +136,15 @@ const rpc = vi.fn(async (name, args) => {
     db.tables.players = db.tables.players.filter((p) => p.id !== args.p_player_id);
     return { data: null, error: null };
   }
-  const id = `p-${nextId++}`;
-  db.tables.players.push({ id, first_name: args.p_first_name, last_name: args.p_last_name, overall_rating: args.p_overall_rating, attributes: args.p_attributes });
-  const entry = db.tables.team_entries.find((e) => e.id === args.p_team_entry_id);
-  db.tables.roster_memberships.push({ id: `m-${nextId++}`, player_id: id, team_entry_id: entry.id, season_id: entry.season_id, jersey_number: args.p_jersey_number, position: args.p_position });
-  return { data: id, error: null };
+  if (name === 'create_player_for_account') {
+    const id = `p-${nextId++}`;
+    db.tables.players.push({ id, first_name: args.p_first_name, last_name: args.p_last_name, overall_rating: args.p_overall_rating, attributes: args.p_attributes });
+    db.linked[id] = db.accounts.find((a) => a.user_id === args.p_user)?.email;
+    const entry = db.tables.team_entries.find((e) => e.id === args.p_team_entry_id);
+    db.tables.roster_memberships.push({ id: `m-${nextId++}`, player_id: id, team_entry_id: entry.id, season_id: entry.season_id, jersey_number: args.p_jersey_number, position: args.p_position });
+    return { data: id, error: null };
+  }
+  return { data: null, error: { message: `unexpected call ${name}` } };
 });
 
 vi.mock('../../../lib/supabase', () => ({
@@ -139,9 +156,16 @@ import ManageRosters, { describeError, validatePlayer, blankPlayer } from '../Ma
 beforeEach(() => { seed(); rpc.mockClear(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-const READS = new Set(['search_players', 'player_link_status']);
+const READS = new Set(['search_players', 'player_link_status', 'verified_accounts_for_linking', 'account_link_matches']);
 const writes = () => db.calls.filter((c) => (c.rpc && !READS.has(c.rpc)) || ['insert', 'update', 'delete', 'upsert'].includes(c.op));
 const pick = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+
+// The new player's account comes first: search verified accounts by email and choose one.
+async function chooseNewAccount(text, action = 'Choose') {
+  pick('New player email search', text);
+  const list = await screen.findByRole('list', { name: 'New player matches' });
+  fireEvent.click(within(list).getByRole('button', { name: new RegExp(`^${action} `) }));
+}
 
 async function openTeam(team = 'e1') {
   render(<ManageRosters />);
@@ -158,13 +182,12 @@ describe('validation and messages', () => {
     expect(validatePlayer({ ...blankPlayer(), first_name: ' ' }).error).toMatch(/first name/);
     expect(validatePlayer({ ...blankPlayer(), first_name: 'A', jersey_number: '120' }).error).toMatch(/0 and 99/);
     expect(validatePlayer({ ...blankPlayer(), first_name: 'A', overall_rating: '0' }).error).toMatch(/1 and 99/);
-    expect(validatePlayer({ ...blankPlayer(), first_name: 'A', email: 'nope' }).error).toMatch(/valid email/);
     const badStat = blankPlayer(); badStat.first_name = 'A'; badStat.card.stats.Pace = '120';
     expect(validatePlayer(badStat).error).toMatch(/Pace must be a whole number between 1 and 99/);
-    const ok = { ...blankPlayer(), first_name: ' Ada ', last_name: 'S', jersey_number: '0', overall_rating: '80', email: 'A@X.IN', baseAttributes: { pace: 9, extra: 1 } };
+    const ok = { ...blankPlayer(), first_name: ' Ada ', last_name: 'S', jersey_number: '0', overall_rating: '80', baseAttributes: { pace: 9, extra: 1 } };
     ok.card = { ...ok.card, stats: { ...ok.card.stats, Pace: '9' } };
     expect(validatePlayer(ok).value)
-      .toEqual({ first_name: 'Ada', last_name: 'S', jersey_number: 0, position: null, overall_rating: 80, attributes: { extra: 1, stats: { Pace: { total: 9 } } }, email: 'a@x.in' });
+      .toEqual({ first_name: 'Ada', last_name: 'S', jersey_number: 0, position: null, overall_rating: 80, attributes: { extra: 1, stats: { Pace: { total: 9 } } } });
   });
 
   it('leaves the rating unset unless one is entered, and still refuses an out-of-range one', () => {
@@ -179,6 +202,7 @@ describe('validation and messages', () => {
     expect(describeError({ code: '23505', message: 'roster_memberships_entry_jersey_key' })).toMatch(/jersey number is already taken/);
     expect(describeError({ code: '23503', message: 'This player has goals or assists this season, so their place on the roster is kept' })).toMatch(/place on the roster is kept/);
     expect(describeError({ code: '23503', message: 'fk' })).toMatch(/kept/);
+    expect(describeError({ code: '23514', message: 'This player is not linked to an account yet.' })).toMatch(/Link them to a verified account/);
   });
 });
 
@@ -202,17 +226,17 @@ describe('choosing a division, season and team', () => {
     await waitFor(() => expect(screen.getByText(/no players on this roster yet/i)).toBeTruthy());
   });
 
-  it('marks a player linked to an account and shows the account in the player panel', async () => {
-    db.linkedPlayer = 'p1';
+  it('marks a player linked to an account and shows the account\'s email in the player panel', async () => {
     await openTeam();
     await waitFor(() => expect(screen.getByRole('option', { name: /9 · Ada Striker · ST · linked account/ })).toBeTruthy());
     expect(rpc).toHaveBeenCalledWith('player_link_status', { p_player_ids: expect.arrayContaining(['p1']) });
     pick('Player', 'm1');
     expect(within(screen.getByRole('group', { name: 'Player account' })).getByText(/Linked to/).textContent).toMatch(/ada@iiitkottayam/);
-    expect(screen.getByText('Import account links')).toBeTruthy();
+    expect(screen.getByText('Account matching')).toBeTruthy();
+    expect(screen.getByText('Link an account to a player')).toBeTruthy();
   });
 
-  it('lists the team\'s players in a dropdown and opens the chosen one with its card, roster place and private email', async () => {
+  it('lists the team\'s players in a dropdown and opens the chosen one with its card and roster place; the email is read-only', async () => {
     await openTeam();
     await waitFor(() => expect(screen.getByRole('option', { name: /9 · Ada Striker · ST/ })).toBeTruthy());
     expect(screen.queryByLabelText('Edit first name')).toBeNull();
@@ -224,7 +248,8 @@ describe('choosing a division, season and team', () => {
     expect(screen.getByLabelText('Edit Shooting').value).toBe('');
     expect(screen.getByLabelText('Edit preferred foot').value).toBe('');
     expect(screen.getByLabelText('Edit play style').value).toBe(''); // no play style: not set
-    expect(screen.getByLabelText('Edit email').value).toBe('ada@iiitkottayam.ac.in');
+    expect(screen.queryByLabelText('Edit email')).toBeNull(); // no email field: the email is the account's
+    expect(within(screen.getByRole('group', { name: 'Player account' })).getByText(/read-only/)).toBeTruthy();
   });
   it('shows the roster of the team chosen last, even when an earlier team answers later', async () => {
     db.slow = 'e1';
@@ -261,9 +286,11 @@ describe('teams in the season', () => {
 });
 
 describe('players', () => {
-  it('creates a player on the roster through create_rostered_player, after validating', async () => {
+  it('creates a player for a chosen verified account through create_player_for_account, after validating', async () => {
     await openTeam();
     const form = screen.getByRole('form', { name: 'New player' });
+    expect(screen.queryByLabelText('New first name')).toBeNull(); // the account comes first
+    await chooseNewAccount('bea');
     pick('New first name', 'Bea');
     pick('New rating', '150');
     fireEvent.click(within(form).getByRole('button', { name: /create player/i }));
@@ -273,45 +300,69 @@ describe('players', () => {
     pick('New last name', 'Keeper');
     pick('New jersey', '1');
     pick('New position', 'GK');
-    pick('New email', 'Bea@IIITKottayam.ac.in');
     fireEvent.click(within(form).getByRole('button', { name: /create player/i }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Bea Keeper added to Alpha/));
-    expect(rpc).toHaveBeenCalledWith('create_rostered_player', {
-      p_team_entry_id: 'e1', p_first_name: 'Bea', p_last_name: 'Keeper', p_jersey_number: 1, p_position: 'GK',
-      p_overall_rating: 64, p_attributes: {}, p_image_url: null, p_email: 'bea@iiitkottayam.ac.in',
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Bea Keeper added to Alpha, linked to bea@iiitkottayam.ac.in/));
+    expect(rpc).toHaveBeenCalledWith('create_player_for_account', {
+      p_user: 'u-bea', p_team_entry_id: 'e1', p_first_name: 'Bea', p_last_name: 'Keeper', p_jersey_number: 1, p_position: 'GK',
+      p_overall_rating: 64, p_attributes: {}, p_image_url: null,
     });
     await waitFor(() => expect(screen.getByRole('option', { name: /1 · Bea Keeper · GK/ })).toBeTruthy());
   });
 
   it('creates a player without a rating when none is entered (never 50)', async () => {
     await openTeam();
+    await chooseNewAccount('bea');
     pick('New first name', 'Una');
     fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Una added to Alpha/));
-    expect(rpc.mock.calls.find(([name]) => name === 'create_rostered_player')[1].p_overall_rating).toBeNull();
+    expect(rpc.mock.calls.find(([name]) => name === 'create_player_for_account')[1].p_overall_rating).toBeNull();
+  });
+
+  it('offers the existing player of an account that already has one, instead of a duplicate', async () => {
+    await openTeam('e2');
+    await chooseNewAccount('ada@', 'Use their player');
+    const offer = screen.getByRole('group', { name: 'Existing player for this account' });
+    expect(offer.textContent).toMatch(/already has a player: Ada Striker/);
+    expect(screen.queryByLabelText('New first name')).toBeNull();
+    fireEvent.click(within(offer).getByRole('button', { name: 'Add Ada Striker to Beta' }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada Striker added to Beta/));
+    expect(writes()).toEqual([{ rpc: 'add_player_to_roster', args: { p_player: 'p1', p_team_entry_id: 'e2' } }]);
+  });
+
+  it('links and adds a legacy player waiting for the account (same email)', async () => {
+    await openTeam();
+    await chooseNewAccount('adam.two', 'Use their player');
+    const offer = screen.getByRole('group', { name: 'Existing player for this account' });
+    expect(offer.textContent).toMatch(/Adam Other is waiting for this account/);
+    fireEvent.click(within(offer).getByRole('button', { name: 'Link Adam Other and add to Alpha' }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Adam Other is linked to adam.two@iiitkottayam.ac.in and added to Alpha/));
+    expect(writes()).toEqual([
+      { rpc: 'link_player_account', args: { p_player: 'p2', p_user: 'u-wait' } },
+      { rpc: 'add_player_to_roster', args: { p_player: 'p2', p_team_entry_id: 'e1' } },
+    ]);
   });
 
   it('reports a refusal from the database and keeps the form', async () => {
-    db.fail['rpc.create_rostered_player'] = { code: '42501', message: 'Only a dictator can create players' };
+    db.fail['rpc.create_player_for_account'] = { code: '42501', message: 'Only a dictator can create players' };
     await openTeam();
+    await chooseNewAccount('bea');
     pick('New first name', 'Bea');
     fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/only a dictator/i));
     expect(screen.getByLabelText('New first name').value).toBe('Bea');
   });
 
-  it('saves the card, the roster place and the private email; an empty email clears it', async () => {
+  it('saves the card and the roster place in one call, with no email', async () => {
     await openTeam();
     await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
     pick('Player', 'm1');
     pick('Edit last name', 'Finisher');
     pick('Edit jersey', '10');
-    pick('Edit email', '');
     fireEvent.click(screen.getByRole('button', { name: /save player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada saved/));
     expect(writes()).toEqual([{ rpc: 'update_rostered_player', args: {
       p_membership_id: 'm1', p_first_name: 'Ada', p_last_name: 'Finisher', p_overall_rating: 70, p_attributes: { stats: { Pace: { total: 80 } } },
-      p_jersey_number: 10, p_position: 'ST', p_set_email: true, p_email: null,
+      p_jersey_number: 10, p_position: 'ST',
     } }]);
   });
 
@@ -366,17 +417,6 @@ describe('players', () => {
     expect(writes().filter((w) => w.table)).toEqual([]); // never a separate roster delete
   });
 
-  it('leaves the private email alone when contact details could not be loaded', async () => {
-    db.fail['player_private_details.select'] = { message: 'permission denied' };
-    await openTeam();
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/saving will not change any email/));
-    pick('Player', 'm1');
-    pick('Edit last name', 'Finisher');
-    fireEvent.click(screen.getByRole('button', { name: /save player/i }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada saved/));
-    expect(writes()).toEqual([{ rpc: 'update_rostered_player', args: expect.objectContaining({ p_set_email: false }) }]);
-  });
-
   it('searches as you type by full name, telling same-name players apart by their latest roster place', async () => {
     await openTeam();
     await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
@@ -386,12 +426,14 @@ describe('players', () => {
     const list = await screen.findByRole('list', { name: 'Matching players' });
     expect(screen.getByText('2 players found')).toBeTruthy();
     const items = within(list).getAllByRole('listitem').map((li) => li.textContent);
-    expect(items[0]).toMatch(/Adam Other.*OVR 60.*Latest: Not on a roster yet/);
+    expect(items[0]).toMatch(/Adam Other.*OVR 60.*Latest: Not on a roster yet.*Not linked to an account: link first/);
     expect(items[1]).toMatch(/Adam Other.*OVR 65.*Latest: Gamma · 2025 \(WSL\) · #4/);
     expect(db.calls.find((c) => c.rpc === 'search_players').args).toMatchObject({ p_query: 'adam other', p_season_id: 's1' });
-    fireEvent.click(within(list).getAllByRole('button', { name: 'Add Adam Other to Alpha' })[1]);
+    // Only the linked one can be added.
+    expect(within(list).getAllByRole('button', { name: 'Add Adam Other to Alpha' })).toHaveLength(1);
+    fireEvent.click(within(list).getByRole('button', { name: 'Add Adam Other to Alpha' }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Adam Other added to Alpha/));
-    expect(writes()).toEqual([expect.objectContaining({ table: 'roster_memberships', op: 'insert', payload: { player_id: 'p3', team_entry_id: 'e1', season_id: 's1' } })]);
+    expect(writes()).toEqual([{ rpc: 'add_player_to_roster', args: { p_player: 'p3', p_team_entry_id: 'e1' } }]);
   });
 
   it('marks a player already in this season instead of offering to add them, and explains no matches', async () => {
@@ -443,6 +485,7 @@ describe('the FUT card in the player forms', () => {
 
   it('previews a new player while it is typed: name, rating, stats, foot and play style, with no invented values', async () => {
     await openTeam();
+    await chooseNewAccount('bea');
     expect(newCard().getAttribute('aria-label')).toBe('FUT card: Unnamed player');
     expect(within(newCard()).getByTestId('card-rating').textContent).toBe('—'); // no rating until one is entered
     expect(screen.getByLabelText('New rating').value).toBe('');
@@ -466,7 +509,7 @@ describe('the FUT card in the player forms', () => {
     pick('New play style', 'Tiki Taka');
     fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Bea Keeper added to Alpha/));
-    expect(rpc.mock.calls.find(([name]) => name === 'create_rostered_player')[1].p_attributes).toEqual({
+    expect(rpc.mock.calls.find(([name]) => name === 'create_player_for_account')[1].p_attributes).toEqual({
       stats: { Pace: { total: 71 } }, bio: { preferredFoot: 'Left' },
       playStyle: 'Tiki Taka',
     });
@@ -474,6 +517,7 @@ describe('the FUT card in the player forms', () => {
 
   it('shows a new player\'s picture before upload, then uploads it once the player exists', async () => {
     await openTeam();
+    await chooseNewAccount('bea');
     pick('New first name', 'Bea');
     fireEvent.change(screen.getByLabelText('New portrait file'), { target: { files: [png()] } });
     expect(within(newCard()).getByRole('img', { name: 'Bea portrait' }).getAttribute('src')).toBe('blob:local-1');
@@ -489,6 +533,7 @@ describe('the FUT card in the player forms', () => {
 
   it('keeps a new player when the picture fails, says so, and can retry the picture', async () => {
     await openTeam();
+    await chooseNewAccount('bea');
     pick('New first name', 'Bea');
     fireEvent.change(screen.getByLabelText('New portrait file'), { target: { files: [png()] } });
     respond(502, { message: 'storage is down' });

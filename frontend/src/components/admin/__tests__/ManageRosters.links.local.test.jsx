@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
-// Group: player-accounts. The dictator's account-link controls through the real Data API: a dictator finds a verified
-// synthetic account, links it to a synthetic player, unlinks it, and links it again through a clean import preview;
-// the database holds exactly that link each time. A captain using the same controls is refused and nothing changes.
+// Group: player-accounts. The dictator's account controls in Teams & Rosters through the real Data API: a dictator
+// chooses a verified synthetic account by email and links it, through Division -> Season -> Team -> Player, to a
+// player without an account (a seed player), then unlinks it in the player panel; the database holds exactly that link
+// each time and the player is restored. Locally (where legacy fixtures can be written as the seed writes them) the
+// dictator also links every ready match from the matching preview, and the seed's matches are restored afterwards. A
+// captain using the same controls sees no matches and no accounts, and nothing changes.
 //
 // Targets (skipped unless one is chosen):
 //   SL_LOCAL_SUPABASE=1     this repository's local stack only (127.0.0.1:54321); run by the player-accounts group
@@ -12,7 +15,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 // @ts-ignore plain ESM
 import { loadEnvText, verifyTarget } from '../../../../../scripts/staging-checks.mjs';
@@ -21,12 +24,14 @@ const ROOT = resolve(__dirname, '../../../../..');
 const TARGET = process.env.SL_UI_TARGET === 'staging' ? 'staging' : process.env.SL_LOCAL_SUPABASE === '1' ? 'local' : null;
 const DOMAIN = 'iiitkottayam.ac.in';
 const tag = `sl-check-${randomBytes(4).toString('hex')}`;
+const LOCAL_DB = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 
 const holder = vi.hoisted(() => ({ client: null }));
 vi.mock('../../../lib/supabase', () => ({ supabase: { from: (...a) => holder.client.from(...a), rpc: (...a) => holder.client.rpc(...a) } }));
 
 import PlayerAccountLink from '../PlayerAccountLink';
-import AccountLinkImport from '../AccountLinkImport';
+import AccountMatches from '../AccountMatches';
+import ManualLink from '../ManualLink';
 
 function connection() {
   if (TARGET === 'local') {
@@ -44,11 +49,11 @@ function connection() {
   return { url: env.SUPABASE_URL, publishable: env.SUPABASE_PUBLISHABLE_KEY, secret: env.SUPABASE_SECRET_KEY };
 }
 
+
 const opts = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
 let conn;
 let admin;
 const users = [];
-let divisionId = null;
 
 async function signedInAs(label, role) {
   const email = `${tag}-${label}@${DOMAIN}`;
@@ -65,80 +70,120 @@ async function signedInAs(label, role) {
   return { id: data.user.id, email, client };
 }
 
+// The LOCAL database only: legacy rows written as the seed writes them (no request JWT).
+function localSql(sql) {
+  if (TARGET !== 'local') throw new Error('local fixtures are written only to the local database');
+  const r = spawnSync('psql', [LOCAL_DB, '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', sql], { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(r.stderr);
+  return r.stdout.trim();
+}
 const linkOf = async (id) => {
   const { data, error } = await admin.from('players').select('user_id').eq('id', id).single();
   if (error) throw error;
   return data.user_id;
 };
+const typeSearch = async (label, text) => {
+  fireEvent.change(screen.getByLabelText(label), { target: { value: text } });
+  await act(async () => { await new Promise((r) => setTimeout(r, 300)); });
+};
 
 describe.skipIf(!TARGET)(`account links through the real Data API (${TARGET ?? 'skipped'})`, () => {
   let dictator;
   let captain;
-  let fan;
-  let playerId = null;
+  let target; // an unlinked seed player with a roster place: { player, entry, season, division, name }
+  let account;
 
   beforeAll(async () => {
     conn = connection();
     admin = createClient(conn.url, conn.secret, opts);
     dictator = await signedInAs('dictator', 'dictator');
     captain = await signedInAs('captain', 'captain');
-    fan = await signedInAs('fan', 'default');
-    const created = await admin.from('players').insert({ first_name: tag, last_name: 'Linkable' }).select('id').single();
-    if (created.error) throw created.error;
-    playerId = created.data.id;
-  }, 60000);
+    account = await signedInAs('person', 'default');
+    // A seed player without an account and without a waiting email, on a roster.
+    const { data: keys } = await admin.from('player_link_keys').select('player_id');
+    const waiting = new Set((keys ?? []).map((k) => k.player_id));
+    const { data: places, error } = await admin.from('roster_memberships')
+      .select('player_id, team_entry_id, season_id, season:seasons ( division_id ), player:players!inner ( first_name, last_name, user_id )')
+      .is('player.user_id', null).limit(50);
+    if (error) throw error;
+    const place = places.find((p) => !waiting.has(p.player_id));
+    if (!place) throw new Error('no unlinked seed player on a roster to link');
+    target = { player: place.player_id, entry: place.team_entry_id, season: place.season_id, division: place.season.division_id, name: `${place.player.first_name} ${place.player.last_name}` };
+  }, 90000);
 
   afterEach(cleanup);
 
   afterAll(async () => {
     if (!admin) return;
-    if (playerId) await admin.from('players').delete().eq('id', playerId);
+    // The seed player is left as it was: unlinked (unlinking keeps everything else).
+    if (target && (await linkOf(target.player))) await dictator.client.rpc('unlink_player_account', { p_player: target.player });
     for (const id of users) await admin.auth.admin.deleteUser(id);
   }, 60000);
 
-  const player = () => ({ id: playerId, first_name: tag, last_name: 'Linkable' });
-
-  it('a dictator links a verified account found by email, then unlinks it', async () => {
+  it('a dictator links a verified account to a player found through the rosters, then unlinks it', async () => {
     holder.client = dictator.client;
     const onChanged = vi.fn();
-    const { rerender } = render(<PlayerAccountLink player={player()} status={{ linked: false }} onChanged={onChanged} />);
-    fireEvent.change(screen.getByLabelText('Search accounts'), { target: { value: fan.email } });
-    const list = await screen.findByRole('list', { name: 'Matching accounts' }, { timeout: 10000 });
-    fireEvent.click(within(list).getByRole('button', { name: new RegExp(`Link .*${tag}-fan`) }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/is linked to/), { timeout: 10000 });
-    expect(await linkOf(playerId)).toBe(fan.id);
-    const status = await dictator.client.rpc('player_link_status', { p_player_ids: [playerId] });
-    rerender(<PlayerAccountLink player={player()} status={status.data[0]} onChanged={onChanged} />);
+    render(<ManualLink onChanged={onChanged} />);
+    await typeSearch('Manual email search', account.email);
+    const list = await screen.findByRole('list', { name: 'Manual matches' }, { timeout: 10000 });
+    fireEvent.click(within(list).getByRole('button', { name: `Choose ${account.email}` }));
+    const choose = async (label, value, optionCheck) => {
+      await waitFor(() => expect(within(screen.getByLabelText(label)).getAllByRole('option').some(optionCheck)).toBe(true), { timeout: 10000 });
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    };
+    await choose('Link division', target.division, (o) => o.value === target.division);
+    await choose('Link season', target.season, (o) => o.value === target.season);
+    await choose('Link team', target.entry, (o) => o.value === target.entry);
+    await choose('Link player', target.player, (o) => o.value === target.player);
+    fireEvent.click(screen.getByRole('button', { name: `Link ${target.name}` }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/is linked to .* in every season/), { timeout: 10000 });
+    expect(await linkOf(target.player)).toBe(account.id);
+    cleanup();
+
+    const status = (await dictator.client.rpc('player_link_status', { p_player_ids: [target.player] })).data[0];
+    expect(status).toMatchObject({ linked: true, email: account.email });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<PlayerAccountLink player={{ id: target.player, first_name: target.name, last_name: '' }} status={status} />);
     fireEvent.click(screen.getByRole('button', { name: /unlink/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/no longer linked/), { timeout: 10000 });
-    expect(await linkOf(playerId)).toBeNull();
-  }, 30000);
+    expect(await linkOf(target.player)).toBeNull();
+  }, 60000);
 
-  it('a dictator links through a clean import preview', async () => {
+  it.skipIf(TARGET !== 'local')('a dictator links every ready match from the preview (local fixtures; the seed is restored)', async () => {
     holder.client = dictator.client;
-    render(<AccountLinkImport />);
-    fireEvent.change(screen.getByLabelText('Account links file'), { target: { value: `player_id,email\n${playerId},${fan.email.toUpperCase()}` } });
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
-    await screen.findByRole('table', { name: 'Account links preview' }, { timeout: 10000 });
-    expect(screen.getByText('Will be linked')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/1 player linked/), { timeout: 10000 });
-    expect(await linkOf(playerId)).toBe(fan.id);
-  }, 30000);
+    const ready = await signedInAs('ready', 'default');
+    // A legacy player waiting for that account's email, added after the account exists (as in production).
+    const legacy = localSql(`WITH p AS (INSERT INTO public.players (first_name, last_name) VALUES ('${tag}', 'Waiting') RETURNING id)
+      , k AS (INSERT INTO public.player_link_keys (player_id, email) SELECT id, '${ready.email.toLowerCase()}' FROM p) SELECT id FROM p`);
+    const before = (await dictator.client.rpc('account_link_matches')).data.filter((m) => m.status === 'ready');
+    const seedKeys = before.filter((m) => m.player_id !== legacy).map((m) => ({ player: m.player_id, email: m.email }));
+    try {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      render(<AccountMatches />);
+      const button = await screen.findByRole('button', { name: new RegExp(`Link all ${before.length} ready match`) }, { timeout: 10000 });
+      expect(within(screen.getByRole('table', { name: 'Account matches' })).getByText(ready.email.toLowerCase())).toBeTruthy();
+      fireEvent.click(button);
+      await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(new RegExp(`${before.length} players? linked`)), { timeout: 10000 });
+      expect(await linkOf(legacy)).toBe(ready.id);
+    } finally {
+      // Restore the seed's ready matches for other local checks; remove the fixture.
+      for (const k of seedKeys) {
+        await dictator.client.rpc('unlink_player_account', { p_player: k.player });
+        localSql(`INSERT INTO public.player_link_keys (player_id, email) VALUES ('${k.player}', '${k.email}') ON CONFLICT DO NOTHING`);
+      }
+      localSql(`DELETE FROM public.players WHERE id = '${legacy}'`);
+    }
+  }, 60000);
 
-  it('a captain finds no accounts and cannot import; nothing changes', async () => {
+  it('a captain sees no matches and finds no accounts; nothing changes', async () => {
     holder.client = captain.client;
-    render(<PlayerAccountLink player={player()} status={{ linked: false }} />);
-    fireEvent.change(screen.getByLabelText('Search accounts'), { target: { value: fan.email } });
-    await waitFor(() => expect(screen.getByText(/No verified account matches/)).toBeTruthy(), { timeout: 10000 });
+    render(<AccountMatches />);
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/could not be loaded \(Only a dictator/), { timeout: 10000 });
     cleanup();
-    render(<AccountLinkImport />);
-    fireEvent.change(screen.getByLabelText('Account links file'), { target: { value: `player_id,email\n${playerId},` } });
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Only a dictator/), { timeout: 10000 });
-    const direct = await captain.client.rpc('unlink_player_account', { p_player: playerId });
-    expect(direct.error?.code).toBe('42501');
-    expect(await linkOf(playerId)).toBe(fan.id);
-  }, 30000);
+    render(<ManualLink />);
+    await typeSearch('Manual email search', account.email);
+    await waitFor(() => expect(screen.getByText(/No verified account matches/)).toBeTruthy(), { timeout: 10000 });
+    expect((await captain.client.rpc('link_player_account', { p_player: target.player, p_user: account.id })).error?.code).toBe('42501');
+    expect(await linkOf(target.player)).toBeNull();
+  }, 60000);
 });

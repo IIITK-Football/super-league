@@ -54,6 +54,8 @@ describe('your player card', () => {
     expect(within(card()).getByText('70')).toBeTruthy();
     expect(screen.queryByLabelText(/rating|first name|pace|play style/i)).toBeNull();
     expect(within(screen.getByRole('list', { name: 'Your seasons' })).getByText(/WSL · 2026 \(current\): Alpha · #9 · ST/)).toBeTruthy();
+    expect(card().textContent).toMatch(/Email: ada@iiitkottayam.ac.in \(your sign-in email; it cannot be changed here\)/);
+    expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.getByRole('button', { name: /save card/i }).disabled).toBe(true);
   });
 

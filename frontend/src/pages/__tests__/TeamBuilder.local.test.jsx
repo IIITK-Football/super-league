@@ -64,8 +64,8 @@ const must = (r) => {
   return r.data;
 };
 
-async function signedInAs(role) {
-  const email = `${tag}-tb-${role}@${DOMAIN}`;
+async function signedInAs(role, label = role) {
+  const email = `${tag}-tb-${label}@${DOMAIN}`;
   const { data, error } = await admin.auth.admin.createUser({ email, password: randomBytes(16).toString('hex'), email_confirm: true });
   if (error) throw error;
   users.push(data.user.id);
@@ -97,13 +97,20 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
       made.teams.push(team);
       made.entries.push(must(await admin.from('team_entries').insert({ team_id: team, season_id: season }).select('id').single()).id);
     }
+    // Players are created as the app creates them: each for a verified account, by a dictator.
+    const setup = await signedInAs('dictator', 'setup');
     for (const [i, name] of ['Ada', 'Zed'].entries()) {
-      const player = must(await admin.from('players').insert({ first_name: `${tag}${name}`, last_name: 'Player', overall_rating: 60 }).select('id').single()).id;
+      const account = await admin.auth.admin.createUser({ email: `${tag}-tb-player-${name.toLowerCase()}@${DOMAIN}`, password: randomBytes(16).toString('hex'), email_confirm: true });
+      if (account.error) throw account.error;
+      users.push(account.data.user.id);
+      const player = must(await setup.client.rpc('create_player_for_account', {
+        p_user: account.data.user.id, p_team_entry_id: made.entries[i], p_first_name: `${tag}${name}`, p_last_name: 'Player', p_overall_rating: 60, p_jersey_number: 7, p_position: 'CM',
+      }));
       made.players.push(player);
-      made.places.push(must(await admin.from('roster_memberships').insert({ player_id: player, team_entry_id: made.entries[i], season_id: i ? made.season2 : made.season, jersey_number: 7, position: 'CM' }).select('id').single()).id);
+      made.places.push(must(await admin.from('roster_memberships').select('id').eq('player_id', player).eq('team_entry_id', made.entries[i]).single()).id);
     }
     // Ada also plays for the other team: places[2].
-    made.places.push(must(await admin.from('roster_memberships').insert({ player_id: made.players[0], team_entry_id: made.entries[1], season_id: made.season2, jersey_number: 9, position: 'CM' }).select('id').single()).id);
+    made.places.push(must(await setup.client.rpc('add_player_to_roster', { p_player: made.players[0], p_team_entry_id: made.entries[1], p_jersey_number: 9, p_position: 'CM' })));
     captain = await signedInAs('captain');
     noRole = await signedInAs('default');
     made.regs.push(must(await admin.from('team_registrations').insert({ captain_id: captain.id, team_name: `${tag} Own`, season_id: made.season, team_id: made.teams[0] }).select('id').single()).id);

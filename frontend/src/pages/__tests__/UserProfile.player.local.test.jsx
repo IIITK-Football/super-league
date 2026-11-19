@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Group: player-accounts. "Your player card" through the real Data API: a dictator links a verified synthetic account to
-// a synthetic player; signed in as that player, the card shows the player and the change of preferred foot and the
+// Group: player-accounts. "Your player card" through the real Data API: a dictator creates a player for a verified
+// synthetic account; signed in as that player, the card shows the player and the change of preferred foot and the
 // portrait removal are saved through update_my_player, leaving the rating and stats untouched. An account with no
 // linked player sees how to get linked and has no form. (The portrait upload route is covered by the backend tests.)
 //
@@ -72,6 +72,7 @@ describe.skipIf(!TARGET)(`your player card through the real Data API (${TARGET ?
   let linked;
   let unlinked;
   let playerId = null;
+  const made = { division: null, season: null, team: null, entry: null };
 
   beforeAll(async () => {
     conn = connection();
@@ -79,21 +80,28 @@ describe.skipIf(!TARGET)(`your player card through the real Data API (${TARGET ?
     dictator = await signedInAs('dictator', 'dictator');
     linked = await signedInAs('player', 'default');
     unlinked = await signedInAs('nobody', 'captain');
-    const created = await admin.from('players').insert({
-      first_name: tag, last_name: 'Self', overall_rating: 71, image_url: 'https://media.example/old.png',
-      attributes: { stats: { Pace: { total: 82 } }, playStyle: 'Rapid', bio: { preferredFoot: 'Right' } },
-    }).select('id').single();
-    if (created.error) throw created.error;
-    playerId = created.data.id;
-    const link = await dictator.client.rpc('link_player_account', { p_player: playerId, p_user: linked.id });
-    if (link.error) throw link.error;
+    // The player is created as the app creates players: for the person's verified account, by a dictator.
+    const must = (r) => { if (r.error) throw r.error; return r.data; };
+    made.division = must(await admin.from('divisions').insert({ slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
+    made.season = must(await admin.from('seasons').insert({ division_id: made.division, slug: '2026', name: `${tag} 2026`, is_current: true }).select('id').single()).id;
+    made.team = must(await admin.from('teams').insert({ name: `${tag} Self FC` }).select('id').single()).id;
+    made.entry = must(await admin.from('team_entries').insert({ team_id: made.team, season_id: made.season }).select('id').single()).id;
+    playerId = must(await dictator.client.rpc('create_player_for_account', {
+      p_user: linked.id, p_team_entry_id: made.entry, p_first_name: tag, p_last_name: 'Self', p_overall_rating: 71,
+      p_image_url: 'https://media.example/old.png', p_attributes: { stats: { Pace: { total: 82 } }, playStyle: 'Rapid', bio: { preferredFoot: 'Right' } },
+    }));
   }, 60000);
 
   afterEach(cleanup);
 
   afterAll(async () => {
     if (!admin) return;
+    if (made.season) await admin.from('roster_memberships').delete().eq('season_id', made.season);
     if (playerId) await admin.from('players').delete().eq('id', playerId);
+    if (made.entry) await admin.from('team_entries').delete().eq('id', made.entry);
+    if (made.team) await admin.from('teams').delete().eq('id', made.team);
+    if (made.season) await admin.from('seasons').delete().eq('id', made.season);
+    if (made.division) await admin.from('divisions').delete().eq('id', made.division);
     for (const id of users) await admin.auth.admin.deleteUser(id);
   }, 60000);
 
@@ -102,6 +110,7 @@ describe.skipIf(!TARGET)(`your player card through the real Data API (${TARGET ?
     render(<MyPlayerCard />);
     const foot = await screen.findByLabelText('Preferred foot', {}, { timeout: 10000 });
     expect(foot.value).toBe('Right');
+    expect(screen.getByText(/Email:/).textContent).toContain(linked.email); // the account's email, read-only
     fireEvent.change(foot, { target: { value: 'Both' } });
     fireEvent.click(screen.getByRole('button', { name: 'Remove portrait' }));
     fireEvent.click(screen.getByRole('button', { name: /save card/i }));

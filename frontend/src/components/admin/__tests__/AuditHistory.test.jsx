@@ -65,6 +65,7 @@ describe('summaries', () => {
     expect(describeActor(entry({ actor_id: '6a1f0c2e-0000-4000-8000-000000000001' }), {})).toBe(UNKNOWN_ACCOUNT); // never a raw id
     expect(describeActor(entry({ actor_id: null, actor_role: 'service_role' }), {})).toBe('Server');
     expect(describeActor(entry({ actor_id: null, actor_role: 'postgres' }), {})).toBe('System (postgres)');
+    expect(describeActor(entry({ actor_id: null, actor_role: 'auto-link' }), {})).toBe('Automatic link (email verified)');
   });
 });
 

@@ -8,7 +8,9 @@ import { CARD_STATS, FEET, applyCardDraft, blankCardDraft, cardDraft } from '../
 import { PLAY_STYLES } from '../../data/playStyles';
 import { ghostButton, inputClass, labelClass, primaryButton } from './adminStyles';
 import PlayerAccountLink from './PlayerAccountLink';
-import AccountLinkImport from './AccountLinkImport';
+import AccountMatches from './AccountMatches';
+import ManualLink from './ManualLink';
+import AccountPicker from './AccountPicker';
 
 // Dictator flow for season teams and rosters: division -> season -> team entry, then that team's players.
 // A player is one reusable identity (the FUT card: name, portrait, rating, attributes); a roster place puts the
@@ -17,11 +19,10 @@ import AccountLinkImport from './AccountLinkImport';
 // player is on one team per season, and a roster place with goals or assists is kept); this screen reports it.
 
 export const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'CF', 'ST'];
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // card: the FUT card fields being edited; baseAttributes: the stored attributes, kept for every field the form does not
 // show.
-export const blankPlayer = () => ({ first_name: '', last_name: '', jersey_number: '', position: '', overall_rating: '', card: blankCardDraft(), baseAttributes: {}, email: '' });
+export const blankPlayer = () => ({ first_name: '', last_name: '', jersey_number: '', position: '', overall_rating: '', card: blankCardDraft(), baseAttributes: {} });
 
 // Returns an error message, or the cleaned values to write.
 export function validatePlayer(p) {
@@ -37,15 +38,15 @@ export function validatePlayer(p) {
   if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 99)) return { error: 'Overall rating must be between 1 and 99, or left empty.' };
   const attributes = applyCardDraft(p.baseAttributes, p.card || blankCardDraft());
   if (attributes.error) return { error: attributes.error };
-  const email = p.email.trim().toLowerCase();
-  if (email && !EMAIL.test(email)) return { error: 'Enter a valid email address, or leave it empty.' };
-  return { value: { first_name: first, last_name: last, jersey_number: jersey, position: p.position || null, overall_rating: rating, attributes: attributes.value, email: email || null } };
+  return { value: { first_name: first, last_name: last, jersey_number: jersey, position: p.position || null, overall_rating: rating, attributes: attributes.value } };
 }
 
 export function describeError(error) {
   if (!error) return '';
   const text = `${error.message || ''} ${error.details || ''}`;
   if (error.code === '42501') return 'Only a dictator can change players and rosters.';
+  if (error.code === '23514' && /not linked to an account/.test(text)) return 'This player is not linked to an account yet. Link them to a verified account before adding them to a roster.';
+  if (error.code === '23514' && /verified account/.test(text)) return 'Choose a verified account: the person must confirm their email first.';
   if (error.code === '23505' && /player_season/.test(text)) return 'This player is already on a team this season.';
   if (error.code === '23505' && /jersey/.test(text)) return 'That jersey number is already taken on this team.';
   if (error.code === '23505' && /team_season|team_entries/.test(text)) return 'This team is already in the season.';
@@ -65,7 +66,6 @@ function playerFields(value, onChange, idPrefix) {
     <label className={labelClass}>Jersey<input aria-label={`${idPrefix} jersey`} type="number" min="0" max="99" value={value.jersey_number ?? ''} onChange={field('jersey_number')} className={`${inputClass} mt-1`} /></label>
     <label className={labelClass}>Position<select aria-label={`${idPrefix} position`} value={value.position || ''} onChange={field('position')} className={`${inputClass} mt-1 normal-case tracking-normal`}><option value="">Not set</option>{[...new Set([...POSITIONS, value.position].filter(Boolean))].map((p) => <option key={p} value={p}>{p}</option>)}</select></label>
     <label className={labelClass}>Overall rating<input aria-label={`${idPrefix} rating`} type="number" min="1" max="99" placeholder="Not set" value={value.overall_rating} onChange={field('overall_rating')} className={`${inputClass} mt-1`} /></label>
-    <label className={labelClass}>Private email<input aria-label={`${idPrefix} email`} type="email" value={value.email} onChange={field('email')} placeholder="Dictators only" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
     {cardFields(value, onChange, idPrefix)}
   </div>;
 }
@@ -123,6 +123,8 @@ export default function ManageRosters() {
   const [selectedPlace, setSelectedPlace] = useState('');
   const [editing, setEditing] = useState(null);
   const [newPlayer, setNewPlayer] = useState(blankPlayer);
+  // The verified account a new player is created for (verified_accounts_for_linking row), chosen first.
+  const [newAccount, setNewAccount] = useState(null);
   const [teamToAdd, setTeamToAdd] = useState('');
   const [newTeamName, setNewTeamName] = useState('');
   const [search, setSearch] = useState('');
@@ -131,7 +133,6 @@ export default function ManageRosters() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [contactsLoaded, setContactsLoaded] = useState(false);
   // Account link of each player on the roster: { [playerId]: { linked, account_label } }, from player_link_status.
   const [links, setLinks] = useState({});
   const [linksError, setLinksError] = useState('');
@@ -142,7 +143,15 @@ export default function ManageRosters() {
   // player's latest roster place so players with the same name can be told apart, and whether they are already in
   // this season (a player has one place per season).
   const playerSearch = useLatestSearch(
-    (text) => supabase.rpc('search_players', { p_query: text, p_season_id: seasonId || null, p_limit: 20 }),
+    async (text) => {
+      const found = await supabase.rpc('search_players', { p_query: text, p_season_id: seasonId || null, p_limit: 20 });
+      if (found.error || !found.data?.length) return found;
+      // Only players linked to an account can join a roster: mark the others.
+      const { data: links, error: linkError } = await supabase.rpc('player_link_status', { p_player_ids: found.data.map((p) => p.player_id) });
+      if (linkError) return { data: null, error: linkError };
+      const linked = new Map((links || []).map((l) => [l.player_id, l.linked]));
+      return { data: found.data.map((p) => ({ ...p, linked: linked.get(p.player_id) === true })), error: null };
+    },
     search, { minLength: 2, deps: [seasonId] },
   );
   // The team whose roster was asked for last; an answer for any other team arrives late and is dropped.
@@ -206,23 +215,18 @@ export default function ManageRosters() {
     if (latestEntry.current !== eId) return;
     if (err) { setError(describeError(err)); isLoading('roster', false); return; }
     const ids = (places || []).map((p) => p.player_id);
-    const [{ data: players, error: playersError }, { data: privates, error: privatesError }, { data: linkRows, error: linkError }] = ids.length
+    const [{ data: players, error: playersError }, { data: linkRows, error: linkError }] = ids.length
       ? await Promise.all([
         supabase.from('players').select('id, first_name, last_name, image_url, overall_rating, attributes').in('id', ids),
-        supabase.from('player_private_details').select('player_id, email').in('player_id', ids),
         supabase.rpc('player_link_status', { p_player_ids: ids }),
       ])
-      : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
+      : [{ data: [], error: null }, { data: [], error: null }];
     if (latestEntry.current !== eId) return;
     if (playersError) setError(describeError(playersError));
-    // Without the contact details the form cannot show the email, so saving must leave it alone.
-    if (privatesError) setError(`Contact details could not be loaded (${describeError(privatesError)}); saving will not change any email.`);
-    setContactsLoaded(!privatesError);
     setLinksError(linkError ? describeError(linkError) : '');
     setLinks(Object.fromEntries((linkRows || []).map((l) => [l.player_id, l])));
     const byId = new Map((players || []).map((p) => [p.id, p]));
-    const emails = new Map((privates || []).map((p) => [p.player_id, p.email]));
-    setRoster((places || []).map((p) => ({ ...p, player: byId.get(p.player_id) || null, email: emails.get(p.player_id) || '' }))
+    setRoster((places || []).map((p) => ({ ...p, player: byId.get(p.player_id) || null }))
       .sort((a, b) => (a.jersey_number ?? 999) - (b.jersey_number ?? 999)));
     isLoading('roster', false);
   };
@@ -251,7 +255,7 @@ export default function ManageRosters() {
     const r = roster.find((x) => x.id === id);
     setEditing(r ? {
       first_name: r.player?.first_name || '', last_name: r.player?.last_name || '', jersey_number: r.jersey_number ?? '', position: r.position || '',
-      overall_rating: r.player?.overall_rating == null ? '' : String(r.player.overall_rating), card: cardDraft(r.player?.attributes), baseAttributes: r.player?.attributes || {}, email: r.email || '',
+      overall_rating: r.player?.overall_rating == null ? '' : String(r.player.overall_rating), card: cardDraft(r.player?.attributes), baseAttributes: r.player?.attributes || {},
     } : null);
   };
 
@@ -278,20 +282,24 @@ export default function ManageRosters() {
 
   // Players ----------------------------------------------------------------------------------------------------
 
+  // A new player starts from a verified account (every player has one). An account that already has a player, or that a
+  // legacy player is waiting for (the same email), is offered as that player instead of a duplicate.
   const createPlayer = async (event) => {
     event.preventDefault();
+    if (!newAccount) { fail('Choose the new player\'s verified account first.'); return; }
     const checked = validatePlayer(newPlayer);
     if (checked.error) { fail(checked.error); return; }
     const v = checked.value;
     const name = `${v.first_name} ${v.last_name}`.trim();
     setBusy('create-player');
-    const { data: playerId, error: err } = await supabase.rpc('create_rostered_player', {
-      p_team_entry_id: entryId, p_first_name: v.first_name, p_last_name: v.last_name, p_jersey_number: v.jersey_number,
-      p_position: v.position, p_overall_rating: v.overall_rating, p_attributes: v.attributes, p_image_url: null, p_email: v.email,
+    const { data: playerId, error: err } = await supabase.rpc('create_player_for_account', {
+      p_user: newAccount.user_id, p_team_entry_id: entryId, p_first_name: v.first_name, p_last_name: v.last_name, p_jersey_number: v.jersey_number,
+      p_position: v.position, p_overall_rating: v.overall_rating, p_attributes: v.attributes, p_image_url: null,
     });
     setBusy('');
-    if (!report(err, `${name} added to ${entry?.name}.`)) return;
+    if (!report(err, `${name} added to ${entry?.name}, linked to ${newAccount.email}.`)) return;
     setNewPlayer(blankPlayer());
+    setNewAccount(null);
     loadRoster(entryId);
     const pending = portraits.new;
     if (!pending?.file || !playerId) return;
@@ -301,17 +309,31 @@ export default function ManageRosters() {
     if (await uploadNewPortrait(ready)) { report(null, `${name} added to ${entry?.name} with their portrait.`); loadRoster(entryId); }
   };
 
+  // The account already has a player (or a legacy player waits for it): put that player on this team instead.
+  const addAccountPlayer = async (account) => {
+    const waiting = !account.linked_player_id && account.key_player_id;
+    const playerId = account.linked_player_id || account.key_player_id;
+    const name = account.linked_player_name || account.key_player_name;
+    setBusy('add-account-player');
+    if (waiting) {
+      const { error: linkError } = await supabase.rpc('link_player_account', { p_player: playerId, p_user: account.user_id });
+      if (linkError) { setBusy(''); report(linkError); return; }
+    }
+    const { error: err } = await supabase.rpc('add_player_to_roster', { p_player: playerId, p_team_entry_id: entryId });
+    setBusy('');
+    if (report(err, `${name} ${waiting ? `is linked to ${account.email} and ` : ''}added to ${entry?.name}.`)) { setNewAccount(null); loadRoster(entryId); }
+  };
+
   const savePlayer = async () => {
     const checked = validatePlayer(editing);
     if (checked.error) { fail(checked.error); return; }
     const v = checked.value;
     setBusy(`save-${place.id}`);
-    // One database call: the card, the roster place and the email are saved together or not at all. Without loaded
-    // contact details the form cannot show the email, so the email is left alone.
+    // One database call: the card and the roster place are saved together or not at all. The email is the linked
+    // account's and is not edited here.
     const { error: err } = await supabase.rpc('update_rostered_player', {
       p_membership_id: place.id, p_first_name: v.first_name, p_last_name: v.last_name, p_overall_rating: v.overall_rating,
       p_attributes: v.attributes, p_jersey_number: v.jersey_number, p_position: v.position,
-      p_set_email: contactsLoaded, p_email: v.email || null,
     });
     setBusy('');
     if (report(err, `${v.first_name} saved.`)) loadRoster(entryId);
@@ -410,10 +432,11 @@ export default function ManageRosters() {
 
   const addExistingPlayer = async (player) => {
     setBusy(`add-${player.player_id}`);
-    const { error: err } = await supabase.from('roster_memberships').insert({ player_id: player.player_id, team_entry_id: entryId, season_id: seasonId });
+    const { error: err } = await supabase.rpc('add_player_to_roster', { p_player: player.player_id, p_team_entry_id: entryId });
     setBusy('');
     if (report(err, `${player.first_name} ${player.last_name} added to ${entry?.name}.`)) { setSearch(''); loadRoster(entryId); }
   };
+
 
   // Render -----------------------------------------------------------------------------------------------------
 
@@ -529,6 +552,8 @@ export default function ManageRosters() {
               <span className="block text-xs text-zinc-500">Latest: {context}</span></span>
             {p.in_season
               ? <span className="text-xs text-zinc-500">Already in this season</span>
+              : !p.linked
+                ? <span className="text-xs text-amber-300">Not linked to an account: link first</span>
               : <button type="button" onClick={() => addExistingPlayer(p)} disabled={busy === `add-${p.player_id}`} aria-label={`Add ${name} to ${entry?.name}`} className={ghostButton}><Plus size={13} /> Add to {entry?.name}</button>}
           </li>;
         })}</ul>}
@@ -536,31 +561,48 @@ export default function ManageRosters() {
 
       <form noValidate onSubmit={createPlayer} aria-label="New player" className="space-y-3 rounded-xl border border-white/10 p-4">
         <p className="text-xs font-black uppercase tracking-wider text-zinc-400">New player on {entry?.name}</p>
+        {!newAccount
+          ? <AccountPicker label="1. The new player's verified account" idPrefix="New player" onPick={(acc) => { setNewAccount(acc); setError(''); setMessage(''); }}
+            pickLabel={(acc) => (acc.linked_player_id || acc.key_player_id ? 'Use their player' : 'Choose')} />
+          : <p className="flex flex-wrap items-center gap-2 text-sm text-white">Account: <span className="font-bold">{newAccount.email}</span>
+            <button type="button" onClick={() => setNewAccount(null)} className={ghostButton}>Change</button></p>}
+        {newAccount && (newAccount.linked_player_id || newAccount.key_player_id) && <div role="group" aria-label="Existing player for this account" className="space-y-2 rounded-lg border border-amber-400/30 p-3 text-sm">
+          <p className="text-zinc-200">{newAccount.linked_player_id
+            ? `This account already has a player: ${newAccount.linked_player_name}${newAccount.linked_player_place ? ` (${newAccount.linked_player_place})` : ''}. A person has one player in every season, so add that player instead of creating another.`
+            : `${newAccount.key_player_name}${newAccount.key_player_place ? ` (${newAccount.key_player_place})` : ''} is waiting for this account (the same email). Link that player and add them instead of creating another.`}</p>
+          <button type="button" onClick={() => addAccountPlayer(newAccount)} disabled={busy === 'add-account-player'} className={primaryButton}>
+            {busy === 'add-account-player' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            {newAccount.linked_player_id ? `Add ${newAccount.linked_player_name} to ${entry?.name}` : `Link ${newAccount.key_player_name} and add to ${entry?.name}`}
+          </button>
+        </div>}
+        {newAccount && !newAccount.linked_player_id && !newAccount.key_player_id && <>
         <div className="flex flex-wrap items-start gap-3">
-          <FutCard details player={previewPlayer(newPlayer, null)} portrait={portraits.new?.status === 'local' ? portraits.new : undefined} />
-          <div className="space-y-2">
-            {seasonPlace(newPlayer, entry?.name)}
-            <label className={ghostButton}><ImagePlus size={13} /> {portraits.new?.status === 'local' ? 'Change picture' : 'Choose portrait (500 × 500 PNG)'}
-              <input type="file" accept="image/png" className="sr-only" aria-label="New portrait file" onChange={(e) => {
-                const file = e.target.files?.[0]; e.target.value = '';
-                if (file) setPortrait('new', { file, url: URL.createObjectURL(file), status: 'local' });
-              }} />
-            </label>
-            {portraits.new?.status === 'local' && <button type="button" onClick={() => setPortrait('new', null)} className={ghostButton}>Remove picture</button>}
-            <p className="text-[10px] text-zinc-500">The picture uploads when the player is created.</p>
+            <FutCard details player={previewPlayer(newPlayer, null)} portrait={portraits.new?.status === 'local' ? portraits.new : undefined} />
+            <div className="space-y-2">
+              {seasonPlace(newPlayer, entry?.name)}
+              <label className={ghostButton}><ImagePlus size={13} /> {portraits.new?.status === 'local' ? 'Change picture' : 'Choose portrait (500 × 500 PNG)'}
+                <input type="file" accept="image/png" className="sr-only" aria-label="New portrait file" onChange={(e) => {
+                  const file = e.target.files?.[0]; e.target.value = '';
+                  if (file) setPortrait('new', { file, url: URL.createObjectURL(file), status: 'local' });
+                }} />
+              </label>
+              {portraits.new?.status === 'local' && <button type="button" onClick={() => setPortrait('new', null)} className={ghostButton}>Remove picture</button>}
+              <p className="text-[10px] text-zinc-500">The picture uploads when the player is created.</p>
+            </div>
           </div>
-        </div>
+          {playerFields(newPlayer, setNewPlayer, 'New')}
+          <button type="submit" disabled={busy === 'create-player'} className={primaryButton}>{busy === 'create-player' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Create player</button>
+        </>}
         {portraits.new?.status === 'failed' && <div role="group" aria-label="New player portrait" className="flex flex-wrap items-center gap-2 rounded-lg border border-red-500/20 p-2 text-xs text-red-300">
           The portrait for {portraits.new.name} is not saved.
           {portraits.new.membershipId && <button type="button" onClick={() => uploadNewPortrait(portraits.new).then((ok) => ok && (report(null, `Portrait saved for ${portraits.new.name}.`), loadRoster(entryId)))} disabled={busy === 'new-portrait'} className={ghostButton}>Retry portrait upload</button>}
           <button type="button" onClick={() => setPortrait('new', null)} className={ghostButton}>Discard picture</button>
         </div>}
-        {playerFields(newPlayer, setNewPlayer, 'New')}
-        <button type="submit" disabled={busy === 'create-player'} className={primaryButton}>{busy === 'create-player' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Create player</button>
       </form>
     </section>}
 
-    <AccountLinkImport onApplied={() => entryId && loadRoster(entryId)} />
+    <AccountMatches onChanged={() => entryId && loadRoster(entryId)} />
+    <ManualLink onChanged={() => entryId && loadRoster(entryId)} />
 
     {!divisionId && !loading.divisions && divisions.length > 0 && <p className="text-zinc-500">Choose a division to see its seasons and teams.</p>}
     <p className="text-[10px] text-zinc-600">Players who have scored or assisted in a season keep their place on that season&apos;s roster, and a player who has played is never deleted.</p>

@@ -92,6 +92,7 @@ export default function MyPlayerCard() {
   return <section aria-label="Your player card" className="space-y-4">
     <h2 className="text-xl font-black uppercase tracking-tight text-white">Your player card</h2>
     <p className="text-xs text-zinc-500">You can change your portrait and preferred foot. Your name, rating, stats and play style are set by your captain or a dictator.</p>
+    {player.email && <p className="text-sm text-zinc-300">Email: <span className="font-bold text-white">{player.email}</span> <span className="text-xs text-zinc-500">(your sign-in email; it cannot be changed here)</span></p>}
     <div className="flex flex-wrap items-start gap-4">
       <FutCard details player={preview} portrait={portrait || undefined} />
       <div className="space-y-3">
