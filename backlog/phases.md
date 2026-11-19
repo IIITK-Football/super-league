@@ -30,12 +30,13 @@ These slices run on the current Next API, so that Phase 3 ports each final model
 
 ### Phase 3 — Workers backend migration and the complete storage system
 
-1. Worker runtime and Supabase access (SL-030), then the gateway (SL-031).
-2. All R2 work after the Worker runtime: inventory (SL-070), storage abstraction (SL-071), Wrangler local emulation (SL-072).
-3. The parity port (SL-032).
-4. Bucket reorganization, custom domain and configuration (SL-073), rolled out local → staging → production one bucket at a time, each production cutover owner-approved and verified before its old path is retired.
-5. Credential rotation (SL-074).
-6. Retirement of the Next backend (SL-034).
+1. Measure and reduce warm latency on the existing Vercel Preview backend and assess the minimum sufficient Worker topology (SL-029).
+2. Establish the Worker runtime and Supabase access (SL-030), then the gateway (SL-031).
+3. All R2 work after the Worker runtime: inventory (SL-070), storage abstraction (SL-071), Wrangler local emulation (SL-072).
+4. The parity port (SL-032).
+5. Bucket reorganization, custom domain and configuration (SL-073), rolled out local → staging → production one bucket at a time, each production cutover owner-approved and verified before its old path is retired.
+6. Credential rotation (SL-074).
+7. Retirement of the Next backend (SL-034).
 
 **Dependency:** do not create a Wrangler R2 implementation against the still-running Next/Vercel backend. Phases 4–6 consume the finished storage system and never redo its migration.
 

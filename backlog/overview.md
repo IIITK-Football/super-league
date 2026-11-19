@@ -62,7 +62,7 @@ This is the code-based starting point observed during repository review on 15 No
 | 0 | Scope, data safety, product/domain decisions | All schema and service rewrites |
 | 1 | Local-first setup, fixture validation, test/CI foundation | Migration implementation and reliable feature work |
 | 2 | Canonical domain slices, each end to end: divisions/seasons, player identity and rosters, audit history, account linking, scoped roles, match events and statistics, then the security audit and API contracts | Workers migration (which ports each final model once) |
-| 3 | Hono/Cloudflare Workers runtime, gateway and parity port, plus the complete R2 storage system (inventory, abstraction, Wrangler local emulation, bucket and domain migration, credential rotation) | All later feature work, which uses the Worker API and the finished storage |
+| 3 | Measure and reduce warm latency on the existing Vercel Preview backend and assess the minimum sufficient Worker topology (SL-029), then migrate to Hono/Cloudflare Workers and complete the R2 storage system (inventory, abstraction, Wrangler local emulation, bucket and domain migration, credential rotation) | All later feature work, which uses the Worker API and the finished storage |
 | 4 | Division/season product capabilities: configuration and navigation, fantasy (World Cup decoupled), rules, registration, exports, sign-in allowlists | Match operations and home configuration |
 | 5 | Match operations: phone/offline scorer workspace, lineups, formats and brackets | Sharing and external integrations |
 | 6 | Configurable home content, sharing, and external data integrations | Contributor documentation and the redesign |
@@ -73,6 +73,6 @@ This is the code-based starting point observed during repository review on 15 No
 
 **Feature-slice rule (2026-11-18):** each unfinished item is an end-to-end slice. It delivers its migration with data-preservation guards, its API, a minimal usable frontend for the people who need it (rule R10) and local plus staging verification, and it retires the path it replaces once every caller is ported. Folded items are listed in `superseded.json`.
 
-**Hard ordering constraint:** Wrangler R2 emulation and the storage redesign run in Phase 3 only after the Worker runtime (SL-030) exists. **Frontend constraint:** do not begin the product redesign or the division UI consolidation until Phases 0–8 are complete. A capability a person uses or configures ships a minimal, working flow in the existing frontend in its own phase, following current patterns (rule R10); Phase 9 consolidates, redesigns and refines those flows rather than creating them.
+**Hard ordering constraint:** Phase 3 first measures and reduces current-backend warm latency (SL-029); the Workers migration (SL-030) cannot start until that work is complete. Wrangler R2 emulation and the storage redesign follow the Worker runtime. **Frontend constraint:** do not begin the product redesign or the division UI consolidation until Phases 0–8 are complete. A capability a person uses or configures ships a minimal, working flow in the existing frontend in its own phase, following current patterns (rule R10); Phase 9 consolidates, redesigns and refines those flows rather than creating them.
 
 ## 3. Phased backlog
