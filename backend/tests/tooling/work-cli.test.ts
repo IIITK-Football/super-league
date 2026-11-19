@@ -189,16 +189,42 @@ describe('check', () => {
     commit('feat: more');
     const base2 = git('rev-parse', 'HEAD');
     item('SL-102', { status: 'done' });
-    item('SL-101', { status: 'in-progress' });
+    item('SL-103', { status: 'in-progress' });
     commit('feat: skip everything');
     out = [];
     err = [];
     expect(cli('check', '--base', base1)).toBe(1);
-    expect(said()).toMatch(/SL-101: new item cannot start as in-progress/);
+    expect(said()).toMatch(/SL-103: new item cannot start as in-progress/);
     out = [];
     err = [];
     expect(cli('check', '--base', base2)).toBe(1);
     expect(said()).toMatch(/SL-102: status cannot change from not-started to done/);
+  });
+
+  it('judges a pull request spanning several commits by each committed step, not only its two ends', () => {
+    git('init', '-q', '-b', 'develop');
+    item('SL-100', { status: 'not-started', legacy: true });
+    item('SL-101', { status: 'not-started', legacy: true });
+    commit('feat: backlog');
+    const base = git('rev-parse', 'HEAD');
+    item('SL-100', { status: 'in-progress', legacy: true });
+    item('SL-102', { status: 'not-started', legacy: true });
+    commit('feat: start');
+    item('SL-102', { status: 'in-progress', legacy: true });
+    commit('feat: start the new item');
+    item('SL-100', { status: 'done', legacy: true });
+    item('SL-102', { status: 'done', legacy: true });
+    item('SL-101', { status: 'done', legacy: true });
+    commit('feat: finish');
+    out = [];
+    err = [];
+    expect(cli('check', '--base', base)).toBe(1);
+    const text = said();
+    // SL-100 and SL-102 went not-started -> in-progress -> done in separate commits: allowed.
+    expect(text).not.toMatch(/SL-100: status cannot change/);
+    expect(text).not.toMatch(/SL-102: new item cannot start/);
+    // SL-101 skipped in-progress in a single commit: refused, as before.
+    expect(text).toMatch(/SL-101: status cannot change from not-started to done/);
   });
 
   it('rejects a change to ready that has no approval, and a done item without its walkthrough and evidence', () => {

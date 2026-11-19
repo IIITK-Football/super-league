@@ -46,6 +46,35 @@ function gitShow(root, ref, path) {
   return r.status === 0 ? r.stdout : null;
 }
 
+// The statuses an item file had at each commit after `base` that changed it, oldest first. A pull request carries many
+// commits, so an item may move not-started -> in-progress -> done across them: each step is judged, not only the ends.
+function statusPath(root, base, itemId) {
+  const rel = `backlog/items/${itemId}.md`;
+  const path = [];
+  for (const commit of gitLines(root, ['log', '--reverse', '--format=%H', `${base}..HEAD`, '--', rel])) {
+    const text = gitShow(root, commit, rel);
+    if (text === null) continue;
+    try {
+      path.push(parseItem(text).meta.status);
+    } catch {
+      // an unreadable intermediate version is skipped; its neighbours are still judged
+    }
+  }
+  return path;
+}
+
+// Problems with the sequence of statuses an item went through (consecutive repeats ignored); [] when every step is allowed.
+function pathProblems(from, steps, bootstrap) {
+  let prev = from;
+  for (const status of steps) {
+    if (status === prev) continue;
+    const p = transitionProblems(prev, status, { bootstrap });
+    if (p.length) return p;
+    prev = status;
+  }
+  return [];
+}
+
 function gitLines(root, args) {
   const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   return r.status === 0 ? r.stdout.split('\n').filter(Boolean) : [];
@@ -397,7 +426,12 @@ export function run(argv, { root = ROOT, out = console.log, err = console.error,
           }
         }
         const to = item.meta.status;
-        const tp = transitionProblems(from, to, { bootstrap: !hadBacklog });
+        let tp = transitionProblems(from, to, { bootstrap: !hadBacklog });
+        // Across several commits (a pull request), the change is allowed when every committed step is.
+        if (tp.length) {
+          const steps = [...statusPath(root, base, itemId), to];
+          if (steps.length > 1 && pathProblems(from, steps, !hadBacklog).length === 0) tp = [];
+        }
         problems.push(...tp.map((p) => `${itemId}: ${p}`));
         if (tp.length || from === to) continue;
         if (to === 'ready' && item.meta.legacy !== true) problems.push(...readyProblems(item, bl, { root }));
