@@ -162,3 +162,14 @@ After the migrations, the `staging` job runs, in order: `scripts/preview-seed.sh
   - after these migrations it prints `roster player ... CLOSED`, and `RETIRED` for both old overloads;
   - before them, the roster function does not exist yet, so it reports `INCONCLUSIVE`.
 - **The staging deploy's read-only check** `scripts/sql/verify-captain-rpc.sql` expects the new function and the old overloads gone.
+
+## Production release 2026-11-19
+
+The first release of the canonical schema to production, in the order performed:
+
+1. Pull request #183 (`develop` into `main`). GitHub refused "Rebase and merge" for this 159-commit pull request although a local rebase replayed cleanly with an identical tree, and "require linear history" then blocked a merge commit; the owner disabled that rule and merged with a merge commit. For a large release, use a merge commit (or a squash, after which `develop` should be realigned with `main`).
+2. A manual production backup, verified: `automated-prod/manual/20261119T201728Z-44606579026-1.dump.age` (Database backup run `44606579026`). It showed production already had a migration history (4 versions, latest `20261118000000`), so `scripts/production-history-repair.sh` was not needed.
+3. The three pre-production data scripts, each first as a dry run (the whole script, ending in a deliberate error so nothing is kept), then for real, in the production SQL Editor: `reconcile-league-points.sql`, `clear-invalid-jersey-numbers.sql`, `normalize-legacy-play-styles.sql`. The owner keeps the result CSVs (the rollback record). They are not run again.
+4. Database deploy run `44610257088` (dispatch on `main`, `dry_run: false`): pre-migration backup `automated-prod/pre-migration/20261119T203759Z-44610257088-1.dump.age` (restore test passed), confirmed 3 minutes old at approval, then all 19 pending migrations applied through `20261130000007_drop_contact_emails`. The automatic run for the merge push (`44605660405`) was cancelled because its backup predated the data scripts.
+
+Still the owner's: check the live site against the new schema, and attest SL-080 C4.
