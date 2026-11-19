@@ -61,24 +61,27 @@ describe('recording', () => {
     ]);
   });
 
-  it('records a role change and a roster change, keeping private contact data out', async () => {
+  it('records a role change and an account-first player, keeping email addresses out', async () => {
     expect((await as.dictator.db.from('user_roles').update({ role: 'captain' }).eq('user_id', as.default.id).select('user_id')).data).toHaveLength(1);
     const { data: roleRows } = await history('user_roles', as.default.id);
     expect(roleRows!.at(-1)).toMatchObject({ actor_id: as.dictator.id, action: 'update', changes: { role: { from: 'default', to: 'captain' } } });
     await admin.from('user_roles').update({ role: 'default' }).eq('user_id', as.default.id);
 
     const entry = (await admin.from('team_entries').select('id').limit(1).single()).data!;
-    const { data: created, error } = await as.dictator.db.rpc('create_rostered_player', {
-      p_team_entry_id: entry.id, p_first_name: `${tag}Ada`, p_last_name: 'Audit', p_jersey_number: 98, p_email: 'ada.audit@iiitkottayam.ac.in',
+    const email = uniqueEmail('audit-ada');
+    const account = (await admin.auth.admin.createUser({ email, email_confirm: true })).data.user!;
+    users.push(account.id);
+    const { data: created, error } = await as.dictator.db.rpc('create_player_for_account', {
+      p_user: account.id, p_team_entry_id: entry.id, p_first_name: `${tag}Ada`, p_last_name: 'Audit', p_jersey_number: 98,
     });
     expect(error).toBeNull();
     player = created as string;
-    const { data: contact } = await history('player_private_details', player);
-    expect(contact![0]).toMatchObject({ actor_id: as.dictator.id, action: 'insert', changes: { email: '[redacted]' } });
+    const { data: card } = await history('players', player);
+    expect(card![0]).toMatchObject({ actor_id: as.dictator.id, action: 'insert', changes: expect.objectContaining({ user_id: account.id }) });
     const { data: place } = await admin.from('audit_log').select('actor_id').eq('table_name', 'roster_memberships').contains('changes', { player_id: player });
     expect(place).toEqual([{ actor_id: as.dictator.id }]);
-    const { data: everything } = await admin.from('audit_log').select('changes').in('table_name', ['players', 'roster_memberships', 'player_private_details']).order('id', { ascending: false }).limit(50);
-    expect(JSON.stringify(everything)).not.toContain('ada.audit@');
+    const { data: everything } = await admin.from('audit_log').select('changes').in('table_name', ['players', 'roster_memberships', 'player_link_keys']).order('id', { ascending: false }).limit(50);
+    expect(JSON.stringify(everything)).not.toContain(email);
   });
 });
 

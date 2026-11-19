@@ -1,11 +1,12 @@
 // Group: rosters. Dictator player and roster management through the real local Data API, as the Teams & Rosters
-// dashboard sends it: each account is signed in with its own token, so row level security, create_rostered_player
+// dashboard sends it: each account is signed in with its own token, so row level security, create_player_for_account
 // and the history triggers decide. Allowed for a dictator; refused for a captain, editor, normal user
 // and anon, with nothing written. Also the captain portrait upload route and the registration route. Runs against
 // THIS repository's local Supabase stack (127.0.0.1:54321).
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys, uniqueEmail } from '../auth/local-supabase';
+import { insertLocal } from '../local-fixtures';
 
 vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
@@ -47,8 +48,17 @@ async function route(path: string, who: string | null, body: FormData | object) 
   return { status: res.status, body: await res.json() };
 }
 
-const create = (who: string, entry: string, first: string, extra: Record<string, unknown> = {}) =>
-  as[who].db.rpc('create_rostered_player', { p_team_entry_id: entry, p_first_name: first, p_last_name: 'Test', ...extra });
+// A fresh verified account for each new player (every new player needs one).
+async function verifiedAccount(label: string) {
+  const { data, error } = await admin.auth.admin.createUser({ email: uniqueEmail(`roster-${label}`), email_confirm: true });
+  if (error) throw error;
+  users.push(data.user.id);
+  return { id: data.user.id, email: data.user.email! };
+}
+const create = async (who: string, entry: string, first: string, extra: Record<string, unknown> = {}) => {
+  const account = await verifiedAccount(first.toLowerCase().slice(-12));
+  return as[who].db.rpc('create_player_for_account', { p_user: account.id, p_team_entry_id: entry, p_first_name: first, p_last_name: 'Test', ...extra });
+};
 
 beforeAll(async () => {
   const keys = localKeys();
@@ -70,11 +80,12 @@ beforeAll(async () => {
     { team_id: made.teams[0], season_id: made.seasons[1] },
   ]).select('id')).data!.map((e) => e.id);
   // A fixed player on each team of season A, used by the refusal and portrait tests.
-  const fixed = must(await admin.from('players').insert([{ first_name: `${tag}FixedOne`, last_name: 'Keeper' }, { first_name: `${tag}FixedTwo`, last_name: 'Keeper' }]).select('id')).data!;
-  must(await admin.from('roster_memberships').insert([
+  // Legacy players without an account (the API no longer creates these; written as the seed writes them).
+  const fixed = insertLocal<{ id: string }>('players', [{ first_name: `${tag}FixedOne`, last_name: 'Keeper' }, { first_name: `${tag}FixedTwo`, last_name: 'Keeper' }]);
+  insertLocal('roster_memberships', [
     { player_id: fixed[0].id, team_entry_id: made.entries[0], season_id: made.seasons[0], jersey_number: 1 },
     { player_id: fixed[1].id, team_entry_id: made.entries[1], season_id: made.seasons[0], jersey_number: 1 },
-  ]));
+  ]);
   // The captain holds team One's registration for season A only.
   made.regs = must(await admin.from('team_registrations').insert({ captain_id: as.captain.id, team_name: `${tag} One`, season_id: made.seasons[0], team_id: made.teams[0] }).select('id')).data!.map((r) => r.id);
 }, 90000);
@@ -97,29 +108,34 @@ describe('a dictator manages players and season rosters', () => {
   let player = '';
   let place = '';
 
-  it('creates a player on a season roster in one step, with a private email', async () => {
-    const { data, error } = await create('dictator', made.entries[0], `${tag}Ada`, {
-      p_last_name: 'Striker', p_jersey_number: 9, p_position: 'ST', p_overall_rating: 72, p_attributes: { stats: { Pace: { total: 80 } } }, p_email: 'Ada.Striker@IIITKottayam.ac.in',
+  let adaEmail = '';
+  it('creates a player for a verified account on a season roster in one step; the email is the account\'s', async () => {
+    const account = await verifiedAccount('ada');
+    adaEmail = account.email;
+    const { data, error } = await as.dictator.db.rpc('create_player_for_account', {
+      p_user: account.id, p_team_entry_id: made.entries[0], p_first_name: `${tag}Ada`,
+      p_last_name: 'Striker', p_jersey_number: 9, p_position: 'ST', p_overall_rating: 72, p_attributes: { stats: { Pace: { total: 80 } } },
     });
     expect(error).toBeNull();
     player = data as string;
-    const row = (await admin.from('players').select('first_name, overall_rating, attributes, roster_memberships(id, team_entry_id, jersey_number, position), player_private_details(email)').eq('id', player).single()).data as any;
-    expect(row).toMatchObject({ first_name: `${tag}Ada`, overall_rating: 72, attributes: { stats: { Pace: { total: 80 } } } });
+    const row = (await admin.from('players').select('first_name, overall_rating, attributes, user_id, roster_memberships(id, team_entry_id, jersey_number, position)').eq('id', player).single()).data as any;
+    expect(row).toMatchObject({ first_name: `${tag}Ada`, overall_rating: 72, attributes: { stats: { Pace: { total: 80 } } }, user_id: account.id });
     expect(row.roster_memberships).toEqual([expect.objectContaining({ team_entry_id: made.entries[0], jersey_number: 9, position: 'ST' })]);
-    expect(row.player_private_details).toMatchObject({ email: 'ada.striker@iiitkottayam.ac.in' });
+    const status = (await as.dictator.db.rpc('player_link_status', { p_player_ids: [player] })).data;
+    expect(status).toEqual([expect.objectContaining({ linked: true, email: account.email })]);
     place = row.roster_memberships[0].id;
   });
 
   it('refuses a jersey already taken on the team, and a second team in the same season', async () => {
     const clash = await create('dictator', made.entries[0], `${tag}Ben`, { p_jersey_number: 9 });
     expect(clash.error?.code).toBe('23505');
-    const twice = await as.dictator.db.from('roster_memberships').insert({ player_id: player, team_entry_id: made.entries[1], season_id: made.seasons[0] });
+    const twice = await as.dictator.db.rpc('add_player_to_roster', { p_player: player, p_team_entry_id: made.entries[1] });
     expect(twice.error?.code).toBe('23505');
     expect((await admin.from('players').select('id').eq('first_name', `${tag}Ben`)).data).toEqual([]);
   });
 
   it('adds the same player to another season\'s roster: one identity, two seasons', async () => {
-    const res = await as.dictator.db.from('roster_memberships').insert({ player_id: player, team_entry_id: made.entries[2], season_id: made.seasons[1], jersey_number: 10, position: 'CF' });
+    const res = await as.dictator.db.rpc('add_player_to_roster', { p_player: player, p_team_entry_id: made.entries[2], p_jersey_number: 10, p_position: 'CF' });
     expect(res.error).toBeNull();
     expect((await admin.from('roster_memberships').select('id', { count: 'exact', head: true }).eq('player_id', player)).count).toBe(2);
     expect((await admin.from('players').select('id', { count: 'exact', head: true }).eq('first_name', `${tag}Ada`)).count).toBe(1);
@@ -132,12 +148,19 @@ describe('a dictator manages players and season rosters', () => {
     expect(across.error?.code).toBe('23503');
   });
 
-  it('edits the card and private email, and clears the email', async () => {
+  it('edits the card; there is no separate contact email to set', async () => {
     expect((await as.dictator.db.from('players').update({ last_name: 'Finisher', overall_rating: 80 }).eq('id', player).select('id')).data).toHaveLength(1);
-    expect((await as.dictator.db.from('player_private_details').upsert({ player_id: player, email: 'ada@iiitkottayam.ac.in' }, { onConflict: 'player_id' })).error).toBeNull();
-    expect((await admin.from('player_private_details').select('email').eq('player_id', player).single()).data!.email).toBe('ada@iiitkottayam.ac.in');
-    expect((await as.dictator.db.from('player_private_details').delete().eq('player_id', player)).error).toBeNull();
-    expect((await admin.from('player_private_details').select('email').eq('player_id', player)).data).toEqual([]);
+    expect((await as.dictator.db.from('player_private_details' as any).select('email')).error).toBeTruthy();
+    const status = (await as.dictator.db.rpc('player_link_status', { p_player_ids: [player] })).data;
+    expect(status[0].email).toBe(adaEmail);
+  });
+
+  it('refuses a new roster place for a legacy player without an account', async () => {
+    const legacy = (await admin.from('roster_memberships').select('player_id').eq('team_entry_id', made.entries[0]).neq('player_id', player).limit(1)).data![0].player_id;
+    const res = await as.dictator.db.rpc('add_player_to_roster', { p_player: legacy, p_team_entry_id: made.entries[2] });
+    expect(res.error?.code).toBe('23514');
+    expect(res.error?.message).toMatch(/not linked to an account/);
+    expect((await as.dictator.db.from('roster_memberships').insert({ player_id: legacy, team_entry_id: made.entries[2], season_id: made.seasons[1] })).error?.code).toBe('23514');
   });
 
   it('keeps history: a roster place with goals, and a player who scored or assisted, cannot be removed', async () => {
@@ -164,7 +187,7 @@ describe('a dictator manages players and season rosters', () => {
 
   it('visitors read cards and rosters but never private details', async () => {
     expect((await anonClient.from('players').select('id').eq('id', player)).data).toHaveLength(1);
-    expect((await anonClient.from('player_private_details').select('email')).error?.code).toBe('42501');
+    expect((await anonClient.from('player_link_keys' as any).select('email')).error).toBeTruthy();
   });
 });
 
@@ -177,9 +200,10 @@ describe.each(['captain', 'editor', 'default'])('a %s account', (who) => {
     expect((await as[who].db.from('players').update({ first_name: `${tag}Renamed` }).eq('id', someone.player_id).select('id')).data).toEqual([]);
     expect((await as[who].db.from('roster_memberships').update({ jersey_number: 99 }).eq('id', someone.id).select('id')).data).toEqual([]);
     expect((await as[who].db.from('roster_memberships').delete().eq('id', someone.id).select('id')).data).toEqual([]);
-    expect((await as[who].db.from('roster_memberships').insert({ player_id: someone.player_id, team_entry_id: made.entries[2], season_id: made.seasons[1] })).error?.code).toBe('42501');
+    expect((await as[who].db.from('roster_memberships').insert({ player_id: someone.player_id, team_entry_id: made.entries[2], season_id: made.seasons[1] })).error).toBeTruthy();
+    expect((await as[who].db.rpc('add_player_to_roster', { p_player: someone.player_id, p_team_entry_id: made.entries[2] })).error?.code).toBe('42501');
     expect((await as[who].db.from('players').insert({ first_name: `${tag}Fake`, last_name: who })).error?.code).toBe('42501');
-    expect((await as[who].db.from('player_private_details').select('player_id')).data).toEqual([]);
+    expect((await as[who].db.from('player_link_keys' as any).select('player_id')).error).toBeTruthy();
     expect((await admin.from('players').select('id', { count: 'exact', head: true }).ilike('first_name', `${tag}%`)).count).toBe(before);
     expect((await admin.from('players').select('first_name').eq('id', someone.player_id).single()).data!.first_name).not.toBe(`${tag}Renamed`);
   });

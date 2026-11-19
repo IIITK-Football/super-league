@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys } from '../auth/local-supabase';
+import { insertLocal } from '../local-fixtures';
 
 vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
@@ -50,14 +51,15 @@ beforeAll(async () => {
     { team_id: made.teams[0], season_id: made.seasons[0] }, { team_id: made.teams[1], season_id: made.seasons[0] },
     { team_id: made.teams[2], season_id: made.seasons[1] }, { team_id: made.teams[3], season_id: made.seasons[1] },
   ]).select('id')).data!.map((e) => e.id);
-  const ids = must(await admin.from('players').insert([{ first_name: tag, last_name: 'Traveller' }, { first_name: tag, last_name: 'Helper' }]).select('id')).data!;
+  // Legacy players without an account, written as the seed writes them.
+  const ids = insertLocal<{ id: string }>('players', [{ first_name: tag, last_name: 'Traveller' }, { first_name: tag, last_name: 'Helper' }]);
   made.player = ids[0].id;
   made.rival = ids[1].id;
-  must(await admin.from('roster_memberships').insert([
+  insertLocal('roster_memberships', [
     { player_id: made.player, team_entry_id: made.entries[0], season_id: made.seasons[0], jersey_number: 9, position: 'ST' },
     { player_id: made.rival, team_entry_id: made.entries[0], season_id: made.seasons[0], jersey_number: 8, position: 'CM' },
     { player_id: made.player, team_entry_id: made.entries[2], season_id: made.seasons[1], jersey_number: 10, position: 'CF' },
-  ]));
+  ]);
   made.matches = must(await admin.from('matches').insert([
     { home_team_id: made.teams[0], away_team_id: made.teams[1], season_id: made.seasons[0], status: 'completed', home_score: 2, away_score: 0, date: '2027-02-01T12:00:00Z' },
     // Season B records its goal only in the match JSON (as Freshers seasons did).

@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys } from '../auth/local-supabase';
+import { insertLocal } from '../local-fixtures';
 
 vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
@@ -55,13 +56,13 @@ beforeAll(async () => {
   made.teams = teams!.map((t) => t.id);
   must(await admin.from('team_entries').insert(made.teams.map((team_id) => ({ team_id, season_id: next }))));
 
-  const { data: players } = must(await admin.from('players').insert([
+  // Legacy players without an account, written as the seed writes them.
+  made.players = insertLocal<{ id: string }>('players', [
     { first_name: tag, last_name: 'Striker' },
     { first_name: tag, last_name: 'Creator' },
-  ]).select('id'));
-  made.players = players!.map((p) => p.id);
+  ]).map((p) => p.id);
   const rovers = must(await admin.from('team_entries').select('id').eq('team_id', made.teams[0]).eq('season_id', next).single()).data!;
-  must(await admin.from('roster_memberships').insert(made.players.map((player_id, i) => ({ player_id, team_entry_id: rovers.id, season_id: next, jersey_number: i + 1 }))));
+  insertLocal('roster_memberships', made.players.map((player_id, i) => ({ player_id, team_entry_id: rovers.id, season_id: next, jersey_number: i + 1 })));
   const { data: match } = must(await admin.from('matches').insert({
     home_team_id: made.teams[0], away_team_id: made.teams[1], season_id: next,
     status: 'completed', home_score: 1, away_score: 0, date: '2027-02-01T12:00:00Z',

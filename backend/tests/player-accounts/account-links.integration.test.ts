@@ -1,102 +1,82 @@
-// Group: player-accounts. Account-linked players through the real local Data API, each account signed in with its own
-// token: a dictator links a verified account, unlinks it and runs the dry-run import; a captain, an editor, a normal
-// user and the server key cannot link, unlink or claim; nobody but the server reads the link; and a linked player edits
-// only their own portrait and preferred foot, through the profile portrait route and update_my_player. After linking
-// and a self-edit the same player and card show in rosters and season statistics. Only the media upload is replaced (no
-// R2 locally); authorization and every write are real. Runs against THIS repository's local Supabase (127.0.0.1:54321).
+// Group: player-accounts. Linking players to verified accounts through the real local Data API, each account signed in
+// with its own token: the dictator's matching preview (ready, duplicate, waiting for verification, conflict, no account)
+// and apply (only still-ready previewed pairs, idempotent, never by name), manual links found by Auth email
+// (verified accounts only, one player per account and one account per player), account-first player creation (an
+// account that already has a player, or that an unlinked player is waiting for, gets no second identity), linked-only
+// roster places, and unlinking (only the link changes; the player then has no email and no key). A captain, an
+// editor, a normal user and the server key are refused on every path. Legacy unlinked players and their match keys
+// are written as the seed writes them (local only). Runs against THIS repository's local Supabase (127.0.0.1:54321).
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys, uniqueEmail } from '../auth/local-supabase';
+import { insertLocal } from '../local-fixtures';
 
 vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
-const uploaded: string[] = [];
-vi.mock('@/lib/roster/playerImage', async (original) => {
-  const real = await original<typeof import('@/lib/roster/playerImage')>();
-  return {
-    ...real,
-    uploadPortrait: async (key: string) => { uploaded.push(key); return `https://media.example/${key}`; },
-  };
-});
 
 const tag = `acct${Date.now().toString(36)}`;
 let admin: SupabaseClient;
-let anonClient: SupabaseClient;
 const users: string[] = [];
-const as: Record<string, { id: string; email: string; token: string; db: SupabaseClient }> = {};
-const made = { division: '', season: '', team: '', entry: '', players: [] as string[] };
+const as: Record<string, { id: string; email: string; db: SupabaseClient }> = {};
+const made = { division: '', season: '', team: '', entry: '', legacy: [] as string[], created: [] as string[] };
 
-async function account(label: string, role: string, verified = true) {
-  const email = uniqueEmail(`${tag}-${label}`);
-  const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: verified });
+async function account(label: string, verified = true) {
+  const { data, error } = await admin.auth.admin.createUser({ email: uniqueEmail(`${tag}-${label}`), email_confirm: verified });
   if (error) throw error;
   users.push(data.user.id);
-  await admin.from('user_roles').update({ role }).eq('user_id', data.user.id);
-  return { id: data.user.id, email };
+  return { id: data.user.id, email: data.user.email! };
 }
-
 async function signIn(label: string, role: string, c: ReturnType<typeof clients>) {
-  const { id, email } = await account(label, role);
+  const { id, email } = await account(label);
+  await admin.from('user_roles').update({ role }).eq('user_id', id);
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   const db = c.anon();
-  const { data: v, error } = await db.auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
+  const { error } = await db.auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
   if (error) throw error;
-  return { id, email, token: v.session!.access_token, db };
+  return { id, email, db };
 }
-
 const must = <T extends { error: unknown }>(r: T): T => {
   if (r.error) throw new Error(`setup failed: ${JSON.stringify(r.error)}`);
   return r;
 };
 const linkOf = async (player: string) => (await admin.from('players').select('user_id').eq('id', player).single()).data!.user_id as string | null;
+const keyOf = async (player: string) => (await as.dictator.db.rpc('player_link_status', { p_player_ids: [player] })).data[0].has_key as boolean;
+const ours = async () => ((await as.dictator.db.rpc('account_link_matches')).data as { player_id: string; status: string; user_id: string | null }[])
+  .filter((m) => made.legacy.includes(m.player_id));
 
-async function portrait(who: string | null, image?: Buffer) {
-  const { POST } = await import('../../app/api/profile/player-portrait/route');
-  const form = new FormData();
-  if (image) form.set('image', new File([new Uint8Array(image)], 'p.png', { type: 'image/png' }));
-  const headers: Record<string, string> = who ? { Authorization: `Bearer ${as[who].token}` } : {};
-  const res = await POST(new Request('http://localhost/api/profile/player-portrait', { method: 'POST', headers, body: form }));
-  return { status: res.status, body: await res.json() };
-}
-
-// A valid 500 x 500 PNG (the portrait rule): the signature, an IHDR chunk with the size, and an end chunk.
-function png500(): Buffer {
-  const { deflateSync, crc32 } = require('node:zlib') as typeof import('node:zlib');
-  const chunk = (type: string, data: Buffer) => {
-    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
-    const body = Buffer.concat([Buffer.from(type), data]);
-    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body) >>> 0);
-    return Buffer.concat([len, body, crc]);
-  };
-  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(500, 0); ihdr.writeUInt32BE(500, 4); ihdr[8] = 8; ihdr[9] = 2;
-  const raw = Buffer.alloc((500 * 3 + 1) * 500);
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
-}
+let ready: { id: string; email: string };
+let dup: { id: string; email: string };
 
 beforeAll(async () => {
   const keys = localKeys();
   Object.assign(process.env, { SUPABASE_URL: keys.url, SUPABASE_PUBLISHABLE_KEY: keys.publishable, SUPABASE_SECRET_KEY: keys.secret });
   const c = clients(keys);
   admin = c.admin;
-  anonClient = c.anon();
-  for (const [label, role] of [['dictator', 'dictator'], ['captain', 'captain'], ['editor', 'editor'], ['fan', 'default'], ['other', 'default']]) {
-    as[label] = await signIn(label, role, c);
-  }
+  for (const [label, role] of [['dictator', 'dictator'], ['captain', 'captain'], ['editor', 'editor'], ['fan', 'default']]) as[label] = await signIn(label, role, c);
   made.division = must(await admin.from('divisions').insert({ slug: tag, name: `${tag} Division` }).select('id').single()).data!.id;
   made.season = must(await admin.from('seasons').insert({ division_id: made.division, slug: `${tag}-a`, name: `${tag} A`, is_current: true }).select('id').single()).data!.id;
   made.team = must(await admin.from('teams').insert({ name: `${tag} One`, short_name: 'ONE' }).select('id').single()).data!.id;
   made.entry = must(await admin.from('team_entries').insert({ team_id: made.team, season_id: made.season }).select('id').single()).data!.id;
-  made.players = must(await admin.from('players').insert([
-    { first_name: `${tag}Linked`, last_name: 'Lane', overall_rating: 70, attributes: { stats: { Pace: { total: 80 } }, playStyle: 'Power Shot' } },
-    { first_name: `${tag}Second`, last_name: 'Player' },
-  ]).select('id')).data!.map((p) => p.id);
-  must(await admin.from('roster_memberships').insert({ player_id: made.players[0], team_entry_id: made.entry, season_id: made.season, jersey_number: 9, position: 'ST' }));
-  must(await admin.from('player_private_details').insert({ player_id: made.players[1], email: as.other.email }));
-}, 90000);
+  // Accounts first, then the legacy keys (as for people who signed up before the conversion): nothing links on its own.
+  ready = await account('ready');
+  dup = await account('dup');
+  const waiting = await account('waiting', false);
+  made.legacy = insertLocal<{ id: string }>('players', ['Ready', 'DupOne', 'DupTwo', 'Waiting', 'Nobody', 'Conflict'].map((n) => ({ first_name: `${tag}${n}`, last_name: 'Legacy' }))).map((p) => p.id);
+  insertLocal('roster_memberships', made.legacy.map((player_id, i) => ({ player_id, team_entry_id: made.entry, season_id: made.season, jersey_number: i + 1 })));
+  insertLocal('player_link_keys', [
+    { player_id: made.legacy[0], email: ready.email.toLowerCase() },
+    { player_id: made.legacy[1], email: dup.email.toLowerCase() },
+    { player_id: made.legacy[2], email: dup.email.toLowerCase() },
+    { player_id: made.legacy[3], email: waiting.email.toLowerCase() },
+    { player_id: made.legacy[4], email: `${tag}-nobody@iiitkottayam.ac.in` },
+    { player_id: made.legacy[5], email: as.fan.email.toLowerCase() },
+  ]);
+}, 120000);
 
 afterAll(async () => {
   if (!admin) return;
+  const players = [...made.legacy, ...made.created];
   await admin.from('roster_memberships').delete().eq('season_id', made.season);
-  await admin.from('players').delete().in('id', made.players);
+  if (players.length) await admin.from('players').delete().in('id', players);
   await admin.from('team_entries').delete().eq('id', made.entry);
   await admin.from('teams').delete().eq('id', made.team);
   await admin.from('seasons').delete().eq('id', made.season);
@@ -104,109 +84,137 @@ afterAll(async () => {
   for (const id of users) await admin.auth.admin.deleteUser(id);
 }, 60000);
 
-describe('linking a player to an account', () => {
-  it('only a dictator links, and only a verified account', async () => {
-    const unverified = await account('unverified', 'default', false);
-    const refused = await as.dictator.db.rpc('link_player_account', { p_player: made.players[0], p_user: unverified.id });
-    expect(refused.error?.code).toBe('23514');
+describe('the matching preview and apply', () => {
+  it('a conflict needs the account linked elsewhere: link the fan first by hand', async () => {
+    const fanPlayer = await as.dictator.db.rpc('create_player_for_account', { p_user: as.fan.id, p_team_entry_id: made.entry, p_first_name: `${tag}Fan`, p_last_name: 'Own' });
+    // The fan's email is legacy Conflict's key, so creating a second identity is refused and points at that player.
+    expect(fanPlayer.error?.code).toBe('23505');
+    expect(fanPlayer.error?.details).toBe(made.legacy[5]);
+    const other = insertLocal<{ id: string }>('players', [{ first_name: `${tag}FanCard`, last_name: 'Own' }])[0].id;
+    made.created.push(other);
+    must(await as.dictator.db.rpc('link_player_account', { p_player: other, p_user: as.fan.id }));
+  });
+
+  it('reports each case, matching verified emails only and never by name', async () => {
+    const byPlayer = Object.fromEntries((await ours()).map((m) => [m.player_id, m]));
+    expect(made.legacy.map((p) => byPlayer[p]?.status)).toEqual(['ready', 'duplicate', 'duplicate', 'waiting_verification', 'no_account', 'conflict']);
+    expect(byPlayer[made.legacy[0]].user_id).toBe(ready.id);
+    expect((await as.captain.db.rpc('account_link_matches')).error?.code).toBe('42501');
+    expect((await as.fan.db.rpc('account_link_matches')).error?.code).toBe('42501');
+  });
+
+  it('applies only the previewed pairs that are still ready, once', async () => {
+    const pairs = (await ours()).filter((m) => m.status === 'ready').map(({ player_id, user_id }) => ({ player_id, user_id }));
+    expect((await as.captain.db.rpc('apply_account_link_matches', { p_expected: pairs })).error?.code).toBe('42501');
+    const first = must(await as.dictator.db.rpc('apply_account_link_matches', {
+      p_expected: [...pairs, { player_id: made.legacy[1], user_id: dup.id }, { player_id: made.legacy[4], user_id: ready.id }],
+    })).data;
+    expect(first.linked).toBe(1);
+    expect(first.skipped.map((s: { status: string }) => s.status).sort()).toEqual(['changed', 'duplicate']);
+    expect(await linkOf(made.legacy[0])).toBe(ready.id);
+    expect(await keyOf(made.legacy[0])).toBe(false);
+    expect(await linkOf(made.legacy[1])).toBeNull();
+    const again = must(await as.dictator.db.rpc('apply_account_link_matches', { p_expected: pairs })).data;
+    expect(again.linked).toBe(0);
+  });
+});
+
+describe('manual links', () => {
+  it('finds verified accounts by Auth email only, with the player each is linked to', async () => {
+    const found = (await as.dictator.db.rpc('verified_accounts_for_linking', { p_query: `${tag}-ready` })).data;
+    expect(found).toEqual([expect.objectContaining({ user_id: ready.id, linked_player_id: made.legacy[0] })]);
+    expect((await as.dictator.db.rpc('verified_accounts_for_linking', { p_query: `${tag}-waiting` })).data).toEqual([]);
+    expect((await as.dictator.db.rpc('verified_accounts_for_linking', { p_query: `${tag}Ready` })).data).toEqual([]); // a player name finds nothing
+    expect((await as.captain.db.rpc('verified_accounts_for_linking', { p_query: `${tag}-ready` })).data).toEqual([]);
+  });
+
+  it('resolves a duplicate by hand; one player per account and one account per player', async () => {
+    const unverified = await account('unverified', false);
+    expect((await as.dictator.db.rpc('link_player_account', { p_player: made.legacy[1], p_user: unverified.id })).error?.code).toBe('23514');
     for (const who of ['captain', 'editor', 'fan']) {
-      const r = await as[who].db.rpc('link_player_account', { p_player: made.players[0], p_user: as.fan.id });
-      expect(r.error?.code, who).toBe('42501');
+      expect((await as[who].db.rpc('link_player_account', { p_player: made.legacy[1], p_user: dup.id })).error?.code, who).toBe('42501');
     }
-    expect(await linkOf(made.players[0])).toBeNull();
-    must(await as.dictator.db.rpc('link_player_account', { p_player: made.players[0], p_user: as.fan.id }));
-    expect(await linkOf(made.players[0])).toBe(as.fan.id);
-    const twice = await as.dictator.db.rpc('link_player_account', { p_player: made.players[1], p_user: as.fan.id });
+    must(await as.dictator.db.rpc('link_player_account', { p_player: made.legacy[1], p_user: dup.id }));
+    expect(await linkOf(made.legacy[1])).toBe(dup.id);
+    expect(await keyOf(made.legacy[1])).toBe(false);
+    expect((await as.dictator.db.rpc('link_player_account', { p_player: made.legacy[2], p_user: dup.id })).error?.code).toBe('23505');
+    const another = await account('another');
+    expect((await as.dictator.db.rpc('link_player_account', { p_player: made.legacy[1], p_user: another.id })).error?.code).toBe('23505');
+    expect(await linkOf(made.legacy[1])).toBe(dup.id);
+  });
+
+  it('nobody claims or writes the link directly, not even with the server key', async () => {
+    expect((await as.fan.db.from('players').update({ user_id: as.fan.id } as any).eq('id', made.legacy[2]).select('id')).error).toBeTruthy();
+    expect((await admin.from('players').update({ user_id: as.dictator.id } as any).eq('id', made.legacy[2])).error?.code).toBe('42501');
+    expect(await linkOf(made.legacy[2])).toBeNull();
+  });
+});
+
+describe('account-first players and linked-only rosters', () => {
+  it('creates, links and rosters a new player for a verified account in one step', async () => {
+    const fresh = await account('fresh');
+    const r = must(await as.dictator.db.rpc('create_player_for_account', {
+      p_user: fresh.id, p_team_entry_id: made.entry, p_first_name: `${tag}Fresh`, p_last_name: 'Face', p_jersey_number: 40, p_position: 'ST', p_overall_rating: 66,
+    }));
+    made.created.push(r.data);
+    const row = (await admin.from('players').select('user_id, overall_rating, roster_memberships(jersey_number, position)').eq('id', r.data).single()).data as any;
+    expect(row).toEqual({ user_id: fresh.id, overall_rating: 66, roster_memberships: [{ jersey_number: 40, position: 'ST' }] });
+  });
+
+  it('offers the existing identity instead of creating a duplicate', async () => {
+    const twice = await as.dictator.db.rpc('create_player_for_account', { p_user: ready.id, p_team_entry_id: made.entry, p_first_name: `${tag}Again`, p_last_name: 'Ready' });
     expect(twice.error?.code).toBe('23505');
+    expect(twice.error?.details).toBe(made.legacy[0]);
+    expect((await admin.from('players').select('id').eq('first_name', `${tag}Again`)).data).toEqual([]);
   });
 
-  it('nobody claims a player by writing the link directly, not even with the server key', async () => {
-    const own = await as.other.db.from('players').update({ user_id: as.other.id }).eq('id', made.players[1]).select('id');
-    expect(own.error).toBeTruthy();
-    const server = await admin.from('players').update({ user_id: as.other.id }).eq('id', made.players[1]);
-    expect(server.error?.code).toBe('42501');
-    expect(await linkOf(made.players[1])).toBeNull();
+  it('refuses unverified accounts, other roles, the server key and direct inserts', async () => {
+    const unverified = await account('noverify', false);
+    expect((await as.dictator.db.rpc('create_player_for_account', { p_user: unverified.id, p_team_entry_id: made.entry, p_first_name: `${tag}X`, p_last_name: 'Y' })).error?.code).toBe('23514');
+    const spare = await account('spare');
+    for (const who of ['captain', 'editor', 'fan']) {
+      expect((await as[who].db.rpc('create_player_for_account', { p_user: spare.id, p_team_entry_id: made.entry, p_first_name: `${tag}X`, p_last_name: who })).error?.code, who).toBe('42501');
+    }
+    expect((await as.dictator.db.from('players').insert({ first_name: `${tag}Direct`, last_name: 'Insert' })).error?.code).toBe('42501');
+    expect((await admin.from('players').insert({ first_name: `${tag}Server`, last_name: 'Insert' })).error?.code).toBe('42501');
+    expect((await admin.from('players').select('id').ilike('first_name', `${tag}X%`)).data).toEqual([]);
   });
 
-  it('nobody but the server reads the link; the public card still reads', async () => {
-    expect((await anonClient.from('players').select('user_id').eq('id', made.players[0])).error).toBeTruthy();
-    expect((await as.fan.db.from('players').select('user_id').eq('id', made.players[0])).error).toBeTruthy();
-    const card = await anonClient.from('players').select('id, first_name, overall_rating').eq('id', made.players[0]).single();
-    expect(card.data?.overall_rating).toBe(70);
-    const status = await as.dictator.db.rpc('player_link_status', { p_player_ids: made.players });
-    expect(status.data.find((s: { player_id: string }) => s.player_id === made.players[0])).toMatchObject({ linked: true, account_label: expect.stringContaining(as.fan.email) });
-    expect((await as.captain.db.rpc('player_link_status', { p_player_ids: made.players })).data).toEqual([]);
-  });
-
-  it('the account search lists verified accounts with the player each is linked to', async () => {
-    const r = await as.dictator.db.rpc('player_link_candidates', { p_query: `${tag}-fan` });
-    expect(r.data).toEqual([expect.objectContaining({ user_id: as.fan.id, linked_player_id: made.players[0] })]);
-    expect((await as.captain.db.rpc('player_link_candidates', { p_query: `${tag}-fan` })).data).toEqual([]);
-  });
-});
-
-describe('a linked player edits their own card', () => {
-  it('reads their own card and seasons', async () => {
-    const me = must(await as.fan.db.rpc('my_player')).data;
-    expect(me).toMatchObject({ id: made.players[0], overall_rating: 70, seasons: [expect.objectContaining({ team: `${tag} One`, jersey_number: 9, position: 'ST' })] });
-    expect((await as.other.db.rpc('my_player')).data).toBeNull();
-  });
-
-  it('uploads a portrait for their own player only', async () => {
-    expect((await portrait(null, png500())).status).toBe(401);
-    expect((await portrait('other', png500())).status).toBe(403);
-    expect((await portrait('fan')).status).toBe(400);
-    const ok = await portrait('fan', png500());
-    expect(ok.status).toBe(200);
-    expect(ok.body.imageUrl).toBe(`https://media.example/players/${made.players[0]}.png`);
-    expect(uploaded).toEqual([`players/${made.players[0]}.png`]);
-  });
-
-  it('saves only the portrait and preferred foot; everything else stays', async () => {
-    must(await as.fan.db.rpc('update_my_player', { p_image_url: `https://media.example/players/${made.players[0]}.png`, p_preferred_foot: 'Left' }));
-    const row = (await admin.from('players').select('image_url, overall_rating, attributes, first_name').eq('id', made.players[0]).single()).data!;
-    expect(row).toEqual({ image_url: `https://media.example/players/${made.players[0]}.png`, overall_rating: 70, first_name: `${tag}Linked`,
-      attributes: { stats: { Pace: { total: 80 } }, playStyle: 'Power Shot', bio: { preferredFoot: 'Left' } } });
-    const other = await as.fan.db.rpc('update_my_player', { p_image_url: `https://media.example/players/${made.players[1]}.png`, p_preferred_foot: 'Left' });
-    expect(other.error?.code).toBe('22023');
-    const direct = await as.fan.db.from('players').update({ overall_rating: 99 }).eq('id', made.players[0]).select('id');
-    expect(direct.data ?? []).toEqual([]); // row level security: a player has no direct write
-    expect((await as.other.db.rpc('update_my_player', { p_image_url: null, p_preferred_foot: 'Right' })).error?.code).toBe('42501');
-  });
-
-  it('the self-edit and the link are in the audit history, without emails', async () => {
-    const { data } = await admin.from('audit_log').select('actor_id, changes').eq('table_name', 'players').eq('record_id', made.players[0]);
-    expect(data!.some((r) => r.actor_id === as.dictator.id && 'user_id' in (r.changes ?? {}))).toBe(true);
-    expect(data!.some((r) => r.actor_id === as.fan.id && 'image_url' in (r.changes ?? {}))).toBe(true);
-    expect(JSON.stringify(data)).not.toContain('@');
-  });
-
-  it('the same player and card appear in the roster after linking and editing', async () => {
-    const { data } = await anonClient.from('roster_memberships').select('jersey_number, player:players ( id, image_url )').eq('team_entry_id', made.entry);
-    expect(data).toEqual([{ jersey_number: 9, player: { id: made.players[0], image_url: `https://media.example/players/${made.players[0]}.png` } }]);
+  it('only linked players gain a roster place', async () => {
+    const team2 = must(await admin.from('teams').insert({ name: `${tag} Two`, short_name: 'TWO' }).select('id').single()).data!.id;
+    const nextSeason = must(await admin.from('seasons').insert({ division_id: made.division, slug: `${tag}-b`, name: `${tag} B`, is_current: false }).select('id').single()).data!.id;
+    const entry2 = must(await admin.from('team_entries').insert({ team_id: team2, season_id: nextSeason }).select('id').single()).data!.id;
+    try {
+      const refused = await as.dictator.db.rpc('add_player_to_roster', { p_player: made.legacy[2], p_team_entry_id: entry2 });
+      expect(refused.error?.code).toBe('23514');
+      expect(refused.error?.message).toMatch(/not linked to an account/);
+      expect((await admin.from('roster_memberships').insert({ player_id: made.legacy[2], team_entry_id: entry2, season_id: nextSeason })).error?.code).toBe('23514');
+      const added = must(await as.dictator.db.rpc('add_player_to_roster', { p_player: made.legacy[0], p_team_entry_id: entry2, p_jersey_number: 5 }));
+      expect(added.data).toBeTruthy();
+      expect((await as.captain.db.rpc('add_player_to_roster', { p_player: made.legacy[1], p_team_entry_id: entry2 })).error?.code).toBe('42501');
+    } finally {
+      await admin.from('roster_memberships').delete().eq('season_id', nextSeason);
+      await admin.from('team_entries').delete().eq('id', entry2);
+      await admin.from('teams').delete().eq('id', team2);
+      await admin.from('seasons').delete().eq('id', nextSeason);
+    }
   });
 });
 
-describe('the account-link import and unlinking', () => {
-  it('previews every row, writes nothing on a problem, links a clean file once', async () => {
-    const rows = [{ player_id: made.players[1], email: '' }, { player_id: made.players[0], email: as.fan.email }, { player_id: 'nope', email: 'x' }];
-    const preview = must(await as.dictator.db.rpc('preview_player_account_links', { p_rows: rows })).data;
-    expect(preview.map((r: { status: string }) => r.status)).toEqual(['ready', 'already_linked', 'invalid_row']);
-    expect((await as.dictator.db.rpc('apply_player_account_links', { p_rows: rows })).error).toBeTruthy();
-    expect(await linkOf(made.players[1])).toBeNull();
-    expect((await as.captain.db.rpc('preview_player_account_links', { p_rows: rows })).error?.code).toBe('42501');
-    const clean = rows.slice(0, 2);
-    expect(must(await as.dictator.db.rpc('apply_player_account_links', { p_rows: clean })).data).toBe(1);
-    expect(await linkOf(made.players[1])).toBe(as.other.id); // the blank email used the dictator-entered contact email
-    expect(must(await as.dictator.db.rpc('apply_player_account_links', { p_rows: clean })).data).toBe(0);
+describe('unlinking', () => {
+  it('clears only the link; the player then has no email and no key', async () => {
+    expect((await as.fan.db.rpc('unlink_player_account', { p_player: made.legacy[0] })).error?.code).toBe('42501');
+    must(await as.dictator.db.rpc('unlink_player_account', { p_player: made.legacy[0] }));
+    const status = (await as.dictator.db.rpc('player_link_status', { p_player_ids: [made.legacy[0]] })).data[0];
+    expect(status).toMatchObject({ linked: false, email: null, has_key: false });
+    expect((await admin.from('roster_memberships').select('id').eq('player_id', made.legacy[0])).data).toHaveLength(1);
+    // With no key, the account's later activity never links it back on its own.
+    expect((await ours()).some((m) => m.player_id === made.legacy[0])).toBe(false);
   });
 
-  it('unlinking clears only the link, by a dictator only', async () => {
-    expect((await as.fan.db.rpc('unlink_player_account', { p_player: made.players[0] })).error?.code).toBe('42501');
-    must(await as.dictator.db.rpc('unlink_player_account', { p_player: made.players[0] }));
-    const row = (await admin.from('players').select('user_id, image_url, overall_rating').eq('id', made.players[0]).single()).data!;
-    expect(row).toEqual({ user_id: null, image_url: `https://media.example/players/${made.players[0]}.png`, overall_rating: 70 });
-    expect((await admin.from('roster_memberships').select('id').eq('player_id', made.players[0])).data).toHaveLength(1);
-    expect((await as.fan.db.rpc('my_player')).data).toBeNull();
+  it('a dismissed key leaves the preview', async () => {
+    expect((await as.captain.db.rpc('dismiss_player_link_key', { p_player: made.legacy[4] })).error?.code).toBe('42501');
+    must(await as.dictator.db.rpc('dismiss_player_link_key', { p_player: made.legacy[4] }));
+    expect((await ours()).some((m) => m.player_id === made.legacy[4])).toBe(false);
   });
 });
