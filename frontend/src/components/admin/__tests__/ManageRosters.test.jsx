@@ -164,6 +164,12 @@ describe('validation and messages', () => {
       .toEqual({ first_name: 'Ada', last_name: 'S', jersey_number: 0, position: null, overall_rating: 80, attributes: { extra: 1, stats: { Pace: { total: 9 } } }, email: 'a@x.in' });
   });
 
+  it('leaves the rating unset unless one is entered, and still refuses an out-of-range one', () => {
+    expect(validatePlayer({ ...blankPlayer(), first_name: 'A' }).value.overall_rating).toBeNull();
+    expect(validatePlayer({ ...blankPlayer(), first_name: 'A', overall_rating: ' ' }).value.overall_rating).toBeNull();
+    expect(validatePlayer({ ...blankPlayer(), first_name: 'A', overall_rating: '100' }).error).toMatch(/1 and 99, or left empty/);
+  });
+
   it('turns database refusals into actionable messages', () => {
     expect(describeError({ code: '42501' })).toMatch(/only a dictator/i);
     expect(describeError({ code: '23505', message: 'roster_memberships_player_season_key' })).toMatch(/already on a team this season/);
@@ -262,6 +268,14 @@ describe('players', () => {
       p_overall_rating: 64, p_attributes: {}, p_image_url: null, p_email: 'bea@iiitkottayam.ac.in',
     });
     await waitFor(() => expect(screen.getByRole('option', { name: /1 · Bea Keeper · GK/ })).toBeTruthy());
+  });
+
+  it('creates a player without a rating when none is entered (never 50)', async () => {
+    await openTeam();
+    pick('New first name', 'Una');
+    fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Una added to Alpha/));
+    expect(rpc.mock.calls.find(([name]) => name === 'create_rostered_player')[1].p_overall_rating).toBeNull();
   });
 
   it('reports a refusal from the database and keeps the form', async () => {
@@ -417,7 +431,8 @@ describe('the FUT card in the player forms', () => {
   it('previews a new player while it is typed: name, rating, stats, foot and play styles, with no invented values', async () => {
     await openTeam();
     expect(newCard().getAttribute('aria-label')).toBe('FUT card: Unnamed player');
-    expect(within(newCard()).getByTestId('card-rating').textContent).toBe('50'); // the form's starting rating
+    expect(within(newCard()).getByTestId('card-rating').textContent).toBe('—'); // no rating until one is entered
+    expect(screen.getByLabelText('New rating').value).toBe('');
     expect(newCard().textContent).toMatch(/PAC—.*PHY—/);
     expect(newCard().textContent).toMatch(/Preferred foot: not set/);
     expect(newCard().textContent).toMatch(/Play styles: none/);

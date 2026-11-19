@@ -4,7 +4,7 @@
 // the team record, keeps empty card values empty (no generated stats or rating), and saves only changed players'
 // allow-listed fields through captain_update_roster_player. It never shows or sends a player's private email. Against an in-memory Data API fake; the real
 // path is TeamBuilder.local.test.jsx (rosters group).
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,15 +12,19 @@ const db = { tables: {}, rpcError: null, rosterError: null, slowEntry: null };
 const auth = { role: 'captain' };
 const rpc = vi.fn(async () => ({ data: null, error: db.rpcError }));
 
-function seed({ roster = true } = {}) {
+function seed({ roster = true, pastSeason = false } = {}) {
   db.tables = {
     // The registration keeps an older copy of the team name; the team record is what is shown.
+    divisions: [{ id: 'd1', name: 'Freshers', sort_order: 1 }, { id: 'd2', name: 'Empty Division', sort_order: 2 }],
+    seasons: [{ id: 's1', division_id: 'd1', name: '2026', is_current: true, sort_order: 2 }, { id: 's0', division_id: 'd1', name: '2025', is_current: false, sort_order: 1 }],
     team_registrations: [
-      { id: 'r1', captain_id: 'c1', team_id: 't1', team_name: 'Old Copy Name', season_id: 's1', season: { name: '2026', division: { name: 'Freshers' } } },
-      { id: 'r2', captain_id: 'c2', team_id: 't2', team_name: 'Beta', season_id: 's1', season: { name: '2026', division: { name: 'Freshers' } } },
+      { id: 'r1', captain_id: 'c1', team_id: 't1', team_name: 'Old Copy Name', season_id: 's1', season: { id: 's1', name: '2026', is_current: true, division: { id: 'd1', name: 'Freshers' } } },
+      { id: 'r2', captain_id: 'c2', team_id: 't2', team_name: 'Beta', season_id: 's1', season: { id: 's1', name: '2026', is_current: true, division: { id: 'd1', name: 'Freshers' } } },
+      ...(pastSeason ? [{ id: 'r0', captain_id: 'c1', team_id: 't1', team_name: 'Alpha', season_id: 's0', season: { id: 's0', name: '2025', is_current: false, division: { id: 'd1', name: 'Freshers' } } }] : []),
     ],
     teams: [{ id: 't1', name: 'Alpha', logo_url: 'https://img/alpha.png', team_color: '#112233' }, { id: 't2', name: 'Beta', logo_url: null, team_color: null }],
     team_entries: [{ id: 'e1', team_id: 't1', season_id: 's1' }, { id: 'e2', team_id: 't2', season_id: 's1' }, { id: 'e0', team_id: 't1', season_id: 's0' }],
+    // (e0 is Alpha's earlier season)
     roster_memberships: [
       ...(roster ? [
         { id: 'm1', team_entry_id: 'e1', jersey_number: 9, position: 'ST', player: { id: 'p1', first_name: 'Ada', last_name: 'Striker', image_url: null, overall_rating: 70, attributes: {} } },
@@ -146,15 +150,25 @@ describe('TeamBuilder on season rosters', () => {
     });
   });
 
-  it('asks for a rating instead of inventing one', async () => {
+  it('saves with the rating not set instead of inventing one', async () => {
     db.tables.roster_memberships[0].player.overall_rating = null;
     renderBuilder();
     await screen.findByRole('button', { name: /01 Ada Striker/ });
     expect(screen.getByLabelText(/overall rating/i).value).toBe('');
     fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '12' } });
     fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
-    expect(await screen.findByText(/Set an overall rating between 1 and 99 for Ada Striker/)).toBeTruthy();
-    expect(rpc).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText(/saved successfully/i)).toBeTruthy());
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_membership_id: 'm1', p_jersey_number: 12, p_overall_rating: null });
+  });
+
+  it('lets a captain with several teams switch between them, and opens a past season read-only', async () => {
+    seed({ pastSeason: true });
+    renderBuilder();
+    await screen.findByRole('button', { name: /01 Ada Striker/ });
+    const mine = screen.getByLabelText('Your team');
+    expect(within(mine).getAllByRole('option').map((o) => o.textContent)).toEqual(['Alpha · Freshers 2026', 'Alpha · Freshers 2025 (past season, read only)']);
+    fireEvent.change(mine, { target: { value: 'r0' } });
+    expect(await screen.findByText(/past season: captains can view it but not change it/i)).toBeTruthy();
   });
 
   it('shows an error, not someone else\'s players, when the roster cannot be loaded', async () => {
@@ -164,16 +178,49 @@ describe('TeamBuilder on season rosters', () => {
     expect(screen.queryByRole('button', { name: /^0\d / })).toBeNull();
   });
 
-  it('in the dictator preview, ignores a late roster for the previously chosen team', async () => {
+  it('a dictator who also captains a team starts on it and can edit (no read-only preview)', async () => {
+    auth.role = 'dictator';
+    renderBuilder();
+    await screen.findByRole('button', { name: /01 Ada Striker/ });
+    expect(screen.getByLabelText('Team').value).toBe('t1');
+    expect(screen.getByText(/Dictator workspace/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '15' } });
+    fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
+    await waitFor(() => expect(screen.getByText(/saved successfully/i)).toBeTruthy());
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_membership_id: 'm1', p_jersey_number: 15 });
+  });
+
+  it('a dictator picks division, season and team and edits any roster', async () => {
+    auth.role = 'dictator';
+    db.tables.team_registrations = db.tables.team_registrations.filter((r) => r.captain_id !== 'c1'); // not a captain
+    renderBuilder();
+    expect(await screen.findByText(/Pick a division, season and team/)).toBeTruthy();
+    expect(screen.getByLabelText('Season').disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Division'), { target: { value: 'd2' } });
+    expect(await screen.findByRole('option', { name: 'This division has no seasons' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Division'), { target: { value: 'd1' } });
+    await waitFor(() => expect(screen.getByRole('option', { name: '2026 (current)' })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Season'), { target: { value: 's1' } });
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Beta' })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Team'), { target: { value: 't2' } });
+    expect(await screen.findByRole('button', { name: /01 Wrong Team/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ada Striker/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /change logo/i })).toBeNull(); // branding stays with the team's captain
+    fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
+    await waitFor(() => expect(screen.getByText(/saved successfully/i)).toBeTruthy());
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_membership_id: 'm-other-team', p_jersey_number: 8 });
+  });
+
+  it('a dictator\'s late roster answer for a previously chosen team is ignored', async () => {
     auth.role = 'dictator';
     renderBuilder();
     await screen.findByRole('button', { name: /01 Ada Striker/ });
     db.slowEntry = 'e2'; // Beta's roster answers late
-    fireEvent.change(screen.getByLabelText(/captain team/i), { target: { value: 'r2' } });
-    fireEvent.change(screen.getByLabelText(/captain team/i), { target: { value: 'r1' } });
+    fireEvent.change(screen.getByLabelText('Team'), { target: { value: 't2' } });
+    fireEvent.change(screen.getByLabelText('Team'), { target: { value: 't1' } });
     expect(await screen.findByRole('button', { name: /01 Ada Striker/ })).toBeTruthy();
     await new Promise((r) => setTimeout(r, 120));
     expect(screen.queryByRole('button', { name: /Wrong Team/ })).toBeNull();
-    expect(screen.getAllByRole('button', { name: /^0\d / }).map((b) => b.textContent)).toEqual(['01 Ada Striker', '02 Bea Keeper']);
   });
 });

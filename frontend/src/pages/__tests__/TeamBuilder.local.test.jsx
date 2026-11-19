@@ -57,7 +57,7 @@ const opts = { auth: { persistSession: false, autoRefreshToken: false, detectSes
 let conn;
 let admin;
 const users = [];
-const made = { division: null, season: null, teams: [], entries: [], players: [], places: [], regs: [] };
+const made = { division: null, season: null, division2: null, season2: null, teams: [], entries: [], players: [], places: [], regs: [] };
 
 const must = (r) => {
   if (r.error) throw new Error(`setup failed: ${JSON.stringify(r.error)}`);
@@ -87,17 +87,23 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
     admin = createClient(conn.url, conn.secret, opts);
     made.division = must(await admin.from('divisions').insert({ slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
     made.season = must(await admin.from('seasons').insert({ division_id: made.division, slug: '2026', name: `${tag} 2026`, is_current: true }).select('id').single()).id; // captains edit current-season rosters only
-    for (const name of ['Own', 'Other']) {
+    // The other team plays the current season of a second division, so one player can be on both rosters (one
+    // shared card, one roster place per season).
+    made.division2 = must(await admin.from('divisions').insert({ slug: `${tag}-b`, name: `SL Check ${tag} B` }).select('id').single()).id;
+    made.season2 = must(await admin.from('seasons').insert({ division_id: made.division2, slug: '2026', name: `${tag} B 2026`, is_current: true }).select('id').single()).id;
+    for (const [name, season] of [['Own', made.season], ['Other', made.season2]]) {
       // Branded, so the builder goes straight to the roster.
       const team = must(await admin.from('teams').insert({ name: `${tag} ${name}`, logo_url: 'https://example.invalid/logo.png', team_color: '#112233' }).select('id').single()).id;
       made.teams.push(team);
-      made.entries.push(must(await admin.from('team_entries').insert({ team_id: team, season_id: made.season }).select('id').single()).id);
+      made.entries.push(must(await admin.from('team_entries').insert({ team_id: team, season_id: season }).select('id').single()).id);
     }
     for (const [i, name] of ['Ada', 'Zed'].entries()) {
       const player = must(await admin.from('players').insert({ first_name: `${tag}${name}`, last_name: 'Player', overall_rating: 60 }).select('id').single()).id;
       made.players.push(player);
-      made.places.push(must(await admin.from('roster_memberships').insert({ player_id: player, team_entry_id: made.entries[i], season_id: made.season, jersey_number: 7, position: 'CM' }).select('id').single()).id);
+      made.places.push(must(await admin.from('roster_memberships').insert({ player_id: player, team_entry_id: made.entries[i], season_id: i ? made.season2 : made.season, jersey_number: 7, position: 'CM' }).select('id').single()).id);
     }
+    // Ada also plays for the other team: places[2].
+    made.places.push(must(await admin.from('roster_memberships').insert({ player_id: made.players[0], team_entry_id: made.entries[1], season_id: made.season2, jersey_number: 9, position: 'CM' }).select('id').single()).id);
     captain = await signedInAs('captain');
     noRole = await signedInAs('default');
     made.regs.push(must(await admin.from('team_registrations').insert({ captain_id: captain.id, team_name: `${tag} Own`, season_id: made.season, team_id: made.teams[0] }).select('id').single()).id);
@@ -108,12 +114,12 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
   afterAll(async () => {
     if (!admin) return;
     await admin.from('team_registrations').delete().in('id', made.regs);
-    await admin.from('roster_memberships').delete().eq('season_id', made.season);
+    await admin.from('roster_memberships').delete().in('season_id', [made.season, made.season2]);
     await admin.from('players').delete().in('id', made.players);
-    await admin.from('team_entries').delete().eq('season_id', made.season);
+    await admin.from('team_entries').delete().in('season_id', [made.season, made.season2]);
     await admin.from('teams').delete().in('id', made.teams);
-    await admin.from('seasons').delete().eq('id', made.season);
-    await admin.from('divisions').delete().eq('id', made.division);
+    await admin.from('seasons').delete().in('id', [made.season, made.season2]);
+    await admin.from('divisions').delete().in('id', [made.division, made.division2]);
     for (const id of users) await admin.auth.admin.deleteUser(id);
   }, 60000);
 
@@ -131,6 +137,38 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
     expect(must(await admin.from('roster_memberships').select('jersey_number, position').eq('id', made.places[0]).single())).toEqual({ jersey_number: 11, position: 'ST' });
     expect(must(await admin.from('players').select('overall_rating, first_name').eq('id', made.players[0]).single())).toEqual({ overall_rating: 83, first_name: `${tag}Ada` });
     expect(must(await admin.from('roster_memberships').select('jersey_number').eq('id', made.places[1]).single()).jersey_number).toBe(7);
+    // Ada's card is shared: the other team's roster shows the new rating, but its own jersey is untouched.
+    const elsewhere = must(await admin.from('roster_memberships').select('jersey_number, player:players(overall_rating)').eq('id', made.places[2]).single());
+    expect(elsewhere).toEqual({ jersey_number: 9, player: { overall_rating: 83 } });
+  }, 60000);
+
+  it('the captain cannot write through the other team\'s roster place for the same player, and nothing changes', async () => {
+    const r = await captain.client.rpc('captain_update_roster_player', {
+      p_membership_id: made.places[2], p_position: 'GK', p_jersey_number: 1, p_overall_rating: 10, p_attributes: {}, p_image_url: null,
+    });
+    expect(r.error?.message).toMatch(/not part of your assigned roster/);
+    const after = must(await admin.from('roster_memberships').select('jersey_number, position, player:players(overall_rating)').eq('id', made.places[2]).single());
+    expect(after).toEqual({ jersey_number: 9, position: 'CM', player: { overall_rating: 83 } });
+  }, 60000);
+
+  it('a dictator who also captains a team keeps dictator access: picks another team and saves', async () => {
+    const boss = await signedInAs('dictator');
+    made.regs.push(must(await admin.from('team_registrations').insert({ captain_id: boss.id, team_name: `${tag} Other`, season_id: made.season2, team_id: made.teams[1] }).select('id').single()).id);
+    holder.client = boss.client;
+    holder.user = { id: boss.id, role: 'dictator' };
+    render(<MemoryRouter><TeamBuilder /></MemoryRouter>);
+    await screen.findByRole('button', { name: new RegExp(`${tag}Zed`) }, { timeout: 15000 }); // starts on the team they captain
+    fireEvent.change(screen.getByLabelText('Division'), { target: { value: made.division } });
+    await waitFor(() => expect(screen.getByRole('option', { name: `${tag} 2026 (current)` })).toBeTruthy(), { timeout: 15000 });
+    fireEvent.change(screen.getByLabelText('Season'), { target: { value: made.season } });
+    await waitFor(() => expect(screen.getByRole('option', { name: `${tag} Own` })).toBeTruthy(), { timeout: 15000 });
+    fireEvent.change(screen.getByLabelText('Team'), { target: { value: made.teams[0] } });
+    await screen.findByRole('button', { name: new RegExp(`01 ${tag}Ada`) }, { timeout: 15000 });
+    fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '21' } });
+    fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
+    await waitFor(() => expect(screen.getByText(/saved successfully/i)).toBeTruthy(), { timeout: 15000 });
+    expect(must(await admin.from('roster_memberships').select('jersey_number').eq('id', made.places[0]).single()).jersey_number).toBe(21);
+    must(await admin.from('roster_memberships').update({ jersey_number: 11 }).eq('id', made.places[0])); // the next case expects 11
   }, 60000);
 
   it('a user assigned to the team without the captain role is refused and nothing is written', async () => {

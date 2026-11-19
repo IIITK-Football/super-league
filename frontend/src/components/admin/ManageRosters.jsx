@@ -18,7 +18,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // card: the FUT card fields being edited; baseAttributes: the stored attributes, kept for every field the form does not
 // show.
-export const blankPlayer = () => ({ first_name: '', last_name: '', jersey_number: '', position: '', overall_rating: '50', card: blankCardDraft(), baseAttributes: {}, email: '' });
+export const blankPlayer = () => ({ first_name: '', last_name: '', jersey_number: '', position: '', overall_rating: '', card: blankCardDraft(), baseAttributes: {}, email: '' });
 
 // Returns an error message, or the cleaned values to write.
 export function validatePlayer(p) {
@@ -28,8 +28,10 @@ export function validatePlayer(p) {
   if (first.length > 100 || last.length > 100) return { error: 'Names can have up to 100 characters.' };
   const jersey = p.jersey_number === '' || p.jersey_number === null || p.jersey_number === undefined ? null : Number(p.jersey_number);
   if (jersey !== null && (!Number.isInteger(jersey) || jersey < 0 || jersey > 99)) return { error: 'Jersey number must be between 0 and 99.' };
-  const rating = Number(p.overall_rating);
-  if (!Number.isInteger(rating) || rating < 1 || rating > 99) return { error: 'Overall rating must be between 1 and 99.' };
+  // An empty rating means "not set" (saved as null); a rating that is set must be 1..99. Nothing is filled in.
+  const ratingText = String(p.overall_rating ?? '').trim();
+  const rating = ratingText === '' ? null : Number(ratingText);
+  if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 99)) return { error: 'Overall rating must be between 1 and 99, or left empty.' };
   const attributes = applyCardDraft(p.baseAttributes, p.card || blankCardDraft());
   if (attributes.error) return { error: attributes.error };
   const email = p.email.trim().toLowerCase();
@@ -63,7 +65,7 @@ function playerFields(value, onChange, idPrefix) {
     <label className={labelClass}>Last name<input aria-label={`${idPrefix} last name`} value={value.last_name} onChange={field('last_name')} className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
     <label className={labelClass}>Jersey<input aria-label={`${idPrefix} jersey`} type="number" min="0" max="99" value={value.jersey_number ?? ''} onChange={field('jersey_number')} className={`${inputClass} mt-1`} /></label>
     <label className={labelClass}>Position<select aria-label={`${idPrefix} position`} value={value.position || ''} onChange={field('position')} className={`${inputClass} mt-1 normal-case tracking-normal`}><option value="">Not set</option>{[...new Set([...POSITIONS, value.position].filter(Boolean))].map((p) => <option key={p} value={p}>{p}</option>)}</select></label>
-    <label className={labelClass}>Overall rating<input aria-label={`${idPrefix} rating`} type="number" min="1" max="99" value={value.overall_rating} onChange={field('overall_rating')} className={`${inputClass} mt-1`} /></label>
+    <label className={labelClass}>Overall rating<input aria-label={`${idPrefix} rating`} type="number" min="1" max="99" placeholder="Not set" value={value.overall_rating} onChange={field('overall_rating')} className={`${inputClass} mt-1`} /></label>
     <label className={labelClass}>Private email<input aria-label={`${idPrefix} email`} type="email" value={value.email} onChange={field('email')} placeholder="Dictators only" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
     {cardFields(value, onChange, idPrefix)}
   </div>;
@@ -255,7 +257,7 @@ export default function ManageRosters() {
     const r = roster.find((x) => x.id === id);
     setEditing(r ? {
       first_name: r.player?.first_name || '', last_name: r.player?.last_name || '', jersey_number: r.jersey_number ?? '', position: r.position || '',
-      overall_rating: String(r.player?.overall_rating ?? 50), card: cardDraft(r.player?.attributes), baseAttributes: r.player?.attributes || {}, email: r.email || '',
+      overall_rating: r.player?.overall_rating == null ? '' : String(r.player.overall_rating), card: cardDraft(r.player?.attributes), baseAttributes: r.player?.attributes || {}, email: r.email || '',
     } : null);
   };
 

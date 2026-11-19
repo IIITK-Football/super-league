@@ -98,15 +98,21 @@ export async function loadRoster(registration) {
     }));
 }
 
+// A team context the builder works on: a team in a season, with the signed-in user's own registration for it if they
+// have one (only then may branding be changed). Captains get their own registrations; dictators pick any team.
+const SEASON_FIELDS = 'id, name, is_current, division:divisions(id, name)';
+
 export function TeamBuilder() {
     const { user, role } = useAuth();
-    const isDictatorPreview = role === 'dictator';
+    // Dictator first: a dictator keeps dictator access even when they also captain a team.
+    const isDictator = role === 'dictator';
     const [registration, setRegistration] = useState(null);
     const [registrations, setRegistrations] = useState([]);
     const [players, setPlayers] = useState([]);
     const [activePlayer, setActivePlayer] = useState(0);
     const [activeTab, setActiveTab] = useState('basic');
     const [loading, setLoading] = useState(true);
+    const [rosterLoading, setRosterLoading] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [saving, setSaving] = useState(false);
     const [teamLogoFile, setTeamLogoFile] = useState(null);
@@ -118,78 +124,130 @@ export function TeamBuilder() {
     const [brandingModalOpen, setBrandingModalOpen] = useState(false);
     const [brandingError, setBrandingError] = useState('');
     const [brandingSuccess, setBrandingSuccess] = useState('');
+    // Dictator selection: division -> season -> team, as in Teams & Rosters.
+    const [divisions, setDivisions] = useState([]);
+    const [divisionId, setDivisionId] = useState('');
+    const [seasons, setSeasons] = useState([]);
+    const [seasonId, setSeasonId] = useState('');
+    const [teams, setTeams] = useState([]);
+    const [teamId, setTeamId] = useState('');
+    const [picking, setPicking] = useState({ seasons: false, teams: false });
     const latestRegistration = useRef(null);
+    const latestPick = useRef({ seasons: 0, teams: 0 });
+    // A captain edits only the current season; an earlier season of their own team opens read-only.
+    const readOnly = !isDictator && registration?.season?.is_current === false;
 
-    useEffect(() => {
-        let cancelled = false;
-        const loadTeam = async () => {
-            if (!user?.id) return;
-            let query = supabase
-                .from('team_registrations')
-                .select('id, team_id, team_name, season_id, season:seasons(name, division:divisions(name))')
-                .order('team_name', { ascending: true });
-            if (!isDictatorPreview) query = query.eq('captain_id', user.id);
-            const { data, error: loadError } = isDictatorPreview
-                ? await query
-                : await query.maybeSingle();
-            if (cancelled) return;
-            if (loadError) setError(loadError.message);
-            const teamRegistrations = (isDictatorPreview ? data || [] : data ? [data] : []);
-            const teamIds = teamRegistrations.map((item) => item.team_id).filter(Boolean);
-            let teamsById = {};
-            if (teamIds.length) {
-                const { data: teams, error: teamsError } = await supabase
-                    .from('teams')
-                    .select('id, name, logo_url, team_color')
-                    .in('id', teamIds);
-                if (teamsError) setError(teamsError.message);
-                teamsById = Object.fromEntries((teams || []).map((team) => [team.id, team]));
-            }
-            if (cancelled) return;
-            const choices = teamRegistrations.map((item) => ({ ...item, team: teamsById[item.team_id] || null }));
-            setRegistrations(choices);
-            const selected = isDictatorPreview
-                ? choices[0] || null
-                : choices[0] || null;
-            setRegistration(selected);
-            // Only the latest choice may fill the roster: if the dictator picks another team while this loads, this
-            // answer is ignored.
-            latestRegistration.current = selected?.id ?? null;
-            try {
-                const roster = await loadRoster(selected);
-                if (cancelled || latestRegistration.current !== (selected?.id ?? null)) return;
-                setPlayers(roster.map(fromMember));
-            } catch (rosterError) {
-                if (!cancelled && latestRegistration.current === (selected?.id ?? null)) { setPlayers([]); setError(rosterError.message || 'Could not load the roster.'); }
-            }
-            setTeamColor(selected?.team?.team_color || '#ffffff');
-            setTeamColorSelected(Boolean(selected?.team?.team_color));
-            setLoading(false);
-        };
-        loadTeam();
-        return () => { cancelled = true; };
-    }, [user?.id, isDictatorPreview]);
-
-    const currentPlayer = players[activePlayer];
-    const selectRegistration = (registrationId) => {
-        const selected = registrations.find((item) => item.id === registrationId) || null;
-        setRegistration(selected);
+    // Loads the context's roster; only the latest choice may fill it (a late answer for an earlier choice is ignored).
+    const openContext = (context) => {
+        setRegistration(context);
         setPlayers([]);
-        // Only the latest choice may fill the roster: a slower answer for an earlier team is ignored.
-        latestRegistration.current = registrationId;
-        loadRoster(selected)
-            .then((roster) => { if (latestRegistration.current === registrationId) setPlayers(roster.map(fromMember)); })
-            .catch((rosterError) => { if (latestRegistration.current === registrationId) { setPlayers([]); setError(rosterError.message || 'Could not load the roster.'); } });
         setActivePlayer(0);
         setActiveTab('basic');
         setTeamLogoFile(null);
-        setTeamColor(selected?.team?.team_color || '#ffffff');
-        setTeamColorSelected(Boolean(selected?.team?.team_color));
-        setError('');
-        setSuccess('');
-        setBrandingError('');
-        setBrandingSuccess('');
+        setTeamColor(context?.team?.team_color || '#ffffff');
+        setTeamColorSelected(Boolean(context?.team?.team_color));
+        setError(''); setSuccess(''); setBrandingError(''); setBrandingSuccess('');
+        const key = context?.id ?? null;
+        latestRegistration.current = key;
+        if (!context) { setRosterLoading(false); return; }
+        setRosterLoading(true);
+        loadRoster(context)
+            .then((roster) => { if (latestRegistration.current === key) setPlayers(roster.map(fromMember)); })
+            .catch((rosterError) => { if (latestRegistration.current === key) { setPlayers([]); setError(rosterError.message || 'Could not load the roster.'); } })
+            .finally(() => { if (latestRegistration.current === key) setRosterLoading(false); });
     };
+
+    const teamsById = async (ids) => {
+        if (!ids.length) return {};
+        const { data: rows, error: teamsError } = await supabase.from('teams').select('id, name, logo_url, team_color').in('id', ids);
+        if (teamsError) setError(teamsError.message);
+        return Object.fromEntries((rows || []).map((team) => [team.id, team]));
+    };
+
+    useEffect(() => {
+        let cancelled = false;
+        const start = async () => {
+            if (!user?.id) return;
+            // The user's own registrations (any number): a captain's teams, or the teams a dictator also captains.
+            const { data: own, error: ownError } = await supabase
+                .from('team_registrations')
+                .select(`id, team_id, team_name, season_id, season:seasons(${SEASON_FIELDS})`)
+                .eq('captain_id', user.id);
+            if (cancelled) return;
+            if (ownError) setError(ownError.message);
+            const byId = await teamsById((own || []).map((r) => r.team_id).filter(Boolean));
+            if (cancelled) return;
+            const mine = (own || []).map((r) => ({ ...r, registrationId: r.id, team: byId[r.team_id] || null }))
+                .sort((a, b) => Number(b.season?.is_current === true) - Number(a.season?.is_current === true) || teamLabel(a).localeCompare(teamLabel(b)));
+            setRegistrations(mine);
+            if (isDictator) {
+                const { data: rows, error: divisionsError } = await supabase.from('divisions').select('id, name').order('sort_order', { ascending: true });
+                if (cancelled) return;
+                if (divisionsError) setError(divisionsError.message);
+                setDivisions(rows || []);
+                setLoading(false);
+                // Start on the dictator's own current team if they captain one.
+                const preferred = mine.find((r) => r.season?.is_current);
+                if (preferred?.season?.division?.id) {
+                    setDivisionId(preferred.season.division.id);
+                    await loadSeasons(preferred.season.division.id);
+                    setSeasonId(preferred.season_id);
+                    await loadTeams(preferred.season_id);
+                    setTeamId(preferred.team_id);
+                    openContext(preferred);
+                }
+                return;
+            }
+            setLoading(false);
+            openContext(mine[0] || null);
+        };
+        start();
+        return () => { cancelled = true; };
+    }, [user?.id, isDictator]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const loadSeasons = async (dId) => {
+        const n = ++latestPick.current.seasons;
+        setPicking((p) => ({ ...p, seasons: true }));
+        const { data, error: err } = await supabase.from('seasons').select('id, name, is_current').eq('division_id', dId).order('sort_order', { ascending: true });
+        if (n !== latestPick.current.seasons) return;
+        if (err) setError(err.message);
+        setSeasons(data || []);
+        setPicking((p) => ({ ...p, seasons: false }));
+    };
+    const loadTeams = async (sId) => {
+        const n = ++latestPick.current.teams;
+        setPicking((p) => ({ ...p, teams: true }));
+        const { data: entries, error: err } = await supabase.from('team_entries').select('team_id').eq('season_id', sId);
+        const byId = await teamsById((entries || []).map((e) => e.team_id));
+        if (n !== latestPick.current.teams) return;
+        if (err) setError(err.message);
+        setTeams(Object.values(byId).sort((a, b) => a.name.localeCompare(b.name)));
+        setPicking((p) => ({ ...p, teams: false }));
+    };
+    const chooseDivision = (id) => {
+        setDivisionId(id); setSeasons([]); setSeasonId(''); setTeams([]); setTeamId('');
+        latestPick.current.seasons += 1; latestPick.current.teams += 1; openContext(null);
+        if (id) loadSeasons(id);
+    };
+    const chooseSeason = (id) => {
+        setSeasonId(id); setTeams([]); setTeamId('');
+        latestPick.current.teams += 1; openContext(null);
+        if (id) loadTeams(id);
+    };
+    const chooseTeam = (id) => {
+        setTeamId(id);
+        if (!id) { openContext(null); return; }
+        const season = seasons.find((x) => x.id === seasonId);
+        const division = divisions.find((d) => d.id === divisionId);
+        const own = registrations.find((r) => r.team_id === id && r.season_id === seasonId);
+        openContext({
+            id: own?.id || `${id}:${seasonId}`, registrationId: own?.id || null, team_id: id, season_id: seasonId,
+            season: { ...season, division }, team: teams.find((t) => t.id === id) || null,
+        });
+    };
+
+    const currentPlayer = players[activePlayer];
+    const selectRegistration = (registrationId) => openContext(registrations.find((item) => item.id === registrationId) || null);
     const updatePlayer = (field, value) => setPlayers((current) => current.map((player, index) => index === activePlayer ? { ...player, [field]: value } : player));
     const updateStat = (stat, value) => updatePlayer('stats', { ...currentPlayer.stats, [stat]: value });
 
@@ -244,7 +302,7 @@ export function TeamBuilder() {
 
     const handleBrandingSubmit = async (event) => {
         event.preventDefault();
-        if (isDictatorPreview) return;
+        if (!registration?.registrationId || readOnly) return; // branding needs the user's own current registration
         setError('');
         setSuccess('');
         setBrandingError('');
@@ -271,6 +329,7 @@ export function TeamBuilder() {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const formData = new FormData();
+            formData.append('registration_id', registration.registrationId);
             formData.append('team_color', teamColor);
             if (teamLogoFile) formData.append('logo', teamLogoFile);
 
@@ -303,7 +362,7 @@ export function TeamBuilder() {
     };
 
     const handleImageUpload = async (event) => {
-        if (isDictatorPreview) return;
+        if (readOnly) return;
         const file = event.target.files?.[0];
         if (!file) return;
         
@@ -357,17 +416,17 @@ export function TeamBuilder() {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        if (isDictatorPreview) return;
+        if (readOnly) return;
         setError('');
         setSuccess('');
 
-        // Only players the captain changed are saved, so nothing unedited is rewritten. A changed player needs an overall
-        // rating (the database requires one); nothing is filled in on the captain's behalf.
+        // Only changed players are saved, so nothing unedited is rewritten. An empty rating stays "not set"; a rating
+        // that is set must be 1..99. Nothing is filled in.
         const changed = players.filter(isChanged);
         if (!changed.length) { setSuccess('No changes to save.'); return; }
         for (const player of changed) {
             const rating = Number(player.overallRating);
-            if (player.overallRating === '' || !Number.isInteger(rating) || rating < 1 || rating > 99) { setError(`Set an overall rating between 1 and 99 for ${player.fullName} before saving.`); return; }
+            if (player.overallRating !== '' && (!Number.isInteger(rating) || rating < 1 || rating > 99)) { setError(`The overall rating for ${player.fullName} must be between 1 and 99, or left empty.`); return; }
             const attributes = attributesForSave(player);
             if (attributes.error) { setError(`${player.fullName}: ${attributes.error}`); return; }
         }
@@ -382,7 +441,7 @@ export function TeamBuilder() {
                 if (rpcError) throw rpcError;
                 setPlayers((current) => current.map((p) => (p.id === player.id ? fromMember({
                     id: p.id, name: p.fullName, position: p.position, jersey_number: p.jerseyNumber, image_url: p.imageUrl,
-                    overall_rating: Number(p.overallRating), attributes,
+                    overall_rating: p.overallRating === '' ? null : Number(p.overallRating), attributes,
                 }) : p)));
             }
             setSuccess('Player profiles and images saved successfully.');
@@ -395,12 +454,33 @@ export function TeamBuilder() {
 
     if (loading) return <div className="min-h-screen bg-black" />;
 
+    const dictatorPicker = isDictator && <div className="team-builder-grid" aria-label="Choose a team">
+        <label>Division<select aria-label="Division" value={divisionId} onChange={(event) => chooseDivision(event.target.value)}>
+            <option value="">{divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
+            {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select></label>
+        <label>Season<select aria-label="Season" value={seasonId} disabled={!divisionId || picking.seasons} onChange={(event) => chooseSeason(event.target.value)}>
+            <option value="">{picking.seasons ? 'Loading seasons...' : divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}</option>
+            {seasons.map((x) => <option key={x.id} value={x.id}>{x.name}{x.is_current ? ' (current)' : ''}</option>)}
+        </select></label>
+        <label>Team<select aria-label="Team" value={teamId} disabled={!seasonId || picking.teams} onChange={(event) => chooseTeam(event.target.value)}>
+            <option value="">{picking.teams ? 'Loading teams...' : seasonId && !teams.length ? 'No teams in this season' : 'Choose a team'}</option>
+            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select></label>
+    </div>;
+    const captainPicker = !isDictator && registrations.length > 1 && <label>Your team<select aria-label="Your team" value={registration?.id || ''} onChange={(event) => selectRegistration(event.target.value)}>
+        {registrations.map((item) => <option key={item.id} value={item.id}>{teamLabel(item)} · {item.season?.division?.name} {item.season?.name}{item.season?.is_current ? '' : ' (past season, read only)'}</option>)}
+    </select></label>;
+    const workspace = isDictator ? 'Dictator workspace' : 'Captain workspace';
+
     if (!registration) return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
-        <div className="team-builder-empty"><Users size={32} /><p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'}</p><h1>No squad<br /><em>assigned.</em></h1><span>{isDictatorPreview ? 'No captain teams have been assigned yet.' : 'A dictator will assign your team and roster here.'}</span>{error && <p className="team-builder-error">{error}</p>}</div>
+        {isDictator
+            ? <div className="team-builder-shell"><div className="team-builder-heading"><Users size={28} /><p>{workspace}</p><h1>Choose a<br /><em>team.</em></h1><span>Pick a division, season and team to manage its roster.</span></div>{dictatorPicker}{error && <p role="alert" className="team-builder-error">{error}</p>}</div>
+            : <div className="team-builder-empty"><Users size={32} /><p>{workspace}</p><h1>No squad<br /><em>assigned.</em></h1><span>A dictator will assign your team and roster here.</span>{error && <p className="team-builder-error">{error}</p>}</div>}
     </main>;
 
-    if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictatorPreview) return <main className="team-builder">
+    if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictator && registration.registrationId && !readOnly) return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
         <div className="team-builder-shell">
             <div className="team-builder-heading"><Shield size={28} /><p>Captain workspace / {registration.season?.division?.name} {registration.season?.name}</p><h1>Brand your<br /><em>team.</em></h1><span>Set your team identity before entering the Team Builder.</span></div>
@@ -427,30 +507,14 @@ export function TeamBuilder() {
         </div>
     </main>;
 
-    if ((!registration.team?.logo_url || !registration.team?.team_color) && isDictatorPreview) return <main className="team-builder">
-        <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
-        <div className="team-builder-shell">
-            <div className="team-builder-heading"><Shield size={28} /><p>Dictator preview / {registration.season?.division?.name} {registration.season?.name}</p><h1>Brand your<br /><em>team.</em></h1><span>This captain is prompted to upload a team logo and choose its color before accessing the roster.</span></div>
-            <div className="team-builder-form team-builder-brand-form">
-                <label>Captain team
-                    <select value={registration.id} onChange={(event) => selectRegistration(event.target.value)}>
-                        {registrations.map((item) => <option key={item.id} value={item.id}>{teamLabel(item)}{item.season?.name ? ` · ${item.season.name}` : ''}</option>)}
-                    </select>
-                </label>
-                <div className="team-builder-brand-preview" style={{ borderColor: teamColor }}>
-                    {registration.team?.logo_url ? <img src={registration.team.logo_url} alt={`${teamLabel(registration)} logo`} /> : <Shield size={38} />}
-                    <strong>{teamLabel(registration)}</strong>
-                </div>
-                <p className="team-builder-brand-hint">Captain view preview — changes are disabled.</p>
-            </div>
-        </div>
-    </main>;
-
     if (!players.length) return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
-        <div className="team-builder-empty"><Shield size={32} /><p>{teamLabel(registration)}</p>{error
+        {dictatorPicker}{captainPicker}
+        <div className="team-builder-empty"><Shield size={32} /><p>{teamLabel(registration)}</p>{rosterLoading
+            ? <><h1>Loading<br /><em>roster.</em></h1><span>Loading the roster...</span></>
+            : error
             ? <><h1>Roster<br /><em>unavailable.</em></h1><span role="alert" className="team-builder-error">The roster could not be loaded: {error}</span></>
-            : <><h1>Roster<br /><em>pending.</em></h1><span>{isDictatorPreview ? 'This is what captains see while their roster is being formed.' : 'Your dictator is forming the player roster.'}</span></>}</div>
+            : <><h1>Roster<br /><em>pending.</em></h1><span>{isDictator ? 'No players on this roster yet. Add them in Teams & Rosters.' : 'Your dictator is forming the player roster.'}</span></>}</div>
     </main>;
 
     return <main className="team-builder">
@@ -458,7 +522,7 @@ export function TeamBuilder() {
         <div className="team-builder-shell team-builder-shell-wide">
             <div className="team-builder-heading">
                 <Users size={28} />
-                <p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'} / {registration.season?.division?.name} {registration.season?.name}</p>
+                <p>{workspace} / {registration.season?.division?.name} {registration.season?.name}</p>
                 <h1>Set your<br /><em>lineup.</em></h1>
                 <span>Set positions, ratings, and images for {teamLabel(registration)}.</span>
 
@@ -472,7 +536,7 @@ export function TeamBuilder() {
                         <strong>{teamLabel(registration)}</strong>
                         <span>Color: {registration.team?.team_color || '#FFFFFF'}</span>
                     </div>
-                    {!isDictatorPreview && (
+                    {registration.registrationId && !readOnly && (
                         <button
                             type="button"
                             onClick={() => {
@@ -489,10 +553,10 @@ export function TeamBuilder() {
                 </div>
             </div>
             <form onSubmit={handleSubmit} className="team-builder-form">
-                {isDictatorPreview && <label>Captain team<select value={registration.id} onChange={(event) => selectRegistration(event.target.value)}>{registrations.map((item) => <option key={item.id} value={item.id}>{teamLabel(item)}{item.season?.name ? ` · ${item.season.name}` : ''}</option>)}</select></label>}
-                {isDictatorPreview && <p className="team-builder-brand-hint">Captain view preview — editing and uploads are disabled.</p>}
+                {dictatorPicker}{captainPicker}
+                {readOnly && <p className="team-builder-brand-hint">This is a past season: captains can view it but not change it.</p>}
                 <div className="team-builder-player-nav"><div className="team-builder-player-tabs">{players.map((player, index) => <button type="button" key={player.id} onClick={() => { setActivePlayer(index); setActiveTab('basic'); }} className={index === activePlayer ? 'is-active' : ''}>{String(index + 1).padStart(2, '0')} {player.fullName || 'Player'}</button>)}</div></div>
-                <fieldset disabled={isDictatorPreview} className="team-builder-preview-fieldset">
+                <fieldset disabled={readOnly} className="team-builder-preview-fieldset">
                 <div className="team-builder-card">
                     <div className="team-builder-card-head"><div><p>{currentPlayer?.fullName}</p><span>{currentPlayer?.jerseyNumber ? `#${currentPlayer.jerseyNumber}` : 'No jersey number yet'}{currentPlayer?.position ? ` · ${currentPlayer.position}` : ''}</span></div></div>
                     <div className="team-builder-form-tabs"><button type="button" onClick={() => setActiveTab('basic')} className={activeTab === 'basic' ? 'is-active' : ''}>Position & Details</button><button type="button" onClick={() => setActiveTab('bio')} className={activeTab === 'bio' ? 'is-active' : ''}>Bio & Playstyle</button><button type="button" onClick={() => setActiveTab('stats')} className={activeTab === 'stats' ? 'is-active' : ''}>Attributes</button></div>
