@@ -72,7 +72,7 @@ describe('the backup gate in db-deploy.yml', () => {
 
 function runBackup(env: Record<string, string>) {
   return spawnSync('bash', [join(root, 'scripts/backup/database-backup.sh')], {
-    encoding: 'utf8', env: { PATH: process.env.PATH!, HOME: process.env.HOME!, ...env } as NodeJS.ProcessEnv,
+    encoding: 'utf8', env: { PATH: process.env.PATH!, HOME: process.env.HOME!, ...env } as unknown as NodeJS.ProcessEnv,
   });
 }
 const base = (over: Record<string, string> = {}) => ({
@@ -121,7 +121,7 @@ describe('confirm-backup.sh', () => {
     return { dir, sha };
   }
   const confirm = (env: Record<string, string>) => spawnSync('bash', [join(root, 'scripts/backup/confirm-backup.sh')], {
-    encoding: 'utf8', env: { PATH: process.env.PATH!, HOME: process.env.HOME!, BACKUP_KEY: KEY, MAX_AGE_HOURS: '6', ...env } as NodeJS.ProcessEnv,
+    encoding: 'utf8', env: { PATH: process.env.PATH!, HOME: process.env.HOME!, BACKUP_KEY: KEY, MAX_AGE_HOURS: '6', ...env } as unknown as NodeJS.ProcessEnv,
   });
 
   it('permits an intact, recent, restore-tested production pre-migration backup', () => {

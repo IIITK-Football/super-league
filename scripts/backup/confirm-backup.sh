@@ -12,7 +12,6 @@ set -euo pipefail
 
 verdict() {
   local permitted="$1" reason="$2"
-  local out="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
   {
     echo "### Pre-migration backup confirmation"
     echo
@@ -22,7 +21,7 @@ verdict() {
     echo "| Result | ${reason} |"
     echo
     echo "**Production migration permitted: ${permitted}**"
-  } >> "$out"
+  } | if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat >> "$GITHUB_STEP_SUMMARY"; else cat; fi
   echo "Production migration permitted: ${permitted} (${reason})"
   [ "$permitted" = 'yes' ] || exit 1
 }

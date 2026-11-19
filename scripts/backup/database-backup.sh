@@ -28,10 +28,11 @@ sha=''
 size=''
 fail() { echo "BACKUP FAILED: $*" >&2; write_summary; exit 1; }
 note_summary() { summary_lines+=("$1"); }
+# The job summary file on GitHub Actions; standard output elsewhere (opening /dev/stdout fails when it is a socket).
+summary_sink() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat >> "$GITHUB_STEP_SUMMARY"; else cat; fi; }
 write_summary() {
   local permitted='no'
   [ "$verdict_backup" = 'yes' ] && [ "$verdict_verified" = 'yes' ] && permitted='yes'
-  local out="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
   {
     echo "### Database backup (${TARGET:-?}, ${REASON:-?})"
     echo
@@ -48,7 +49,7 @@ write_summary() {
       echo
       echo "**Production migration permitted: ${permitted}**"
     fi
-  } >> "$out"
+  } | summary_sink
   if [ "${REASON:-}" = 'pre-migration' ]; then echo "Production migration permitted: ${permitted}"; fi
 }
 
