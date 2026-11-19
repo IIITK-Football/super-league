@@ -4,60 +4,49 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getPlayStyle, PLAY_STYLES } from '../data/playStyles';
+import { CARD_STATS, FEET, applyCardDraft, cardDraft, storedPlayStyle } from '../lib/playerCard';
 import { API_BASE_URL } from '../lib/api';
 import { rosterPlayerRpcArgs } from '../lib/rosterPlayerUpdate';
 import './TeamBuilder.css';
 import './TeamBranding.css';
 
 const API_URL = API_BASE_URL;
-const statKeys = ['pace', 'shooting', 'passing', 'dribbling', 'defending', 'physicality'];
 const positions = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'CF', 'ST'];
 
 const getPlayStyleId = (name) => PLAY_STYLES.find((style) => style.name.toLowerCase() === name?.replace(/\+$/, '').toLowerCase())?.id || '';
 
-const getRandomStat = () => Math.floor(Math.random() * (80 - 40 + 1)) + 40;
-
-const fromMember = (member) => {
-    const attributes = member.attributes || {};
-    const bio = attributes.bio || {};
-    const playStyle = attributes.playStyles?.[0] || {};
-    const rawStats = attributes.stats || {};
-
-    const statEntries = statKeys.map((key) => {
-        const val = rawStats[key[0].toUpperCase() + key.slice(1)]?.total;
-        return [key, typeof val === 'number' ? val : null];
-    });
-
-    const isAllDefaultOrMissing = statEntries.every(([_, val]) => val === null || val === 50);
-
-    const stats = Object.fromEntries(
-        statEntries.map(([key, val]) => [
-            key,
-            isAllDefaultOrMissing || val === null ? getRandomStat() : val,
-        ])
-    );
-
-    const calculatedAvgRating = Math.round(
-        Object.values(stats).reduce((acc, curr) => acc + curr, 0) / statKeys.length
-    );
-
-    const overallRating = (!member.overall_rating || member.overall_rating === 50)
-        ? calculatedAvgRating
-        : member.overall_rating;
-
-    return {
+// A roster place as the form edits it. Card fields come from the canonical attributes; anything not set stays empty
+// (no default foot, no generated stats or rating). `saved` records what was loaded, so only changed players are saved.
+const editable = (p) => JSON.stringify([p.position, p.jerseyNumber, p.imageUrl, p.overallRating, p.preferredFoot, p.playStyleId, p.stats]);
+export const fromMember = (member) => {
+    const card = cardDraft(member.attributes);
+    const player = {
         id: member.id,
         fullName: member.name || [member.first_name, member.last_name].filter(Boolean).join(' '),
         position: member.position || '',
         jerseyNumber: member.jersey_number ?? '',
         imageUrl: member.image_url || '',
-        preferredFoot: bio.preferredFoot || 'Right',
-        playStyleId: getPlayStyleId(playStyle.name),
-        overallRating,
-        attributes,
-        stats,
+        preferredFoot: card.preferredFoot,
+        playStyleId: card.playStyles[0] ? getPlayStyleId(card.playStyles[0].name) : '',
+        overallRating: member.overall_rating == null ? '' : String(member.overall_rating),
+        attributes: member.attributes || {},
+        stats: card.stats,
     };
+    return { ...player, saved: editable(player) };
 };
+
+// The attributes to save for an edited player: the stored card with the form's values applied. Only the first play
+// style is chosen here; the others are kept.
+export const attributesForSave = (player) => {
+    let playStyles = cardDraft(player.attributes).playStyles;
+    if (player.playStyleId !== JSON.parse(player.saved)[5]) {
+        const style = getPlayStyle(player.playStyleId);
+        const rest = playStyles.slice(1);
+        playStyles = style ? [storedPlayStyle(style), ...rest.filter((s) => s.name !== style.name)] : rest;
+    }
+    return applyCardDraft(player.attributes, { stats: player.stats, preferredFoot: player.preferredFoot, playStyles });
+};
+export const isChanged = (player) => editable(player) !== player.saved;
 
 function PlayStylePicker({ value, onChange }) {
     const style = getPlayStyle(value);
@@ -77,6 +66,9 @@ function PlayStylePicker({ value, onChange }) {
 
 // The roster of a registration's team in its season: each roster place with the player's card. The id used for
 // saving is the roster place (captain_update_roster_player checks that it belongs to the captain's team and season).
+// The team's own name (the registration keeps an older copy that can differ, so it is never shown).
+const teamLabel = (registration) => registration?.team?.name || 'Your team';
+
 export async function loadRoster(registration) {
     if (!registration?.team_id || !registration?.season_id) return [];
     const { data: entry, error: entryError } = await supabase
@@ -148,7 +140,7 @@ export function TeamBuilder() {
             if (teamIds.length) {
                 const { data: teams, error: teamsError } = await supabase
                     .from('teams')
-                    .select('id, logo_url, team_color')
+                    .select('id, name, logo_url, team_color')
                     .in('id', teamIds);
                 if (teamsError) setError(teamsError.message);
                 teamsById = Object.fromEntries((teams || []).map((team) => [team.id, team]));
@@ -160,12 +152,15 @@ export function TeamBuilder() {
                 ? choices[0] || null
                 : choices[0] || null;
             setRegistration(selected);
+            // Only the latest choice may fill the roster: if the dictator picks another team while this loads, this
+            // answer is ignored.
+            latestRegistration.current = selected?.id ?? null;
             try {
                 const roster = await loadRoster(selected);
-                if (cancelled) return;
+                if (cancelled || latestRegistration.current !== (selected?.id ?? null)) return;
                 setPlayers(roster.map(fromMember));
             } catch (rosterError) {
-                if (!cancelled) setError(rosterError.message || 'Could not load the roster.');
+                if (!cancelled && latestRegistration.current === (selected?.id ?? null)) { setPlayers([]); setError(rosterError.message || 'Could not load the roster.'); }
             }
             setTeamColor(selected?.team?.team_color || '#ffffff');
             setTeamColorSelected(Boolean(selected?.team?.team_color));
@@ -184,7 +179,7 @@ export function TeamBuilder() {
         latestRegistration.current = registrationId;
         loadRoster(selected)
             .then((roster) => { if (latestRegistration.current === registrationId) setPlayers(roster.map(fromMember)); })
-            .catch((rosterError) => { if (latestRegistration.current === registrationId) setError(rosterError.message || 'Could not load the roster.'); });
+            .catch((rosterError) => { if (latestRegistration.current === registrationId) { setPlayers([]); setError(rosterError.message || 'Could not load the roster.'); } });
         setActivePlayer(0);
         setActiveTab('basic');
         setTeamLogoFile(null);
@@ -196,7 +191,7 @@ export function TeamBuilder() {
         setBrandingSuccess('');
     };
     const updatePlayer = (field, value) => setPlayers((current) => current.map((player, index) => index === activePlayer ? { ...player, [field]: value } : player));
-    const updateStat = (stat, value) => updatePlayer('stats', { ...currentPlayer.stats, [stat]: Number(value) || 0 });
+    const updateStat = (stat, value) => updatePlayer('stats', { ...currentPlayer.stats, [stat]: value });
 
     const handleLogoChange = (event) => {
         const file = event.target.files?.[0];
@@ -366,24 +361,29 @@ export function TeamBuilder() {
         setError('');
         setSuccess('');
 
-        // Removed mandatory validation for all players to allow partial saving
+        // Only players the captain changed are saved, so nothing unedited is rewritten. A changed player needs an overall
+        // rating (the database requires one); nothing is filled in on the captain's behalf.
+        const changed = players.filter(isChanged);
+        if (!changed.length) { setSuccess('No changes to save.'); return; }
+        for (const player of changed) {
+            const rating = Number(player.overallRating);
+            if (player.overallRating === '' || !Number.isInteger(rating) || rating < 1 || rating > 99) { setError(`Set an overall rating between 1 and 99 for ${player.fullName} before saving.`); return; }
+            const attributes = attributesForSave(player);
+            if (attributes.error) { setError(`${player.fullName}: ${attributes.error}`); return; }
+        }
         setSaving(true);
         try {
-            for (const player of players) {
-                const style = getPlayStyle(player.playStyleId);
-                const oldAttributes = player.attributes || {};
-                const attributes = {
-                    ...oldAttributes,
-                    bio: { ...(oldAttributes.bio || {}), preferredFoot: player.preferredFoot },
-                    playStyles: style ? [{ name: style.name, description: style.description, icon_url: style.imageUrl }] : [],
-                    stats: Object.fromEntries(statKeys.map((stat) => [stat[0].toUpperCase() + stat.slice(1), { total: Number(player.stats[stat]) || getRandomStat() }])),
-                };
-
+            for (const player of changed) {
                 // The database decides who may change what. There is deliberately no direct-update fallback:
                 // captains have no write access to players or rosters, so a fallback would change nothing yet still
                 // report success.
-                const { error: rpcError } = await supabase.rpc('captain_update_roster_player', rosterPlayerRpcArgs(player, attributes, getRandomStat));
+                const attributes = attributesForSave(player).value;
+                const { error: rpcError } = await supabase.rpc('captain_update_roster_player', rosterPlayerRpcArgs(player, attributes));
                 if (rpcError) throw rpcError;
+                setPlayers((current) => current.map((p) => (p.id === player.id ? fromMember({
+                    id: p.id, name: p.fullName, position: p.position, jersey_number: p.jerseyNumber, image_url: p.imageUrl,
+                    overall_rating: Number(p.overallRating), attributes,
+                }) : p)));
             }
             setSuccess('Player profiles and images saved successfully.');
         } catch (saveError) {
@@ -406,8 +406,8 @@ export function TeamBuilder() {
             <div className="team-builder-heading"><Shield size={28} /><p>Captain workspace / {registration.season?.division?.name} {registration.season?.name}</p><h1>Brand your<br /><em>team.</em></h1><span>Set your team identity before entering the Team Builder.</span></div>
             <form onSubmit={handleBrandingSubmit} className="team-builder-form team-builder-brand-form">
                 <div className="team-builder-brand-preview" style={{ borderColor: teamColor }}>
-                    {teamLogoFile ? <span>{teamLogoFile.name}</span> : registration.team?.logo_url ? <img src={registration.team.logo_url} alt={`${registration.team_name} logo`} /> : <Shield size={38} />}
-                    <strong>{registration.team_name}</strong>
+                    {teamLogoFile ? <span>{teamLogoFile.name}</span> : registration.team?.logo_url ? <img src={registration.team.logo_url} alt={`${teamLabel(registration)} logo`} /> : <Shield size={38} />}
+                    <strong>{teamLabel(registration)}</strong>
                 </div>
                 <label>Team logo (Required)
                     <input type="file" accept="image/png" required={!registration.team?.logo_url} onChange={handleLogoChange} />
@@ -434,12 +434,12 @@ export function TeamBuilder() {
             <div className="team-builder-form team-builder-brand-form">
                 <label>Captain team
                     <select value={registration.id} onChange={(event) => selectRegistration(event.target.value)}>
-                        {registrations.map((item) => <option key={item.id} value={item.id}>{item.team_name}</option>)}
+                        {registrations.map((item) => <option key={item.id} value={item.id}>{teamLabel(item)}{item.season?.name ? ` · ${item.season.name}` : ''}</option>)}
                     </select>
                 </label>
                 <div className="team-builder-brand-preview" style={{ borderColor: teamColor }}>
-                    {registration.team?.logo_url ? <img src={registration.team.logo_url} alt={`${registration.team_name} logo`} /> : <Shield size={38} />}
-                    <strong>{registration.team_name}</strong>
+                    {registration.team?.logo_url ? <img src={registration.team.logo_url} alt={`${teamLabel(registration)} logo`} /> : <Shield size={38} />}
+                    <strong>{teamLabel(registration)}</strong>
                 </div>
                 <p className="team-builder-brand-hint">Captain view preview — changes are disabled.</p>
             </div>
@@ -448,7 +448,9 @@ export function TeamBuilder() {
 
     if (!players.length) return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
-        <div className="team-builder-empty"><Shield size={32} /><p>{registration.team_name}</p><h1>Roster<br /><em>pending.</em></h1><span>{isDictatorPreview ? 'This is what captains see while their roster is being formed.' : 'Your dictator is forming the player roster.'}</span></div>
+        <div className="team-builder-empty"><Shield size={32} /><p>{teamLabel(registration)}</p>{error
+            ? <><h1>Roster<br /><em>unavailable.</em></h1><span role="alert" className="team-builder-error">The roster could not be loaded: {error}</span></>
+            : <><h1>Roster<br /><em>pending.</em></h1><span>{isDictatorPreview ? 'This is what captains see while their roster is being formed.' : 'Your dictator is forming the player roster.'}</span></>}</div>
     </main>;
 
     return <main className="team-builder">
@@ -458,16 +460,16 @@ export function TeamBuilder() {
                 <Users size={28} />
                 <p>{isDictatorPreview ? 'Dictator preview' : 'Captain workspace'} / {registration.season?.division?.name} {registration.season?.name}</p>
                 <h1>Set your<br /><em>lineup.</em></h1>
-                <span>Set positions, ratings, and images for {registration.team_name}.</span>
+                <span>Set positions, ratings, and images for {teamLabel(registration)}.</span>
 
                 <div className="team-builder-identity-badge" style={{ borderLeftColor: registration.team?.team_color || '#d9ff4a' }}>
                     {registration.team?.logo_url ? (
-                        <img src={registration.team.logo_url} alt={`${registration.team_name} logo`} />
+                        <img src={registration.team.logo_url} alt={`${teamLabel(registration)} logo`} />
                     ) : (
                         <Shield size={28} />
                     )}
                     <div className="team-builder-identity-info">
-                        <strong>{registration.team_name}</strong>
+                        <strong>{teamLabel(registration)}</strong>
                         <span>Color: {registration.team?.team_color || '#FFFFFF'}</span>
                     </div>
                     {!isDictatorPreview && (
@@ -487,7 +489,7 @@ export function TeamBuilder() {
                 </div>
             </div>
             <form onSubmit={handleSubmit} className="team-builder-form">
-                {isDictatorPreview && <label>Captain team<select value={registration.id} onChange={(event) => selectRegistration(event.target.value)}>{registrations.map((item) => <option key={item.id} value={item.id}>{item.team_name}</option>)}</select></label>}
+                {isDictatorPreview && <label>Captain team<select value={registration.id} onChange={(event) => selectRegistration(event.target.value)}>{registrations.map((item) => <option key={item.id} value={item.id}>{teamLabel(item)}{item.season?.name ? ` · ${item.season.name}` : ''}</option>)}</select></label>}
                 {isDictatorPreview && <p className="team-builder-brand-hint">Captain view preview — editing and uploads are disabled.</p>}
                 <div className="team-builder-player-nav"><div className="team-builder-player-tabs">{players.map((player, index) => <button type="button" key={player.id} onClick={() => { setActivePlayer(index); setActiveTab('basic'); }} className={index === activePlayer ? 'is-active' : ''}>{String(index + 1).padStart(2, '0')} {player.fullName || 'Player'}</button>)}</div></div>
                 <fieldset disabled={isDictatorPreview} className="team-builder-preview-fieldset">
@@ -498,7 +500,7 @@ export function TeamBuilder() {
                         <label>Player<select value={activePlayer} onChange={(event) => setActivePlayer(Number(event.target.value))}>{players.map((player, index) => <option key={player.id} value={index}>{player.fullName}</option>)}</select></label>
                         <label>Position (Mandatory)<select value={currentPlayer.position} onChange={(event) => updatePlayer('position', event.target.value)}><option value="">Choose position</option>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
                         <label>Jersey number<input type="number" min="0" max="99" value={currentPlayer.jerseyNumber} onChange={(event) => updatePlayer('jerseyNumber', event.target.value)} /></label>
-                        <label>Overall rating<input type="number" min="1" max="99" value={currentPlayer.overallRating} onChange={(event) => updatePlayer('overallRating', event.target.value)} /></label>
+                        <label>Overall rating<input type="number" min="1" max="99" placeholder="Not set" value={currentPlayer.overallRating} onChange={(event) => updatePlayer('overallRating', event.target.value)} /></label>
                         
                         <div className="col-span-2 space-y-2">
                             <label className="block">Player Image (Mandatory for Captain)</label>
@@ -517,8 +519,8 @@ export function TeamBuilder() {
                             <span className="text-[10px] text-zinc-500">Must be a PNG format file with exact 500 × 500 resolution</span>
                         </div>
                     </div>}
-                    {activeTab === 'bio' && <div className="team-builder-grid"><label>Preferred foot<select value={currentPlayer.preferredFoot} onChange={(event) => updatePlayer('preferredFoot', event.target.value)}><option>Right</option><option>Left</option><option>Both</option></select></label><PlayStylePicker value={currentPlayer.playStyleId} onChange={(value) => updatePlayer('playStyleId', value)} /></div>}
-                    {activeTab === 'stats' && <div className="team-builder-stats">{statKeys.map((stat) => <label key={stat}>{stat}<input type="number" min="1" max="99" value={currentPlayer.stats[stat]} onChange={(event) => updateStat(stat, event.target.value)} /></label>)}</div>}
+                    {activeTab === 'bio' && <div className="team-builder-grid"><label>Preferred foot<select value={currentPlayer.preferredFoot} onChange={(event) => updatePlayer('preferredFoot', event.target.value)}><option value="">Not set</option>{FEET.map((foot) => <option key={foot}>{foot}</option>)}</select></label><PlayStylePicker value={currentPlayer.playStyleId} onChange={(value) => updatePlayer('playStyleId', value)} /></div>}
+                    {activeTab === 'stats' && <div className="team-builder-stats">{CARD_STATS.map(({ key }) => <label key={key}>{key}<input type="number" min="1" max="99" placeholder="Not set" value={currentPlayer.stats[key]} onChange={(event) => updateStat(key, event.target.value)} /></label>)}</div>}
                 </div>
                 {(error || success) && <p className={error ? 'team-builder-error' : 'team-builder-success'}>{error || success}</p>}
                 <button className="team-builder-submit" type="submit" disabled={saving}>{saving ? 'Saving player profiles...' : <><Save size={18} /> Save player profiles</>}</button>
@@ -540,11 +542,11 @@ export function TeamBuilder() {
                             {teamLogoFile ? (
                                 <span>{teamLogoFile.name} (Selected)</span>
                             ) : registration.team?.logo_url ? (
-                                <img src={registration.team.logo_url} alt={`${registration.team_name} logo`} />
+                                <img src={registration.team.logo_url} alt={`${teamLabel(registration)} logo`} />
                             ) : (
                                 <Shield size={38} />
                             )}
-                            <strong>{registration.team_name}</strong>
+                            <strong>{teamLabel(registration)}</strong>
                         </div>
                         <label>New team logo
                             <input
