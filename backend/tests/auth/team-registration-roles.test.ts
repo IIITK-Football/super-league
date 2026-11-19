@@ -12,6 +12,7 @@ const DICTATOR = 'u-dictator';
 const state = {
   roles: {} as Record<string, string>,
   writes: [] as string[],
+  registrationError: null as null | { code: string; message: string },
 };
 
 function fakeAdmin() {
@@ -24,9 +25,16 @@ function fakeAdmin() {
         return api;
       },
       maybeSingle: async () => ({ data: filterId && state.roles[filterId] ? { role: state.roles[filterId] } : null, error: null }),
-      single: async () => ({ data: { id: `${name}-1` }, error: null }),
+      single: async () => (name === 'team_registrations' && state.registrationError
+        ? { data: null, error: state.registrationError }
+        : { data: { id: `${name}-1` }, error: null }),
       insert: () => {
         state.writes.push(`insert:${name}`);
+        return api;
+      },
+      update: (row: any) => {
+        state.writes.push(`update:${name}`);
+        if (name === 'team_registrations') state.writes.push(`captain=${row.captain_id}`);
         return api;
       },
       upsert: (row: any) => {
@@ -57,11 +65,11 @@ vi.mock('@/lib/scope', () => ({
 
 import { POST } from '../../app/api/admin/team-registrations/route';
 
-const assign = (captainId: string) =>
+const assign = (captainId: string, extra: Record<string, unknown> = {}) =>
   POST(
     new Request('http://localhost/api/admin/team-registrations', {
       method: 'POST',
-      body: JSON.stringify({ team_name: 'Test FC', division: 'freshers', captain_id: captainId, members: [] }),
+      body: JSON.stringify({ team_name: 'Test FC', division: 'freshers', captain_id: captainId, members: [], ...extra }),
     }),
   );
 
@@ -71,6 +79,7 @@ beforeEach(() => {
   process.env.SUPABASE_SECRET_KEY = 'test-secret';
   state.roles = { [DICTATOR]: 'dictator' };
   state.writes = [];
+  state.registrationError = null;
 });
 
 describe('POST /api/admin/team-registrations: captain role assignment', () => {
@@ -120,5 +129,32 @@ describe('POST /api/admin/team-registrations: captain role assignment', () => {
       expect(state.roles.p5).toBe(role);
       expect(state.writes).toEqual([]);
     }
+  });
+});
+
+describe('POST /api/admin/team-registrations: changing a captain', () => {
+  it('updates the existing registration in place instead of inserting a second one', async () => {
+    state.roles.p7 = 'default';
+    const res = await assign('p7', { id: 'reg-1', team_id: 'team-1' });
+    expect(res.status).toBe(200);
+    expect(state.writes).toContain('update:team_registrations');
+    expect(state.writes).toContain('captain=p7');
+    expect(state.writes.filter((w) => /^(insert|upsert):team_registrations/.test(w))).toEqual([]);
+  });
+
+  it('a new registration is inserted', async () => {
+    state.roles.p8 = 'default';
+    const res = await assign('p8', { team_id: 'team-2' });
+    expect(res.status).toBe(200);
+    expect(state.writes).toContain('insert:team_registrations');
+    expect(state.writes).not.toContain('update:team_registrations');
+  });
+
+  it('explains when the account already captains another team', async () => {
+    state.roles.p9 = 'captain';
+    state.registrationError = { code: '23505', message: 'duplicate key value violates unique constraint "team_registrations_captain_id_key"' };
+    const res = await assign('p9', { id: 'reg-1', team_id: 'team-1' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).message).toMatch(/already captains another team/);
   });
 });

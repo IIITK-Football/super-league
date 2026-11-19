@@ -1,130 +1,202 @@
-import { useEffect, useState } from 'react';
-import { Loader2, Plus, Save, Trash2, Users } from 'lucide-react';
-import { useLatestSearch } from '../../hooks/useLatestSearch';
+import { useEffect, useRef, useState } from 'react';
+import { Loader2, Save, Trash2, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
-import { useDivisions } from '../../hooks/useDivisions';
+import { useLatestSearch } from '../../hooks/useLatestSearch';
 
-const API_URL = API_BASE_URL;
-
-// A registration belongs to a season of a division. New teams join the chosen division's current season; an existing
-// team keeps its season unless its division is changed.
-// Players and season rosters are managed in Teams & Rosters (ManageRosters); this screen registers a team for a season
-// and assigns its captain.
-const blankTeam = (division = 'freshers') => ({ id: null, draftId: crypto.randomUUID(), team_name: '', division, season_id: null, saved_division: null, captain_id: '' });
-const teamKey = (team) => team.id || team.draftId;
+// Captains & registrations. The dictator chooses division -> season -> team (as in Teams & Rosters) and sees only that
+// team's registration for that season: its captain, labelled by the dictator-only account directory (verified email,
+// name as context; never an editable profile email or a raw id). Assigning, changing or revoking a captain goes through
+// the registration route (changing a captain updates the existing registration) or row level security (revoking), and
+// the captain shown afterwards is always reloaded from the database. Every load is numbered: a late answer for an
+// earlier choice is ignored, and choosing again clears what belonged to the previous choice.
+const inputClass = 'w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-[#d9ff4a]/60';
+const labelClass = 'text-[10px] font-black uppercase tracking-widest text-zinc-500';
 
 export default function ManageRegistrations() {
-  const { divisions } = useDivisions();
-  const [registrations, setRegistrations] = useState([]);
-  const [captainLabels, setCaptainLabels] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState(null);
+  const [divisions, setDivisions] = useState([]);
+  const [divisionId, setDivisionId] = useState('');
+  const [seasons, setSeasons] = useState([]);
+  const [seasonId, setSeasonId] = useState('');
+  const [teams, setTeams] = useState([]);
+  const [teamId, setTeamId] = useState('');
+  const [registration, setRegistration] = useState(null);
+  const [captainLabel, setCaptainLabel] = useState('');
+  const [takenCaptains, setTakenCaptains] = useState(new Set());
+  const [picked, setPicked] = useState({ id: '', label: '' });
+  const [loading, setLoading] = useState({ divisions: true, seasons: false, teams: false, registration: false });
+  const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const latest = useRef({ seasons: 0, teams: 0, registration: 0 });
+  const isLoading = (key, value) => setLoading((current) => ({ ...current, [key]: value }));
+  // Starts a numbered load; the returned check is false once a newer load of the same kind has started.
+  const begin = (kind) => { const n = ++latest.current[kind]; return () => latest.current[kind] === n; };
 
-  const loadRegistrations = async () => {
-    setLoading(true);
-    const { data, error: registrationsError } = await supabase.from('team_registrations')
-      .select('id, team_id, team_name, season_id, season:seasons(name, division:divisions(slug)), captain_id').order('created_at', { ascending: false });
-    // Current captains are labelled by the dictator-only account directory (verified email, name as context).
-    const ids = [...new Set((data || []).map((r) => r.captain_id).filter(Boolean))];
-    const { data: people, error: peopleError } = ids.length
-      ? await supabase.rpc('account_directory', { p_ids: ids, p_limit: 200 })
-      : { data: [], error: null };
-    if (registrationsError || peopleError) setError(registrationsError?.message || peopleError?.message || 'Could not load teams.');
-    setCaptainLabels(Object.fromEntries((people || []).map((p) => [p.user_id, p.label])));
-    setRegistrations((data || []).map((r) => {
-      const slug = r.season?.division?.slug || null;
-      return { ...r, division: slug, saved_division: slug };
-    }));
-    setLoading(false);
+  useEffect(() => {
+    (async () => {
+      const { data, error: err } = await supabase.from('divisions').select('id, slug, name').order('sort_order', { ascending: true });
+      if (err) setError(err.message);
+      setDivisions(data || []);
+      isLoading('divisions', false);
+    })();
+  }, []);
+
+  const loadSeasons = async (dId) => {
+    const current = begin('seasons');
+    isLoading('seasons', true);
+    const { data, error: err } = await supabase.from('seasons').select('id, slug, name, is_current').eq('division_id', dId).order('sort_order', { ascending: true });
+    if (!current()) return;
+    if (err) setError(err.message);
+    setSeasons(data || []);
+    isLoading('seasons', false);
   };
 
-  useEffect(() => { loadRegistrations(); }, []);
+  const loadTeams = async (sId) => {
+    const current = begin('teams');
+    isLoading('teams', true);
+    const { data: entries, error: err } = await supabase.from('team_entries').select('team_id').eq('season_id', sId);
+    const ids = (entries || []).map((e) => e.team_id);
+    const { data: rows, error: teamsError } = ids.length ? await supabase.from('teams').select('id, name').in('id', ids) : { data: [], error: null };
+    if (!current()) return;
+    if (err || teamsError) setError((err || teamsError).message);
+    setTeams((rows || []).sort((a, b) => a.name.localeCompare(b.name)));
+    isLoading('teams', false);
+  };
 
-  const changeTeam = (id, field, value) => setRegistrations((current) => current.map((team) => teamKey(team) === id ? { ...team, [field]: value } : team));
-  const addTeam = () => setRegistrations((current) => [blankTeam(divisions.some((d) => d.slug === 'freshers') ? 'freshers' : divisions[0]?.slug), ...current]);
-  const saveTeam = async (team) => {
-    setSavingId(teamKey(team));
-    setError('');
+  // The selected team's registration in the selected season, its captain's label, and the accounts that already
+  // captain a team (an account captains one team at a time).
+  const loadRegistration = async (sId, tId) => {
+    const current = begin('registration');
+    isLoading('registration', true);
+    const [{ data: row, error: err }, { data: all }] = await Promise.all([
+      supabase.from('team_registrations').select('id, team_id, team_name, season_id, captain_id').eq('season_id', sId).eq('team_id', tId).maybeSingle(),
+      supabase.from('team_registrations').select('captain_id'),
+    ]);
+    const { data: people, error: peopleError } = row?.captain_id
+      ? await supabase.rpc('account_directory', { p_ids: [row.captain_id], p_limit: 1 })
+      : { data: [], error: null };
+    if (!current()) return;
+    if (err || peopleError) setError((err || peopleError).message);
+    setRegistration(row || null);
+    setCaptainLabel(row?.captain_id ? (people?.[0]?.label || 'An account that is no longer available') : '');
+    setTakenCaptains(new Set((all || []).map((r) => r.captain_id).filter(Boolean)));
+    isLoading('registration', false);
+  };
+
+  const clearBelow = (level) => {
+    if (level <= 1) { setSeasons([]); setSeasonId(''); latest.current.seasons += 1; }
+    if (level <= 2) { setTeams([]); setTeamId(''); latest.current.teams += 1; }
+    setRegistration(null); setCaptainLabel(''); setPicked({ id: '', label: '' }); latest.current.registration += 1;
+    setError(''); setMessage('');
+  };
+  const chooseDivision = (id) => { clearBelow(1); setDivisionId(id); if (id) loadSeasons(id); };
+  const chooseSeason = (id) => { clearBelow(2); setSeasonId(id); if (id) loadTeams(id); };
+  const chooseTeam = (id) => { clearBelow(3); setTeamId(id); if (id) loadRegistration(seasonId, id); };
+
+  const division = divisions.find((d) => d.id === divisionId);
+  const team = teams.find((t) => t.id === teamId);
+
+  const saveCaptain = async () => {
+    if (!picked.id) { setError('Find and choose the captain’s account first.'); return; }
+    setBusy('save'); setError(''); setMessage('');
     try {
-      if (!team.team_name.trim() || !team.captain_id) throw new Error('Enter a team name and assign a captain.');
       const { data: { session } } = await supabase.auth.getSession();
-      const saveResponse = await fetch(`${API_URL}/admin/team-registrations`, {
+      const response = await fetch(`${API_BASE_URL}/admin/team-registrations`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({
-          id: team.id, team_id: team.team_id, team_name: team.team_name, division: team.division,
-          ...(team.season_id && team.division === team.saved_division ? { season: team.season_id } : {}),
-          captain_id: team.captain_id,
+          ...(registration?.id ? { id: registration.id } : {}),
+          team_id: teamId, team_name: registration?.team_name || team?.name, division: division?.slug, season: seasonId, captain_id: picked.id,
         }),
       });
-      const saveResult = await saveResponse.json();
-      if (!saveResponse.ok) throw new Error(`${saveResult.message || 'Could not save the team registration.'} (HTTP ${saveResponse.status})`);
-      await loadRegistrations();
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || `Could not save the captain (HTTP ${response.status}).`);
+      setMessage(`${picked.label} is now the captain of ${team?.name}.`);
+      setPicked({ id: '', label: '' });
     } catch (saveError) {
-      setError(saveError.message || 'Could not save this team.');
+      setError(saveError.message || 'Could not save the captain.');
     } finally {
-      setSavingId(null);
+      setBusy('');
+      loadRegistration(seasonId, teamId); // show what the database now holds
     }
   };
 
-  const deleteTeam = async (id) => {
-    if (!window.confirm('Delete this registration? The team, its season entry and its roster are kept.')) return;
-    const { error: deleteError } = await supabase.from('team_registrations').delete().eq('id', id);
-    if (deleteError) { setError(deleteError.message); return; }
-    setRegistrations((current) => current.filter((team) => team.id !== id));
+  const revokeCaptain = async () => {
+    if (!registration) return;
+    if (!window.confirm(`Revoke ${captainLabel} as captain of ${team?.name}? The team, its season entry and its roster are kept.`)) return;
+    setBusy('revoke'); setError(''); setMessage('');
+    const { data, error: err } = await supabase.from('team_registrations').delete().eq('id', registration.id).select('id');
+    setBusy('');
+    if (err) setError(err.message);
+    else if (!data?.length) setError('Nothing was revoked: only a dictator can revoke a captain.');
+    else setMessage(`${captainLabel} is no longer the captain of ${team?.name}.`);
+    loadRegistration(seasonId, teamId);
   };
 
-  const assignedCaptainIds = new Set(registrations.filter((team) => team.id).map((team) => team.captain_id));
-  const inputClass = 'w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-[#d9ff4a]/60';
-
   return <div className="space-y-6 p-6">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><Users size={20} /> Captains &amp; registrations</h2><p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Register teams for a season and assign their captains</p></div>
-      <button type="button" onClick={addTeam} className="flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-black uppercase tracking-wider text-black"><Plus size={15} /> Form a team</button>
-    </div>
+    <div><h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><Users size={20} /> Captains &amp; registrations</h2><p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Choose a division, season and team, then assign, change or revoke its captain</p></div>
     {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
-    {loading ? <p className="text-zinc-500">Loading teams...</p> : registrations.map((team, teamIndex) => {
-      return <section key={teamKey(team) || `draft-${teamIndex}`} className="space-y-4 rounded-2xl border border-white/10 bg-white/[.03] p-5">
-        <div className="grid gap-3 md:grid-cols-[1fr_200px_1fr_auto]">
-          <input value={team.team_name} onChange={(event) => changeTeam(teamKey(team), 'team_name', event.target.value)} placeholder="Team name" className={`${inputClass} font-bold`} />
-          <select aria-label="Division" value={team.division || ''} onChange={(event) => changeTeam(teamKey(team), 'division', event.target.value)} className={inputClass}>{!team.division && <option value="">Choose a division</option>}{divisions.map((division) => <option key={division.slug} value={division.slug}>{division.name}{team.season && team.division === division.slug ? ` · ${team.season.name}` : ''}</option>)}</select>
-          <CaptainField team={team} labels={captainLabels} assigned={assignedCaptainIds} inputClass={inputClass}
-            onPick={(id, label) => { changeTeam(teamKey(team), 'captain_id', id); if (id) setCaptainLabels((current) => ({ ...current, [id]: label })); }} />
-          <div className="flex gap-2"><button type="button" onClick={() => saveTeam(team)} disabled={savingId === teamKey(team)} className="flex items-center gap-2 rounded-lg bg-[#d9ff4a] px-3 py-2 text-xs font-black uppercase text-black"><Save size={14} /> Save</button>{team.id && <button type="button" onClick={() => deleteTeam(team.id)} className="rounded-lg border border-red-500/30 px-3 py-2 text-red-400" aria-label="Delete team"><Trash2 size={14} /></button>}</div>
+    {message && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</p>}
+
+    <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-5 md:grid-cols-3">
+      <label className={labelClass}>Division
+        <select aria-label="Division" value={divisionId} onChange={(e) => chooseDivision(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
+          <option value="">{loading.divisions ? 'Loading divisions...' : divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
+          {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+      </label>
+      <label className={labelClass}>Season
+        <select aria-label="Season" value={seasonId} disabled={!divisionId || loading.seasons} onChange={(e) => chooseSeason(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
+          <option value="">{loading.seasons ? 'Loading seasons...' : divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}</option>
+          {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>)}
+        </select>
+      </label>
+      <label className={labelClass}>Team
+        <select aria-label="Team" value={teamId} disabled={!seasonId || loading.teams} onChange={(e) => chooseTeam(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
+          <option value="">{loading.teams ? 'Loading teams...' : seasonId && !teams.length ? 'No teams in this season' : 'Choose a team'}</option>
+          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      </label>
+    </div>
+
+    {teamId && <section aria-label="Captain" className="space-y-4 rounded-2xl border border-white/10 bg-white/[.03] p-5">
+      {loading.registration ? <p className="flex items-center gap-2 text-zinc-500"><Loader2 size={14} className="animate-spin" /> Loading the captain...</p> : <>
+        <p className="text-sm text-zinc-300">
+          {registration ? <>Captain of {team?.name} in this season: <strong className="text-white">{captainLabel}</strong></> : <>{team?.name} has no captain in this season.</>}
+        </p>
+        <CaptainField picked={picked} onPick={setPicked} taken={takenCaptains} currentCaptainId={registration?.captain_id} teamName={team?.name} />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={saveCaptain} disabled={busy !== '' || !picked.id} className="flex items-center gap-2 rounded-lg bg-[#d9ff4a] px-3 py-2 text-xs font-black uppercase text-black disabled:opacity-40">
+            {busy === 'save' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {registration ? 'Change captain' : 'Assign captain'}
+          </button>
+          {registration && <button type="button" onClick={revokeCaptain} disabled={busy !== ''} className="flex items-center gap-1 rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-400 disabled:opacity-40"><Trash2 size={13} /> Revoke captain</button>}
         </div>
         <p className="text-xs text-zinc-600">Players for this team are managed in Teams &amp; Rosters.</p>
-      </section>;
-    })}
-    {!loading && !registrations.length && <p className="text-zinc-500">No teams formed yet. Create a team and assign its captain.</p>}
+      </>}
+    </section>}
   </div>;
 }
 
-// The captain of one team: search accounts by name or college email (each word must match), then pick one. Accounts
-// are labelled by the dictator-only account directory (verified email, name as context), never by an editable profile
-// email or a raw id. Accounts already captaining another team are not offered.
+// Finds the captain's account: every word of a name or college email must match. Accounts already captaining another
+// team are not offered; results are labelled by the account directory.
 /* eslint-disable react/prop-types -- this codebase does not use prop-types */
-function CaptainField({ team, labels, assigned, inputClass, onPick }) {
+function CaptainField({ picked, onPick, taken, currentCaptainId, teamName }) {
   const [query, setQuery] = useState('');
   const search = useLatestSearch((text) => supabase.rpc('account_directory', { p_query: text, p_limit: 20 }), query, { minLength: 2 });
-  const options = search.results.filter((a) => a.user_id === team.captain_id || !assigned.has(a.user_id));
-  const current = team.captain_id ? (labels[team.captain_id] || 'Current captain') : '';
-  return <div className="space-y-1 text-[10px] font-black uppercase tracking-widest text-zinc-500">
-    <label className="block">Find captain account
-      <input type="search" aria-label={`Find captain for ${team.team_name || 'new team'}`} value={query} onChange={(e) => setQuery(e.target.value)}
-        placeholder="Name or college email" className={`${inputClass} mt-1 normal-case tracking-normal`} />
+  const options = search.results.filter((a) => a.user_id !== currentCaptainId && !taken.has(a.user_id));
+  return <div className="grid gap-3 md:grid-cols-2">
+    <label className={labelClass}>Find an account
+      <input type="search" aria-label={`Find captain for ${teamName}`} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" className={`${inputClass} mt-1 normal-case tracking-normal`} />
     </label>
-    <label className="block">Captain
-      <select aria-label={`Captain for ${team.team_name || 'new team'}`} value={team.captain_id || ''}
-        onChange={(e) => onPick(e.target.value, options.find((a) => a.user_id === e.target.value)?.label)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-        <option value="">{current ? 'No captain' : 'Choose from the search results'}</option>
-        {team.captain_id && !options.some((a) => a.user_id === team.captain_id) && <option value={team.captain_id}>{current}</option>}
+    <label className={labelClass}>New captain
+      <select aria-label={`New captain for ${teamName}`} value={picked.id} onChange={(e) => onPick({ id: e.target.value, label: options.find((a) => a.user_id === e.target.value)?.label || '' })} className={`${inputClass} mt-1 normal-case tracking-normal`}>
+        <option value="">{options.length ? 'Choose from the search results' : 'Search to choose an account'}</option>
         {options.map((a) => <option key={a.user_id} value={a.user_id}>{a.label}</option>)}
       </select>
     </label>
-    <p aria-live="polite" className="normal-case tracking-normal text-zinc-500">
+    <p aria-live="polite" className="text-xs text-zinc-500 md:col-span-2">
       {search.status === 'idle' && query.trim() && 'Type at least two letters.'}
       {search.status === 'loading' && <span className="inline-flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Searching...</span>}
       {search.status === 'ready' && (options.length ? `${options.length} account${options.length === 1 ? '' : 's'} found` : 'No free account matches. Accounts already captaining a team are not listed.')}

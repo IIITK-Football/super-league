@@ -69,13 +69,18 @@ export async function POST(request: Request) {
       .upsert({ team_id: leagueTeamId, season_id: scope.season.id }, { onConflict: 'team_id,season_id', ignoreDuplicates: true });
     if (entryError) throw entryError;
 
-    const { data: registration, error: registrationError } = await supabase.from('team_registrations').upsert({
-      ...(body.id ? { id: body.id } : {}),
-      team_id: leagueTeamId,
-      team_name: body.team_name.trim(),
-      season_id: scope.season.id,
-      captain_id: body.captain_id,
-    }, { onConflict: 'captain_id' }).select('id').single();
+    // An existing registration is updated in place (changing its captain never inserts a second row); a new one is
+    // inserted. An account captains one team at a time.
+    const row = { team_id: leagueTeamId, team_name: body.team_name.trim(), season_id: scope.season.id, captain_id: body.captain_id };
+    const { data: registration, error: registrationError } = body.id
+      ? await supabase.from('team_registrations').update(row).eq('id', body.id).select('id').single()
+      : await supabase.from('team_registrations').insert(row).select('id').single();
+    if (registrationError?.code === '23505') {
+      return NextResponse.json({ success: false, message: 'This account already captains another team. Revoke that captaincy first.' }, { status: 409 });
+    }
+    if (registrationError?.code === 'PGRST116') {
+      return NextResponse.json({ success: false, message: 'That registration no longer exists. Reload and try again.' }, { status: 404 });
+    }
     if (registrationError) throw registrationError;
 
     if (currentRole !== 'captain' && currentRole !== 'dictator') {
