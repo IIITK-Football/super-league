@@ -13,11 +13,12 @@
     {
       "id": "D-02",
       "question": "How World Cup's separate page/domain shares account and UI primitives without coupling its fantasy rules to division fantasy.",
-      "status": "open",
+      "status": "resolved",
       "items": [
         "SL-043"
       ],
-      "proposal": "docs/decisions/D-02-world-cup-separation-proposal.md"
+      "proposal": "docs/decisions/D-02-world-cup-separation-proposal.md",
+      "resolution": "docs/decisions/D-02-world-cup-separation.md"
     },
     {
       "id": "D-03",

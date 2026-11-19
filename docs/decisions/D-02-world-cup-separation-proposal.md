@@ -1,6 +1,6 @@
 # D-02 proposal: World Cup separation from division fantasy
 
-Status: **proposal, open**. Blocks SL-043. The World Cup home entry point is SL-060. CLAUDE.md requires that World Cup stays a separate page and domain, with no incidental changes. Drafted 2026-11-18.
+Status: **resolved by the owner 2026-11-19; see `D-02-world-cup-separation.md`, which takes precedence**. World Cup is frozen; this proposal is not an implementation instruction.
 
 ## 1. Current state
 - **Onboarding forces a World Cup choice.**
@@ -72,3 +72,8 @@ Status: **proposal, open**. Blocks SL-043. The World Cup home entry point is SL-
 4. Keep a direct "World Cup" link in the navbar? **Default: no.** Home content only (SL-060).
 5. Make the division nickname optional, falling back to the account nickname? **Default: yes.**
 6. Drop the unused `user_profiles.team_flair_id`? **Default:** in the Phase 10 legacy sweep, after a production null-count check.
+
+## Owner answers
+
+- **2026-11-19, separation boundary:** freeze World Cup feature work and preserve its existing behavior/data. Its only route is `/wc`; a home-carousel link may be added later as ordinary home content. Division fantasy is independent and shows the selected division's current season.
+- **2026-11-19, onboarding:** keep the current onboarding behavior; no onboarding or flair flow changes are part of division fantasy work.
