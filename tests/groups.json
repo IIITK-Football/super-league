@@ -507,13 +507,14 @@
       "run": []
     },
     "player-accounts": {
-      "description": "Account-linked players and the self-service player card: dictator link, unlink and import through the local Auth and Data API, self-service limits, and the real-stack Teams & Rosters and profile flows",
+      "description": "Account-linked players and the self-service player card: dictator matching, manual links, automatic links on verification and account-first players through the local Auth and Data API, self-service limits, and the real-stack Teams & Rosters and profile flows",
       "owner": "backend",
       "requiresLocalDb": true,
       "paths": [
         "backend/tests/player-accounts/**",
         "backend/supabase/migrations/*account_linked*",
         "backend/app/api/profile/**",
+        "backend/tests/local-fixtures.ts",
         "frontend/src/components/admin/__tests__/ManageRosters.links.local.test.jsx",
         "frontend/src/pages/__tests__/UserProfile.player.local.test.jsx"
       ],
@@ -547,6 +548,7 @@
       "covers": [
         "backend/supabase/migrations/*account_linked*",
         "backend/app/api/profile/**",
+        "backend/tests/local-fixtures.ts",
         "frontend/src/pages/UserProfile.jsx"
       ],
       "testPaths": [
