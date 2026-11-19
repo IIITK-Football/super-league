@@ -1,6 +1,6 @@
 # D-03 proposal: multiple roles and scoped assignments
 
-Status: **proposal, open**. The owner resolves D-03 and records the answers. Unblocks SL-024; SL-050 builds on it. The capability boundaries of `docs/decisions/SL-003-role-capability-matrix.md` are unchanged: no role implies another, only a dictator changes roles and assignments, and captain access needs both the role and an assignment (SL-003 rule 3).
+Status: **resolved by the owner 2026-11-19; the decision is recorded in `D-03-roles-and-assignments.md`, which wins where this design text differs.** This text has been reconciled with it. Unblocks SL-024; SL-050 builds on it. The capability boundaries of `docs/decisions/SL-003-role-capability-matrix.md` are unchanged: no role implies another, only a dictator changes roles and assignments, and captain access needs both the role and an assignment (SL-003 rule 3).
 
 ## 1. Current state
 
@@ -36,8 +36,8 @@ CREATE TABLE public.captain_assignments (
   assigned_by   uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   assigned_at   timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (team_entry_id, season_id) REFERENCES public.team_entries(id, season_id) ON DELETE CASCADE,
-  UNIQUE (team_entry_id),          -- one captain per team entry (see Q3)
-  UNIQUE (user_id, season_id)      -- one team per captain per season (409 on conflict)
+  UNIQUE (team_entry_id)           -- one captain per team entry, no co-captains (Q3)
+  -- No UNIQUE (user_id) or (user_id, season_id): a person may captain several entries across seasons and divisions.
 );
 
 CREATE TABLE public.scorer_assignments (
@@ -56,7 +56,7 @@ CREATE UNIQUE INDEX ON public.scorer_assignments (user_id, match_id) WHERE match
 
 ON DELETE: deleting a user removes their grants and assignments (as today). Deleting a team entry or match removes the now meaningless assignment; seasons stay `RESTRICT`, consistent with `team_entries`. Revocation is a hard delete; the SL-027 audit trigger on all three tables keeps the history, so no `revoked_at` columns or partial uniques are needed.
 
-**Captain change** (the SL-024 defect): `UPDATE captain_assignments SET user_id = …` on the existing row. Roster and season stay with the team entry; `UNIQUE (user_id, season_id)` gives the clear 409 for a captain already assigned elsewhere this season. The previous captain keeps the inert `captain` grant unless the dictator revokes it (see Q4).
+**Captain change** (the SL-024 defect): `UPDATE captain_assignments SET user_id = …` on the existing row; roster and season stay with the team entry. Only a second captain for the same team entry is refused (409). Assigning adds the `captain` grant; when a person's last **active** (current-season) captain assignment is revoked or reassigned, only their `captain` grant is removed, never another grant (Q4, Q5 as decided).
 
 **SL-050 invitations** (built there, shape reserved here): `scorer_invitations(id, token_hash, season_id | match_id, intended_user_id NOT NULL, expires_at, revoked_at, accepted_at)`. Acceptance is a `SECURITY DEFINER` RPC that requires `auth.uid() = intended_user_id`, an unexpired, unrevoked, unaccepted invitation, and inserts only a `scorer_assignments` row (plus the `scorer` grant if Q5 allows). It can never write `dictator` or any other role.
 
@@ -91,19 +91,11 @@ Helpers never include the dictator; policies spell it out (`is_dictator() OR can
 1. **Multiple roles via a set of grants (option B)?** Default: yes.
 2. **Scorer scope: season or single match only, or also a whole division across seasons?** Default: season or match; a new season needs a new assignment.
 3. **One captain per team entry, or allow co-captains?** Default: one (`UNIQUE (team_entry_id)`); a vice-captain can be added later as a separate decision.
-4. **On captain change, does the previous captain keep the `captain` grant?** Default: keep it (it grants nothing without an assignment); the dashboard shows grants with no assignment so the dictator can revoke them.
-5. **Does assigning a captain or scorer also add the matching role grant automatically?** Default: yes, in the same transaction and audited, because it is an explicit dictator action (today's route already does this). Removing an assignment never removes a grant automatically.
+4. **On captain change, does the previous captain keep the `captain` grant?** *Decided 2026-11-19 (differs from the original default):* no. The `captain` grant is removed when the person's last active (current-season) captain assignment is revoked; other grants are kept.
+5. **Does assigning a captain or scorer also add the matching role grant automatically?** *Decided 2026-11-19:* yes, in the same transaction and audited (an editor keeps the editor grant). Revoking the last active assignment removes that grant (see Q4).
 6. **Legacy `admin` holders:** *answered by the owner 2026-11-19:* never ported or promoted; their `admin` rows are removed and the accounts stay ordinary users (Auth accounts and profiles kept), with no review or re-grant path. `/dictator` is the canonical dashboard URL and `/admin` redirects to it. Done by `20261129000000` and `20261130000000`.
 7. **May a captain-assigned user also score matches involving their own team?** Default: technically allowed if the dictator assigns it (no role implies another, and no role forbids another); the dashboard warns.
 8. **Do scorer assignments expire?** Default: optional `expires_at`, null for dictator-made assignments, required for SL-050 invitations.
 
-## Owner answers recorded 2026-11-19 (D-03 stays open)
-These answer the captain questions only; the multi-role model (option B) and the scorer questions are still open.
-- **Shared card:** a captain assigned to a player's current roster on their own team may edit that player's shared FUT card (shown on every roster place). Jersey and position stay with the captain's team entry and season.
-- **Several teams:** a captain may captain several teams across seasons and divisions. There is no global uniqueness (this replaces `UNIQUE (user_id, season_id)` in §3); only a duplicate assignment to the same team and season is prevented.
-- **Scope:** captain access is scoped to the exact team entry and season, and never carries over to another.
-- **Revoking:** removing one assignment keeps the captain capability while another remains. It is removed only when none remain, and never overwrites another role such as dictator (this replaces the "inert grant" answer to Q4).
-- **Captain search:** never excludes people who captain elsewhere. It shows their existing assignments and blocks only a duplicate for this team and season.
-- **Dictators** keep dictator permissions when also assigned as a captain.
-- **Still open:** one captain per team entry vs co-captains (Q3); editors as captains before multi-role grants; whether past-season assignments count as "remaining".
-
+## Owner answers 2026-11-19
+Superseded by the decision record `D-03-roles-and-assignments.md`, which also covers the shared FUT card editing, captain search showing existing assignments, and dictator precedence agreed during SL-021.

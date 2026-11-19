@@ -1,6 +1,6 @@
 # D-08 proposal: authoritative score and goal events
 
-Status: **proposal, open**. The owner resolves D-08 and records the answers; it unblocks SL-022. Drafted 2026-11-18 from the code at that date.
+Status: **resolved by the owner 2026-11-19; the decision is recorded in `D-08-score-and-goal-events.md`, which wins where this text differs** (notably: 3–0 is only the current default award; the migration also aborts on more goal rows than the recorded score). It unblocks SL-022. Drafted 2026-11-18 from the code at that date.
 
 ## 1. Today's behavior
 

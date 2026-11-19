@@ -22,11 +22,12 @@
     {
       "id": "D-03",
       "question": "How a person may hold multiple roles and how scorer/captain assignments are scoped; preserve the capability boundaries already fixed in SL-003.",
-      "status": "open",
+      "status": "resolved",
       "items": [
         "SL-024"
       ],
-      "proposal": "docs/decisions/D-03-roles-and-assignments-proposal.md"
+      "proposal": "docs/decisions/D-03-roles-and-assignments-proposal.md",
+      "resolution": "docs/decisions/D-03-roles-and-assignments.md"
     },
     {
       "id": "D-04",
@@ -69,11 +70,12 @@
     {
       "id": "D-08",
       "question": "The authoritative scoreboard rule when a scorer manually sets a score that does not equal the currently attributed goal events.",
-      "status": "open",
+      "status": "resolved",
       "items": [
         "SL-022"
       ],
-      "proposal": "docs/decisions/D-08-score-and-goal-events-proposal.md"
+      "proposal": "docs/decisions/D-08-score-and-goal-events-proposal.md",
+      "resolution": "docs/decisions/D-08-score-and-goal-events.md"
     },
     {
       "id": "D-09",
