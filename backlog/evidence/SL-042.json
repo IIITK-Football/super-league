@@ -1,9 +1,9 @@
 {
-  "head": "0f99f68973c637755bbfc20d576b088f3a954e90",
-  "tree": "0d4e9ed3819f9f6c02444e55d70a3e7e25141c49",
+  "head": "e2149a28e8102846d00d2494c825db198ac3ddb1",
+  "tree": "5543c7d164e6c01254561ff09819cf53a199a845",
   "clean": false,
   "dryRun": false,
-  "at": "2026-11-19T11:01:46.912Z",
+  "at": "2026-11-19T11:05:06.293Z",
   "groups": [
     {
       "name": "database",
@@ -14,7 +14,7 @@
           "cwd": ".",
           "cmd": "bash scripts/local-db.sh test",
           "exit": 0,
-          "ms": 3574
+          "ms": 4307
         }
       ]
     },
@@ -27,13 +27,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/player-accounts",
           "exit": 0,
-          "ms": 10270
+          "ms": 9305
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run --no-file-parallelism src/components/admin/__tests__/ManageRosters.links.local.test.jsx src/pages/__tests__/UserProfile.player.local.test.jsx",
           "exit": 0,
-          "ms": 7157
+          "ms": 6697
         }
       ]
     },
@@ -46,7 +46,7 @@
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run --passWithNoTests",
           "exit": 0,
-          "ms": 7566
+          "ms": 7009
         }
       ]
     },
@@ -59,7 +59,7 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/tooling",
           "exit": 0,
-          "ms": 10196
+          "ms": 11348
         }
       ]
     },
@@ -72,13 +72,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/rosters",
           "exit": 0,
-          "ms": 8669
+          "ms": 8140
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageRosters.local.test.jsx src/pages/__tests__/TeamBuilder.local.test.jsx",
           "exit": 0,
-          "ms": 6732
+          "ms": 5600
         }
       ]
     }
