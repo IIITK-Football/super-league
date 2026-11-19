@@ -87,3 +87,8 @@ Status: **proposal, open**. The owner resolves D-04, which unblocks SL-030 and s
 4. As a narrow, isolated and separately verified World Cup fix: take `user_id` from the verified token, and require `CRON_SECRET` or a dictator for the manual sync routes? **Default: yes.** Until then, those routes stay on Next.
 5. Placement: Smart Placement, or a hint pointing at the database region? **Default: Smart Placement, measured on staging.**
 6. Worker tests: `@cloudflare/vitest-pool-workers` plus one `wrangler dev` smoke test? **Default: yes.**
+
+## Owner answers
+
+- **2026-11-19, access path:** use option A, Supabase Data API over HTTPS. Forward the signed-in caller's JWT for user operations so Postgres RLS and audit attribution remain in force; keep the secret key restricted to approved background jobs. Use RPCs for atomic multi-write operations. The Data API has no separate fee on the Free plan; normal plan quotas and usage limits still apply.
+- **2026-11-19, JWT verification:** use asymmetric signing keys for Supabase Auth tokens. Roll out staging first and verify Worker token validation before applying the same configuration to production. This records the approach only; hosted settings are unchanged.
