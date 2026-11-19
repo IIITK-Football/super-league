@@ -4,8 +4,9 @@ name: Database backup
 # * every day at 03:00 IST (21:30 UTC), under automated-prod/scheduled/;
 # * on demand from the Actions tab on main ("Run workflow", with a note), under automated-prod/manual/, before any
 #   manual production SQL change: wait for "Uploaded object verified: yes" first;
-# * the staging rehearsal (target staging-rehearsal, or a push to develop that changes the backup tooling), under
-#   automated-staging-test/rehearsal/, never against production.
+# * the staging rehearsal (target staging-rehearsal, run on demand from main), under
+#   automated-staging-test/rehearsal/, never against production. (The first rehearsal ran from develop on 2026-11-20,
+#   while develop was temporarily allowed on the Database Backup environment; it no longer is.)
 # The pre-migration backup that gates production migrations runs in db-deploy.yml (job production-backup).
 # Each run dumps through the Session pooler, proves the dump restores into a disposable local database, encrypts it to
 # the owner's age key, uploads it and reads it back. Logs show keys, sizes, checksums, counts and verdicts only, and
@@ -26,13 +27,6 @@ on:
         type: choice
         options: [production, staging-rehearsal]
         default: production
-  push:
-    branches: [develop]
-    paths:
-      - 'scripts/backup/**'
-      - '.github/actions/database-backup/**'
-      - '.github/workflows/db-backup.yml'
-
 permissions:
   contents: read
 
@@ -42,7 +36,7 @@ jobs:
     timeout-minutes: 30
     environment: Database Backup
     concurrency:
-      group: db-backup-${{ github.event_name == 'push' && 'staging' || inputs.target == 'staging-rehearsal' && 'staging' || 'production' }}
+      group: db-backup-${{ inputs.target == 'staging-rehearsal' && 'staging' || 'production' }}
       cancel-in-progress: false
     steps:
       - name: Choose the target
@@ -53,8 +47,7 @@ jobs:
           REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" = push ]; then target=staging; reason=rehearsal
-          elif [ "$EVENT" = schedule ]; then target=production; reason=scheduled
+          if [ "$EVENT" = schedule ]; then target=production; reason=scheduled
           elif [ "$INPUT_TARGET" = staging-rehearsal ]; then target=staging; reason=rehearsal
           else target=production; reason=manual; fi
           if [ "$target" = production ] && [ "$REF" != refs/heads/main ]; then

@@ -65,7 +65,8 @@ describe('the backup gate in db-deploy.yml', () => {
     expect(backupWorkflow).toMatch(/cron: '30 21 \* \* \*'/);
     expect(backupWorkflow).toMatch(/environment: Database Backup/);
     expect(backupWorkflow).toMatch(/Production backups run only from main; refusing to continue/);
-    expect(backupWorkflow).toMatch(/if \[ "\$EVENT" = push \]; then target=staging; reason=rehearsal/);
+    expect(backupWorkflow).toMatch(/elif \[ "\$INPUT_TARGET" = staging-rehearsal \]; then target=staging; reason=rehearsal/);
+    expect(backupWorkflow).not.toMatch(/^\s*push:/m); // develop is no longer allowed on the Database Backup environment
   });
 });
 

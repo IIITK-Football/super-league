@@ -10,7 +10,7 @@ to the owner's age key and stored in the private R2 bucket `backup`.
 | **Every production migration** (mandatory gate) | `db-deploy.yml`, job `production-backup`, before the `production` job | `automated-prod/pre-migration/` |
 | Every day, 03:00 IST (21:30 UTC) | `db-backup.yml`, schedule on `main` | `automated-prod/scheduled/` |
 | **Before any manual production SQL change** | Actions → "Database backup" → Run workflow on `main`, target `production`, with a note | `automated-prod/manual/` |
-| Staging rehearsal | Actions → "Database backup", target `staging-rehearsal`, or a push to `develop` that changes the backup tooling | `automated-staging-test/rehearsal/` |
+| Staging rehearsal | Actions → "Database backup" on `main`, target `staging-rehearsal` | `automated-staging-test/rehearsal/` |
 | A backup whose restore test failed | any of the above; the run fails | `<prefix>/unverified/` |
 
 Each object `<prefix>/<reason>/<UTC time>-<run id>-<attempt>.dump.age` has a `.manifest.json` beside it. The manifest
@@ -64,8 +64,8 @@ If the approval comes more than 6 hours after the backup, run the workflow again
 | Repository variables | `BACKUP_AGE_RECIPIENT`, `PRODUCTION_PROJECT_REF` | Encryption key; production project guard |
 | R2 bucket `backup` | Lifecycle rule: delete `automated-prod/` objects after 180 days; bucket lock 30 days | Retention |
 
-`develop` was allowed on Database Backup only for the staging rehearsal. Remove it afterwards, so only `main` reaches
-the production URL.
+`develop` was allowed on Database Backup only for the first staging rehearsal, which passed on 2026-11-20. It was then
+removed, so only `main` reaches the production URL.
 
 ## Retention and cost
 - **Retention:** objects live 180 days (lifecycle rule). For their first 30 days they cannot be deleted or overwritten (bucket lock). Keys are unique, so nothing is overwritten anyway.
