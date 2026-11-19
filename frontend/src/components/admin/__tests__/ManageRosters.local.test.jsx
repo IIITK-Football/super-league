@@ -182,10 +182,10 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(must(await admin.from('roster_memberships').select('jersey_number').eq('id', ada.roster_memberships[0].id).single()).jersey_number).toBe(10);
 
     // Add last season's player: the same identity now has a roster place in two seasons.
-    type('Search players', `${tag}Vera`);
-    fireEvent.click(screen.getByRole('button', { name: /find/i }));
+    type('Search players', `${tag}Vera`); // searched as you type, through search_players
     const list = await screen.findByRole('list', { name: 'Matching players' }, { timeout: 15000 });
-    fireEvent.click(within(list).getByRole('button', { name: /add to/i }));
+    expect(within(list).getByText(/Latest: .*· #/)).toBeTruthy(); // the earlier season's roster place tells them apart
+    fireEvent.click(within(list).getByRole('button', { name: /^add .* to /i }));
     await statusText(/Veteran added to/);
     expect(must(await admin.from('roster_memberships').select('season_id').eq('player_id', made.veteran)).map((r) => r.season_id).sort())
       .toEqual([made.seasons.now, made.seasons.old].sort());

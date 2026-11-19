@@ -23,6 +23,12 @@ function seed() {
   db.calls = [];
   db.fail = {};
   db.slow = null;
+  // What search_players returns: identities with their latest roster place and the season flag.
+  db.searchPlayers = [
+    { player_id: 'p1', first_name: 'Ada', last_name: 'Striker', overall_rating: 70, in_season: true, last_team: 'Alpha', last_season: '2026', last_division: 'WSL', last_jersey: 9 },
+    { player_id: 'p2', first_name: 'Adam', last_name: 'Other', overall_rating: 60, in_season: false, last_team: null, last_season: null, last_division: null, last_jersey: null },
+    { player_id: 'p3', first_name: 'Adam', last_name: 'Other', overall_rating: 65, in_season: false, last_team: 'Gamma', last_season: '2025', last_division: 'WSL', last_jersey: 4 },
+  ];
 }
 
 function from(table) {
@@ -94,6 +100,11 @@ const rpc = vi.fn(async (name, args) => {
     db.tables.team_entries.push({ id: `e-${nextId++}`, team_id: team, season_id: args.p_season_id });
     return { data: team, error: null };
   }
+  if (name === 'search_players') {
+    if (db.fail['rpc.search_players']) return { data: null, error: db.fail['rpc.search_players'] };
+    const words = args.p_query.toLowerCase().split(/\s+/).filter(Boolean);
+    return { data: db.searchPlayers.filter((p) => words.every((w) => `${p.first_name} ${p.last_name}`.toLowerCase().includes(w))), error: null };
+  }
   if (name === 'update_rostered_player') {
     const place = db.tables.roster_memberships.find((m) => m.id === args.p_membership_id);
     Object.assign(db.tables.players.find((p) => p.id === place.player_id), { first_name: args.p_first_name, last_name: args.p_last_name, overall_rating: args.p_overall_rating, attributes: args.p_attributes });
@@ -125,7 +136,7 @@ import ManageRosters, { describeError, parseAttributes, validatePlayer, blankPla
 beforeEach(() => { seed(); rpc.mockClear(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-const writes = () => db.calls.filter((c) => c.rpc || ['insert', 'update', 'delete', 'upsert'].includes(c.op));
+const writes = () => db.calls.filter((c) => (c.rpc && c.rpc !== 'search_players') || ['insert', 'update', 'delete', 'upsert'].includes(c.op));
 const pick = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
 async function openTeam(team = 'e1') {
@@ -333,15 +344,53 @@ describe('players', () => {
     expect(writes()).toEqual([{ rpc: 'update_rostered_player', args: expect.objectContaining({ p_set_email: false }) }]);
   });
 
-  it('finds an existing player from another season and adds them to this roster', async () => {
+  it('searches as you type by full name, telling same-name players apart by their latest roster place', async () => {
     await openTeam();
     await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
-    pick('Search players', 'ada');
-    fireEvent.click(screen.getByRole('button', { name: /find/i }));
+    pick('Search players', 'a');
+    expect(await screen.findByText('Type at least two letters of the name.')).toBeTruthy();
+    pick('Search players', 'adam other');
     const list = await screen.findByRole('list', { name: 'Matching players' });
-    expect(within(list).queryByText(/Ada Striker/)).toBeNull(); // already on this roster
-    fireEvent.click(within(list).getByRole('button', { name: /add to alpha/i }));
+    expect(screen.getByText('2 players found')).toBeTruthy();
+    const items = within(list).getAllByRole('listitem').map((li) => li.textContent);
+    expect(items[0]).toMatch(/Adam Other.*OVR 60.*Latest: Not on a roster yet/);
+    expect(items[1]).toMatch(/Adam Other.*OVR 65.*Latest: Gamma · 2025 \(WSL\) · #4/);
+    expect(db.calls.find((c) => c.rpc === 'search_players').args).toMatchObject({ p_query: 'adam other', p_season_id: 's1' });
+    fireEvent.click(within(list).getAllByRole('button', { name: 'Add Adam Other to Alpha' })[1]);
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Adam Other added to Alpha/));
-    expect(writes()).toEqual([expect.objectContaining({ table: 'roster_memberships', op: 'insert', payload: { player_id: 'p2', team_entry_id: 'e1', season_id: 's1' } })]);
+    expect(writes()).toEqual([expect.objectContaining({ table: 'roster_memberships', op: 'insert', payload: { player_id: 'p3', team_entry_id: 'e1', season_id: 's1' } })]);
+  });
+
+  it('marks a player already in this season instead of offering to add them, and explains no matches', async () => {
+    await openTeam();
+    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    pick('Search players', 'ada striker');
+    const list = await screen.findByRole('list', { name: 'Matching players' });
+    expect(within(list).getByText('Already in this season')).toBeTruthy();
+    expect(within(list).queryByRole('button')).toBeNull();
+    pick('Search players', 'zz nobody');
+    expect(await screen.findByText(/No player matches “zz nobody”. Create them below./)).toBeTruthy();
+  });
+
+  it('reports a failed search and can retry', async () => {
+    db.fail['rpc.search_players'] = { message: 'timeout' };
+    await openTeam();
+    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    pick('Search players', 'adam');
+    expect(await screen.findByText(/player search failed \(timeout\)/i)).toBeTruthy();
+    delete db.fail['rpc.search_players'];
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(await screen.findByText('2 players found')).toBeTruthy();
+  });
+
+  it('shows the chosen player\'s placeholder FUT card from the identity, with this season\'s place beside it', async () => {
+    await openTeam();
+    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    pick('Player', 'm1');
+    const card = screen.getByRole('region', { name: 'FUT card (placeholder)' });
+    expect(card.textContent).toMatch(/Ada Striker/);
+    expect(card.textContent).toMatch(/OVR 70/);
+    expect(card.textContent).not.toMatch(/#9|ST/);
+    expect(screen.getByText(/#9 · ST · Alpha/)).toBeTruthy();
   });
 });

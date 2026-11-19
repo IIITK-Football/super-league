@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRightLeft, ImagePlus, Loader2, Plus, Save, Search, Trash2, UserMinus, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
+import { useLatestSearch } from '../../hooks/useLatestSearch';
+import FutCardPlaceholder from '../players/FutCardPlaceholder';
 
 // Dictator flow for season teams and rosters: division -> season -> team entry, then that team's players.
 // A player is one reusable identity (the FUT card: name, portrait, rating, attributes); a roster place puts the
@@ -89,13 +91,19 @@ export default function ManageRosters() {
   const [teamToAdd, setTeamToAdd] = useState('');
   const [newTeamName, setNewTeamName] = useState('');
   const [search, setSearch] = useState('');
-  const [found, setFound] = useState([]);
   const [moveTo, setMoveTo] = useState('');
   const [loading, setLoading] = useState({ divisions: true, seasons: false, entries: false, roster: false });
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [contactsLoaded, setContactsLoaded] = useState(false);
+  // Existing players, searched as the dictator types (every word of the name must match). Each result carries the
+  // player's latest roster place so players with the same name can be told apart, and whether they are already in
+  // this season (a player has one place per season).
+  const playerSearch = useLatestSearch(
+    (text) => supabase.rpc('search_players', { p_query: text, p_season_id: seasonId || null, p_limit: 20 }),
+    search, { minLength: 2, deps: [seasonId] },
+  );
   // The team whose roster was asked for last; an answer for any other team arrives late and is dropped.
   const latestEntry = useRef('');
 
@@ -189,7 +197,7 @@ export default function ManageRosters() {
   };
   const chooseEntry = (id) => {
     latestEntry.current = id;
-    setEntryId(id); setRoster([]); setSelectedPlace(''); setEditing(null); setFound([]); setMoveTo('');
+    setEntryId(id); setRoster([]); setSelectedPlace(''); setEditing(null); setSearch(''); setMoveTo('');
     if (id) loadRoster(id);
   };
   const choosePlace = (id) => {
@@ -309,26 +317,11 @@ export default function ManageRosters() {
     setSelectedPlace(''); setEditing(null); loadRoster(entryId);
   };
 
-  const findPlayers = async (event) => {
-    event.preventDefault();
-    const term = search.trim();
-    if (term.length < 2) { fail('Type at least two letters of the player\'s name.'); return; }
-    setBusy('search');
-    const pattern = `%${term.replace(/[%_]/g, '')}%`;
-    const { data, error: err } = await supabase.from('players').select('id, first_name, last_name')
-      .or(`first_name.ilike.${pattern},last_name.ilike.${pattern}`).order('last_name', { ascending: true }).limit(20);
-    setBusy('');
-    if (err) { report(err); return; }
-    setError('');
-    setFound((data || []).filter((p) => !roster.some((r) => r.player_id === p.id)));
-    if (!data?.length) setMessage('No player matches that name. Create them below.');
-  };
-
   const addExistingPlayer = async (player) => {
-    setBusy(`add-${player.id}`);
-    const { error: err } = await supabase.from('roster_memberships').insert({ player_id: player.id, team_entry_id: entryId, season_id: seasonId });
+    setBusy(`add-${player.player_id}`);
+    const { error: err } = await supabase.from('roster_memberships').insert({ player_id: player.player_id, team_entry_id: entryId, season_id: seasonId });
     setBusy('');
-    if (report(err, `${player.first_name} ${player.last_name} added to ${entry?.name}.`)) { setFound([]); setSearch(''); loadRoster(entryId); }
+    if (report(err, `${player.first_name} ${player.last_name} added to ${entry?.name}.`)) { setSearch(''); loadRoster(entryId); }
   };
 
   // Render -----------------------------------------------------------------------------------------------------
@@ -393,6 +386,10 @@ export default function ManageRosters() {
         </label>}
 
       {place && editing && <div aria-label="Edit player" className="space-y-3 rounded-xl border border-[#d9ff4a]/30 p-4">
+        <div className="flex flex-wrap items-start gap-3">
+          <FutCardPlaceholder player={place.player} />
+          <p className="text-xs text-zinc-400"><span className={labelClass}>This season</span><br />{place.jersey_number != null ? `#${place.jersey_number}` : 'No jersey'} · {place.position || 'No position'} · {entry?.name}</p>
+        </div>
         {playerFields(editing, setEditing, 'Edit')}
         <div className="flex flex-wrap items-end gap-2">
           <button type="button" onClick={savePlayer} disabled={busy === `save-${place.id}`} className={primaryButton}>{busy === `save-${place.id}` ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save player</button>
@@ -410,16 +407,36 @@ export default function ManageRosters() {
         </div>
       </div>}
 
-      <form noValidate onSubmit={findPlayers} aria-label="Find an existing player" className="flex flex-wrap items-end gap-2">
-        <label className={`${labelClass} flex-1`}>Add an existing player (plays in another season or division)
-          <input aria-label="Search players" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name" className={`${inputClass} mt-1 normal-case tracking-normal`} />
+      <div role="search" aria-label="Find an existing player" className="space-y-2">
+        <label className={`${labelClass} block`}>Add an existing player (plays in another season or division)
+          <span className="mt-1 flex items-center gap-2 rounded-lg border border-white/10 bg-black/50 px-3 focus-within:border-[#d9ff4a]/60">
+            <Search size={14} className="text-zinc-500" aria-hidden="true" />
+            <input type="search" aria-label="Search players" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="First and/or last name"
+              className="w-full bg-transparent py-2 text-sm normal-case tracking-normal text-white outline-none" />
+          </span>
         </label>
-        <button type="submit" disabled={busy === 'search'} className={ghostButton}><Search size={13} /> Find</button>
-      </form>
-      {found.length > 0 && <ul aria-label="Matching players" className="space-y-1">{found.map((p) => <li key={p.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-black/30 px-3 py-2 text-sm">
-        {p.first_name} {p.last_name}
-        <button type="button" onClick={() => addExistingPlayer(p)} disabled={busy === `add-${p.id}`} className={ghostButton}><Plus size={13} /> Add to {entry?.name}</button>
-      </li>)}</ul>}
+        <p aria-live="polite" className="text-xs text-zinc-500">
+          {playerSearch.status === 'idle' && search.trim() && 'Type at least two letters of the name.'}
+          {playerSearch.status === 'loading' && <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Searching players...</span>}
+          {playerSearch.status === 'ready' && (playerSearch.results.length
+            ? `${playerSearch.results.length} player${playerSearch.results.length === 1 ? '' : 's'} found${playerSearch.results.length === 20 ? ' (the first 20; add more of the name to narrow)' : ''}`
+            : `No player matches “${search.trim()}”. Create them below.`)}
+        </p>
+        {playerSearch.status === 'error' && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+          The player search failed ({playerSearch.error}). <button type="button" onClick={playerSearch.retry} className="underline">Try again</button>
+        </p>}
+        {playerSearch.status === 'ready' && playerSearch.results.length > 0 && <ul aria-label="Matching players" className="space-y-1">{playerSearch.results.map((p) => {
+          const name = `${p.first_name} ${p.last_name}`.trim();
+          const context = p.last_team ? `${p.last_team} · ${p.last_season} (${p.last_division})${p.last_jersey != null ? ` · #${p.last_jersey}` : ''}` : 'Not on a roster yet';
+          return <li key={p.player_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/5 bg-black/30 px-3 py-2 text-sm">
+            <span><span className="font-bold text-white">{name}</span> <span className="text-zinc-500">· OVR {p.overall_rating ?? '—'}</span>
+              <span className="block text-xs text-zinc-500">Latest: {context}</span></span>
+            {p.in_season
+              ? <span className="text-xs text-zinc-500">Already in this season</span>
+              : <button type="button" onClick={() => addExistingPlayer(p)} disabled={busy === `add-${p.player_id}`} aria-label={`Add ${name} to ${entry?.name}`} className={ghostButton}><Plus size={13} /> Add to {entry?.name}</button>}
+          </li>;
+        })}</ul>}
+      </div>
 
       <form noValidate onSubmit={createPlayer} aria-label="New player" className="space-y-3 rounded-xl border border-white/10 p-4">
         <p className="text-xs font-black uppercase tracking-wider text-zinc-400">New player on {entry?.name}</p>
