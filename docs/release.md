@@ -57,6 +57,7 @@ Production was created from the legacy migrations by hand. **It has no migration
      - It maps the unambiguous names to the catalog; the goalkeeper leftovers become Deflector and the rest Technical (your decision, 2026-11-19).
      - It stops on any other name, and each change is listed.
      - The rehearsal converted 16 players.
+   - **Back up first, and wait for it:** run Actions → "Database backup" on `main` (target `production`, a note naming the scripts) and wait for "Uploaded object verified: yes" before any of the scripts below (`docs/backups.md`). Production migrations take their own verified backup automatically before they can be approved.
    - **Preview each script first:** run it with its `COMMIT` line changed to `ROLLBACK`. Nothing is written and the list is shown.
      - Proceed only if the counts match the rehearsal (84 accounts and 10,930 points; 16 jersey numbers: 10 out of range and 6 shared; 16 play styles), or every difference is understood. Production data may have changed since the archive of 2026-11-07.
      - Then run each script as is, and export its list: it is that script's rollback record.

@@ -99,6 +99,7 @@
       "owner": "platform",
       "paths": [
         ".claude/settings.json",
+        ".github/actions/**",
         ".githooks/**",
         ".github/workflows/**",
         ".gitmessage",
@@ -125,6 +126,7 @@
       ],
       "covers": [
         ".claude/settings.json",
+        ".github/actions/**",
         ".githooks/**",
         ".github/workflows/**",
         ".gitmessage",

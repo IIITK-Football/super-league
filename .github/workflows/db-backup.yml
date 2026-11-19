@@ -1,0 +1,92 @@
+name: Database backup
+
+# Production database backups, stored encrypted in the private R2 bucket "backup" (docs/backups.md):
+# * every day at 03:00 IST (21:30 UTC), under automated-prod/scheduled/;
+# * on demand from the Actions tab on main ("Run workflow", with a note), under automated-prod/manual/, before any
+#   manual production SQL change: wait for "Uploaded object verified: yes" first;
+# * the staging rehearsal (target staging-rehearsal, or a push to develop that changes the backup tooling), under
+#   automated-staging-test/rehearsal/, never against production.
+# The pre-migration backup that gates production migrations runs in db-deploy.yml (job production-backup).
+# Each run dumps through the Session pooler, proves the dump restores into a disposable local database, encrypts it to
+# the owner's age key, uploads it and reads it back. Logs show keys, sizes, checksums, counts and verdicts only, and
+# nothing is ever uploaded as an Actions artifact (this repository is public).
+
+on:
+  schedule:
+    - cron: '30 21 * * *'
+  workflow_dispatch:
+    inputs:
+      note:
+        description: 'Why this backup is taken (for example: before reconcile-league-points.sql)'
+        required: true
+        type: string
+      target:
+        description: 'production, or staging-rehearsal to test the backup on staging'
+        required: true
+        type: choice
+        options: [production, staging-rehearsal]
+        default: production
+  push:
+    branches: [develop]
+    paths:
+      - 'scripts/backup/**'
+      - '.github/actions/database-backup/**'
+      - '.github/workflows/db-backup.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: Database Backup
+    concurrency:
+      group: db-backup-${{ github.event_name == 'push' && 'staging' || inputs.target == 'staging-rehearsal' && 'staging' || 'production' }}
+      cancel-in-progress: false
+    steps:
+      - name: Choose the target
+        id: target
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TARGET: ${{ inputs.target }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = push ]; then target=staging; reason=rehearsal
+          elif [ "$EVENT" = schedule ]; then target=production; reason=scheduled
+          elif [ "$INPUT_TARGET" = staging-rehearsal ]; then target=staging; reason=rehearsal
+          else target=production; reason=manual; fi
+          if [ "$target" = production ] && [ "$REF" != refs/heads/main ]; then
+            echo "Production backups run only from main; refusing to continue"; exit 1
+          fi
+          echo "Target: ${target}; reason: ${reason}"
+          { echo "target=${target}"; echo "reason=${reason}"; } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (frozen lockfile; the Supabase CLI runs the restore test)
+        run: pnpm install --frozen-lockfile
+
+      - name: Back up and verify
+        uses: ./.github/actions/database-backup
+        with:
+          target: ${{ steps.target.outputs.target }}
+          reason: ${{ steps.target.outputs.reason }}
+          note: ${{ inputs.note }}
+          db-url: ${{ steps.target.outputs.target == 'production' && secrets.PRODUCTION_BACKUP_DB_URL || secrets.STAGING_BACKUP_DB_URL }}
+          expected-ref: ${{ steps.target.outputs.target == 'production' && vars.PRODUCTION_PROJECT_REF || 'yecozsiccsfwphlmxozt' }}
+          production-ref: ${{ vars.PRODUCTION_PROJECT_REF }}
+          age-recipient: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          r2-bucket: ${{ secrets.R2_BUCKET }}
+          r2-endpoint: ${{ secrets.R2_ENDPOINT }}
+          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}

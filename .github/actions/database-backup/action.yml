@@ -1,0 +1,79 @@
+name: Database backup
+description: >
+  Dumps a Supabase database through its Session pooler, proves the dump restores into a disposable local database,
+  encrypts it to the owner's age public key, uploads it to the private R2 backup bucket and reads it back to verify it.
+  Production objects go under automated-prod/, the staging rehearsal under automated-staging-test/. Logs and the job
+  summary show keys, sizes, checksums, counts and verdicts only. The caller must have checked out the repository and
+  installed its root dependencies (the Supabase CLI runs the restore test). Never uploads an Actions artifact.
+
+inputs:
+  target:
+    description: production | staging (staging is only the rehearsal target)
+    required: true
+  reason:
+    description: pre-migration | scheduled | manual | rehearsal
+    required: true
+  note:
+    description: Free text recorded in the manifest
+    required: false
+    default: ''
+  db-url:
+    description: Session pooler URI of the database (user <role>.<project ref>)
+    required: true
+  expected-ref:
+    description: The project ref the URI must name
+    required: true
+  production-ref:
+    description: The production project ref (a staging rehearsal refuses it)
+    required: true
+  age-recipient:
+    description: The owner's age public key
+    required: true
+  r2-bucket:
+    required: true
+  r2-endpoint:
+    required: true
+  r2-access-key-id:
+    required: true
+  r2-secret-access-key:
+    required: true
+
+outputs:
+  key:
+    description: Object key of the verified backup
+    value: ${{ steps.backup.outputs.key }}
+  sha256:
+    description: sha256 of the encrypted object
+    value: ${{ steps.backup.outputs.sha256 }}
+  created-at:
+    description: Creation time (UTC) recorded in the manifest
+    value: ${{ steps.backup.outputs.created_at }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install the PostgreSQL 17 client and age
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+        sudo apt-get install -y -qq postgresql-client-17 age > /dev/null
+        echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+    - name: Back up, restore-test, encrypt, upload and read back
+      id: backup
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        REASON: ${{ inputs.reason }}
+        NOTE: ${{ inputs.note }}
+        DB_URL: ${{ inputs.db-url }}
+        EXPECTED_REF: ${{ inputs.expected-ref }}
+        PRODUCTION_REF: ${{ inputs.production-ref }}
+        AGE_RECIPIENT: ${{ inputs.age-recipient }}
+        R2_BUCKET: ${{ inputs.r2-bucket }}
+        R2_ENDPOINT: ${{ inputs.r2-endpoint }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.r2-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.r2-secret-access-key }}
+        SUPABASE_BIN: ${{ github.workspace }}/node_modules/.bin/supabase
+      run: bash "${{ github.workspace }}/scripts/backup/database-backup.sh"
