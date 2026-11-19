@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { probeAll } from './verify-rpc-closed.mjs';
 
 // The seed's legacy player without an account waits for this synthetic address (backend/supabase/seed.sql).
-export const AUTO_LINK_EMAIL = 'roster.fixture@iiitkottayam.ac.in';
+export const AUTO_LINK_EMAIL = 'auto.link.fixture@iiitkottayam.ac.in';
 export const STAGING_REF = 'yecozsiccsfwphlmxozt';
 const DOMAIN = 'iiitkottayam.ac.in';
 const PREFIX = 'sl-check-';
@@ -366,8 +366,16 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
       const after = (await admin(`/rest/v1/players?id=eq.${waitingPlayer}&select=user_id`)).data?.[0]?.user_id ?? null;
       const audited = (await admin(`/rest/v1/audit_log?table_name=eq.players&record_id=eq.${waitingPlayer}&actor_role=eq.auto-link&select=id`)).data ?? [];
       const ok = before === null && after === signup.data.id && audited.length > 0;
+      // When it fails, say why: was the email confirmed, and what does the dictator's matching preview show for it?
+      let why = '';
+      if (!ok) {
+        const confirmedAt = (await admin(`/auth/v1/admin/users/${signup.data.id}`)).data?.email_confirmed_at ?? null;
+        const preview = await call('/rest/v1/rpc/account_link_matches', { method: 'POST', key: PUBLISHABLE, token: managerToken, body: {} });
+        const row = (preview.data ?? []).find?.((m) => m.player_id === waitingPlayer);
+        why = `; email confirmed: ${Boolean(confirmedAt)}; preview: ${row ? row.status : preview.ok ? 'not listed' : message(preview)}`;
+      }
       record('An account is linked automatically when its matching email is confirmed', ok ? 'PASS' : 'FAIL',
-        `before: ${before === null ? 'unlinked' : 'linked'}, after: ${after === signup.data.id ? 'linked to the account' : 'not linked'}, audited as auto-link: ${audited.length > 0}`);
+        `before: ${before === null ? 'unlinked' : 'linked'}, after: ${after === signup.data.id ? 'linked to the account' : 'not linked'}, audited as auto-link: ${audited.length > 0}${why}`);
     }
 
     // Recovery: the one-time token flow, without sending any mail (this does not test email delivery or redirect URLs).

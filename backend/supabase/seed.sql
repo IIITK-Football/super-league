@@ -763,13 +763,16 @@ WHERE id = (SELECT id FROM public.players WHERE first_name = 'Jackson' AND last_
   AND user_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM public.players p JOIN auth.users u ON u.id = p.user_id WHERE u.email = 'fan01@iiitkottayam.ac.in');
 
--- Account matching (private match keys of unlinked legacy players; no contact emails exist any more). Five WSL players
+-- Account matching (private match keys of unlinked legacy players; no contact emails exist any more). Seven WSL players
 -- of the first WSL team, one per case the dictator's matching preview shows:
 --   slot 2  fan02 (verified)                 ready: linked by the dictator's "link all ready matches"
 --   slot 3  fan03, and slot 4 fan03 too      duplicate: resolved by hand
 --   slot 5  fan04 (unverified)               waiting for verification: linked automatically when fan04 verifies
 --   slot 6  fan01 (already linked to Lamb)   conflict
---   slot 7  roster.fixture@…                 no account
+--   slot 7  roster.fixture@…                 no account (on a project converted from the old seed, this address also
+--                                            belonged to a men's player's contact email, so it shows as a duplicate)
+--   slot 8  auto.link.fixture@…              no account; the staging checks confirm an account with this address to
+--                                            test the automatic link, then delete it (the next seed run restores the key)
 -- fan02 is verified BEFORE its key is added, as for a legacy player whose person signed up long ago. A key is only
 -- (re)added while its player is unlinked and its account has no player, so a re-run never undoes a link.
 UPDATE auth.users SET email_confirmed_at = now()
@@ -777,7 +780,8 @@ WHERE email = 'fan02@iiitkottayam.ac.in' AND email_confirmed_at IS NULL;
 INSERT INTO public.player_link_keys (player_id, email)
 SELECT p.id, k.email
 FROM (VALUES (2, 'fan02@iiitkottayam.ac.in'), (3, 'fan03@iiitkottayam.ac.in'), (4, 'fan03@iiitkottayam.ac.in'),
-             (5, 'fan04@iiitkottayam.ac.in'), (6, 'fan01@iiitkottayam.ac.in'), (7, 'roster.fixture@iiitkottayam.ac.in')) AS k(slot, email)
+             (5, 'fan04@iiitkottayam.ac.in'), (6, 'fan01@iiitkottayam.ac.in'), (7, 'roster.fixture@iiitkottayam.ac.in'),
+             (8, 'auto.link.fixture@iiitkottayam.ac.in')) AS k(slot, email)
 CROSS JOIN (SELECT id FROM _mega_teams WHERE division = 'womens' ORDER BY team_name LIMIT 1) wsl
 JOIN public.players p ON p.id = md5('mega-player:' || wsl.id::text || ':' || k.slot)::uuid
 WHERE p.user_id IS NULL
