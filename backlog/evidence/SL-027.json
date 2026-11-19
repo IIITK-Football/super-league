@@ -1,9 +1,9 @@
 {
-  "head": "4b0dfce57c959065286948e65f26663c7becc538",
-  "tree": "2eebeb17704d42739b5e91c652c103f651ae7bdb",
+  "head": "0174682dee0007d6b2edb78fdb9ac9923c709587",
+  "tree": "7f6542c64bc06d44c215fa8d8653aaca7b334c08",
   "clean": true,
   "dryRun": false,
-  "at": "2026-11-19T05:32:44.913Z",
+  "at": "2026-11-19T05:36:18.321Z",
   "groups": [
     {
       "name": "database",
@@ -14,7 +14,7 @@
           "cwd": ".",
           "cmd": "bash scripts/local-db.sh test",
           "exit": 0,
-          "ms": 3366
+          "ms": 3364
         }
       ]
     },
@@ -27,13 +27,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/audit",
           "exit": 0,
-          "ms": 2944
+          "ms": 3060
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/AuditHistory.local.test.jsx",
           "exit": 0,
-          "ms": 3272
+          "ms": 3345
         }
       ]
     },
@@ -46,7 +46,7 @@
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run --passWithNoTests",
           "exit": 0,
-          "ms": 6730
+          "ms": 6748
         }
       ]
     },
@@ -59,7 +59,7 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/tooling",
           "exit": 0,
-          "ms": 10482
+          "ms": 10842
         }
       ]
     }
