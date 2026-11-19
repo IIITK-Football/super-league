@@ -96,3 +96,14 @@ Helpers never include the dictator; policies spell it out (`is_dictator() OR can
 6. **Legacy `admin` holders:** *answered by the owner 2026-11-19:* never ported or promoted; their `admin` rows are removed and the accounts stay ordinary users (Auth accounts and profiles kept), with no review or re-grant path. `/dictator` is the canonical dashboard URL and `/admin` redirects to it. Done by `20261129000000` and `20261130000000`.
 7. **May a captain-assigned user also score matches involving their own team?** Default: technically allowed if the dictator assigns it (no role implies another, and no role forbids another); the dashboard warns.
 8. **Do scorer assignments expire?** Default: optional `expires_at`, null for dictator-made assignments, required for SL-050 invitations.
+
+## Owner answers recorded 2026-11-19 (D-03 stays open)
+These answer the captain questions only; the multi-role model (option B) and the scorer questions are still open.
+- **Shared card:** a captain assigned to a player's current roster on their own team may edit that player's shared FUT card (shown on every roster place). Jersey and position stay with the captain's team entry and season.
+- **Several teams:** a captain may captain several teams across seasons and divisions. There is no global uniqueness (this replaces `UNIQUE (user_id, season_id)` in §3); only a duplicate assignment to the same team and season is prevented.
+- **Scope:** captain access is scoped to the exact team entry and season, and never carries over to another.
+- **Revoking:** removing one assignment keeps the captain capability while another remains. It is removed only when none remain, and never overwrites another role such as dictator (this replaces the "inert grant" answer to Q4).
+- **Captain search:** never excludes people who captain elsewhere. It shows their existing assignments and blocks only a duplicate for this team and season.
+- **Dictators** keep dictator permissions when also assigned as a captain.
+- **Still open:** one captain per team entry vs co-captains (Q3); editors as captains before multi-role grants; whether past-season assignments count as "remaining".
+
