@@ -196,7 +196,7 @@
         "backend/lib/auth/**",
         "backend/app/api/auth/**",
         "backend/app/api/admin/team-registrations/**",
-      "backend/app/api/admin/newsletter/**",
+        "backend/app/api/admin/newsletter/**",
         "backend/supabase/migrations/*auth*",
         "frontend/src/lib/authApi.js",
         "frontend/src/lib/authRules.js",
@@ -505,6 +505,55 @@
         "frontend/**"
       ],
       "run": []
+    },
+    "player-accounts": {
+      "description": "Account-linked players and the self-service player card: dictator link, unlink and import through the local Auth and Data API, self-service limits, and the real-stack Teams & Rosters and profile flows",
+      "owner": "backend",
+      "requiresLocalDb": true,
+      "paths": [
+        "backend/tests/player-accounts/**",
+        "backend/supabase/migrations/*account_linked*",
+        "backend/app/api/profile/**",
+        "frontend/src/components/admin/__tests__/ManageRosters.links.local.test.jsx",
+        "frontend/src/pages/__tests__/UserProfile.player.local.test.jsx"
+      ],
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/player-accounts"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "env",
+            "SL_LOCAL_SUPABASE=1",
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "src/components/admin/__tests__/ManageRosters.links.local.test.jsx",
+            "src/pages/__tests__/UserProfile.player.local.test.jsx"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/supabase/migrations/*account_linked*",
+        "backend/app/api/profile/**",
+        "frontend/src/pages/UserProfile.jsx"
+      ],
+      "testPaths": [
+        "backend/tests/player-accounts/**",
+        "frontend/src/components/admin/__tests__/ManageRosters.links.local.test.jsx",
+        "frontend/src/pages/__tests__/UserProfile.player.local.test.jsx"
+      ]
     }
   },
   "allGroupsTriggers": [
