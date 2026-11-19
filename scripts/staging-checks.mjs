@@ -84,9 +84,9 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
 
   const created = [];
   const tag = `${PREFIX}${rand(4)}`;
-  const makeUser = async (label) => {
+  const makeUser = async (label, confirmed = true) => {
     const email = `${tag}-${label}@${DOMAIN}`;
-    const r = await admin('/auth/v1/admin/users', { method: 'POST', body: { email, password: rand(16), email_confirm: true } });
+    const r = await admin('/auth/v1/admin/users', { method: 'POST', body: { email, password: rand(16), email_confirm: confirmed } });
     if (!r.ok || !r.data?.id) throw new Error(`could not create synthetic account ${label} (${message(r)})`);
     created.push(r.data.id);
     return { id: r.data.id, email };
@@ -303,6 +303,28 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
 
     const byUser = await asUser(userToken)('/rest/v1/divisions', { method: 'POST', prefer: 'return=minimal', body: { slug: `${tag}-x`, name: 'SL Check Refused' } });
     expectRefused('An account without the managing role cannot create a division', byUser, /row-level security|permission denied|42501/i);
+
+    // Account-linked players: only a dictator links, only a verified account, and not even the server key can write the
+    // link; nobody signed in or anonymous can read it; unlinking clears it.
+    const linkTarget = await admin('/rest/v1/players', { method: 'POST', prefer: 'return=representation', body: { first_name: `${tag}-player`, last_name: 'Link', attributes: {} } });
+    if (!linkTarget.ok) throw new Error(`could not create the account-link player (${message(linkTarget)})`);
+    const linkPlayer = linkTarget.data[0].id;
+    const linkOf = async () => (await admin(`/rest/v1/players?id=eq.${linkPlayer}&select=user_id`)).data?.[0]?.user_id ?? null;
+    const linkRpc = (token, name, body) => call(`/rest/v1/rpc/${name}`, { method: 'POST', key: PUBLISHABLE, token, body });
+    const unverified = await makeUser('unverified', false);
+    expectRefused('An unverified account cannot be linked to a player', await linkRpc(managerToken, 'link_player_account', { p_player: linkPlayer, p_user: unverified.id }), /verified/i);
+    expectRefused('A normal user cannot link a player to an account', await linkRpc(userToken, 'link_player_account', { p_player: linkPlayer, p_user: normal.id }), /only a dictator|42501/i);
+    const linked = await linkRpc(managerToken, 'link_player_account', { p_player: linkPlayer, p_user: normal.id });
+    const nowLinked = await linkOf();
+    record('A dictator links a player to a verified account', linked.ok && nowLinked === normal.id ? 'PASS' : 'FAIL', linked.ok ? `linked: ${nowLinked === normal.id}` : message(linked));
+    const byServer = await admin(`/rest/v1/players?id=eq.${linkPlayer}`, { method: 'PATCH', prefer: 'return=minimal', body: { user_id: dictator.id } });
+    if (byServer.ok || (await linkOf()) !== normal.id) record('The server key cannot write the account link', 'FAIL', 'the link was changed with the secret key');
+    else expectRefused('The server key cannot write the account link', byServer, /only a dictator|42501/i);
+    expectRefused('Anonymous visitors cannot read the account link', await anon(`/rest/v1/players?id=eq.${linkPlayer}&select=user_id`), /permission denied|42501/i);
+    expectRefused('A signed-in account cannot read the account link', await asUser(userToken)(`/rest/v1/players?id=eq.${linkPlayer}&select=user_id`), /permission denied|42501/i);
+    const unlinked = await linkRpc(managerToken, 'unlink_player_account', { p_player: linkPlayer });
+    const afterUnlink = await linkOf();
+    record('A dictator unlinks a player, clearing only the link', unlinked.ok && afterUnlink === null ? 'PASS' : 'FAIL', unlinked.ok ? `cleared: ${afterUnlink === null}` : message(unlinked));
 
     // Recovery: the one-time token flow, without sending any mail (this does not test email delivery or redirect URLs).
     const recoveryToken = await session(normal, 'recovery');

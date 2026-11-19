@@ -4,6 +4,7 @@
 -- the Freshers member table became season roster memberships (20261124000000, 20261125000000); the retired
 -- overloads must be gone. Check 11 reads only a count of registrations. Checks 12-16 cover the dictator roster
 -- functions and the roster history guard (20261127000000) and the audit history's write protection (20261126000000).
+-- Checks 17-18 cover the account-linked players (20261130000005).
 BEGIN READ ONLY;
 
 WITH f AS (
@@ -71,6 +72,21 @@ FROM (
                          WHERE c.oid = to_regclass('public.audit_log')
                            AND (a.grantee = 0 OR r.rolname IN ('anon', 'authenticated', 'service_role'))
                            AND a.privilege_type NOT IN ('SELECT', 'REFERENCES', 'TRIGGER', 'MAINTAIN'))
+  UNION ALL
+  SELECT 17, 'the account-link and own-card functions exist and are closed to anonymous callers and PUBLIC; they run as owner with an empty search_path',
+         (SELECT bool_and(fn IS NOT NULL AND NOT has_function_privilege('anon', fn, 'EXECUTE') AND has_function_privilege('authenticated', fn, 'EXECUTE')
+                          AND p.prosecdef AND p.proconfig @> ARRAY['search_path=""']
+                          AND NOT EXISTS (SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee = 0))
+          FROM unnest(ARRAY['public.link_player_account(uuid,uuid)', 'public.unlink_player_account(uuid)', 'public.player_link_candidates(text)',
+                            'public.player_link_status(uuid[])', 'public.preview_player_account_links(jsonb)', 'public.apply_player_account_links(jsonb)',
+                            'public.my_player()', 'public.update_my_player(text,text)']) AS name
+          CROSS JOIN LATERAL (SELECT to_regprocedure(name) AS fn) r
+          LEFT JOIN pg_proc p ON p.oid = r.fn) IS TRUE
+  UNION ALL
+  SELECT 18, 'the account link is guarded on every write and unreadable by anonymous visitors and signed-in users',
+         EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.players'::regclass AND tgname = 'players_account_link_guard' AND NOT tgisinternal)
+         AND NOT has_column_privilege('anon', 'public.players', 'user_id', 'SELECT')
+         AND NOT has_column_privilege('authenticated', 'public.players', 'user_id', 'SELECT')
 ) c
 ORDER BY n;
 

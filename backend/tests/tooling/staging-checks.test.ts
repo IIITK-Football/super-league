@@ -13,13 +13,13 @@ const PUBLISHABLE = ['sb', 'publishable', 'NEVER_PRINT_THIS_key_abcdef'].join('_
 const goodEnv = () => ({ SUPABASE_URL: `https://${STAGING}.supabase.co`, SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE, SUPABASE_SECRET_KEY: SECRET, ALLOW_REMOTE_SUPABASE: 'true' });
 
 type Opts = { captchaEnforced?: boolean; openRpc?: boolean; failAtRpc?: boolean; leakEmail?: boolean; openDivisions?: boolean; brokenCurrentSeason?: boolean;
-  noAudit?: boolean; openAudit?: boolean; editableAudit?: boolean; anySeasonCaptain?: boolean };
+  noAudit?: boolean; openAudit?: boolean; editableAudit?: boolean; anySeasonCaptain?: boolean; serverKeyLinks?: boolean };
 
 function fakeStaging(opts: Opts = {}) {
   const { captchaEnforced = true, openRpc = false, failAtRpc = false, openDivisions = false, brokenCurrentSeason = false } = opts;
   // The append-only audit history: division inserts are recorded with the signed-in actor (absent with noAudit).
   const auditLog = new Map<string, { id: string; actor_id: string | null; table_name: string; record_id: string; action: string }>();
-  const users = new Map<string, { id: string; email: string }>();
+  const users = new Map<string, { id: string; email: string; confirmed?: boolean }>();
   const roles = new Map<string, string>();
   const regs = new Map<string, { id: string; captain_id: string }>();
   const regTeams = new Map<string, { team_id: string; season_id: string }>();
@@ -55,7 +55,7 @@ function fakeStaging(opts: Opts = {}) {
     if (p === '/auth/v1/admin/users' && method === 'POST') {
       if (!/@iiitkottayam\.ac\.in$/.test(body.email)) return json(422, { msg: 'domain' });
       const id = `u${++n}`;
-      users.set(id, { id, email: body.email });
+      users.set(id, { id, email: body.email, confirmed: body.email_confirm === true });
       roles.set(id, 'default');
       return json(200, { id, email: body.email });
     }
@@ -119,6 +119,13 @@ function fakeStaging(opts: Opts = {}) {
         if (v.startsWith('like.')) return String(r[k] ?? '').startsWith(v.slice(5).replace(/\*$/, ''));
         return true;
       });
+      // players.user_id (the account link) is readable by the server only, and written only by a dictator.
+      if (rosterTable === 'players' && method === 'GET' && !asAdmin && (u.searchParams.get('select') ?? '').includes('user_id')) {
+        return json(401, { code: '42501', message: 'permission denied for table players' });
+      }
+      if (rosterTable === 'players' && method === 'PATCH' && body && 'user_id' in body && !opts.serverKeyLinks) {
+        return json(403, { code: '42501', message: 'Only a dictator can link a player to an account' });
+      }
       if (method === 'GET') {
         if (rosterTable === 'player_private_details' && !asAdmin) {
           if (!headers.authorization) return json(401, { code: '42501', message: 'permission denied for table player_private_details' });
@@ -226,6 +233,16 @@ function fakeStaging(opts: Opts = {}) {
         return new Response(null, { status: 204 });
       }
     }
+    if ((p === '/rest/v1/rpc/link_player_account' || p === '/rest/v1/rpc/unlink_player_account') && method === 'POST') {
+      const me = uid(headers.authorization);
+      if (!me || roles.get(me) !== 'dictator') return json(403, { code: '42501', message: 'Only a dictator can link a player to an account' });
+      const player = rows.players.get(body.p_player);
+      if (!player) return json(404, { code: 'P0002', message: 'Player not found' });
+      if (p.endsWith('/unlink_player_account')) { player.user_id = null; return new Response(null, { status: 204 }); }
+      if (!users.get(body.p_user)?.confirmed) return json(400, { code: '23514', message: 'Only a verified account can be linked to a player' });
+      player.user_id = body.p_user;
+      return new Response(null, { status: 204 });
+    }
     if (p === '/rest/v1/rpc/set_current_season' && method === 'POST') {
       if (!manager) return json(403, { code: '42501', message: 'Only a dictator can change the current season' });
       const target = seasons.get(body.p_season);
@@ -287,6 +304,15 @@ describe('runChecks refuses a wrong target before any request', () => {
   });
 });
 
+describe('runChecks detects a broken account-link guard', () => {
+  it('fails when the server key can write the account link', async () => {
+    const s = fakeStaging({ serverKeyLinks: true });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
+    expect(by(results, /server key cannot write the account link/i)?.status).toBe('FAIL');
+    expect(s.users.size).toBe(0);
+  });
+});
+
 describe('runChecks against a healthy staging', () => {
   it('passes every check, and leaves nothing behind', async () => {
     const s = fakeStaging();
@@ -294,7 +320,9 @@ describe('runChecks against a healthy staging', () => {
     expect(results.filter((r: { status: string }) => r.status === 'FAIL')).toEqual([]);
     for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /rename a player/i, /private player details/i, /dictator/i, /recovery/i, /clean/i,
                       /legacy divisions/i, /new hidden division/i, /current season switches/i, /hidden division is invisible/i, /cannot create a division/i,
-                      /recorded in the audit history/i, /audit history is hidden/i, /change or remove audit history/i, /season that is not current/i]) {
+                      /recorded in the audit history/i, /audit history is hidden/i, /change or remove audit history/i, /season that is not current/i,
+                      /unverified account cannot be linked/i, /normal user cannot link/i, /dictator links a player/i, /server key cannot write the account link/i,
+                      /anonymous visitors cannot read the account link/i, /signed-in account cannot read the account link/i, /dictator unlinks a player/i]) {
       expect(by(results, re)?.status, String(re)).toBe('PASS');
     }
     expect(s.users.size).toBe(0);
@@ -325,14 +353,14 @@ describe('runChecks against a healthy staging', () => {
     for (const c of s.calls) expect(new URL(c.url).host).toBe(`${STAGING}.supabase.co`);
   });
 
-  it('creates only synthetic accounts, never sends mail (confirmed on creation), and removes them', async () => {
+  it('creates only synthetic accounts, never sends mail (confirmed on creation, except the one unverified account), and removes them', async () => {
     const s = fakeStaging();
     await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     const creates = s.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/auth/v1/admin/users'));
     expect(creates.length).toBeGreaterThanOrEqual(5);
     for (const c of creates) {
       expect(c.body.email).toMatch(/^sl-check-[a-z0-9-]+@iiitkottayam\.ac\.in$/);
-      expect(c.body.email_confirm).toBe(true);
+      expect(c.body.email_confirm).toBe(!/-unverified@/.test(c.body.email)); // admin-created accounts get no mail either way
     }
     expect(s.calls.some((c) => /\/auth\/v1\/(recover|otp|signup|resend)/.test(c.url))).toBe(false); // none of the endpoints that send email
   });
