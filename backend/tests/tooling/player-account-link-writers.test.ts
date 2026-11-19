@@ -1,5 +1,5 @@
 // Group: tooling. A player's account link (players.user_id) is written only by the database's dictator functions, which
-// a trigger enforces on every path. No backend route or helper may write it, and nothing may read every column of
+// a trigger enforces on every path, and players and roster places are created only through the account-first functions. No backend route or helper may write it, and nothing may read every column of
 // players (the link column is not readable by visitors or signed-in users, so select('*') would fail for them).
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -19,6 +19,11 @@ describe('player account link', () => {
       const text = readFileSync(f, 'utf8');
       return /from\(['"]players['"]\)[\s\S]{0,200}\.(update|insert|upsert)\([^)]*user_id/.test(text);
     }).map((f) => relative(root, f));
+    expect(offenders).toEqual([]);
+  });
+
+  it('no route, helper or page creates a player or a roster place directly (only create_player_for_account and add_player_to_roster)', () => {
+    const offenders = sources.filter((f) => /from\(['"](players|roster_memberships)['"]\)\s*\.(insert|upsert)\(/.test(readFileSync(f, 'utf8'))).map((f) => relative(root, f));
     expect(offenders).toEqual([]);
   });
 

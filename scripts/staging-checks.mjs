@@ -15,6 +15,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { probeAll } from './verify-rpc-closed.mjs';
 
+// The seed's legacy player without an account waits for this synthetic address (backend/supabase/seed.sql).
+export const AUTO_LINK_EMAIL = 'roster.fixture@iiitkottayam.ac.in';
 export const STAGING_REF = 'yecozsiccsfwphlmxozt';
 const DOMAIN = 'iiitkottayam.ac.in';
 const PREFIX = 'sl-check-';
@@ -105,6 +107,8 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
   };
   // A synthetic team in the current Freshers season: the team, its season entry, the captain's registration and one
   // player on the season roster (a roster place). Names carry the run's prefix so cleanup can find them.
+  // Players are created as the app creates them: for a verified synthetic account, by the run's dictator.
+  let dictatorToken = null;
   const makeTeam = async (captain, name, seasonId = null) => {
     const season = seasonId ?? await currentFreshersSeason();
     const post = async (path, body, what) => {
@@ -115,10 +119,16 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const team = await post('/rest/v1/teams', { name: `${tag} ${name}` }, 'team');
     const entry = await post('/rest/v1/team_entries', { team_id: team, season_id: season }, 'season entry');
     await post('/rest/v1/team_registrations', { captain_id: captain.id, team_name: `SL CHECK ${name}`, season_id: season, team_id: team }, 'registration');
-    const player = await post('/rest/v1/players', { first_name: `${tag}-player`, last_name: name, overall_rating: 60, attributes: {} }, 'player');
-    await post('/rest/v1/player_private_details', { player_id: player, email: `${tag}-player-${name.toLowerCase()}@${DOMAIN}` }, 'player contact');
-    const member = await post('/rest/v1/roster_memberships', { player_id: player, team_entry_id: entry, season_id: season, jersey_number: 7, position: 'CM' }, 'roster place');
-    return { member, player };
+    const account = await makeUser(`player-${name.toLowerCase()}`);
+    const made = await call('/rest/v1/rpc/create_player_for_account', {
+      method: 'POST', key: PUBLISHABLE, token: dictatorToken,
+      body: { p_user: account.id, p_team_entry_id: entry, p_first_name: `${tag}-player`, p_last_name: name, p_overall_rating: 60, p_jersey_number: 7, p_position: 'CM' },
+    });
+    if (!made.ok) throw new Error(`could not create the ${name} player (${message(made)})`);
+    const player = made.data;
+    const member = (await admin(`/rest/v1/roster_memberships?player_id=eq.${player}&team_entry_id=eq.${entry}&select=id`)).data?.[0]?.id;
+    if (!member) throw new Error(`the ${name} player has no roster place`);
+    return { member, player, entry };
   };
   const session = async (user, type = 'magiclink') => {
     const link = await admin('/auth/v1/admin/generate_link', { method: 'POST', body: { type, email: user.email } });
@@ -150,7 +160,7 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     await admin(`/rest/v1/seasons?division_id=in.(${ids.join(',')})`, { method: 'DELETE' });
     await admin(`/rest/v1/divisions?id=in.(${ids.join(',')})`, { method: 'DELETE' });
   };
-  // Remove synthetic rosters: roster places, players (with their private details), season entries and teams.
+  // Remove synthetic rosters: roster places, players, season entries and teams.
   const sweepRosters = async () => {
     const teams = ((await admin(`/rest/v1/teams?name=like.${PREFIX}*&select=id`)).data ?? []).map((t) => t.id);
     const entries = teams.length ? ((await admin(`/rest/v1/team_entries?team_id=in.(${teams.join(',')})&select=id`)).data ?? []).map((e) => e.id) : [];
@@ -168,7 +178,7 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     await sweepDivisions();
     const list = await admin('/auth/v1/admin/users?per_page=1000');
     for (const u of list.data?.users ?? []) {
-      if (u.email?.startsWith(PREFIX) && u.email.endsWith(`@${DOMAIN}`)) await admin(`/auth/v1/admin/users/${u.id}`, { method: 'DELETE' });
+      if ((u.email?.startsWith(PREFIX) && u.email.endsWith(`@${DOMAIN}`)) || u.email === AUTO_LINK_EMAIL) await admin(`/auth/v1/admin/users/${u.id}`, { method: 'DELETE' });
     }
   };
 
@@ -188,6 +198,7 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     await setRole(captainB.id, 'captain');
     await setRole(assigned.id, 'default');
     await setRole(dictator.id, 'dictator');
+    dictatorToken = await session(dictator);
     const teamA = await makeTeam(captainA, 'A');
     const teamB = await makeTeam(captainB, 'B');
     const teamC = await makeTeam(assigned, 'C');
@@ -211,10 +222,11 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const afterRename = await admin(`/rest/v1/players?id=eq.${teamA.player}&select=first_name,roster_memberships(id)`);
     const untouched = afterRename.data?.[0]?.first_name === `${tag}-player` && (afterRename.data?.[0]?.roster_memberships ?? []).length === 1;
     record('A captain cannot rename a player or remove them from the roster directly', untouched ? 'PASS' : 'FAIL', untouched ? 'unchanged' : 'the player or roster place changed');
-    const contactAnon = await anon(`/rest/v1/player_private_details?select=email`);
-    const contactCaptain = await call(`/rest/v1/player_private_details?select=email`, { key: PUBLISHABLE, token: tokenA });
-    const privateOk = (!contactAnon.ok || (contactAnon.data ?? []).length === 0) && contactCaptain.ok && (contactCaptain.data ?? []).length === 0;
-    record('Private player details are hidden from visitors and captains', privateOk ? 'PASS' : 'FAIL', privateOk ? 'hidden' : 'a private email was readable');
+    // A player's email is their account's Auth email; the only other addresses are the private match keys.
+    const keysAnon = await anon(`/rest/v1/player_link_keys?select=email`);
+    const keysCaptain = await call(`/rest/v1/player_link_keys?select=email`, { key: PUBLISHABLE, token: tokenA });
+    const keysHidden = !keysAnon.ok && !keysCaptain.ok;
+    record('Private player match keys are hidden from visitors and captains', keysHidden ? 'PASS' : 'FAIL', keysHidden ? 'refused' : 'a match key was readable');
     expectRefused('An assigned user without the captain role is refused', await rpc(await session(assigned), teamC.member), /captain access is required/i);
     expectRefused('A normal user cannot change a player', await rpc(await session(normal), teamA.member), /not part of your assigned roster/i);
 
@@ -230,7 +242,7 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const legacyOk = ['super-league', 'wsl', 'freshers'].every((x) => slugs.includes(x)) && (current.data ?? []).length >= 3;
     record('Legacy divisions are ordinary division records with a current season each', legacyOk ? 'PASS' : 'FAIL', `${slugs.length} divisions, ${(current.data ?? []).length} current seasons`);
 
-    const managerToken = await session(dictator);
+    const managerToken = dictatorToken;
     const userToken = await session(normal);
     const asUser = (token) => (path, opts) => call(path, { ...opts, key: PUBLISHABLE, token });
     const division = await asUser(managerToken)('/rest/v1/divisions', { method: 'POST', prefer: 'return=representation', body: { slug: tag, name: 'SL Check Division', visibility: 'hidden' } });
@@ -306,9 +318,22 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
 
     // Account-linked players: only a dictator links, only a verified account, and not even the server key can write the
     // link; nobody signed in or anonymous can read it; unlinking clears it.
-    const linkTarget = await admin('/rest/v1/players', { method: 'POST', prefer: 'return=representation', body: { first_name: `${tag}-player`, last_name: 'Link', attributes: {} } });
+    // Every new player needs a verified account, on every path: the server key cannot create one.
+    const serverPlayer = await admin('/rest/v1/players', { method: 'POST', prefer: 'return=minimal', body: { first_name: `${tag}-player`, last_name: 'Server' } });
+    expectRefused('The server key cannot create a player without an account', serverPlayer, /verified account|42501/i);
+    // An unlinked player to link: created for an account, then unlinked by the dictator (only the link is cleared).
+    const linkAccount = await makeUser('link-owner');
+    const linkTarget = await call('/rest/v1/rpc/create_player_for_account', {
+      method: 'POST', key: PUBLISHABLE, token: managerToken,
+      body: { p_user: linkAccount.id, p_team_entry_id: teamA.entry, p_first_name: `${tag}-player`, p_last_name: 'Link' },
+    });
     if (!linkTarget.ok) throw new Error(`could not create the account-link player (${message(linkTarget)})`);
-    const linkPlayer = linkTarget.data[0].id;
+    const linkPlayer = linkTarget.data;
+    const firstUnlink = await call('/rest/v1/rpc/unlink_player_account', { method: 'POST', key: PUBLISHABLE, token: managerToken, body: { p_player: linkPlayer } });
+    if (!firstUnlink.ok) throw new Error(`could not unlink the account-link player (${message(firstUnlink)})`);
+    expectRefused('A player without an account cannot join a roster', await call('/rest/v1/rpc/add_player_to_roster', {
+      method: 'POST', key: PUBLISHABLE, token: managerToken, body: { p_player: linkPlayer, p_team_entry_id: teamB.entry },
+    }), /not linked to an account/i);
     const linkOf = async () => (await admin(`/rest/v1/players?id=eq.${linkPlayer}&select=user_id`)).data?.[0]?.user_id ?? null;
     const linkRpc = (token, name, body) => call(`/rest/v1/rpc/${name}`, { method: 'POST', key: PUBLISHABLE, token, body });
     const unverified = await makeUser('unverified', false);
@@ -325,6 +350,25 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const unlinked = await linkRpc(managerToken, 'unlink_player_account', { p_player: linkPlayer });
     const afterUnlink = await linkOf();
     record('A dictator unlinks a player, clearing only the link', unlinked.ok && afterUnlink === null ? 'PASS' : 'FAIL', unlinked.ok ? `cleared: ${afterUnlink === null}` : message(unlinked));
+
+    // Automatic link on verification, on the real hosted Auth: the seed's legacy player waiting for AUTO_LINK_EMAIL is
+    // linked when a synthetic account with that email confirms it. Deleting the account afterwards clears the link,
+    // and the next seed run restores the key.
+    const waitingKey = await admin(`/rest/v1/player_link_keys?email=eq.${encodeURIComponent(AUTO_LINK_EMAIL)}&select=player_id`);
+    const waitingPlayer = waitingKey.data?.[0]?.player_id;
+    if (!waitingPlayer) record('An account is linked automatically when its matching email is confirmed', 'FAIL', `no seed player waits for ${AUTO_LINK_EMAIL} (re-run the seed)`);
+    else {
+      const signup = await admin('/auth/v1/admin/users', { method: 'POST', body: { email: AUTO_LINK_EMAIL, password: rand(16), email_confirm: false } });
+      if (!signup.ok || !signup.data?.id) throw new Error(`could not create the auto-link account (${message(signup)})`);
+      created.push(signup.data.id);
+      const before = (await admin(`/rest/v1/players?id=eq.${waitingPlayer}&select=user_id`)).data?.[0]?.user_id ?? null;
+      await session({ email: AUTO_LINK_EMAIL }); // the confirmation link: GoTrue marks the email confirmed
+      const after = (await admin(`/rest/v1/players?id=eq.${waitingPlayer}&select=user_id`)).data?.[0]?.user_id ?? null;
+      const audited = (await admin(`/rest/v1/audit_log?table_name=eq.players&record_id=eq.${waitingPlayer}&actor_role=eq.auto-link&select=id`)).data ?? [];
+      const ok = before === null && after === signup.data.id && audited.length > 0;
+      record('An account is linked automatically when its matching email is confirmed', ok ? 'PASS' : 'FAIL',
+        `before: ${before === null ? 'unlinked' : 'linked'}, after: ${after === signup.data.id ? 'linked to the account' : 'not linked'}, audited as auto-link: ${audited.length > 0}`);
+    }
 
     // Recovery: the one-time token flow, without sending any mail (this does not test email delivery or redirect URLs).
     const recoveryToken = await session(normal, 'recovery');
@@ -343,9 +387,10 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
       const leftoverRoles = created.length ? (await admin(`/rest/v1/user_roles?user_id=in.(${ids})&select=user_id`)).data ?? [] : [];
       const leftoverDivisions = (await admin(`/rest/v1/divisions?slug=like.${PREFIX}*&select=id`)).data ?? [];
       const leftoverPlayers = (await admin(`/rest/v1/players?first_name=like.${PREFIX}*&select=id`)).data ?? [];
+      const leftoverAutoLink = (await admin('/auth/v1/admin/users?per_page=1000')).data?.users?.filter((u) => u.email === AUTO_LINK_EMAIL) ?? [];
       const leftoverTeams = (await admin(`/rest/v1/teams?name=like.${PREFIX}*&select=id`)).data ?? [];
       const clean = gone.every(Boolean) && leftoverRegs.length === 0 && leftoverRoles.length === 0 && leftoverDivisions.length === 0
-        && leftoverPlayers.length === 0 && leftoverTeams.length === 0;
+        && leftoverPlayers.length === 0 && leftoverTeams.length === 0 && leftoverAutoLink.length === 0;
       record('Cleanup removed every synthetic account and row', clean ? 'PASS' : 'FAIL', `${created.length} accounts removed; ${leftoverRegs.length} registrations, ${leftoverRoles.length} role rows, ${leftoverDivisions.length} divisions, ${leftoverPlayers.length} players and ${leftoverTeams.length} teams left over`);
     } catch (e) {
       record('Cleanup removed every synthetic account and row', 'FAIL', `cleanup error: ${String(e.message ?? e).slice(0, 160)} (accounts are prefixed ${PREFIX} and removed by the next run)`);

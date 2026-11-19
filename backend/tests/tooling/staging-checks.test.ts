@@ -3,7 +3,7 @@
 // script must refuse any other target, detect a broken staging, always clean up, and never print a key or password.
 import { beforeEach, describe, expect, it } from 'vitest';
 // @ts-ignore plain ESM
-import { loadEnvText, runChecks, verifyTarget } from '../../../scripts/staging-checks.mjs';
+import { AUTO_LINK_EMAIL, loadEnvText, runChecks, verifyTarget } from '../../../scripts/staging-checks.mjs';
 
 const STAGING = 'yecozsiccsfwphlmxozt';
 const PROD = 'obkxfepdpdufxawhzaen';
@@ -13,12 +13,12 @@ const PUBLISHABLE = ['sb', 'publishable', 'NEVER_PRINT_THIS_key_abcdef'].join('_
 const goodEnv = () => ({ SUPABASE_URL: `https://${STAGING}.supabase.co`, SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE, SUPABASE_SECRET_KEY: SECRET, ALLOW_REMOTE_SUPABASE: 'true' });
 
 type Opts = { captchaEnforced?: boolean; openRpc?: boolean; failAtRpc?: boolean; leakEmail?: boolean; openDivisions?: boolean; brokenCurrentSeason?: boolean;
-  noAudit?: boolean; openAudit?: boolean; editableAudit?: boolean; anySeasonCaptain?: boolean; serverKeyLinks?: boolean };
+  noAudit?: boolean; openAudit?: boolean; editableAudit?: boolean; anySeasonCaptain?: boolean; serverKeyLinks?: boolean; noAutoLink?: boolean };
 
 function fakeStaging(opts: Opts = {}) {
   const { captchaEnforced = true, openRpc = false, failAtRpc = false, openDivisions = false, brokenCurrentSeason = false } = opts;
   // The append-only audit history: division inserts are recorded with the signed-in actor (absent with noAudit).
-  const auditLog = new Map<string, { id: string; actor_id: string | null; table_name: string; record_id: string; action: string }>();
+  const auditLog = new Map<string, { id: string; actor_id: string | null; actor_role?: string; table_name: string; record_id: string; action: string }>();
   const users = new Map<string, { id: string; email: string; confirmed?: boolean }>();
   const roles = new Map<string, string>();
   const regs = new Map<string, { id: string; captain_id: string }>();
@@ -28,6 +28,9 @@ function fakeStaging(opts: Opts = {}) {
     teams: new Map(), team_entries: new Map(), players: new Map(), player_private_details: new Map(), roster_memberships: new Map(),
   };
   const members = rows.roster_memberships;
+  // The seed's legacy player without an account, waiting for AUTO_LINK_EMAIL (a private match key, server-readable only).
+  rows.players.set('legacy1', { id: 'legacy1', first_name: 'Seed', last_name: 'Legacy', user_id: null });
+  const linkKeys = new Map<string, string>([[AUTO_LINK_EMAIL, 'legacy1']]);
   const hashes = new Map<string, string>();
   // The seeded legacy divisions, each with a current season; synthetic ones are added by the run.
   const divisions = new Map<string, { id: string; slug: string; visibility: string }>(
@@ -64,6 +67,7 @@ function fakeStaging(opts: Opts = {}) {
       const id = adminUser[1];
       if (method === 'GET') return users.has(id) ? json(200, users.get(id)) : json(404, { msg: 'not found' });
       if (method === 'DELETE') {
+        for (const pl of rows.players.values()) if (pl.user_id === id) pl.user_id = null; // ON DELETE SET NULL keeps the player
         users.delete(id);
         roles.delete(id);
         for (const [rid, r] of regs) if (r.captain_id === id) regs.delete(rid);
@@ -79,6 +83,18 @@ function fakeStaging(opts: Opts = {}) {
     }
     if (p === '/auth/v1/verify') {
       const id = hashes.get(body.token_hash);
+      // Confirming the email links the one legacy player waiting for it (auth_user_auto_link), audited as auto-link.
+      const user = id ? users.get(id) : undefined;
+      if (user && !user.confirmed) {
+        user.confirmed = true;
+        const waiting = linkKeys.get(user.email);
+        if (waiting && !opts.noAutoLink && rows.players.get(waiting)?.user_id == null) {
+          rows.players.get(waiting).user_id = user.id;
+          linkKeys.delete(user.email);
+          const a = `a${++n}`;
+          auditLog.set(a, { id: a, actor_id: null, actor_role: 'auto-link', table_name: 'players', record_id: waiting, action: 'update' });
+        }
+      }
       return id ? json(200, { access_token: `at-${id}`, user: { id } }) : json(400, { msg: 'bad token' });
     }
     if (p === '/auth/v1/token') {
@@ -122,6 +138,9 @@ function fakeStaging(opts: Opts = {}) {
       // players.user_id (the account link) is readable by the server only, and written only by a dictator.
       if (rosterTable === 'players' && method === 'GET' && !asAdmin && (u.searchParams.get('select') ?? '').includes('user_id')) {
         return json(401, { code: '42501', message: 'permission denied for table players' });
+      }
+      if (rosterTable === 'players' && method === 'POST' && !body?.user_id) {
+        return json(403, { code: '42501', message: 'A new player needs a verified account: choose the account first' });
       }
       if (rosterTable === 'players' && method === 'PATCH' && body && 'user_id' in body && !opts.serverKeyLinks) {
         return json(403, { code: '42501', message: 'Only a dictator can link a player to an account' });
@@ -233,6 +252,29 @@ function fakeStaging(opts: Opts = {}) {
         return new Response(null, { status: 204 });
       }
     }
+    if (p === '/rest/v1/player_link_keys') {
+      const asAdmin = !headers.authorization && headers.apikey?.startsWith('sb_secret_');
+      if (!asAdmin) return json(401, { code: '42501', message: 'permission denied for table player_link_keys' });
+      const email = (u.searchParams.get('email') ?? '').replace(/^eq\./, '');
+      return json(200, linkKeys.has(email) ? [{ player_id: linkKeys.get(email) }] : []);
+    }
+    if ((p === '/rest/v1/rpc/create_player_for_account' || p === '/rest/v1/rpc/add_player_to_roster') && method === 'POST') {
+      const me = uid(headers.authorization);
+      if (!me || roles.get(me) !== 'dictator') return json(403, { code: '42501', message: 'Only a dictator can create players' });
+      const entry = rows.team_entries.get(body.p_team_entry_id);
+      if (!entry) return json(404, { code: 'P0002', message: 'Team entry not found' });
+      let player = body.p_player;
+      if (p.endsWith('/create_player_for_account')) {
+        if (!users.get(body.p_user)?.confirmed) return json(400, { code: '23514', message: 'Choose a verified account for the new player' });
+        player = `p${++n}`;
+        rows.players.set(player, { id: player, first_name: body.p_first_name, last_name: body.p_last_name, overall_rating: body.p_overall_rating ?? null, user_id: body.p_user });
+      } else if (rows.players.get(player)?.user_id == null) {
+        return json(400, { code: '23514', message: 'This player is not linked to an account yet. Link them to a verified account before adding them to a roster.' });
+      }
+      const m = `m${++n}`;
+      members.set(m, { id: m, player_id: player, team_entry_id: entry.id, season_id: entry.season_id, jersey_number: body.p_jersey_number ?? null, position: body.p_position ?? null });
+      return json(200, p.endsWith('/create_player_for_account') ? player : m);
+    }
     if ((p === '/rest/v1/rpc/link_player_account' || p === '/rest/v1/rpc/unlink_player_account') && method === 'POST') {
       const me = uid(headers.authorization);
       if (!me || roles.get(me) !== 'dictator') return json(403, { code: '42501', message: 'Only a dictator can link a player to an account' });
@@ -304,6 +346,15 @@ describe('runChecks refuses a wrong target before any request', () => {
   });
 });
 
+describe('runChecks detects a missing automatic link', () => {
+  it('fails when confirming a matching email links nothing, and still cleans up', async () => {
+    const s = fakeStaging({ noAutoLink: true });
+    const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
+    expect(by(results, /linked automatically/i)?.status).toBe('FAIL');
+    expect(s.users.size).toBe(0);
+  });
+});
+
 describe('runChecks detects a broken account-link guard', () => {
   it('fails when the server key can write the account link', async () => {
     const s = fakeStaging({ serverKeyLinks: true });
@@ -318,16 +369,19 @@ describe('runChecks against a healthy staging', () => {
     const s = fakeStaging();
     const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
     expect(results.filter((r: { status: string }) => r.status === 'FAIL')).toEqual([]);
-    for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /rename a player/i, /private player details/i, /dictator/i, /recovery/i, /clean/i,
+    for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /rename a player/i, /match keys are hidden/i, /dictator/i, /recovery/i, /clean/i,
                       /legacy divisions/i, /new hidden division/i, /current season switches/i, /hidden division is invisible/i, /cannot create a division/i,
                       /recorded in the audit history/i, /audit history is hidden/i, /change or remove audit history/i, /season that is not current/i,
                       /unverified account cannot be linked/i, /normal user cannot link/i, /dictator links a player/i, /server key cannot write the account link/i,
-                      /anonymous visitors cannot read the account link/i, /signed-in account cannot read the account link/i, /dictator unlinks a player/i]) {
+                      /anonymous visitors cannot read the account link/i, /signed-in account cannot read the account link/i, /dictator unlinks a player/i,
+                      /server key cannot create a player/i, /without an account cannot join a roster/i, /linked automatically/i]) {
       expect(by(results, re)?.status, String(re)).toBe('PASS');
     }
     expect(s.users.size).toBe(0);
     expect(s.regs.size).toBe(0);
-    for (const table of ['teams', 'team_entries', 'players', 'player_private_details', 'roster_memberships']) expect(s.rows[table].size, table).toBe(0);
+    for (const table of ['teams', 'team_entries', 'player_private_details', 'roster_memberships']) expect(s.rows[table].size, table).toBe(0);
+    // Only the seed's legacy player is left, unlinked again (deleting the auto-link account clears its link).
+    expect([...s.rows.players.values()]).toEqual([expect.objectContaining({ id: 'legacy1', user_id: null })]);
     expect(s.roles.size).toBe(0);
     expect([...s.divisions.values()].map((d) => d.slug).sort()).toEqual(['freshers', 'super-league', 'wsl']); // only the seeded ones remain
     expect(s.seasons.size).toBe(3);
@@ -359,6 +413,8 @@ describe('runChecks against a healthy staging', () => {
     const creates = s.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/auth/v1/admin/users'));
     expect(creates.length).toBeGreaterThanOrEqual(5);
     for (const c of creates) {
+      // Synthetic addresses only; the one exception is the seed's own synthetic fixture address for the auto-link check.
+      if (c.body.email === AUTO_LINK_EMAIL) { expect(c.body.email_confirm).toBe(false); continue; }
       expect(c.body.email).toMatch(/^sl-check-[a-z0-9-]+@iiitkottayam\.ac\.in$/);
       expect(c.body.email_confirm).toBe(!/-unverified@/.test(c.body.email)); // admin-created accounts get no mail either way
     }

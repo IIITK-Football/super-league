@@ -48,9 +48,9 @@ FROM (
          NOT EXISTS (SELECT 1 FROM public.teams WHERE logo_url !~ '^data:image/')
   UNION ALL SELECT 18, 'every player linked to an account is linked to a verified account',
          NOT EXISTS (SELECT 1 FROM public.players p JOIN auth.users u ON u.id = p.user_id WHERE u.email_confirmed_at IS NULL)
-  UNION ALL SELECT 19, 'no linked player keeps a private match key (Auth is the only email of a linked player)',
+  UNION ALL SELECT 19, 'no linked player keeps a private match key (Auth is the only address source of a linked player)',
          NOT EXISTS (SELECT 1 FROM public.player_link_keys k JOIN public.players p ON p.id = k.player_id WHERE p.user_id IS NOT NULL)
-  UNION ALL SELECT 20, 'no player contact-email table remains',
+  UNION ALL SELECT 20, 'the old player contact table is gone (Auth holds every player address)',
          to_regclass('public.player_private_details') IS NULL
 ) c
 ORDER BY n;
