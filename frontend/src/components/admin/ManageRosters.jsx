@@ -3,7 +3,9 @@ import { ArrowRightLeft, ImagePlus, Loader2, Plus, Save, Search, Trash2, UserMin
 import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
-import FutCardPlaceholder from '../players/FutCardPlaceholder';
+import FutCard from '../players/FutCard';
+import { CARD_STATS, FEET, applyCardDraft, blankCardDraft, cardDraft, storedPlayStyle } from '../../lib/playerCard';
+import { PLAY_STYLES } from '../../data/playStyles';
 
 // Dictator flow for season teams and rosters: division -> season -> team entry, then that team's players.
 // A player is one reusable identity (the FUT card: name, portrait, rating, attributes); a roster place puts the
@@ -14,18 +16,9 @@ import FutCardPlaceholder from '../players/FutCardPlaceholder';
 export const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'CF', 'ST'];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const blankPlayer = () => ({ first_name: '', last_name: '', jersey_number: '', position: '', overall_rating: '50', attributesText: '', email: '' });
-
-export function parseAttributes(text) {
-  if (!text || !text.trim()) return { value: {} };
-  try {
-    const value = JSON.parse(text);
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return { error: 'Attributes must be a JSON object, for example {"pace": 80}.' };
-    return { value };
-  } catch {
-    return { error: 'Attributes are not valid JSON.' };
-  }
-}
+// card: the FUT card fields being edited; baseAttributes: the stored attributes, kept for every field the form does not
+// show.
+export const blankPlayer = () => ({ first_name: '', last_name: '', jersey_number: '', position: '', overall_rating: '50', card: blankCardDraft(), baseAttributes: {}, email: '' });
 
 // Returns an error message, or the cleaned values to write.
 export function validatePlayer(p) {
@@ -37,7 +30,7 @@ export function validatePlayer(p) {
   if (jersey !== null && (!Number.isInteger(jersey) || jersey < 0 || jersey > 99)) return { error: 'Jersey number must be between 0 and 99.' };
   const rating = Number(p.overall_rating);
   if (!Number.isInteger(rating) || rating < 1 || rating > 99) return { error: 'Overall rating must be between 1 and 99.' };
-  const attributes = parseAttributes(p.attributesText);
+  const attributes = applyCardDraft(p.baseAttributes, p.card || blankCardDraft());
   if (attributes.error) return { error: attributes.error };
   const email = p.email.trim().toLowerCase();
   if (email && !EMAIL.test(email)) return { error: 'Enter a valid email address, or leave it empty.' };
@@ -71,9 +64,61 @@ function playerFields(value, onChange, idPrefix) {
     <label className={labelClass}>Jersey<input aria-label={`${idPrefix} jersey`} type="number" min="0" max="99" value={value.jersey_number ?? ''} onChange={field('jersey_number')} className={`${inputClass} mt-1`} /></label>
     <label className={labelClass}>Position<select aria-label={`${idPrefix} position`} value={value.position || ''} onChange={field('position')} className={`${inputClass} mt-1 normal-case tracking-normal`}><option value="">Not set</option>{[...new Set([...POSITIONS, value.position].filter(Boolean))].map((p) => <option key={p} value={p}>{p}</option>)}</select></label>
     <label className={labelClass}>Overall rating<input aria-label={`${idPrefix} rating`} type="number" min="1" max="99" value={value.overall_rating} onChange={field('overall_rating')} className={`${inputClass} mt-1`} /></label>
-    <label className={`${labelClass} md:col-span-2`}>FUT attributes (JSON)<input aria-label={`${idPrefix} attributes`} value={value.attributesText} onChange={field('attributesText')} placeholder='{"pace": 80, "shooting": 75}' className={`${inputClass} mt-1 font-mono text-xs normal-case tracking-normal`} /></label>
     <label className={labelClass}>Private email<input aria-label={`${idPrefix} email`} type="email" value={value.email} onChange={field('email')} placeholder="Dictators only" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
+    {cardFields(value, onChange, idPrefix)}
   </div>;
+}
+
+// The FUT card fields (stats, preferred foot, play styles): part of the reusable identity, shared across seasons.
+// Empty means not set; nothing is filled in automatically.
+function cardFields(value, onChange, idPrefix) {
+  const card = value.card || blankCardDraft();
+  const setCard = (next) => onChange({ ...value, card: { ...card, ...next } });
+  const chosen = new Set(card.playStyles.map((s) => s.name.toLowerCase()));
+  return <fieldset className="space-y-3 rounded-lg border border-white/10 p-3 md:col-span-4">
+    <legend className={`${labelClass} px-1`}>FUT card (every season)</legend>
+    <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
+      {CARD_STATS.map(({ key, short }) => <label key={key} className={labelClass}>{short}
+        <input aria-label={`${idPrefix} ${key}`} type="number" min="1" max="99" placeholder="—" value={card.stats[key]}
+          onChange={(e) => setCard({ stats: { ...card.stats, [key]: e.target.value } })} className={`${inputClass} mt-1`} />
+      </label>)}
+    </div>
+    <div className="grid gap-3 md:grid-cols-2">
+      <label className={labelClass}>Preferred foot
+        <select aria-label={`${idPrefix} preferred foot`} value={card.preferredFoot} onChange={(e) => setCard({ preferredFoot: e.target.value })} className={`${inputClass} mt-1 normal-case tracking-normal`}>
+          <option value="">Not set</option>{FEET.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+      </label>
+      <label className={labelClass}>Add a play style
+        <select aria-label={`${idPrefix} add play style`} value="" onChange={(e) => {
+          const style = PLAY_STYLES.find((s) => s.id === e.target.value);
+          if (style) setCard({ playStyles: [...card.playStyles, storedPlayStyle(style)] });
+        }} className={`${inputClass} mt-1 normal-case tracking-normal`}>
+          <option value="">Choose a play style</option>
+          {PLAY_STYLES.filter((s) => !chosen.has(s.name.toLowerCase())).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </label>
+    </div>
+    {card.playStyles.length
+      ? <ul aria-label={`${idPrefix} play styles`} className="flex flex-wrap gap-2">{card.playStyles.map((style) => <li key={style.name} title={style.description || ''} className="flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-xs normal-case tracking-normal text-zinc-200">
+        {style.name}
+        <button type="button" aria-label={`Remove ${style.name}`} onClick={() => setCard({ playStyles: card.playStyles.filter((s) => s.name !== style.name) })} className="text-zinc-500 hover:text-white">×</button>
+      </li>)}</ul>
+      : <p className="text-xs normal-case tracking-normal text-zinc-500">No play styles yet.</p>}
+  </fieldset>;
+}
+
+// This season's place (not part of the card): jersey, position and team, from the form being edited.
+function seasonPlace(value, teamName) {
+  const jersey = value.jersey_number === '' || value.jersey_number == null ? 'No jersey' : `#${value.jersey_number}`;
+  return <p aria-label="This season's place" className="text-xs text-zinc-400"><span className={labelClass}>This season</span><br />{jersey} · {value.position || 'No position'} · {teamName}</p>;
+}
+
+// What the card preview shows for a form: the draft values over the stored card, and the picture to show.
+function previewPlayer(value, imageUrl) {
+  const attributes = applyCardDraft(value.baseAttributes, value.card || blankCardDraft());
+  return { first_name: value.first_name, last_name: value.last_name, overall_rating: value.overall_rating, image_url: imageUrl,
+    attributes: attributes.value ?? value.baseAttributes };
 }
 
 export default function ManageRosters() {
@@ -97,6 +142,9 @@ export default function ManageRosters() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [contactsLoaded, setContactsLoaded] = useState(false);
+  // Pictures chosen but not (yet) saved, previewed on the card: 'edit' for the chosen player, 'new' for the new-player
+  // form. { file, url (a local preview), status: 'local' | 'uploading' | 'failed', membershipId, playerId, name }.
+  const [portraits, setPortraits] = useState({});
   // Existing players, searched as the dictator types (every word of the name must match). Each result carries the
   // player's latest roster place so players with the same name can be told apart, and whether they are already in
   // this season (a player has one place per season).
@@ -197,15 +245,17 @@ export default function ManageRosters() {
   };
   const chooseEntry = (id) => {
     latestEntry.current = id;
+    setPortraits((current) => { Object.values(current).forEach((x) => x.url && URL.revokeObjectURL(x.url)); return {}; });
     setEntryId(id); setRoster([]); setSelectedPlace(''); setEditing(null); setSearch(''); setMoveTo('');
     if (id) loadRoster(id);
   };
   const choosePlace = (id) => {
+    setPortrait('edit', null);
     setSelectedPlace(id); setMoveTo('');
     const r = roster.find((x) => x.id === id);
     setEditing(r ? {
       first_name: r.player?.first_name || '', last_name: r.player?.last_name || '', jersey_number: r.jersey_number ?? '', position: r.position || '',
-      overall_rating: String(r.player?.overall_rating ?? 50), attributesText: r.player?.attributes && Object.keys(r.player.attributes).length ? JSON.stringify(r.player.attributes) : '', email: r.email || '',
+      overall_rating: String(r.player?.overall_rating ?? 50), card: cardDraft(r.player?.attributes), baseAttributes: r.player?.attributes || {}, email: r.email || '',
     } : null);
   };
 
@@ -237,13 +287,22 @@ export default function ManageRosters() {
     const checked = validatePlayer(newPlayer);
     if (checked.error) { fail(checked.error); return; }
     const v = checked.value;
+    const name = `${v.first_name} ${v.last_name}`.trim();
     setBusy('create-player');
-    const { error: err } = await supabase.rpc('create_rostered_player', {
+    const { data: playerId, error: err } = await supabase.rpc('create_rostered_player', {
       p_team_entry_id: entryId, p_first_name: v.first_name, p_last_name: v.last_name, p_jersey_number: v.jersey_number,
       p_position: v.position, p_overall_rating: v.overall_rating, p_attributes: v.attributes, p_image_url: null, p_email: v.email,
     });
     setBusy('');
-    if (report(err, `${v.first_name} ${v.last_name}`.trim() + ` added to ${entry?.name}.`)) { setNewPlayer(blankPlayer()); loadRoster(entryId); }
+    if (!report(err, `${name} added to ${entry?.name}.`)) return;
+    setNewPlayer(blankPlayer());
+    loadRoster(entryId);
+    const pending = portraits.new;
+    if (!pending?.file || !playerId) return;
+    const { data: placeRow } = await supabase.from('roster_memberships').select('id').eq('player_id', playerId).eq('season_id', seasonId).maybeSingle();
+    const ready = { ...pending, playerId, membershipId: placeRow?.id, name };
+    if (!placeRow?.id) { setPortraits((c) => ({ ...c, new: { ...ready, status: 'failed' } })); fail(`${name} was added, but the portrait could not be attached yet. Retry the portrait below.`); return; }
+    if (await uploadNewPortrait(ready)) { report(null, `${name} added to ${entry?.name} with their portrait.`); loadRoster(entryId); }
   };
 
   const savePlayer = async () => {
@@ -262,29 +321,65 @@ export default function ManageRosters() {
     if (report(err, `${v.first_name} saved.`)) loadRoster(entryId);
   };
 
-  const uploadPortrait = async (file) => {
-    if (!file) return;
-    setBusy(`portrait-${place.id}`);
-    setError('');
+  const setPortrait = (slot, next) => setPortraits((current) => {
+    const old = current[slot];
+    if (old?.url && old.url !== next?.url) URL.revokeObjectURL(old.url);
+    const copy = { ...current };
+    if (next) copy[slot] = next; else delete copy[slot];
+    return copy;
+  });
+  const markPortraitFailed = (slot) => setPortraits((current) => (current[slot] ? { ...current, [slot]: { ...current[slot], status: 'failed' } } : current));
+
+  // Uploads a portrait for a roster place and stores it on the player's card. Returns '' once the picture is saved,
+  // otherwise what went wrong; nothing is reported as saved unless both steps succeeded.
+  const sendPortrait = async (file, membershipId, playerId) => {
     try {
       const form = new FormData();
-      form.append('membership_id', place.id);
-      form.append('image', file, `${place.player_id}.png`);
+      form.append('membership_id', membershipId);
+      form.append('image', file, `${playerId}.png`);
       const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(`${API_BASE_URL}/admin/freshers/player-image`, {
         method: 'POST', credentials: 'include', headers: { Authorization: `Bearer ${session?.access_token}` }, body: form,
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || result.error || 'Could not upload the portrait.');
-      const { data, error: err } = await supabase.from('players').update({ image_url: result.imageUrl }).eq('id', place.player_id).select('id');
-      if (err || !data?.length) { report(err || { code: '42501' }); return; }
-      report(null, 'Portrait updated.');
-      loadRoster(entryId);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) return result.message || result.error || `the upload was refused (HTTP ${response.status})`;
+      const { data, error: err } = await supabase.from('players').update({ image_url: result.imageUrl }).eq('id', playerId).select('id');
+      if (err || !data?.length) return describeError(err || { code: '42501' });
+      return '';
     } catch (uploadError) {
-      fail(uploadError.message || 'Could not upload the portrait.');
-    } finally {
-      setBusy('');
+      return uploadError.message || 'the upload failed';
     }
+  };
+
+  const uploadPortrait = async (file) => {
+    if (!file || !place) return;
+    const target = place;
+    const url = portraits.edit?.file === file ? portraits.edit.url : URL.createObjectURL(file);
+    setPortrait('edit', { file, url, status: 'uploading', membershipId: target.id, playerId: target.player_id });
+    setBusy(`portrait-${target.id}`);
+    setError(''); setMessage('');
+    const problem = await sendPortrait(file, target.id, target.player_id);
+    setBusy('');
+    if (problem) { markPortraitFailed('edit'); fail(`The portrait did not save: ${problem}. Nothing was changed; try again.`); return; }
+    setPortrait('edit', null);
+    report(null, 'Portrait saved.');
+    loadRoster(entryId);
+  };
+
+  // A new player's picture is uploaded once the player exists. If that fails the player is kept and the picture can be
+  // retried.
+  const uploadNewPortrait = async (pending) => {
+    setPortraits((current) => ({ ...current, new: { ...pending, status: 'uploading' } }));
+    setBusy('new-portrait');
+    const problem = await sendPortrait(pending.file, pending.membershipId, pending.playerId);
+    setBusy('');
+    if (problem) {
+      markPortraitFailed('new');
+      fail(`${pending.name} was added to ${entry?.name}, but the portrait did not save: ${problem}. Retry the portrait below.`);
+      return false;
+    }
+    setPortrait('new', null);
+    return true;
   };
 
   const movePlayer = async () => {
@@ -387,8 +482,8 @@ export default function ManageRosters() {
 
       {place && editing && <div aria-label="Edit player" className="space-y-3 rounded-xl border border-[#d9ff4a]/30 p-4">
         <div className="flex flex-wrap items-start gap-3">
-          <FutCardPlaceholder player={place.player} />
-          <p className="text-xs text-zinc-400"><span className={labelClass}>This season</span><br />{place.jersey_number != null ? `#${place.jersey_number}` : 'No jersey'} · {place.position || 'No position'} · {entry?.name}</p>
+          <FutCard details player={previewPlayer(editing, place.player?.image_url)} portrait={portraits.edit?.membershipId === place.id ? portraits.edit : undefined} />
+          {seasonPlace(editing, entry?.name)}
         </div>
         {playerFields(editing, setEditing, 'Edit')}
         <div className="flex flex-wrap items-end gap-2">
@@ -397,6 +492,10 @@ export default function ManageRosters() {
             {busy === `portrait-${place.id}` ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />} Portrait (500 × 500 PNG)
             <input type="file" accept="image/png" className="sr-only" aria-label="Portrait file" onChange={(e) => { uploadPortrait(e.target.files?.[0]); e.target.value = ''; }} />
           </label>
+          {portraits.edit?.status === 'failed' && portraits.edit.membershipId === place.id && <>
+            <button type="button" onClick={() => uploadPortrait(portraits.edit.file)} disabled={busy === `portrait-${place.id}`} className={ghostButton}>Retry portrait upload</button>
+            <button type="button" onClick={() => setPortrait('edit', null)} className={ghostButton}>Discard new picture</button>
+          </>}
           <select aria-label="Move to team" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className={`${inputClass} w-48`}>
             <option value="">Move to another team</option>
             {entries.filter((e) => e.id !== entryId).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
@@ -440,6 +539,25 @@ export default function ManageRosters() {
 
       <form noValidate onSubmit={createPlayer} aria-label="New player" className="space-y-3 rounded-xl border border-white/10 p-4">
         <p className="text-xs font-black uppercase tracking-wider text-zinc-400">New player on {entry?.name}</p>
+        <div className="flex flex-wrap items-start gap-3">
+          <FutCard details player={previewPlayer(newPlayer, null)} portrait={portraits.new?.status === 'local' ? portraits.new : undefined} />
+          <div className="space-y-2">
+            {seasonPlace(newPlayer, entry?.name)}
+            <label className={ghostButton}><ImagePlus size={13} /> {portraits.new?.status === 'local' ? 'Change picture' : 'Choose portrait (500 × 500 PNG)'}
+              <input type="file" accept="image/png" className="sr-only" aria-label="New portrait file" onChange={(e) => {
+                const file = e.target.files?.[0]; e.target.value = '';
+                if (file) setPortrait('new', { file, url: URL.createObjectURL(file), status: 'local' });
+              }} />
+            </label>
+            {portraits.new?.status === 'local' && <button type="button" onClick={() => setPortrait('new', null)} className={ghostButton}>Remove picture</button>}
+            <p className="text-[10px] text-zinc-500">The picture uploads when the player is created.</p>
+          </div>
+        </div>
+        {portraits.new?.status === 'failed' && <div role="group" aria-label="New player portrait" className="flex flex-wrap items-center gap-2 rounded-lg border border-red-500/20 p-2 text-xs text-red-300">
+          The portrait for {portraits.new.name} is not saved.
+          {portraits.new.membershipId && <button type="button" onClick={() => uploadNewPortrait(portraits.new).then((ok) => ok && (report(null, `Portrait saved for ${portraits.new.name}.`), loadRoster(entryId)))} disabled={busy === 'new-portrait'} className={ghostButton}>Retry portrait upload</button>}
+          <button type="button" onClick={() => setPortrait('new', null)} className={ghostButton}>Discard picture</button>
+        </div>}
         {playerFields(newPlayer, setNewPlayer, 'New')}
         <button type="submit" disabled={busy === 'create-player'} className={primaryButton}>{busy === 'create-player' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Create player</button>
       </form>

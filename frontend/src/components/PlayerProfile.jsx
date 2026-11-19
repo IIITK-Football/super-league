@@ -4,6 +4,8 @@ import { ArrowLeft, Loader2, Shield, Hexagon } from 'lucide-react';
 import { Loader } from './Loader';
 import styles from './PlayerProfile.module.css';
 import { API_BASE_URL } from '../lib/api';
+import FutCard from './players/FutCard';
+import { canonicalAttributes, statValue } from '../lib/playerCard';
 
 
 const getStatColor = (val) => {
@@ -13,48 +15,17 @@ const getStatColor = (val) => {
     return 'bg-[#ff1744]';
 };
 
-const getCardBackground = (rating) => {
-    const num = parseInt(rating) || 50;
-    if (num >= 85) return "url('/gold.png')";
-    if (num >= 70) return "url('/silver.png')";
-    return "url('/bronze.png')";
-};
 
-const getCardTextColor = (rating) => {
-    const num = parseInt(rating) || 50;
-    if (num >= 85) return "text-amber-950";
-    if (num >= 70) return "text-zinc-900";
-    return "text-orange-950";
-};
-
-// THE MAGIC MULTIPLIER FUNCTION
-const getAdjustedStat = (val, isMens) => {
-    return parseInt(val) || 0;
-};
-
-const defaultAttributes = {
-    bio: { preferredFoot: "Right" },
-    stats: {
-        Pace: { total: 0 },
-        Shooting: { total: 0 },
-        Passing: { total: 0 },
-        Dribbling: { total: 0 },
-        Defending: { total: 0 },
-        Physicality: { total: 0 }
-    },
-    playStyles: []
-};
 
 export default function PlayerProfile({ onBack }) {
     // 1. PULL DIVISION FROM CONTEXT
-    const { setView, division, seasonScope } = useLeague();
+    const { setView, seasonScope } = useLeague();
     // The card shows the season being browsed; the history below lists every season.
     const seasonId = seasonScope?.season?.id || '';
     const [player, setPlayer] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const isMens = division === 'super-league'; // Check if we should apply the buff
 
 useEffect(() => {
         const raw = sessionStorage.getItem('selectedPlayer');
@@ -116,17 +87,10 @@ useEffect(() => {
         );
     }
 
-    const attrs = player.attributes || defaultAttributes;
-    const stats = attrs.stats || defaultAttributes.stats;
-    const bio = attrs.bio || defaultAttributes.bio;
+    // The canonical card fields (stats, preferred foot, play styles); empty stays empty.
+    const attrs = canonicalAttributes(player.attributes);
+    const bio = attrs.bio || {};
     const stylesArr = attrs.playStyles || [];
-
-    // 2. APPLY MULTIPLIER TO OVERALL RATING
-    const displayRating = getAdjustedStat(player.overall_rating || 50, isMens);
-    
-    // Pass the calculated displayRating to ensure the card color upgrades if they cross a threshold!
-    const cardBgImage = getCardBackground(displayRating);
-    const cardTextColor = getCardTextColor(displayRating);
 
     return (
         <div className="w-full bg-[#0F0E13] min-h-screen text-white p-4 md:p-8 font-sans pb-20 animate-in fade-in duration-300">
@@ -143,81 +107,7 @@ useEffect(() => {
 
             <div className={styles.mainLayout}>
                 <div className={styles.cardArea}>
-                    <div className="relative w-max drop-shadow-2xl">
-                        <div
-                            className="relative w-[260px] h-[380px] bg-center bg-no-repeat select-none overflow-hidden z-10"
-                            style={{
-                                backgroundImage: cardBgImage,
-                                backgroundSize: '100% 100%'
-                            }}
-                        >
-                            <div className={`absolute top-[22%] left-[16%] flex flex-col items-start z-10 ${cardTextColor}`}>
-                                <span className="text-4xl font-black leading-none tabular-nums">
-                                    {/* Display the buffed overall rating */}
-                                    {displayRating}
-                                </span>
-                                <span className="text-sm font-bold uppercase tracking-wider">
-                                    {player.position || 'RES'}
-                                </span>
-                            </div>
-
-                            <div className="absolute top-[18%] left-0 w-full flex justify-center">
-                                {player.image_url ? (
-                                    <img
-                                        src={player.image_url}
-                                        alt={player.name}
-                                        className="h-[175px] object-contain drop-shadow-2xl select-none" // <-- Added select-none
-            onContextMenu={(e) => e.preventDefault()} // <-- Disables right-click
-            draggable="false" // <-- Disables dragging
-                                    />
-                                ) : (
-                                    <Shield className={`h-[175px] w-auto opacity-40 ${cardTextColor}`} />
-                                )}
-                            </div>
-
-                            <div className={`absolute bottom-[28%] left-0 w-full text-center ${cardTextColor}`}>
-                                <div className="font-black text-[14px] uppercase tracking-widest">
-                                    {player.first_name || player.last_name}
-                                </div>
-                            </div>
-
-                            <div className={`absolute bottom-[19%] left-0 w-full px-6 ${cardTextColor}`}>
-                                <div className={`text-center ${styles.cardStatsGrid}`}>
-                                    {[
-                                        { label: 'PAC', value: stats.Pace?.total },
-                                        { label: 'SHO', value: stats.Shooting?.total },
-                                        { label: 'PAS', value: stats.Passing?.total },
-                                        { label: 'DRI', value: stats.Dribbling?.total },
-                                        { label: 'DEF', value: stats.Defending?.total },
-                                        { label: 'PHY', value: stats.Physicality?.total },
-                                    ].map((stat) => {
-                                        // 3. APPLY MULTIPLIER TO EACH INDIVIDUAL CARD STAT
-                                        const finalVal = getAdjustedStat(stat.value, isMens);
-                                        return (
-                                            <div key={stat.label} className="grid grid-rows-2 justify-items-center">
-                                                <span className="text-[9px] font-bold opacity-80">
-                                                    {stat.label}
-                                                </span>
-                                                <span className="text-[15px] font-black leading-none">
-                                                    {finalVal}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-
-                        {stylesArr.length > 0 && stylesArr[0].icon_url && (
-                            <img
-                                src={stylesArr[0].icon_url}
-                                alt={stylesArr[0].name}
-                                className="absolute top-[48%] left-[26px] -translate-x-1/2 -translate-y-1/2 z-20 w-8 h-8 object-contain"
-                                onContextMenu={(e) => e.preventDefault()}
-            draggable="false"
-                            />
-                        )}
-                    </div>
+                    <FutCard player={player} position={player.position || 'RES'} />
                 </div>
 
                 <div className={styles.headerArea}>
@@ -239,7 +129,7 @@ useEffect(() => {
                         </div>
                         <div>
                             <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Pref. Foot</p>
-                            <span className="font-bold text-sm block mt-1">{bio.preferredFoot || 'Right'}</span>
+                            <span className="font-bold text-sm block mt-1">{bio.preferredFoot || '—'}</span>
                         </div>
                     </div>
                 </div>
@@ -253,14 +143,14 @@ useEffect(() => {
                         <div className={styles.coreAttributesGrid}>
                             {['Pace', 'Shooting', 'Passing', 'Dribbling', 'Defending', 'Physicality'].map(category => {
                                 // 4. APPLY MULTIPLIER TO PROGRESS BARS
-                                const rawVal = stats[category]?.total || 0;
-                                const val = getAdjustedStat(rawVal, isMens);
+                                const total = statValue(attrs, category);
+                                const val = total ?? 0;
 
                                 return (
                                     <div key={category} className="grid gap-2 text-sm">
                                         <div className="flex justify-between text-gray-300 font-bold uppercase tracking-wider">
                                             <span>{category}</span>
-                                            <span className="text-white text-lg tabular-nums">{val}</span>
+                                            <span className="text-white text-lg tabular-nums">{total ?? '—'}</span>
                                         </div>
 
                                         <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">

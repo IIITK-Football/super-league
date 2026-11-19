@@ -77,6 +77,7 @@ function from(table) {
     order: () => b,
     limit: () => b,
     single: () => { q.single = true; return b; },
+    maybeSingle: () => { q.single = true; return b; },
     then: (resolve, reject) => (db.slow && q.filters.some(([c, v]) => c === 'team_entry_id' && v === db.slow)
       ? new Promise((r) => setTimeout(r, 50)) : Promise.resolve()).then(() => {
       if (q.matchName !== undefined) {
@@ -131,7 +132,7 @@ vi.mock('../../../lib/supabase', () => ({
   supabase: { from: (t) => from(t), rpc: (...a) => rpc(...a), auth: { getSession: async () => ({ data: { session: { access_token: 't' } } }) } },
 }));
 
-import ManageRosters, { describeError, parseAttributes, validatePlayer, blankPlayer } from '../ManageRosters';
+import ManageRosters, { describeError, validatePlayer, blankPlayer } from '../ManageRosters';
 
 beforeEach(() => { seed(); rpc.mockClear(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -155,10 +156,12 @@ describe('validation and messages', () => {
     expect(validatePlayer({ ...blankPlayer(), first_name: 'A', jersey_number: '120' }).error).toMatch(/0 and 99/);
     expect(validatePlayer({ ...blankPlayer(), first_name: 'A', overall_rating: '0' }).error).toMatch(/1 and 99/);
     expect(validatePlayer({ ...blankPlayer(), first_name: 'A', email: 'nope' }).error).toMatch(/valid email/);
-    expect(validatePlayer({ ...blankPlayer(), first_name: 'A', attributesText: '[1]' }).error).toMatch(/JSON object/);
-    expect(validatePlayer({ ...blankPlayer(), first_name: ' Ada ', last_name: 'S', jersey_number: '0', overall_rating: '80', email: 'A@X.IN', attributesText: '{"pace":9}' }).value)
-      .toEqual({ first_name: 'Ada', last_name: 'S', jersey_number: 0, position: null, overall_rating: 80, attributes: { pace: 9 }, email: 'a@x.in' });
-    expect(parseAttributes('').value).toEqual({});
+    const badStat = blankPlayer(); badStat.first_name = 'A'; badStat.card.stats.Pace = '120';
+    expect(validatePlayer(badStat).error).toMatch(/Pace must be a whole number between 1 and 99/);
+    const ok = { ...blankPlayer(), first_name: ' Ada ', last_name: 'S', jersey_number: '0', overall_rating: '80', email: 'A@X.IN', baseAttributes: { pace: 9, extra: 1 } };
+    ok.card = { ...ok.card, stats: { ...ok.card.stats, Pace: '9' } };
+    expect(validatePlayer(ok).value)
+      .toEqual({ first_name: 'Ada', last_name: 'S', jersey_number: 0, position: null, overall_rating: 80, attributes: { extra: 1, stats: { Pace: { total: 9 } } }, email: 'a@x.in' });
   });
 
   it('turns database refusals into actionable messages', () => {
@@ -198,7 +201,10 @@ describe('choosing a division, season and team', () => {
     expect(screen.getByLabelText('Edit first name').value).toBe('Ada');
     expect(screen.getByLabelText('Edit jersey').value).toBe('9');
     expect(screen.getByLabelText('Edit rating').value).toBe('70');
-    expect(screen.getByLabelText('Edit attributes').value).toBe('{"pace":80}');
+    expect(screen.getByLabelText('Edit Pace').value).toBe('80'); // an older flat value is shown in the structured field
+    expect(screen.getByLabelText('Edit Shooting').value).toBe('');
+    expect(screen.getByLabelText('Edit preferred foot').value).toBe('');
+    expect(within(screen.getByLabelText('Edit player')).getByText('No play styles yet.')).toBeTruthy();
     expect(screen.getByLabelText('Edit email').value).toBe('ada@iiitkottayam.ac.in');
   });
   it('shows the roster of the team chosen last, even when an earlier team answers later', async () => {
@@ -277,7 +283,7 @@ describe('players', () => {
     fireEvent.click(screen.getByRole('button', { name: /save player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada saved/));
     expect(writes()).toEqual([{ rpc: 'update_rostered_player', args: {
-      p_membership_id: 'm1', p_first_name: 'Ada', p_last_name: 'Finisher', p_overall_rating: 70, p_attributes: { pace: 80 },
+      p_membership_id: 'm1', p_first_name: 'Ada', p_last_name: 'Finisher', p_overall_rating: 70, p_attributes: { stats: { Pace: { total: 80 } } },
       p_jersey_number: 10, p_position: 'ST', p_set_email: true, p_email: null,
     } }]);
   });
@@ -383,14 +389,129 @@ describe('players', () => {
     expect(await screen.findByText('2 players found')).toBeTruthy();
   });
 
-  it('shows the chosen player\'s placeholder FUT card from the identity, with this season\'s place beside it', async () => {
+  it('shows the chosen player\'s FUT card from the identity, with this season\'s place beside it', async () => {
     await openTeam();
     await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
     pick('Player', 'm1');
-    const card = screen.getByRole('region', { name: 'FUT card (placeholder)' });
-    expect(card.textContent).toMatch(/Ada Striker/);
-    expect(card.textContent).toMatch(/OVR 70/);
-    expect(card.textContent).not.toMatch(/#9|ST/);
-    expect(screen.getByText(/#9 · ST · Alpha/)).toBeTruthy();
+    const card = within(screen.getByLabelText('Edit player')).getByRole('figure', { name: 'FUT card: Ada Striker' });
+    expect(within(card).getByTestId('card-rating').textContent).toBe('70');
+    expect(card.textContent).toMatch(/PAC80/); // the older flat value, shown in its canonical place
+    expect(card.textContent).not.toMatch(/#9|\bST\b/);
+    expect(within(screen.getByLabelText('Edit player')).getByLabelText("This season's place").textContent).toMatch(/#9 · ST · Alpha/);
+  });
+});
+
+describe('the FUT card in the player forms', () => {
+  let fetchSpy;
+  beforeEach(() => {
+    let n = 0;
+    URL.createObjectURL = vi.fn(() => `blob:local-${++n}`);
+    URL.revokeObjectURL = vi.fn();
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+  });
+  const respond = (status, body) => fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
+  const newCard = () => within(screen.getByRole('form', { name: 'New player' })).getByRole('figure');
+  const editCard = () => within(screen.getByLabelText('Edit player')).getByRole('figure');
+  const png = () => new File(['png'], 'face.png', { type: 'image/png' });
+
+  it('previews a new player while it is typed: name, rating, stats, foot and play styles, with no invented values', async () => {
+    await openTeam();
+    expect(newCard().getAttribute('aria-label')).toBe('FUT card: Unnamed player');
+    expect(within(newCard()).getByTestId('card-rating').textContent).toBe('50'); // the form's starting rating
+    expect(newCard().textContent).toMatch(/PAC—.*PHY—/);
+    expect(newCard().textContent).toMatch(/Preferred foot: not set/);
+    expect(newCard().textContent).toMatch(/Play styles: none/);
+    pick('New first name', 'Bea');
+    pick('New last name', 'Keeper');
+    pick('New rating', '64');
+    pick('New Pace', '71');
+    pick('New preferred foot', 'Left');
+    pick('New add play style', 'power-shot');
+    expect(newCard().getAttribute('aria-label')).toBe('FUT card: Bea Keeper');
+    expect(within(newCard()).getByTestId('card-rating').textContent).toBe('64');
+    expect(newCard().textContent).toMatch(/PAC71/);
+    expect(newCard().textContent).toMatch(/Preferred foot: Left/);
+    expect(newCard().textContent).toMatch(/Play styles: Power Shot/);
+    expect(within(newCard()).getByRole('img', { name: 'Power Shot' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Power Shot' }));
+    expect(newCard().textContent).toMatch(/Play styles: none/);
+    pick('New add play style', 'tiki-taka');
+    fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Bea Keeper added to Alpha/));
+    expect(rpc.mock.calls.find(([name]) => name === 'create_rostered_player')[1].p_attributes).toEqual({
+      stats: { Pace: { total: 71 } }, bio: { preferredFoot: 'Left' },
+      playStyles: [expect.objectContaining({ name: 'Tiki Taka', description: expect.any(String), icon_url: expect.stringMatching(/tikitaka/) })],
+    });
+  });
+
+  it('shows a new player\'s picture before upload, then uploads it once the player exists', async () => {
+    await openTeam();
+    pick('New first name', 'Bea');
+    fireEvent.change(screen.getByLabelText('New portrait file'), { target: { files: [png()] } });
+    expect(within(newCard()).getByRole('img', { name: 'Bea portrait' }).getAttribute('src')).toBe('blob:local-1');
+    expect(newCard().textContent).toMatch(/not saved yet/);
+    respond(200, { imageUrl: 'https://media/bea.png' });
+    fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Bea added to Alpha with their portrait/));
+    const created = db.tables.players.find((p) => p.first_name === 'Bea');
+    expect(created.image_url).toBe('https://media/bea.png');
+    const sent = fetchSpy.mock.calls[0][1].body;
+    expect(sent.get('membership_id')).toBe(db.tables.roster_memberships.find((m) => m.player_id === created.id).id);
+  });
+
+  it('keeps a new player when the picture fails, says so, and can retry the picture', async () => {
+    await openTeam();
+    pick('New first name', 'Bea');
+    fireEvent.change(screen.getByLabelText('New portrait file'), { target: { files: [png()] } });
+    respond(502, { message: 'storage is down' });
+    fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Bea was added to Alpha, but the portrait did not save: storage is down/));
+    expect(screen.queryByText(/with their portrait/)).toBeNull();
+    expect(db.tables.players.find((p) => p.first_name === 'Bea').image_url).toBeUndefined();
+    respond(200, { imageUrl: 'https://media/bea.png' });
+    fireEvent.click(within(screen.getByRole('group', { name: 'New player portrait' })).getByRole('button', { name: /retry portrait upload/i }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Portrait saved for Bea/));
+    expect(db.tables.players.find((p) => p.first_name === 'Bea').image_url).toBe('https://media/bea.png');
+  });
+
+  it('edits the card with structured fields, previewing the draft and keeping values the form does not show', async () => {
+    db.tables.players[0].attributes = { pace: 80, stats: { Shooting: { total: 66, finishing: 70 } }, bio: { height: 170 }, playStyles: [{ name: 'Mystery Move' }], custom: 1 };
+    await openTeam();
+    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    pick('Player', 'm1');
+    expect(screen.getByLabelText('Edit Shooting').value).toBe('66');
+    expect(within(screen.getByRole('list', { name: 'Edit play styles' })).getByText('Mystery Move')).toBeTruthy();
+    pick('Edit Shooting', '75');
+    pick('Edit preferred foot', 'Right');
+    pick('Edit add play style', 'finesse-shot');
+    expect(editCard().textContent).toMatch(/SHO75/);
+    expect(editCard().textContent).toMatch(/Preferred foot: Right/);
+    expect(editCard().textContent).toMatch(/Play styles: Mystery Move, Finesse Shot/);
+    expect(editCard().textContent).not.toMatch(/#9/);
+    fireEvent.click(screen.getByRole('button', { name: /save player/i }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Ada saved/));
+    expect(rpc.mock.calls.find(([name]) => name === 'update_rostered_player')[1].p_attributes).toEqual({
+      custom: 1, // the older flat pace moved into its canonical place
+      stats: { Pace: { total: 80 }, Shooting: { total: 75, finishing: 70 } },
+      bio: { height: 170, preferredFoot: 'Right' },
+      playStyles: [{ name: 'Mystery Move' }, expect.objectContaining({ name: 'Finesse Shot' })],
+    });
+  });
+
+  it('previews a replacement portrait, reports a failed upload without claiming it saved, and retries', async () => {
+    await openTeam();
+    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    pick('Player', 'm1');
+    respond(500, { message: 'too large' });
+    fireEvent.change(screen.getByLabelText('Portrait file'), { target: { files: [png()] } });
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/The portrait did not save: too large/));
+    expect(within(editCard()).getByRole('img', { name: 'Ada Striker portrait' }).getAttribute('src')).toBe('blob:local-1');
+    expect(editCard().textContent).toMatch(/did not save/);
+    expect(screen.queryByText('Portrait saved.')).toBeNull();
+    respond(200, { imageUrl: 'https://media/ada.png' });
+    fireEvent.click(screen.getByRole('button', { name: /retry portrait upload/i }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Portrait saved/));
+    await waitFor(() => expect(within(editCard()).getByRole('img', { name: 'Ada Striker portrait' }).getAttribute('src')).toBe('https://media/ada.png'));
+    expect(editCard().textContent).not.toMatch(/not saved|did not save/);
   });
 });
