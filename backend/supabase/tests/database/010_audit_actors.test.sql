@@ -48,10 +48,12 @@ SELECT is((SELECT label FROM _seen WHERE actor_id = 'aa000000-0000-4000-8000-000
 SELECT is((SELECT label FROM _seen WHERE actor_id = 'aa000000-0000-4000-8000-000000000006'), 'Named Person (aa.copy@iiitkottayam.ac.in)', 'a copied name stays distinguishable');
 SELECT is((SELECT label FROM _seen WHERE actor_id = 'aa000000-0000-4000-8000-000000000007'), 'aa.noprofile@iiitkottayam.ac.in', 'an account without a profile is listed by its email');
 SELECT is((SELECT count(*) FROM _seen WHERE actor_id::text LIKE 'aa000000-%')::int, 8, 'each person is listed once, however many changes they made');
-SELECT results_eq($$SELECT label, available FROM _seen WHERE actor_id = 'aa000000-0000-4000-8000-0000000000ff'$$,
-  $$VALUES ('Deleted or unavailable account 2'::text, false)$$, 'a deleted account is labelled clearly');
-SELECT results_eq($$SELECT label FROM _seen WHERE actor_id::text LIKE 'aa000000-0000-4000-8000-0000000000f%' ORDER BY label$$,
-  $$VALUES ('Deleted or unavailable account 1'::text), ('Deleted or unavailable account 2'::text)$$, 'several deleted accounts stay distinguishable');
+-- The history is append-only, so other deleted accounts may already be in it: check the form and distinctness of the
+-- labels, not which numbers they get.
+SELECT is((SELECT count(*)::int FROM _seen WHERE actor_id::text LIKE 'aa000000-0000-4000-8000-0000000000f%'
+           AND label ~ '^Deleted or unavailable account [0-9]+$' AND NOT available), 2, 'a deleted account is labelled clearly');
+SELECT is((SELECT count(DISTINCT label)::int FROM _seen WHERE actor_id::text LIKE 'aa000000-0000-4000-8000-0000000000f%'), 2,
+  'several deleted accounts stay distinguishable');
 SELECT is((SELECT count(*) FROM _seen WHERE label ~ '^[0-9a-f]{8}-[0-9a-f]{4}-')::int, 0, 'no label is a raw id');
 SELECT is((SELECT count(*) FROM pg_temp.as_user('aa000000-0000-4000-8000-000000000002', 'SELECT actor_id, label, available FROM public.audit_actors()')
            AS t(actor_id uuid, label text, available boolean))::int, 0, 'an account without the dictator role gets no rows');
