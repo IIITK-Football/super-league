@@ -57,6 +57,9 @@ Production was created from the legacy migrations by hand. **It has no migration
      - It maps the unambiguous names to the catalog; the goalkeeper leftovers become Deflector and the rest Technical (your decision, 2026-11-19).
      - It stops on any other name, and each change is listed.
      - The rehearsal converted 16 players.
+   - **Preview each script first:** run it with its `COMMIT` line changed to `ROLLBACK`. Nothing is written and the list is shown.
+     - Proceed only if the counts match the rehearsal (84 accounts and 10,930 points; 16 jersey numbers: 10 out of range and 6 shared; 16 play styles), or every difference is understood. Production data may have changed since the archive of 2026-11-07.
+     - Then run each script as is, and export its list: it is that script's rollback record.
    - **Rehearsal result** (2026-11-19, production-shaped local clone, after these three scripts): every pending migration applied (`20261117000000`–`20261130000007`). The account-matching report showed 58 contact emails kept as match keys: 22 ready to link and 36 waiting for an account. The RPC verification passed all 20 checks.
 4. **Repair the history** (separate approval; history rows only, no schema change). The simplest way is `bash scripts/production-history-repair.sh`: it asks for the Session pooler connection string and the password with hidden input, fixes common problems (stray quotes, a password that needs percent-encoding, the `[YOUR-PASSWORD]` placeholder), verifies the target is the production project before changing anything, runs the two repairs below, and stops unless exactly the two new migrations remain pending. By hand, run from `backend/` with a production connection string kept in an environment variable (percent-encoded, never typed into a shared place and never `--linked`):
    ```bash
