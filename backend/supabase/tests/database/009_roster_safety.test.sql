@@ -91,7 +91,7 @@ SELECT public.create_rostered_player((SELECT id FROM public.team_entries WHERE s
 GRANT SELECT ON _u TO authenticated;
 CREATE TEMP TABLE _um AS SELECT id FROM public.roster_memberships WHERE player_id = (SELECT p FROM _u);
 GRANT SELECT ON _um TO authenticated;
-SELECT lives_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.update_rostered_player((SELECT id FROM _um), ' Saved ', 'Player', 77, '{"pace": 90}', 93, 'CM', true, ' Saved@IIITKottayam.ac.in ')::text$q$)$$,
+SELECT lives_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.update_rostered_player((SELECT id FROM _um), ' Saved ', 'Player', 77, '{"stats": {"Pace": {"total": 90}}}', 93, 'CM', true, ' Saved@IIITKottayam.ac.in ')::text$q$)$$,
   'a dictator saves the card, roster place and email in one step');
 SELECT results_eq($$SELECT p.first_name::text, p.overall_rating, rm.jersey_number, rm.position::text, d.email::text
                     FROM public.players p JOIN public.roster_memberships rm ON rm.player_id = p.id

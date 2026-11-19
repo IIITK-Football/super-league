@@ -85,7 +85,7 @@ describe('schema inventory on the local database', () => {
   it('reports what the migrations create in the public schema', () => {
     expect(by('table')).toHaveLength(28);
     expect(by('view')).toHaveLength(2);
-    expect(by('function')).toHaveLength(22);
+    expect(by('function')).toHaveLength(24);
     expect(by('policy')).toHaveLength(54);
     // the division and season model (20261119000000_divisions_and_seasons.sql)
     for (const t of ['divisions', 'seasons', 'section_types', 'season_sections', 'team_entries', 'division_flairs']) {

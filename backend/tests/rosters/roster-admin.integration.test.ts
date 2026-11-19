@@ -99,12 +99,12 @@ describe('a dictator manages players and season rosters', () => {
 
   it('creates a player on a season roster in one step, with a private email', async () => {
     const { data, error } = await create('dictator', made.entries[0], `${tag}Ada`, {
-      p_last_name: 'Striker', p_jersey_number: 9, p_position: 'ST', p_overall_rating: 72, p_attributes: { pace: 80 }, p_email: 'Ada.Striker@IIITKottayam.ac.in',
+      p_last_name: 'Striker', p_jersey_number: 9, p_position: 'ST', p_overall_rating: 72, p_attributes: { stats: { Pace: { total: 80 } } }, p_email: 'Ada.Striker@IIITKottayam.ac.in',
     });
     expect(error).toBeNull();
     player = data as string;
     const row = (await admin.from('players').select('first_name, overall_rating, attributes, roster_memberships(id, team_entry_id, jersey_number, position), player_private_details(email)').eq('id', player).single()).data as any;
-    expect(row).toMatchObject({ first_name: `${tag}Ada`, overall_rating: 72, attributes: { pace: 80 } });
+    expect(row).toMatchObject({ first_name: `${tag}Ada`, overall_rating: 72, attributes: { stats: { Pace: { total: 80 } } } });
     expect(row.roster_memberships).toEqual([expect.objectContaining({ team_entry_id: made.entries[0], jersey_number: 9, position: 'ST' })]);
     expect(row.player_private_details).toMatchObject({ email: 'ada.striker@iiitkottayam.ac.in' });
     place = row.roster_memberships[0].id;

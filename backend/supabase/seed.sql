@@ -287,11 +287,11 @@ SELECT
   r.last_name,
   55 + mod(r.slot * 11 + length(t.team_name), 40),
   portrait.image_url,
-  jsonb_build_object(
-    'pace', 50 + mod(r.slot * 9, 45),
-    'passing', 50 + mod(r.slot * 7, 45),
-    'shooting', 50 + mod(r.slot * 13, 45)
-  )
+  jsonb_build_object('stats', jsonb_build_object(
+    'Pace', jsonb_build_object('total', 50 + mod(r.slot * 9, 45)),
+    'Passing', jsonb_build_object('total', 50 + mod(r.slot * 7, 45)),
+    'Shooting', jsonb_build_object('total', 50 + mod(r.slot * 13, 45))
+  ))
 FROM _mega_teams t
 JOIN _mega_roster r ON r.show_name = t.show_name
 JOIN _mega_portraits portrait ON portrait.slot = r.slot
