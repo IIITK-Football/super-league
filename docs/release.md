@@ -41,6 +41,8 @@ Assistants and scripts in this repository still never run `link`, `--linked` or 
 
 ## Before production runs for the first time
 
+**Completed 2026-11-19** (see "Production release 2026-11-19" below); kept as the record. Production already had a migration history, so step 4 was not needed.
+
 Production was created from the legacy migrations by hand. **It has no migration history at all**: querying `supabase_migrations.schema_migrations` fails with `42P01: relation does not exist`. That means a populated database with no ledger, not an empty database. The baseline must therefore be **marked as applied, never run**, and the production job refuses to continue while the baseline is still listed as pending (the "Refuse to replay the baseline migration" step). **History is marked, never re-run.**
 
 1. **Read-only: compare production's schema with the baseline.** Run the read-only inventory (`scripts/sql/schema-inventory.sql`) in the **production** SQL Editor (it starts with `BEGIN READ ONLY`, so it cannot write), export the result to a file **outside the repository**, and give the assistant the path. The same inventory is produced from the local database with `pnpm db:inventory <file>`; the assistant then compares the two offline. Do not mark the baseline applied until the two agree or every difference is understood.
@@ -58,7 +60,7 @@ Production was created from the legacy migrations by hand. **It has no migration
      - It stops on any other name, and each change is listed.
      - The rehearsal converted 16 players.
    - **Back up first, and wait for it:** run Actions → "Database backup" on `main` (target `production`, a note naming the scripts) and wait for "Uploaded object verified: yes" before any of the scripts below (`docs/backups.md`). Production migrations take their own verified backup automatically before they can be approved.
-   - **Preview each script first:** run it with its `COMMIT` line changed to `ROLLBACK`. Nothing is written and the list is shown.
+   - **Preview each script first, as a dry run:** replace its `COMMIT;` line with a `DO` block that raises an error reporting the counts (`RAISE EXCEPTION 'DRY RUN, nothing kept: …'`). The whole script runs, including its guards and updates, and the error undoes everything. Changing `COMMIT` to `ROLLBACK` does not work in the SQL Editor: it runs the paste as one transaction, so the rollback also discards the temporary list before it is shown.
      - Proceed only if the counts match the rehearsal (84 accounts and 10,930 points; 16 jersey numbers: 10 out of range and 6 shared; 16 play styles), or every difference is understood. Production data may have changed since the archive of 2026-11-07.
      - Then run each script as is, and export its list: it is that script's rollback record.
    - **Rehearsal result** (2026-11-19, production-shaped local clone, after these three scripts): every pending migration applied (`20261117000000`–`20261130000007`). The account-matching report showed 58 contact emails kept as match keys: 22 ready to link and 36 waiting for an account. The RPC verification passed all 20 checks.
