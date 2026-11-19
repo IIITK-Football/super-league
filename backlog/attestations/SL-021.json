@@ -1,0 +1,17 @@
+{
+  "id": "SL-021",
+  "attestations": [
+    {
+      "checkId": "C13",
+      "by": "oreoruuser",
+      "at": "2026-11-19T05:31:51.874Z",
+      "note": "Staging deploy run 44463579474 (commit a9bb9aa) applied the migrations and the seed and passed 33 checks; staging-checks.mjs passed 21 checks; the Teams & Rosters and team builder UI tests passed 7/7 with SL_UI_TARGET=staging (2026-11-19)."
+    },
+    {
+      "checkId": "C14",
+      "by": "oreoruuser",
+      "at": "2026-11-19T05:32:02.092Z",
+      "note": "Owner used Teams & Rosters on staging (develop.super-league.pages.dev): division, season and team selectors, added a team, created, edited and moved a player, and opened the player's season history (2026-11-19)."
+    }
+  ]
+}

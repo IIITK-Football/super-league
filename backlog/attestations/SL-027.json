@@ -1,0 +1,11 @@
+{
+  "id": "SL-027",
+  "attestations": [
+    {
+      "checkId": "C7",
+      "by": "oreoruuser",
+      "at": "2026-11-19T05:32:02.350Z",
+      "note": "Staging deploy run 44463579474 applied the audit migration; the audit UI test passed 2/2 with SL_UI_TARGET=staging; the owner read the history in the Audit History tab on staging (2026-11-19)."
+    }
+  ]
+}
