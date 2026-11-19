@@ -759,4 +759,13 @@ FROM (
 ) d
 WHERE s.id = d.season_id AND (s.starts_on IS DISTINCT FROM d.first_day OR s.ends_on IS DISTINCT FROM d.last_day);
 
+-- Account-linked players: one verified fan account (fan01) linked to one player, Jackson Lamb, who plays for two
+-- teams. Every other seed account stays unverified, so linking one shows the refusal. Re-running changes nothing.
+UPDATE auth.users SET email_confirmed_at = now()
+WHERE email = 'fan01@iiitkottayam.ac.in' AND email_confirmed_at IS NULL;
+UPDATE public.players SET user_id = (SELECT id FROM auth.users WHERE email = 'fan01@iiitkottayam.ac.in')
+WHERE id = (SELECT id FROM public.players WHERE first_name = 'Jackson' AND last_name = 'Lamb' ORDER BY id LIMIT 1)
+  AND user_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM public.players p JOIN auth.users u ON u.id = p.user_id WHERE u.email = 'fan01@iiitkottayam.ac.in');
+
 COMMIT;

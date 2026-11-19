@@ -46,5 +46,7 @@ FROM (
          (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname IN ('on_auth_user_created', 'on_auth_user_role_created') AND NOT tgisinternal) = 2
   UNION ALL SELECT 17, 'fixture media are offline placeholders (no third-party or production image hosts)',
          NOT EXISTS (SELECT 1 FROM public.teams WHERE logo_url !~ '^data:image/')
+  UNION ALL SELECT 18, 'every player linked to an account is linked to a verified account',
+         NOT EXISTS (SELECT 1 FROM public.players p JOIN auth.users u ON u.id = p.user_id WHERE u.email_confirmed_at IS NULL)
 ) c
 ORDER BY n;

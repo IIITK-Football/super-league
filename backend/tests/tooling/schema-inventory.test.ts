@@ -85,7 +85,7 @@ describe('schema inventory on the local database', () => {
   it('reports what the migrations create in the public schema', () => {
     expect(by('table')).toHaveLength(28);
     expect(by('view')).toHaveLength(2);
-    expect(by('function')).toHaveLength(26);
+    expect(by('function')).toHaveLength(36);
     expect(by('policy')).toHaveLength(54);
     // the division and season model (20261119000000_divisions_and_seasons.sql)
     for (const t of ['divisions', 'seasons', 'section_types', 'season_sections', 'team_entries', 'division_flairs']) {
@@ -119,7 +119,7 @@ describe('schema inventory on the local database', () => {
     for (const name of ['ensure_domain_lock', 'ensure_domain_lock_on_email_change', 'on_auth_user_created', 'on_auth_user_role_created']) {
       expect(triggers, name).toContain(`auth.users.${name}`);
     }
-    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(24);
+    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(25);
   });
 
   it('includes function bodies and security-definer settings used to judge drift', () => {

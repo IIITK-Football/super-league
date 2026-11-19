@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       { count: totalPlayers },
       { count: upcomingMatches }
     ] = await Promise.all([
-      supabase.from('players').select('*', { count: 'exact', head: true }),
+      supabase.from('players').select('id', { count: 'exact', head: true }),
       supabase.from('matches').select('*', { count: 'exact', head: true }).eq('status', 'scheduled')
     ]);
 

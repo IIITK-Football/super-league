@@ -1,7 +1,7 @@
 -- Group: database. Verifies the deterministic local seed (supabase/seed.sql).
 -- Run: pnpm exec supabase test db --local   (from backend/, local stack only)
 BEGIN;
-SELECT plan(25);
+SELECT plan(26);
 
 -- Row volumes (documented in docs/local-seed.md)
 SELECT is((SELECT count(*) FROM public.teams)::int, 24, 'teams: 8 per division x 3');
@@ -21,6 +21,9 @@ SELECT is((SELECT count(*) FROM seed_users)::int, 50, 'seed auth users match see
 SELECT is((SELECT count(*) FROM public.newsletter)::int, 24, 'news articles');
 SELECT hasnt_table('public', 'polls', 'the unused polls feature is gone');
 SELECT is((SELECT count(*) FROM public.team_registrations)::int, 2, 'team registrations');
+SELECT results_eq($$SELECT p.first_name::text || ' ' || p.last_name::text, u.email::text, u.email_confirmed_at IS NOT NULL
+                    FROM public.players p JOIN auth.users u ON u.id = p.user_id JOIN seed_users s ON s.id = u.id$$,
+  $$VALUES ('Jackson Lamb'::text, 'fan01@iiitkottayam.ac.in'::text, true)$$, 'one verified seed account is linked to one player');
 SELECT is((SELECT count(*) FROM public.wc_teams)::int, 16, 'World Cup teams');
 SELECT is((SELECT count(*) FROM public.wc_matches)::int, 40, 'World Cup matches');
 SELECT is((SELECT count(*) FROM public.wc_leaderboard w JOIN seed_users s ON s.id = w.user_id)::int, 50, 'World Cup leaderboard rows');
