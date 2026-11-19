@@ -52,11 +52,12 @@ ROLLBACK;`;
 
   it('touches only jersey numbers and runs in one transaction', () => {
     const code = script.replace(/--.*$/gm, '');
-    expect(code.trim().startsWith('BEGIN;')).toBe(true);
-    expect(code.trim().endsWith('COMMIT;')).toBe(true);
+    // The list is made first (read-only), the writes run in one transaction, and the list is shown after COMMIT.
+    expect(code).toMatch(/\nBEGIN;\nLOCK TABLE [^;]+ IN SHARE ROW EXCLUSIVE MODE;\n/);
+    expect(code.trim()).toMatch(/\nCOMMIT;\n\nSELECT [^;]+;$/);
     expect(code.match(/\bUPDATE\s+public\.\w+/g)).toEqual(['UPDATE public.players', 'UPDATE public.team_members']);
     expect(code.match(/SET jersey_number = NULL/g)).toHaveLength(2);
-    const writes = code.replace(/ON COMMIT DROP/g, '');
+    const writes = code.replace(/DROP TABLE IF EXISTS pg_temp\.[\w., ]+;/g, ''); // only its own temporary lists
     for (const w of ['DELETE', 'TRUNCATE', 'DROP', 'ALTER', 'INSERT', 'GRANT']) expect(writes, w).not.toMatch(new RegExp(`\\b${w}\\b`));
   });
 });

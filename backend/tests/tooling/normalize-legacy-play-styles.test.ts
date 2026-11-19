@@ -39,7 +39,7 @@ ROLLBACK;`);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stderr).toMatch(/Play styles converted to catalog names: 11/);
     expect(r.stderr).toMatch(/Play styles converted to catalog names: 0/);
-    expect(r.stdout).toMatch(new RegExp(`${P(8)}\\|Professional Yapper\\|Technical`));
+    expect(r.stdout).toMatch(new RegExp(`${P(8)}\\|Professional Yapper\\|Technical\\|\\{"name": "Professional Yapper", "icon_url": "https://x/custom.png"\\}`));
     const expected = 'STYLES 01=Far Reach,02=Long Ball Pass,03=Precision Header,04=Aerial Fortress,05=Deflector,06=Deflector,'
       + '07=Technical,08=Technical,09=Technical,10=Technical,11=Technical,12=power shot+,13=Technical,14=-';
     expect(r.stdout.split('\n').filter((l) => l.startsWith('STYLES'))).toEqual([expected, expected]);
@@ -66,11 +66,12 @@ ROLLBACK;`);
 
   it('touches only player play styles and runs in one transaction', () => {
     const code = script.replace(/--.*$/gm, '');
-    expect(code.trim().startsWith('BEGIN;')).toBe(true);
-    expect(code.trim().endsWith('COMMIT;')).toBe(true);
+    // The list is made first (read-only), the writes run in one transaction, and the list is shown after COMMIT.
+    expect(code).toMatch(/\nBEGIN;\nLOCK TABLE [^;]+ IN SHARE ROW EXCLUSIVE MODE;\n/);
+    expect(code.trim()).toMatch(/\nCOMMIT;\n\nSELECT [^;]+;$/);
     expect(code.match(/\bUPDATE\s+public\.\w+/g)).toEqual(['UPDATE public.players']);
     expect(code).toMatch(/jsonb_set\(p\.attributes, '\{playStyles\}'/);
-    const writes = code.replace(/ON COMMIT DROP/g, '');
+    const writes = code.replace(/DROP TABLE IF EXISTS pg_temp\.[\w., ]+;/g, ''); // only its own temporary lists
     for (const w of ['DELETE', 'TRUNCATE', 'DROP', 'ALTER', 'INSERT', 'GRANT']) expect(writes, w).not.toMatch(new RegExp(`\\b${w}\\b`));
   });
 });

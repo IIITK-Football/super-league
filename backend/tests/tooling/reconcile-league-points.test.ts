@@ -70,13 +70,25 @@ ROLLBACK;`);
     expect(r.stderr).toMatch(/1 account\(s\) differ in a way the World Cup group-stage addition does not explain\. Nothing was changed\./);
   });
 
+  it('stops with nothing changed when a total changes after the list was made', () => {
+    const [listPart, writePart] = body.split(/^LOCK TABLE/m);
+    const r = run(`${setup()}
+${listPart}
+UPDATE public.user_profiles SET points = 310 WHERE id = '${U(1)}';
+LOCK TABLE${writePart}
+ROLLBACK;`);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/the data changed since the list was made .* Nothing was changed; run it again\./);
+  });
+
   it('touches only user_profiles.points and runs in one transaction', () => {
     const code = script.replace(/--.*$/gm, '');
-    expect(code.trim().startsWith('BEGIN;')).toBe(true);
-    expect(code.trim().endsWith('COMMIT;')).toBe(true);
+    // The list is made first (read-only), the writes run in one transaction, and the list is shown after COMMIT.
+    expect(code).toMatch(/\nBEGIN;\nLOCK TABLE [^;]+ IN SHARE ROW EXCLUSIVE MODE;\n/);
+    expect(code.trim()).toMatch(/\nCOMMIT;\n\nSELECT [^;]+;$/);
     expect(code.match(/\bUPDATE\s+public\.\w+/g)).toEqual(['UPDATE public.user_profiles']);
     expect(code).toMatch(/SET points = c\.new_points/);
-    const writes = code.replace(/ON COMMIT DROP/g, ''); // the temporary list removes itself at commit
+    const writes = code.replace(/DROP TABLE IF EXISTS pg_temp\.[\w., ]+;/g, ''); // only its own temporary lists
     for (const w of ['DELETE', 'TRUNCATE', 'DROP', 'ALTER', 'INSERT', 'GRANT']) expect(writes, w).not.toMatch(new RegExp(`\\b${w}\\b`));
   });
 });
