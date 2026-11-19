@@ -50,6 +50,14 @@ Production was created from the legacy migrations by hand. **It has no migration
      - The script resets only accounts whose excess is explained by their group-stage points; it stops with nothing changed if any difference is not explained.
      - It lists each correction (account id, old, new, excess); export that list.
      - The production-shaped rehearsal (2026-11-19) corrected 84 accounts and 10,930 points; a second run corrects 0.
+   - **Then clear invalid jersey numbers:** `scripts/sql/clear-invalid-jersey-numbers.sql` (same timing). `20261124000000` allows 0–99 and one number per team. The March admin API accepted any number, and the registration form never checked duplicates.
+     - It clears to "not set" every number outside 0–99, and every number two people share on a team; you decided this on 2026-11-19. Each change is listed; export the list.
+     - The rehearsal cleared 10 out-of-range numbers (100–102, 600) and 6 duplicates (13, 15, 55 in two Freshers registrations).
+   - **Then convert legacy free-text play styles:** `scripts/sql/normalize-legacy-play-styles.sql` (same timing). `20261130000004` accepts catalog names only. Until 8 October 2026, play styles were typed as free text.
+     - It maps the unambiguous names to the catalog; the goalkeeper leftovers become Deflector and the rest Technical (your decision, 2026-11-19).
+     - It stops on any other name, and each change is listed.
+     - The rehearsal converted 16 players.
+   - **Rehearsal result** (2026-11-19, production-shaped local clone, after these three scripts): every pending migration applied (`20261117000000`–`20261130000007`). The account-matching report showed 58 contact emails kept as match keys: 22 ready to link and 36 waiting for an account. The RPC verification passed all 20 checks.
 4. **Repair the history** (separate approval; history rows only, no schema change). The simplest way is `bash scripts/production-history-repair.sh`: it asks for the Session pooler connection string and the password with hidden input, fixes common problems (stray quotes, a password that needs percent-encoding, the `[YOUR-PASSWORD]` placeholder), verifies the target is the production project before changing anything, runs the two repairs below, and stops unless exactly the two new migrations remain pending. By hand, run from `backend/` with a production connection string kept in an environment variable (percent-encoded, never typed into a shared place and never `--linked`):
    ```bash
    # production has no row for the baseline: record it as already applied
