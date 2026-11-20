@@ -15,8 +15,8 @@ SELECT ('d2000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'aut
        (ARRAY['em.boss','em.captain','em.ready','em.dup','em.waiting','em.new','em.later','em.linked'])[n] || '@iiitkottayam.ac.in', '',
        CASE WHEN n IN (5, 7) THEN NULL ELSE now() END, now(), now()
 FROM generate_series(1, 8) AS n;
-UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'd2000000-0000-4000-8000-000000000001';
-UPDATE public.user_roles SET role = 'captain' WHERE user_id = 'd2000000-0000-4000-8000-000000000002';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'dictator' FROM auth.users WHERE id = 'd2000000-0000-4000-8000-000000000001' ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'captain' FROM auth.users WHERE id = 'd2000000-0000-4000-8000-000000000002' ON CONFLICT DO NOTHING;
 -- Legacy (unlinked) players and their keys, as the migration leaves them (this session has no request JWT).
 INSERT INTO public.players (id, first_name, last_name) VALUES
   ('d2900000-0000-4000-8000-000000000001', 'Ready', 'Match'),

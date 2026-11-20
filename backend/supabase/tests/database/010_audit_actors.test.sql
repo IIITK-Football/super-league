@@ -9,7 +9,7 @@ INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, up
 SELECT ('aa000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
        (ARRAY['aa.dictator','aa.named','aa.nick','aa.plain','aa.spoof','aa.copy','aa.noprofile'])[n] || '@iiitkottayam.ac.in', '', now(), now()
 FROM generate_series(1, 7) AS n;
-UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'aa000000-0000-4000-8000-000000000001';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'dictator' FROM auth.users WHERE id = 'aa000000-0000-4000-8000-000000000001' ON CONFLICT DO NOTHING;
 UPDATE public.user_profiles SET real_name = 'Named Person' WHERE id = 'aa000000-0000-4000-8000-000000000002';
 UPDATE public.user_profiles SET real_name = '  ', nickname = 'Nicky' WHERE id = 'aa000000-0000-4000-8000-000000000003';
 UPDATE public.user_profiles SET real_name = E'\t\n ', nickname = NULL WHERE id = 'aa000000-0000-4000-8000-000000000004';

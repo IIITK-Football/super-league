@@ -12,8 +12,8 @@ SELECT ('d1000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'aut
        (ARRAY['al.boss','al.captain','al.fan','al.other','al.unverified','al.gone'])[n] || '@iiitkottayam.ac.in', '',
        CASE WHEN n = 5 THEN NULL ELSE now() END, now(), now()
 FROM generate_series(1, 6) AS n;
-UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'd1000000-0000-4000-8000-000000000001';
-UPDATE public.user_roles SET role = 'captain' WHERE user_id = 'd1000000-0000-4000-8000-000000000002';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'dictator' FROM auth.users WHERE id = 'd1000000-0000-4000-8000-000000000001' ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'captain' FROM auth.users WHERE id = 'd1000000-0000-4000-8000-000000000002' ON CONFLICT DO NOTHING;
 INSERT INTO public.players (id, first_name, last_name, overall_rating, attributes) VALUES
   ('d1900000-0000-4000-8000-000000000001', 'Linked', 'Lane', 70, '{"stats": {"Pace": {"total": 80}}, "playStyle": "Power Shot", "keep": 1}'),
   ('d1900000-0000-4000-8000-000000000002', 'Second', 'Player', 60, '{}'),

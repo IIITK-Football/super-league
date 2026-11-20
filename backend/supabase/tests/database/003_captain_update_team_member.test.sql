@@ -16,18 +16,18 @@ SELECT ('c0000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'aut
          || '@iiitkottayam.ac.in', '', now(), now()
 FROM generate_series(1, 8) AS n;
 
-UPDATE public.user_roles SET role = 'captain'  WHERE user_id IN ('c0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000002',
-                                                                 'c0000000-0000-4000-8000-000000000008');
-UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'c0000000-0000-4000-8000-000000000003';
-UPDATE public.user_roles SET role = 'editor'   WHERE user_id = 'c0000000-0000-4000-8000-000000000005';
-UPDATE public.user_roles SET role = 'default'    WHERE user_id = 'c0000000-0000-4000-8000-000000000006';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'captain' FROM auth.users WHERE id IN ('c0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000002',
+                                                                 'c0000000-0000-4000-8000-000000000008') ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'dictator' FROM auth.users WHERE id = 'c0000000-0000-4000-8000-000000000003' ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'editor' FROM auth.users WHERE id = 'c0000000-0000-4000-8000-000000000005' ON CONFLICT DO NOTHING;
+DELETE FROM public.user_roles WHERE user_id = 'c0000000-0000-4000-8000-000000000006';
 -- user 4 (normal) and user 7 (assigned.norole) keep the default role
 
 CREATE TEMP TABLE _season AS
 SELECT s.id FROM public.seasons s JOIN public.divisions d ON d.id = s.division_id WHERE d.slug = 'freshers' AND s.is_current;
 -- A second season of the same division, to prove the assignment is per season.
-INSERT INTO public.seasons (id, division_id, slug, name)
-SELECT 'f9000000-0000-4000-8000-000000000001', s.division_id, 'rpc-other', 'RPC other season'
+INSERT INTO public.seasons (id, division_id, slug, name, status)
+SELECT 'f9000000-0000-4000-8000-000000000001', s.division_id, 'rpc-other', 'RPC other season', 'completed'
 FROM public.seasons s WHERE s.id = (SELECT id FROM _season);
 
 INSERT INTO public.teams (id, name) VALUES
@@ -44,6 +44,9 @@ INSERT INTO public.team_registrations (id, captain_id, team_name, season_id, tea
   ('d0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'RPC Team A', (SELECT id FROM _season), 'f0000000-0000-4000-8000-000000000001'),
   ('d0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000002', 'RPC Team B', (SELECT id FROM _season), 'f0000000-0000-4000-8000-000000000002'),
   ('d0000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000007', 'RPC Team C', (SELECT id FROM _season), 'f0000000-0000-4000-8000-000000000003');
+INSERT INTO public.captain_assignments (team_entry_id, user_id)
+SELECT e.id, r.captain_id FROM public.team_registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
+ON CONFLICT (team_entry_id) DO NOTHING;
 
 INSERT INTO public.players (id, first_name, last_name, overall_rating, attributes, image_url) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'Player', 'A', 60, '{}', 'old-a'),
@@ -128,9 +131,12 @@ SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8
 -- A captain of the same team in an earlier, no longer current season cannot reach the player's shared card.
 INSERT INTO public.team_registrations (id, captain_id, team_name, season_id, team_id) VALUES
   ('d0000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000008', 'RPC Team A old', 'f9000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001');
+INSERT INTO public.captain_assignments (team_entry_id, user_id)
+SELECT e.id, r.captain_id FROM public.team_registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
+ON CONFLICT (team_entry_id) DO NOTHING;
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000008', 'a1000000-0000-4000-8000-000000000005',
   'CB', 5, 70, '{}'::jsonb, 'stale')$$,
-  'P0001', 'Only the current season''s roster can be edited by its captain', 'a captain edits only the current season''s roster');
+  'P0001', 'Only a current or upcoming season''s roster can be edited by its captain', 'a captain edits only a current or upcoming season''s roster (a completed season is read-only)');
 SELECT isnt((SELECT image_url FROM public.players WHERE id = 'e0000000-0000-4000-8000-000000000002'), 'stale', 'the shared card is unchanged');
 
 -- Other teams, other roles ---------------------------------------------------------------------------------
@@ -161,15 +167,15 @@ SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8
   'P0001', 'Captain access is required to update players', 'a user assigned to the team but holding only the default role is refused');
 SELECT is((SELECT image_url FROM public.players WHERE id = 'e0000000-0000-4000-8000-000000000003'), 'old-c',
   'nothing changed for the assigned user without the captain role');
-UPDATE public.user_roles SET role = 'editor' WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'editor' FROM auth.users WHERE id = 'c0000000-0000-4000-8000-000000000007' ON CONFLICT DO NOTHING;
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'a1000000-0000-4000-8000-000000000003',
   'ST', 9, 80, '{}'::jsonb, 'new-c')$$,
   'P0001', 'Captain access is required to update players', 'an assigned editor is refused: no role implies another');
-UPDATE public.user_roles SET role = 'default' WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
+DELETE FROM public.user_roles WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'a1000000-0000-4000-8000-000000000003',
   'ST', 9, 80, '{}'::jsonb, 'new-c')$$,
   'P0001', 'Captain access is required to update players', 'an assigned former legacy admin, now an ordinary user, is refused');
-UPDATE public.user_roles SET role = 'captain' WHERE user_id = 'c0000000-0000-4000-8000-000000000007';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'captain' FROM auth.users WHERE id = 'c0000000-0000-4000-8000-000000000007' ON CONFLICT DO NOTHING;
 SELECT lives_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000007', 'a1000000-0000-4000-8000-000000000003',
   'ST', 9, 80, '{}'::jsonb, 'new-c')$$,
   'once the captain role is assigned deliberately, the same user can update their team''s player');

@@ -9,10 +9,10 @@ INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, up
 SELECT ('b7000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
        (ARRAY['r.normal','r.captain','r.editor','r.admin','r.dictator'])[n] || '@iiitkottayam.ac.in', '', now(), now()
 FROM generate_series(1, 5) AS n;
-UPDATE public.user_roles SET role = 'captain'  WHERE user_id = 'b7000000-0000-4000-8000-000000000002';
-UPDATE public.user_roles SET role = 'editor'   WHERE user_id = 'b7000000-0000-4000-8000-000000000003';
-UPDATE public.user_roles SET role = 'default'    WHERE user_id = 'b7000000-0000-4000-8000-000000000004';
-UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'b7000000-0000-4000-8000-000000000005';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'captain' FROM auth.users WHERE id = 'b7000000-0000-4000-8000-000000000002' ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'editor' FROM auth.users WHERE id = 'b7000000-0000-4000-8000-000000000003' ON CONFLICT DO NOTHING;
+DELETE FROM public.user_roles WHERE user_id = 'b7000000-0000-4000-8000-000000000004';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'dictator' FROM auth.users WHERE id = 'b7000000-0000-4000-8000-000000000005' ON CONFLICT DO NOTHING;
 
 -- The captain holds the registration of a seeded Super League team for its season.
 CREATE TEMP TABLE _fx AS
@@ -24,6 +24,9 @@ FROM public.team_entries e JOIN public.seasons s ON s.id = e.season_id JOIN publ
 WHERE d.slug = 'super-league' ORDER BY e.id LIMIT 1;
 INSERT INTO public.team_registrations (captain_id, team_name, season_id, team_id)
 SELECT 'b7000000-0000-4000-8000-000000000002', 'Roster captain team', season_id, team_id FROM _fx;
+INSERT INTO public.captain_assignments (team_entry_id, user_id)
+SELECT e.id, r.captain_id FROM public.team_registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
+ON CONFLICT (team_entry_id) DO NOTHING;
 GRANT SELECT ON _fx TO anon, authenticated;
 
 -- Runs a statement as an API role and returns the integer it yields (row count for writes).

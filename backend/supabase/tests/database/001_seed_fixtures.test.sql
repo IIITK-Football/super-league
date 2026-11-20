@@ -1,7 +1,7 @@
 -- Group: database. Verifies the deterministic local seed (supabase/seed.sql).
 -- Run: pnpm exec supabase test db --local   (from backend/, local stack only)
 BEGIN;
-SELECT plan(26);
+SELECT plan(28);
 
 -- Row volumes (documented in docs/local-seed.md)
 SELECT is((SELECT count(*) FROM public.teams)::int, 24, 'teams: 8 per division x 3');
@@ -35,15 +35,20 @@ SELECT results_eq(
   $$VALUES ('freshers', 8), ('super-league', 8), ('wsl', 8)$$,
   'eight teams in each division''s 2026 season');
 
--- Roles: legacy role values present for the current schema (see SL-003 mapping)
+-- Roles are independent grants; a plain account has none (the editor also scores, the Beef's captain also scores one match)
 SELECT results_eq(
   $$SELECT r.role, count(*)::int FROM public.user_roles r JOIN seed_users s ON s.id = r.user_id GROUP BY r.role ORDER BY r.role$$,
-  $$VALUES ('captain', 2), ('default', 46), ('dictator', 1), ('editor', 1)$$,
+  $$VALUES ('captain', 2), ('dictator', 1), ('editor', 1), ('scorer', 2)$$,
   'role distribution, and no legacy admin in seed');
 
 -- every assigned captain in the seed holds the captain role (the captain function requires both)
-SELECT is((SELECT count(*) FROM public.team_registrations r JOIN public.user_roles ur ON ur.user_id = r.captain_id
-           WHERE ur.role NOT IN ('captain', 'dictator'))::int, 0, 'seed team assignments all have the captain role');
+SELECT is((SELECT count(*) FROM public.captain_assignments ca
+           WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = ca.user_id AND ur.role IN ('captain', 'dictator')))::int, 0,
+          'seed captain assignments all belong to people holding the captain role');
+SELECT is((SELECT count(*) FROM public.scorer_assignments sa
+           WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = sa.user_id AND ur.role = 'scorer'))::int, 0,
+          'seed scorer assignments all belong to people holding the scorer grant');
+SELECT is((SELECT count(*) FROM public.user_roles WHERE role = 'default')::int, 0, 'no stored default role');
 
 -- Fixture accounts cannot sign in (no password); seeded ids are stable
 SELECT is((SELECT count(*) FROM auth.users u JOIN seed_users s ON s.id = u.id WHERE u.encrypted_password <> '')::int, 0, 'seed accounts have no password');

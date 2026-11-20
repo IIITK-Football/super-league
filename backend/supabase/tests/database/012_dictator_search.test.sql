@@ -9,7 +9,7 @@ INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, up
 SELECT ('ac000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
        (ARRAY['sd.boss','sd.zara','sd.spoof','sd.plain'])[n] || '@iiitkottayam.ac.in', '', now(), now()
 FROM generate_series(1, 4) AS n;
-UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'ac000000-0000-4000-8000-000000000001';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'dictator' FROM auth.users WHERE id = 'ac000000-0000-4000-8000-000000000001' ON CONFLICT DO NOTHING;
 UPDATE public.user_profiles SET real_name = 'Zara Quill' WHERE id = 'ac000000-0000-4000-8000-000000000002';
 -- A user who edited their own profile email to someone else's address.
 UPDATE public.user_profiles SET real_name = NULL, nickname = NULL, email = 'sd.zara@iiitkottayam.ac.in' WHERE id = 'ac000000-0000-4000-8000-000000000003';

@@ -99,9 +99,7 @@ ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email, real_name = EXCLUDED.real_name,
     nickname = EXCLUDED.nickname;
 
-INSERT INTO public.user_roles (user_id, role)
-SELECT id, 'default' FROM _mega_fans
-ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role;
+-- Plain fan accounts hold no role grant: a normal user is someone with no elevated grant.
 
 INSERT INTO public.wc_leaderboard (user_id, points, updated_at)
 SELECT id, points, now() FROM _mega_fans
@@ -117,7 +115,13 @@ SET email = EXCLUDED.email,
 
 INSERT INTO public.user_roles (user_id, role)
 SELECT id, role FROM _mega_users
-ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role;
+ON CONFLICT (user_id, role) DO NOTHING;
+-- Grants are independent: the editor also holds the scorer grant (its assignments are below).
+INSERT INTO public.user_roles (user_id, role) VALUES ('60000000-0000-4000-8000-000000000003', 'scorer')
+ON CONFLICT (user_id, role) DO NOTHING;
+-- The captain of The Beef also scores one match, which exercises the captain-scores warning in the dashboard.
+INSERT INTO public.user_roles (user_id, role) VALUES ('60000000-0000-4000-8000-000000000002', 'scorer')
+ON CONFLICT (user_id, role) DO NOTHING;
 
 -- Eight characters per show. Each division uses only its assigned show.
 CREATE TEMP TABLE _mega_roster (
@@ -480,6 +484,22 @@ INSERT INTO public.team_registrations (id, captain_id, team_name, season_id, tea
 SELECT id, captain_id, team_name, (SELECT season_id FROM _mega_seasons WHERE division = 'freshers'), team_id
 FROM _mega_registrations
 ON CONFLICT (id) DO NOTHING;
+
+-- Each registration is the captain assignment of its team entry (team_registrations is retired in a later migration).
+INSERT INTO public.captain_assignments (team_entry_id, user_id, assigned_at)
+SELECT e.id, r.captain_id, now()
+FROM _mega_registrations r
+JOIN public.team_entries e ON e.team_id = r.team_id
+  AND e.season_id = (SELECT season_id FROM _mega_seasons WHERE division = 'freshers')
+ON CONFLICT (team_entry_id) DO NOTHING;
+
+-- Scorers: the editor scores a whole season (men's), and the Beef's captain scores one scheduled match.
+INSERT INTO public.scorer_assignments (user_id, season_id)
+SELECT '60000000-0000-4000-8000-000000000003'::uuid, season_id FROM _mega_seasons WHERE division = 'mens'
+ON CONFLICT DO NOTHING;
+INSERT INTO public.scorer_assignments (user_id, match_id)
+SELECT '60000000-0000-4000-8000-000000000002'::uuid, (SELECT id FROM public.matches m WHERE m.status = 'scheduled' ORDER BY m.date, m.id LIMIT 1)
+ON CONFLICT DO NOTHING;
 
 -- The Freshers team-builder rosters are the season rosters above (no separate member table).
 -- History fixture: the first Super League team's slot-1 player also plays the Freshers 2026 season for The Beef,

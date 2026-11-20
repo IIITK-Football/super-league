@@ -3,13 +3,13 @@
 -- gone, and no policy or role check mentions it. A normal user cannot promote itself or read other people's roles,
 -- registrations or predictions; a dictator still manages roles. Rolled back.
 BEGIN;
-SELECT plan(10);
+SELECT plan(11);
 
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('ab000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
        (ARRAY['la.user','la.dictator','la.member'])[n] || '@iiitkottayam.ac.in', '', now(), now()
 FROM generate_series(1, 3) AS n;
-UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'ab000000-0000-4000-8000-000000000002';
+INSERT INTO public.user_roles (user_id, role) VALUES ('ab000000-0000-4000-8000-000000000002', 'dictator');
 
 CREATE FUNCTION pg_temp.as_user(p_n integer, p_sql text)
 RETURNS text LANGUAGE plpgsql AS $$
@@ -40,24 +40,24 @@ END;
 $$;
 
 -- The value is gone.
-SELECT throws_ok($$UPDATE public.user_roles SET role = 'admin' WHERE user_id = 'ab000000-0000-4000-8000-000000000003'$$,
+SELECT throws_ok($$INSERT INTO public.user_roles (user_id, role) VALUES ('ab000000-0000-4000-8000-000000000003', 'admin')$$,
   '23514', NULL, 'the legacy admin role can no longer be stored');
-SELECT is((SELECT count(*)::int FROM public.user_roles WHERE role NOT IN ('default', 'captain', 'editor', 'dictator')), 0,
+SELECT is((SELECT count(*)::int FROM public.user_roles WHERE role NOT IN ('captain', 'scorer', 'editor', 'dictator')), 0,
   'every stored role is one of the agreed roles');
 SELECT hasnt_function('public', 'get_user_role', 'the unused legacy role helper is gone');
-SELECT ok(pg_temp.refused(2, $q$INSERT INTO public.user_roles (user_id, role) VALUES ('ab000000-0000-4000-8000-000000000003', 'admin') ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role RETURNING role$q$),
+SELECT ok(pg_temp.refused(2, $q$INSERT INTO public.user_roles (user_id, role) VALUES ('ab000000-0000-4000-8000-000000000003', 'admin') ON CONFLICT DO NOTHING RETURNING role$q$),
   'a dictator cannot assign the legacy admin role');
 
 -- An ordinary user (as every former legacy admin now is) gets nothing.
-SELECT pg_temp.as_user(1, $q$WITH u AS (UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'ab000000-0000-4000-8000-000000000001' RETURNING 1) SELECT count(*)::text FROM u$q$);
-SELECT is((SELECT role FROM public.user_roles WHERE user_id = 'ab000000-0000-4000-8000-000000000001'), 'default', 'an ordinary user cannot promote itself');
-SELECT ok(pg_temp.refused(1, $q$INSERT INTO public.user_roles (user_id, role) VALUES ('ab000000-0000-4000-8000-000000000003', 'dictator') ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role RETURNING role$q$),
+SELECT ok(pg_temp.refused(1, $q$INSERT INTO public.user_roles (user_id, role) VALUES ('ab000000-0000-4000-8000-000000000001', 'dictator')$q$), 'an ordinary user cannot promote itself');
+SELECT is((SELECT count(*)::int FROM public.user_roles WHERE user_id = 'ab000000-0000-4000-8000-000000000001'), 0, 'and still holds no grant');
+SELECT ok(pg_temp.refused(1, $q$INSERT INTO public.user_roles (user_id, role) VALUES ('ab000000-0000-4000-8000-000000000003', 'dictator') ON CONFLICT DO NOTHING RETURNING role$q$),
   'an ordinary user cannot give anyone a role');
-SELECT is(pg_temp.as_user(1, $q$SELECT count(*)::text FROM public.user_roles$q$), '1', 'an ordinary user reads only its own role');
+SELECT is(pg_temp.as_user(1, $q$SELECT count(*)::text FROM public.user_roles$q$), '0', 'an ordinary user reads no one else''s roles');
 SELECT is(pg_temp.as_user(1, $q$SELECT count(*)::text FROM public.predictions WHERE user_id <> 'ab000000-0000-4000-8000-000000000001'$q$), '0', 'an ordinary user reads nobody else''s predictions');
 
 -- A dictator still manages roles, and nothing names the legacy role as granting access.
-SELECT is(pg_temp.as_user(2, $q$INSERT INTO public.user_roles (user_id, role) VALUES ('ab000000-0000-4000-8000-000000000003', 'captain') ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role RETURNING role$q$),
+SELECT is(pg_temp.as_user(2, $q$INSERT INTO public.user_roles (user_id, role) VALUES ('ab000000-0000-4000-8000-000000000003', 'captain') ON CONFLICT DO NOTHING RETURNING role$q$),
   'captain', 'a dictator still assigns roles');
 SELECT is((SELECT count(*)::int FROM pg_policies WHERE schemaname = 'public' AND (coalesce(qual, '') ~ '''admin''' OR coalesce(with_check, '') ~ '''admin'''))
           + (SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
