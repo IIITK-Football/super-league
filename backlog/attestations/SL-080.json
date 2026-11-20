@@ -1,0 +1,11 @@
+{
+  "id": "SL-080",
+  "attestations": [
+    {
+      "checkId": "C4",
+      "by": "oreoruuser",
+      "at": "2026-11-20T05:42:30.964Z",
+      "note": "Production already had a migration history (4 versions through 20261118000000), so the baseline was already recorded as applied and the history repair was not needed. A verified encrypted backup (automated-prod/pre-migration/20261119T203759Z-44610257088-1.dump.age) replaced the manual export. The Database Production reviewer is required and Database deploy run 44610257088 was approved and applied all 19 pending migrations (docs/release.md, Production release 2026-11-19). Owner-reported 2026-11-20: the live production site works and no defects were found."
+    }
+  ]
+}
