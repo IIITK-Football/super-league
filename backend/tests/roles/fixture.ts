@@ -36,9 +36,10 @@ export async function account(f: Roles, label: string, grants: string[] = []) {
   return { id: created.id, token: v.session!.access_token, db };
 }
 
-const must = <T>(r: { data: T | null; error: { message: string } | null }): NonNullable<T> => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const must = (r: { data: any; error: { message: string } | null }): any => {
   if (r.error) throw new Error(r.error.message);
-  return r.data as NonNullable<T>;
+  return r.data;
 };
 
 /** A division with a current, a completed and an upcoming season, two teams entered in each, and two matches in the current one. */
