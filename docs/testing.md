@@ -15,7 +15,7 @@ Tests are organised by domain so a change runs only the groups it can affect. Th
 | `api-services` | backend | API services and contracts | pending (SL-026/030) |
 | `match-operations` | backend | scorer, events, cards, lineups, brackets | pending (SL-022/050/053/054) |
 | `fantasy` | backend | division and World Cup fantasy | pending (SL-022/043) |
-| `e2e` | frontend | Playwright flows; scheduled/release only | pending (SL-100) |
+| `e2e` | frontend | Playwright flows; scheduled/release only | pending (SL-099) |
 
 A **pending** group has no tests yet. It is listed in every report, never failed, and the backlog item named in `tests/groups.json` must add its tests. Each acceptance item later adds tests to the relevant group.
 
