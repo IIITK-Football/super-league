@@ -11,6 +11,7 @@ export default function MatchTimeline() {
   const [matchData, setMatchData] = useState(null);
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchTimeline = async () => {
@@ -22,17 +23,20 @@ export default function MatchTimeline() {
       try {
         const { data: match } = await supabase
           .from('matches')
-          .select('id, season_id, status, date, home_score, away_score, minute, home_team_id, away_team_id, home:teams!home_team_id(name), away:teams!away_team_id(name)')
+          .select('id, season_id, status, date, home_score, away_score, minute, result_kind, result_reason, home_team_id, away_team_id, home:teams!home_team_id(name), away:teams!away_team_id(name)')
           .eq('id', baseMatch.id)
           .single();
 
-        const { data: rawGoals } = await supabase
-          .from('goals')
-          .select('*')
-          .eq('match_id', baseMatch.id);
+        // Goals, own goals and cards of the match; a voided event is a correction and is never shown.
+        const { data: rawGoals, error: eventsError } = await supabase
+          .from('match_events')
+          .select('id, team_id, kind, player_id, assist_player_id, minute, added_minute')
+          .eq('match_id', baseMatch.id)
+          .is('voided_at', null);
+        if (eventsError) throw eventsError;
 
         // The players in this match, with their number and position in the match's season (a roster place).
-        const ids = [...new Set((rawGoals || []).flatMap((g) => [g.player_id, g.assist_id]).filter(Boolean))];
+        const ids = [...new Set((rawGoals || []).flatMap((g) => [g.player_id, g.assist_player_id]).filter(Boolean))];
         const [{ data: cards }, { data: places }] = ids.length
           ? await Promise.all([
             supabase.from('players').select('id, first_name, last_name').in('id', ids),
@@ -44,10 +48,12 @@ export default function MatchTimeline() {
         
         const mappedGoals = (rawGoals || []).map(g => {
           const scorer = players?.find(p => p.id === g.player_id);
-          const assister = players?.find(p => p.id === g.assist_id);
+          const assister = players?.find(p => p.id === g.assist_player_id);
           return {
             ...g,
-            playerName: scorer ? `${scorer.first_name} ${scorer.last_name}` : 'Unknown',
+            is_own_goal: g.kind === 'own_goal',
+            isCard: g.kind === 'yellow' || g.kind === 'red',
+            playerName: scorer ? `${scorer.first_name} ${scorer.last_name}` : 'Unknown scorer',
             playerNumber: scorer?.jersey_number || '-',
             playerPosition: scorer?.position || 'PLY',
             assistName: assister ? `${assister.first_name} ${assister.last_name}` : null,
@@ -55,13 +61,14 @@ export default function MatchTimeline() {
           };
         });
 
-        mappedGoals.sort((a, b) => parseInt(a.minute || 0) - parseInt(b.minute || 0));
+        mappedGoals.sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
 
         let currentHome = 0;
         let currentAway = 0;
         
         const goalsWithScore = mappedGoals.map(g => {
           const isHomeTeam = g.team_id === match.home_team_id;
+          if (g.isCard) return { ...g, runningHome: currentHome, runningAway: currentAway };
           
           if (g.is_own_goal) {
             if (isHomeTeam) currentAway += 1;
@@ -78,6 +85,7 @@ export default function MatchTimeline() {
         setGoals(goalsWithScore);
       } catch (err) {
         console.error("Timeline Error:", err);
+        setError('The match could not be loaded. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -96,6 +104,7 @@ export default function MatchTimeline() {
     return <Loader text="Loading Match Data..." fullScreen />;
   }
 
+  if (error) return <div className="min-h-screen bg-[#0F0E13] p-8 text-center text-red-300" role="alert">{error}</div>;
   if (!matchData) return null;
 
   return (
@@ -115,6 +124,9 @@ export default function MatchTimeline() {
           <div className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-6 sm:mb-8 flex items-center gap-2">
             <Clock size={14} /> 
             {matchData.status === 'live' ? `LIVE • ${matchData.minute}'` : matchData.status}
+            {matchData.result_kind && matchData.result_kind !== 'played' && (
+              <span className="ml-2 rounded bg-amber-500/20 px-2 py-0.5 text-amber-300" title={matchData.result_reason || ''}>{matchData.result_kind} awarded</span>
+            )}
           </div>
 
           <div className="flex items-center justify-center w-full gap-3 sm:gap-6">
@@ -145,13 +157,25 @@ export default function MatchTimeline() {
         <div className="space-y-6 mt-12">
           {goals.length === 0 ? (
              <div className="bg-[#1A1820] rounded-2xl p-8 border border-white/5 text-center text-zinc-600 font-bold uppercase tracking-widest text-sm">
-               No goals recorded yet.
+               {matchData.result_kind && matchData.result_kind !== 'played' ? `Result awarded: ${matchData.result_reason || matchData.result_kind}` : 'No goals recorded yet.'}
              </div>
           ) : (
             <div className="flex flex-col gap-8">
               {goals.map((goal, idx) => {
                 const isHome = goal.team_id === matchData.home_team_id;
                 const teamName = isHome ? matchData.home?.name : matchData.away?.name;
+
+                if (goal.isCard) {
+                  return (
+                    <div key={goal.id || idx} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#1A1820] p-4" data-testid="timeline-card">
+                      <span className={`h-6 w-4 rounded-sm ${goal.kind === 'red' ? 'bg-red-500' : 'bg-yellow-400'}`} aria-hidden="true" />
+                      <div className="flex-1">
+                        <p className="font-black uppercase tracking-tight">{goal.kind === 'red' ? 'Red card' : 'Yellow card'} · {goal.playerName}</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">{teamName} • {goal.minute ?? '?'}'</p>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div key={goal.id || idx} className="rounded-xl overflow-hidden border border-white/10 shadow-2xl animate-fade-up">
@@ -162,7 +186,7 @@ export default function MatchTimeline() {
                       <h4 className="text-lg sm:text-xl font-black uppercase tracking-widest text-zinc-100">
                         {goal.is_own_goal ? "OWN GOAL!!!" : "GOOOAAALLL!!!"}
                       </h4>
-                      <span className="text-sm font-black text-zinc-400">{goal.minute}'</span>
+                      <span className="text-sm font-black text-zinc-400">{goal.minute ?? '?'}'</span>
                     </div>
 
                     {/* Middle Strip - Running Match Score */}
