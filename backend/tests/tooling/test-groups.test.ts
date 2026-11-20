@@ -94,6 +94,7 @@ describe('groups.json', () => {
     expect(config.groups['api-services'].covers).toContain('backend/lib/storage.ts');
     expect(config.groups['api-services'].covers).toContain('backend/app/api/admin/newsletter/image/**');
     expect(config.groups['api-services'].covers).not.toContain('backend/app/api/admin/newsletter/upload-url/**');
+    expect(config.groups['api-services'].covers).toContain('backend/app/api/wc/flair/**');
     expect(needsLocalDatabase(['api-services'], config)).toBe(true);
     const workspace = readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8');
     expect(workspace).toMatch(/^\s+- api$/m);

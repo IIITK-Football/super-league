@@ -49,7 +49,6 @@ const ELEVATED: Record<string, string> = {
   'app/api/wc/teams/route.ts': 'to downscope',
   'app/api/wc/players/route.ts': 'to downscope',
   'app/api/wc/champion-predictors/route.ts': 'to downscope',
-  'app/api/wc/flair/route.ts': 'to downscope; trusts a client user_id',
   'app/api/wc/predictions/awards/route.ts': 'to downscope',
   'app/api/wc/predictions/groups/route.ts': 'to downscope; trusts a client user_id',
   'app/api/wc/predictions/knockouts/route.ts': 'to downscope',
