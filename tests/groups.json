@@ -485,16 +485,42 @@
       ]
     },
     "api-services": {
-      "description": "Backend API services and contracts",
+      "description": "The Hono API Worker: the mounted route table, the session check before writes (PATCH included), rate limits, retired routes answering 404, and the shared runtime-neutral handlers it serves, run against the local Auth and Data API",
       "owner": "backend",
-      "status": "pending",
-      "pendingFor": "SL-026/SL-030",
+      "requiresLocalDb": true,
       "paths": [
+        "api/**",
         "backend/app/api/**",
         "backend/index.js",
         "backend/lib/**"
       ],
-      "run": []
+      "run": [
+        {
+          "cwd": "api",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "tsc",
+            "--noEmit"
+          ]
+        },
+        {
+          "cwd": "api",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run"
+          ]
+        }
+      ],
+      "covers": [
+        "api/**",
+        "backend/lib/http.ts"
+      ],
+      "testPaths": [
+        "api/test/**"
+      ]
     },
     "match-operations": {
       "description": "Canonical match events: live scoring by an assigned scorer, corrections and voids, awarded results, derived scores, standings and statistics, and the live tab, against the local Auth and Data API (allowed and denied cases)",

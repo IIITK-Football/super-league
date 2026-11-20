@@ -1,0 +1,6 @@
+# Copy to api/.dev.vars for `pnpm --dir api dev` (git-ignored). Local values only:
+# `pnpm exec supabase status` (in backend/) prints the local URL and keys.
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SECRET_KEY=
+SL_ENVIRONMENT=local
