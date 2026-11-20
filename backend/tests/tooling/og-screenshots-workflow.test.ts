@@ -41,6 +41,12 @@ describe('og-screenshots workflow', () => {
     expect(on).toMatch(/workflow_dispatch:/);
   });
 
+  it('uploads to production R2 only from main: a manual dispatch from another branch runs nothing', () => {
+    const job = text.slice(text.indexOf('snapshot-and-sync:'));
+    expect(job).toMatch(/^\s+if: github\.ref == 'refs\/heads\/main'\s*$/m);
+    expect(job.indexOf("if: github.ref == 'refs/heads/main'")).toBeLessThan(job.indexOf('steps:'));
+  });
+
   it('captures the home page deterministically: the Super League slide, with the carousel paused', () => {
     expect(script).toMatch(/Show Super League/);
     expect(script).toMatch(/Pause carousel video/);
