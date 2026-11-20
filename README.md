@@ -6,7 +6,7 @@
 **Super League** is the official football league and fantasy prediction platform for the Indian Institute of Information Technology, Kottayam. Designed and built by three students, it is maintained by the open-source community and serves as the authoritative digital record for collegiate football at IIIT Kottayam.
 
 **Live Platform:** [super-league.pages.dev](https://super-league.pages.dev/)
-**Test Platform:** [develop.super-league.pages.dev](https://develop.super-league.pages.dev/)
+**Test Platform:** `develop.super-league.pages.dev` (staging; access is restricted to the core team)
 
 
 ---
@@ -41,7 +41,7 @@ The platform is maintained by the Super League Core Team and community contribut
 
 ## Contributing
 
-Super League operates under a **Benevolent Dictator / Maintainer** governance model. To protect the integrity of the live platform, contributors do not have direct write access to `main` and are required to follow a fork-based workflow.
+Super League operates under a **Benevolent Dictator / Maintainer** governance model. To protect the integrity of the live platform, contributors work in a fork and open pull requests into `develop`, which deploys to staging; only the maintainer releases `develop` to `main` (production).
 
 For local setup instructions, branching conventions, and pull request standards, refer to the [Contributing Guide](CONTRIBUTING.md).
 
