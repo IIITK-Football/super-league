@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
           counts() {
-            psql "$URL" -X -Atc "SELECT (SELECT count(*) FROM public.matches) || ',' || (SELECT count(*) FROM public.teams) || ',' || (SELECT count(*) FROM public.players) || ',' || (SELECT count(*) FROM public.goals) || ',' || (SELECT count(*) FROM public.predictions) || ',' || (SELECT count(*) FROM public.wc_predictions) || ',' || (SELECT count(*) FROM auth.users)"
+            psql "$URL" -X -Atc "SELECT (SELECT count(*) FROM public.matches) || ',' || (SELECT count(*) FROM public.teams) || ',' || (SELECT count(*) FROM public.players) || ',' || (SELECT count(*) FROM public.match_events) || ',' || (SELECT count(*) FROM public.predictions) || ',' || (SELECT count(*) FROM public.wc_predictions) || ',' || (SELECT count(*) FROM auth.users)"
           }
           before="$(counts)"
           psql "$URL" -X -q -v ON_ERROR_STOP=1 -f backend/supabase/seed.sql
