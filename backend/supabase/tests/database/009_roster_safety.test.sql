@@ -102,7 +102,7 @@ SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.delete_unplayed_pl
 
 -- update_rostered_player ---------------------------------------------------------------------------------------
 CREATE TEMP TABLE _u AS
-SELECT pg_temp.new_player((SELECT id FROM public.team_entries WHERE season_id = (SELECT id FROM _s) ORDER BY id LIMIT 1), 'Save', 'Me', 94) AS p;
+SELECT pg_temp.new_player((SELECT entry FROM _pick), 'Save', 'Me', 94) AS p; -- the same entry as the own-goal player (jersey 96), so the clash below is deterministic
 GRANT SELECT ON _u TO authenticated;
 CREATE TEMP TABLE _um AS SELECT id FROM public.roster_memberships WHERE player_id = (SELECT p FROM _u);
 GRANT SELECT ON _um TO authenticated;
