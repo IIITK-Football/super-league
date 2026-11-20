@@ -24,7 +24,7 @@ describe('the legacy admin role grants nothing in the backend', () => {
   it('the scan covers the routes that used to accept it', () => {
     const scanned = files(join(backend, 'app/api')).map((f) => relative(backend, f));
     for (const route of ['app/api/admin/matches/live/route.ts', 'app/api/captain/team-branding/route.ts',
-      'app/api/admin/newsletter/route.ts', 'app/api/admin/newsletter/upload-url/route.ts']) {
+      'app/api/admin/newsletter/route.ts', 'app/api/admin/newsletter/image/route.ts']) {
       expect(scanned).toContain(route);
     }
   });
