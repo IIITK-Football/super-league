@@ -3,10 +3,11 @@ import { supabase } from '../lib/supabase';
 import { createAuthApi } from '../lib/authApi';
 import { COLLEGE_EMAIL_MESSAGE, isCollegeEmail } from '../lib/authRules';
 
-// The role the app acts on for a stored role: only the agreed roles count; anything else is an ordinary user.
-const KNOWN_ROLES = ['default', 'captain', 'editor', 'dictator'];
-export function appRole(stored) {
-  return KNOWN_ROLES.includes(stored) ? stored : 'default';
+// Roles are independent grants: captain, scorer, editor and dictator. A normal user holds none and no role implies
+// another. Only the agreed roles count; anything else in the list is ignored.
+const KNOWN_ROLES = ['captain', 'scorer', 'editor', 'dictator'];
+export function appRoles(stored) {
+  return Array.isArray(stored) ? KNOWN_ROLES.filter((r) => stored.includes(r)) : [];
 }
 
 const AuthContext = createContext({});
@@ -14,7 +15,8 @@ const AuthContext = createContext({});
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [role, setRole] = useState(null);
+  // null while loading; an array (possibly empty: a normal user) once known.
+  const [roles, setRoles] = useState(null);
   const [loading, setLoading] = useState(true);
   const authApi = useMemo(() => createAuthApi(supabase, { origin: window.location.origin }), []);
 
@@ -56,7 +58,7 @@ export function AuthProvider({ children }) {
     if (!session?.user) {
       setUser(null);
       setProfile(null);
-      setRole(null);
+      setRoles(null);
       setLoading(false);
       return;
     }
@@ -68,7 +70,7 @@ export function AuthProvider({ children }) {
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
-      setRole(null);
+      setRoles(null);
       setLoading(false);
       alert(`Access Denied: ${COLLEGE_EMAIL_MESSAGE}`);
       return;
@@ -78,12 +80,8 @@ export function AuthProvider({ children }) {
     setUser(user);
     const userProfile = await fetchProfile(user.id);
     setProfile(userProfile);
-    const { data: roleRecord } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    setRole(appRole(roleRecord?.role));
+    const { data: held } = await supabase.rpc('my_roles');
+    setRoles(appRoles(held));
     setLoading(false);
   };
 
@@ -92,12 +90,12 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
-    setRole(null);
+    setRoles(null);
     setLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, role, loading, ...authApi, signOut, setProfile }}>
+    <AuthContext.Provider value={{ user, profile, roles, hasRole: (r) => Boolean(roles?.includes(r)), loading, ...authApi, signOut, setProfile }}>
       {children}
     </AuthContext.Provider>
   );

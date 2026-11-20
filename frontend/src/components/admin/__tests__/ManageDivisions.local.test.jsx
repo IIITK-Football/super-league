@@ -59,8 +59,11 @@ async function signedInAs(role) {
   const { data, error } = await admin.auth.admin.createUser({ email, password: randomBytes(16).toString('hex'), email_confirm: true });
   if (error) throw error;
   users.push(data.user.id);
-  const roleWrite = await admin.from('user_roles').upsert({ user_id: data.user.id, role }, { onConflict: 'user_id' });
-  if (roleWrite.error) throw roleWrite.error;
+  // A normal user ('default') holds no grant.
+  if (role !== 'default') {
+    const roleWrite = await admin.from('user_roles').upsert({ user_id: data.user.id, role }, { onConflict: 'user_id,role', ignoreDuplicates: true });
+    if (roleWrite.error) throw roleWrite.error;
+  }
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   if (link.error) throw link.error;
   const client = createClient(conn.url, conn.publishable, opts);

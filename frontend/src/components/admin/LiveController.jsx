@@ -4,8 +4,10 @@ import { API_BASE_URL } from '../../lib/api';
 import { Activity, Trophy, CheckCircle, CheckCircle2, X, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { DivisionSwitch } from './DivisionSwitch';
+import { useAuth } from '../../context/AuthContext';
 
 export default function LiveController() {
+  const { hasRole } = useAuth();
   const [division, setDivision] = useState('super-league');
   const { data: resp, refetch } = useApi(`/admin/matches?status=live,scheduled&division=${division}`);
   const { data: playersResp } = useApi(`/players?division=${division}`); // the selected division's current season roster 
@@ -188,7 +190,9 @@ export default function LiveController() {
           </button>
         )) : (
           <div className="col-span-1 md:col-span-2 text-center py-12 border border-white/5 rounded-2xl bg-black/20">
-            <span className="text-zinc-500 font-bold uppercase tracking-widest text-sm">No active or scheduled matches found</span>
+            <span className="text-zinc-500 font-bold uppercase tracking-widest text-sm">
+              {hasRole('dictator') ? 'No active or scheduled matches found' : 'No matches assigned to you in this division'}
+            </span>
           </div>
         )}
       </div>

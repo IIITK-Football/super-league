@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 // Group: frontend-components. Access control finds accounts through the dictator-only account directory: labels are
 // the directory's (verified email with the name as context), never a profile email or raw id; search is debounced and
-// only the newest answer is shown; loading, no-match and error-with-retry states; only the agreed roles are offered.
+// only the newest answer is shown; loading, no-match and error-with-retry states; roles are independent grants (one
+// checkbox per role), granted and removed one at a time, with a hint when a captain or scorer grant has no assignment.
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = { accounts: [], calls: [], fail: null, slow: null, writes: [] };
+const db = { accounts: [], calls: [], fail: null, slow: null, writes: [], removed: [], assignments: { captain_assignments: [], scorer_assignments: [] }, writeError: null };
 const directory = async (args) => {
   db.calls.push(args);
   if (db.slow && args.p_query === db.slow) await new Promise((r) => setTimeout(r, 400));
@@ -16,31 +17,36 @@ const directory = async (args) => {
 vi.mock('../../../lib/supabase', () => ({
   supabase: {
     rpc: (name, args) => (name === 'account_directory' ? directory(args) : Promise.resolve({ data: null, error: { message: 'unexpected' } })),
-    from: () => ({ upsert: async (row) => { db.writes.push(row); return { error: null }; } }),
+    from: (table) => ({
+      select: async () => ({ data: db.assignments[table] ?? [], error: null }),
+      insert: async (row) => { db.writes.push(row); return { error: db.writeError }; },
+      delete: () => { const filters = {}; const chain = { eq: (k, v) => { filters[k] = v; return Object.keys(filters).length < 2 ? chain : Promise.resolve((db.removed.push({ ...filters }), { error: db.writeError })); } }; return chain; },
+    }),
   },
 }));
 const { default: ManageRoles } = await import('../ManageRoles');
 
 beforeEach(() => {
   db.accounts = [
-    { user_id: 'u1', label: 'Ada Lane (ada@iiitkottayam.ac.in)', role: 'default' },
-    { user_id: 'u2', label: 'Ada Lane (ada.l@iiitkottayam.ac.in)', role: 'captain' },
-    { user_id: 'me', label: 'boss@iiitkottayam.ac.in', role: 'dictator' },
+    { user_id: 'u1', label: 'Ada Lane (ada@iiitkottayam.ac.in)', roles: [] },
+    { user_id: 'u2', label: 'Ada Lane (ada.l@iiitkottayam.ac.in)', roles: ['captain', 'editor'] },
+    { user_id: 'me', label: 'boss@iiitkottayam.ac.in', roles: ['dictator'] },
   ];
-  db.calls = []; db.fail = null; db.slow = null; db.writes = [];
+  db.calls = []; db.fail = null; db.slow = null; db.writes = []; db.removed = []; db.writeError = null;
+  db.assignments = { captain_assignments: [], scorer_assignments: [] };
 });
 afterEach(cleanup);
 
 const rows = () => within(screen.getByRole('list', { name: 'Accounts' })).getAllByRole('listitem');
 
 describe('ManageRoles', () => {
-  it('lists accounts by their directory label, distinguishing same-name people, with only the agreed roles', async () => {
+  it('lists accounts by their directory label, with one checkbox per independent role', async () => {
     render(<ManageRoles currentUserId="me" />);
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(screen.getByText('3 accounts')).toBeTruthy();
-    const select = screen.getByLabelText('Role for Ada Lane (ada.l@iiitkottayam.ac.in)');
-    expect(select.value).toBe('captain');
-    expect(within(select).getAllByRole('option').map((o) => o.value)).toEqual(['default', 'captain', 'editor', 'dictator']);
+    const boxes = (label) => ['Captain', 'Scorer', 'Editor', 'Dictator'].map((r) => screen.getByLabelText(`${r} for ${label}`).checked);
+    expect(boxes('Ada Lane (ada.l@iiitkottayam.ac.in)')).toEqual([true, false, true, false]); // several grants at once
+    expect(boxes('Ada Lane (ada@iiitkottayam.ac.in)')).toEqual([false, false, false, false]); // a normal user holds none
     expect(document.body.textContent).not.toMatch(/\bu1\b|\bu2\b/);
   });
 
@@ -76,15 +82,37 @@ describe('ManageRoles', () => {
     await waitFor(() => expect(rows()).toHaveLength(3));
   });
 
-  it('changes a role and confirms it by the account label; keeps the dictator from demoting themself', async () => {
+  it('grants and removes one role at a time, confirms by the account label, and keeps the dictator from removing their own', async () => {
     render(<ManageRoles currentUserId="me" />);
     await waitFor(() => expect(rows()).toHaveLength(3));
-    fireEvent.change(screen.getByLabelText('Role for Ada Lane (ada@iiitkottayam.ac.in)'), { target: { value: 'editor' } });
-    expect(await screen.findByText('Role updated for Ada Lane (ada@iiitkottayam.ac.in).')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Editor for Ada Lane (ada@iiitkottayam.ac.in)'));
+    expect(await screen.findByText('Granted editor for Ada Lane (ada@iiitkottayam.ac.in).')).toBeTruthy();
     expect(db.writes).toEqual([{ user_id: 'u1', role: 'editor' }]);
-    expect(screen.getByLabelText('Role for Ada Lane (ada@iiitkottayam.ac.in)').value).toBe('editor');
-    fireEvent.change(screen.getByLabelText('Role for boss@iiitkottayam.ac.in'), { target: { value: 'default' } });
+    expect(screen.getByLabelText('Editor for Ada Lane (ada@iiitkottayam.ac.in)').checked).toBe(true);
+    fireEvent.click(screen.getByLabelText('Editor for Ada Lane (ada.l@iiitkottayam.ac.in)'));
+    expect(await screen.findByText('Removed editor for Ada Lane (ada.l@iiitkottayam.ac.in).')).toBeTruthy();
+    expect(db.removed).toEqual([{ user_id: 'u2', role: 'editor' }]);
+    expect(screen.getByLabelText('Captain for Ada Lane (ada.l@iiitkottayam.ac.in)').checked).toBe(true); // other grants untouched
+    fireEvent.click(screen.getByLabelText('Dictator for boss@iiitkottayam.ac.in'));
     expect(await screen.findByText(/cannot remove your own dictator access/i)).toBeTruthy();
-    expect(db.writes).toHaveLength(1);
+    expect(db.removed).toHaveLength(1);
+  });
+
+  it('shows the database message when a grant is refused, and does not change the box', async () => {
+    db.writeError = { message: 'new row violates row-level security policy for table "user_roles"' };
+    render(<ManageRoles currentUserId="me" />);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.click(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)'));
+    expect(await screen.findByText(/row-level security/)).toBeTruthy();
+    expect(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)').checked).toBe(false);
+  });
+
+  it('says when a captain or scorer grant has no assignment, and not when it has one', async () => {
+    db.assignments.captain_assignments = [{ user_id: 'u2' }];
+    render(<ManageRoles currentUserId="me" />);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(screen.queryByText(/Captain role without an assignment/)).toBeNull();
+    fireEvent.click(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)'));
+    expect(await screen.findByText(/Scorer role without an assignment/)).toBeTruthy();
   });
 });
