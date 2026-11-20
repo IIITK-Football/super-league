@@ -18,7 +18,9 @@ export async function withPlayers(f: Roles, w: Awaited<ReturnType<typeof world>>
 
 export async function cleanup(f: Roles, playerIds: string[] = []) {
   if (f.admin) {
+    // Matches first: a roster place with match history is kept, so it can only go once the events are gone.
     await f.admin.from('predictions').delete().in('match_id', f.made.matches);
+    for (const id of f.made.matches) await f.admin.from('matches').delete().eq('id', id);
     await f.admin.from('roster_memberships').delete().in('player_id', playerIds);
   }
   await cleanupRoles(f);
