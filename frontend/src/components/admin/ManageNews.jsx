@@ -29,51 +29,21 @@ export default function ManageNews() {
     setContentBlocks(blocks => blocks.filter(b => b.id !== id));
   };
 
-  // --- NEW R2 UPLOAD LOGIC ---
+  // Uploads one image through the API, which stores it in the news bucket and returns its public URL.
   const uploadImage = async (file) => {
     if (!file) return null;
-
-    try {
-      // Grab the user session to prove to the backend we are an admin
-      const { data: { session } } = await supabase.auth.getSession();
-
-      // 1. Ask the backend for a secure Cloudflare R2 upload ticket
-      const urlRes = await fetch(`${API_URL}/admin/newsletter/upload-url`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}` 
-        },
-        body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type
-        })
-      });
-
-      const { signedUrl, publicUrl } = await urlRes.json();
-
-      if (!signedUrl) throw new Error("Failed to get R2 upload URL");
-
-      // 2. Upload the file DIRECTLY to Cloudflare R2
-      const uploadRes = await fetch(signedUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type,
-        },
-      });
-
-      if (!uploadRes.ok) throw new Error("Failed to upload image to Cloudflare");
-
-      // 3. Return the final, public CDN link
-      return publicUrl;
-      
-    } catch (error) {
-      console.error("R2 Upload Error:", error);
-      throw error;
-    }
+    const { data: { session } } = await supabase.auth.getSession();
+    const body = new FormData();
+    body.append('image', file);
+    const res = await fetch(`${API_URL}/admin/newsletter/image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+      body,
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || !result.publicUrl) throw new Error(result.error || 'Could not upload the image.');
+    return result.publicUrl;
   };
-  // ---------------------------
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -121,7 +91,7 @@ export default function ManageNews() {
         alert(`Error: ${errData.message}`);
       }
     } catch (err) {
-      alert("Failed to publish. Check console.");
+      alert(err?.message ? `Failed to publish: ${err.message}` : "Failed to publish. Check console.");
       console.error(err);
     } finally {
       setLoading(false);

@@ -519,7 +519,7 @@
         "backend/lib/http.ts",
         "backend/lib/storage.ts",
         "backend/app/api/media/**",
-        "backend/app/api/admin/newsletter/upload-url/**"
+        "backend/app/api/admin/newsletter/image/**"
       ],
       "testPaths": [
         "api/test/**"
