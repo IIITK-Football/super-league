@@ -119,7 +119,10 @@ describe('schema inventory on the local database', () => {
     for (const name of ['ensure_domain_lock', 'ensure_domain_lock_on_email_change', 'on_auth_user_created', 'on_auth_user_verified_link_player']) {
       expect(triggers, name).toContain(`auth.users.${name}`);
     }
-    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(34);
+    // 36: the security hardening (SL-025) added the audit triggers on teams and newsletter.
+    expect(triggers).toContain('public.teams.audit_teams');
+    expect(triggers).toContain('public.newsletter.audit_newsletter');
+    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(36);
   });
 
   it('includes function bodies and security-definer settings used to judge drift', () => {
