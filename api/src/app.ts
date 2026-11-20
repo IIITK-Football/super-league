@@ -8,6 +8,7 @@ import { Hono } from 'hono';
 import { createClient } from '@supabase/supabase-js';
 import { routes, type RouteModule } from './routes';
 import { checkRateLimit } from '../../backend/lib/rate-limit';
+import { boundBucket, isMediaPurpose } from '../../backend/lib/storage';
 
 const METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -64,6 +65,18 @@ export function createApp() {
     if (!userId) return fail(401, 'Unauthorized: Middleware blocked request. Token missing or invalid.');
     if (!checkRateLimit(`admin_${userId}`, 100, 60_000).success) return fail(429, 'Too Many Requests (Admin Limit Reached)');
     return next();
+  });
+
+  // Local development only: emulated buckets have no public URL, so wrangler dev serves them here. Disabled
+  // everywhere else (staging and production browsers load media straight from the bucket's public URL).
+  app.get('/local-media/:purpose/*', async (c) => {
+    if (process.env.SL_ENVIRONMENT !== 'local') return fail(404, 'Not Found');
+    const purpose = c.req.param('purpose');
+    if (!isMediaPurpose(purpose)) return fail(404, 'Not Found');
+    const key = new URL(c.req.url).pathname.slice(`/api/local-media/${purpose}/`.length).split('/').map(decodeURIComponent).join('/');
+    const object = key ? await boundBucket(purpose)?.get?.(key) : null;
+    if (!object) return fail(404, 'Not Found');
+    return new Response(object.body, { headers: { 'Content-Type': object.httpMetadata?.contentType ?? 'application/octet-stream' } });
   });
 
   for (const [path, load] of routes) {

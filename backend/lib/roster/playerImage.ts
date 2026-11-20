@@ -1,7 +1,6 @@
 // Player portraits: validation and upload for the portrait route (captains and dictators).
-// The R2 client is created only when an image is uploaded, so routes that do not upload work without R2 settings.
+// Storage (the R2_PLAYERS binding) is needed only when an image is uploaded, so routes that do not upload work without it.
 // Keys are the player's id (players/<id>.png); existing portraits and their URLs are never touched.
-import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { keys, StorageError, storageFor } from '@/lib/storage';
 
 export const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -39,7 +38,7 @@ export function portraitKey(playerId: string): string {
 
 export async function uploadPortrait(key: string, buffer: Buffer): Promise<string> {
   const store = storage();
-  await store.client().send(new PutObjectCommand({ Bucket: store.bucket, Key: key, Body: buffer, ContentType: 'image/png', CacheControl: 'public, max-age=3600' }));
+  await store.put(key, buffer, 'image/png');
   return store.publicUrl(key);
 }
 

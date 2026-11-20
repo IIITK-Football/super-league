@@ -4,15 +4,4 @@ SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
 SL_ENVIRONMENT=local
-# Media storage (optional locally; uploads answer 503 until set). Staging buckets and a staging-only R2 token only:
-# the Worker refuses any bucket not named sl-staging-* or sl-local-* and any production media host.
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
-MEDIA_NEWS_BUCKET=
-MEDIA_NEWS_PUBLIC_URL=
-MEDIA_PLAYERS_BUCKET=
-MEDIA_PLAYERS_PUBLIC_URL=
-MEDIA_LOGOS_BUCKET=
-MEDIA_LOGOS_PUBLIC_URL=
-MEDIA_VIDEO_PUBLIC_URL=
+# Media: wrangler dev emulates the R2 bindings and the local public bases (api/wrangler.jsonc); no R2 credentials.
