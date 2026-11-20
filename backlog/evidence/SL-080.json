@@ -1,9 +1,9 @@
 {
-  "head": "070642f8e9e46f3fab57193a9c2670828c57a505",
-  "tree": "6b450503c69ad9699c34f28761c60f98fa235c26",
+  "head": "260d1a61d019751764df8ad6850f47ef133b3280",
+  "tree": "037964879f4752bd00d1a485808d4285de4c13cb",
   "clean": true,
   "dryRun": false,
-  "at": "2026-11-20T05:44:57.536Z",
+  "at": "2026-11-20T05:45:28.355Z",
   "groups": [
     {
       "name": "tooling",
@@ -14,7 +14,7 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/tooling",
           "exit": 0,
-          "ms": 13920
+          "ms": 12847
         }
       ]
     },
@@ -27,7 +27,7 @@
           "cwd": ".",
           "cmd": "bash scripts/local-db.sh test",
           "exit": 0,
-          "ms": 3312
+          "ms": 3225
         }
       ]
     }
