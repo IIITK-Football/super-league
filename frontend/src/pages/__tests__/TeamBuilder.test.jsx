@@ -223,4 +223,13 @@ describe('TeamBuilder on season rosters', () => {
     await new Promise((r) => setTimeout(r, 120));
     expect(screen.queryByRole('button', { name: /Wrong Team/ })).toBeNull();
   });
+
+  it('a captain whose team has no roster yet can still edit the team\'s details', async () => {
+    seed({ roster: false });
+    renderBuilder();
+    expect(await screen.findByText(/forming the player roster/i)).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: /edit team details/i }));
+    expect((await screen.findByLabelText('Team name')).value).toBe('Alpha');
+    expect(screen.getByLabelText('Short name')).toBeTruthy();
+  });
 });
