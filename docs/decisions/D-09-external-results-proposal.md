@@ -1,77 +1,32 @@
-# D-09 proposal: external fixture and score imports
+# D-09 proposal: an outbound fixtures and results feed
 
-Status: **proposal, open**. The owner resolves D-09 before SL-063 starts (Phase 6). Drafted 2026-11-18. This proposal picks no vendor.
+Status: **proposal, open on consumer access.** Reframed 2026-11-20 by the owner: Super League **provides** fixture and result data for other websites to consume. It does not import from Be.tech or any other fixture provider, and the earlier inbound-adapter proposal is withdrawn. Blocks SL-063 (Phase 6).
 
 ## 1. Current state
-- **No integration exists.** There is no provider code, external identifier, import table or job.
-- **Be.tech was an example,** not a committed provider (SL-063).
-- **Matches today** have a schedule (`date`, `venue`, `status`) and score caches with no source column. `audit_matches` and `audit_goals` record changes.
-- **Target model (D-08 proposal):**
-  - the score derives from `match_events` (client ids, versions, voiding);
-  - the API never accepts an absolute score for a played match;
-  - a goal with no player is an unattributed goal.
-- **Scorer workflow (SL-050):** idempotent queued actions, explicit conflict resolution, and never silently overwriting newer data.
+- No outbound feed exists. Public division data is served by the application's own routes (`/api/home/dashboard`, matches, standings), shaped for the current UI, and every route names a division by slug and a season by slug or id (`backend/lib/scope.ts`).
+- Matches carry a schedule, a score cache and, after SL-022, canonical events. Hidden and archived seasons are already hidden by row level security.
+- Writes stay entirely in the authorized scorer and dictator flows. The feed never writes.
 
-## 2. Options
-| | A: auto-apply | B: review everything | **C: auto-apply safe schedule changes, queue the rest** | D: no integration |
-|---|---|---|---|---|
-| Manual edit safety | poor | good | good | n/a |
-| Scorer effort | none | high | low | manual entry |
-| Fits D-08 (events only) | has to fake events | yes | yes | yes |
-| Needs a UI (R10) | no | yes | yes (small) | no |
+## 2. Proposed design (SL-063 delivers it)
+- **Contract:** versioned and read-only, under `/api/v1/feed/` (`divisions`, `seasons`, `fixtures`, `results`, `events`, `standings`). Only public, visible seasons. Stable ids (the match, team entry and season ids), ISO timestamps with a timezone, and a documented schema. Breaking changes mean a new version; the old one is announced as deprecated and kept for a stated window.
+- **Caching:** strong `ETag` and `Last-Modified`, `Cache-Control` with `s-maxage` and `stale-while-revalidate` at the Cloudflare edge, shorter for live matches; conditional requests return 304.
+- **Limits:** a per-consumer (or per-IP, if anonymous) rate limit with `429` and `Retry-After`, applied at the Worker.
+- **Privacy:** no account data. Player names and photos appear only if the owner decides event detail is public (below).
+- **Operations:** request logging by consumer, and a health check. Written once the SL-040 and SL-054 models (seasons, stages) are final.
 
-## 3. Recommendation: C, once the owner names a provider
-**Adapter contract.** Each provider's code lives in `adapters/<provider>/`, reads and normalises only, and never writes:
-```ts
-interface ResultsAdapter {
-  id: string;
-  fetchFixtures(window: { from: Date; to: Date }): Promise<ExtFixture[]>;
-  fetchResults(since: Date): Promise<ExtResult[]>;
-}
-// ExtFixture: externalMatchId, homeRef, awayRef, kickoff, venue?, status, revision?
-// ExtResult:  externalMatchId, status, homeGoals, awayGoals,
-//             events?: { externalEventId?, kind: 'goal'|'own_goal', teamRef, playerRef?, minute? }[]
-```
-A shared importer does the rest:
-- maps references through `external_links (provider, entity_kind, external_id) → internal id`, which a dictator confirms once;
-- writes proposals or changes, and logs every run.
+## 3. Access options (the owner decides)
+| | A. Public, anonymous | B. API keys issued by a dictator | C. Origin allowlist |
+|---|---|---|---|
+| Effort for consumers | none | request a key | none |
+| Server-to-server use | yes | yes | no (an origin header is spoofable) |
+| Attribution and revocation | no | yes | weak |
+| Higher limits for partners | no | yes | no |
+| Needs a minimal UI (R10) | no | yes (key management) | yes (list) |
 
-Replacing a provider means a new adapter and new links, with no change to the core models.
-
-**Precedence:**
-1. A manual edit by a scorer or dictator always wins.
-2. Any event a person created or edited is **confirmed**. Imports never update or void a confirmed event, and never void any event.
-3. Imported goals become `match_events` only after a person accepts them. The player is set only when the player link is confirmed; otherwise they go in as unattributed goals. Each records `source = 'import:<provider>'` and a source reference.
-4. A provider score higher than the derived score becomes proposed goal events. A lower score, or a match with manual events, raises a **conflict** for a person to resolve.
-5. Kickoff and venue apply automatically only if no person changed them since the last import; otherwise they are queued.
-6. A completed match is closed to imports; changes go only to the queue.
-
-**Idempotency:**
-- `external_links` is unique on (provider, kind, external_id).
-- Event ids are `uuidv5(provider|externalMatchId|externalEventId)`, or a hash of the event's fields when the provider has no event ids.
-- Payload hashes skip unchanged records.
-- `import_runs` records each run.
-
-**Review queue:**
-- `import_proposals` (fixture create/update, event add, score conflict; pending, accepted, rejected or superseded; who decided and when).
-- The assigned scorer or a dictator resolves a match's events and conflicts; a dictator creates fixtures.
-- A minimal list in the scorer workspace and the dictator dashboard (R10).
-- Accepting goes through the normal event API, so audit and "needs regrade" apply.
-
-**Operations:**
-- A Worker cron about every 5 minutes in match windows, hourly otherwise.
-- The provider key stays server-side.
-- Retries with backoff, pausing after repeated failures.
-- The provider is named next to imported data.
-
-**Deferral:** build nothing until a provider and its terms, cost and coverage are confirmed.
+**Recommendation:** A for the basic feed (the data is already public), plus optional keys (B) that raise the rate limit and identify partners. Not C.
 
 ## 4. Questions for the owner
-1. Is any provider approved now? **Default: none; defer SL-063.**
-2. Do manual edits always win, and do imports never overwrite or void a confirmed event? **Default: yes.**
-3. Must a person confirm imported goals before they count? **Default: yes.**
-4. May schedule changes apply automatically while no person has edited those fields? **Default: yes.**
-5. Who resolves the queue? **Default: the assigned scorer for events, a dictator for new fixtures.**
-6. Import only schedule and score, leaving cards and assists to people? **Default: yes.**
-7. Cadence? **Default: every 5 minutes in match windows, hourly otherwise.**
-8. If no provider is named by Phase 6, close SL-063 as deferred with this contract on record? **Default: yes.**
+1. Who may consume the feed: anonymous, keyed, or both? **Default: both, as recommended.**
+2. Are player names and goal and card events public, or only fixtures, scores and standings? **Default: events with player names, as the site already shows them.**
+3. Which divisions and seasons are included: every public season, or only the current one? **Default: every public season.**
+4. How long is a deprecated version kept? **Default: 6 months.**

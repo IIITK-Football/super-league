@@ -500,7 +500,7 @@
       "description": "Browser end-to-end flows (Playwright); scheduled/release runs only",
       "owner": "frontend",
       "status": "pending",
-      "pendingFor": "SL-100",
+      "pendingFor": "SL-099",
       "scheduledOnly": true,
       "paths": [
         "backend/app/**",

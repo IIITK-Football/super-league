@@ -38,3 +38,12 @@
 | Q6 legacy `admin` | Never ported (answered and done earlier) |
 | Q7 captain scoring their own team | Only with an explicit scorer assignment, with a dashboard warning |
 | Q8 scorer assignment expiry | Optional `expires_at`; required for SL-050 invitations |
+
+## Addendum (2026-11-20): when a captain assignment is writable, and branding scope
+Resolves how captains prepare a future season without touching past ones. Applies to SL-024, and later to SL-045 and SL-053.
+
+1. **Writable assignment.** A captain assignment grants writes while its season has `archived_at IS NULL`, its status is not `completed`, and the season is either current (`is_current`) or upcoming (status `planned` or `registration`). Entries of completed or archived seasons are read-only history. This replaces "active while its season is the current season" in point 3 of the decision.
+2. **Scope.** Roster-detail and lineup writes need a writable assignment for the exact `team_entry_id`; the allow-list in SL-003 is unchanged. A dictator keeps precedence everywhere (point 4).
+3. **Branding is team-level (owner decision).** A team's name, short name, logo and colours live on the shared `teams` row. Any captain with a writable assignment for one of that team's entries may edit them. Past seasons show the current branding, and the SL-027 history keeps the old values. No branding is copied onto `team_entries`.
+4. **Grant lapse.** The `captain` grant is removed when the person's last writable assignment is revoked, or when its season is completed or archived. This happens inside dictator-only lifecycle RPCs (`set_current_season` and the complete/archive RPC), audited, never through a trigger. Clients cannot write `seasons.status`, `is_current` or `archived_at` directly. Every other grant is kept.
+5. **Migration.** Assignments created from `team_registrations` whose season is no longer writable are kept as history, and their holders lose the `captain` grant if they have no writable assignment. The migration reports that list for the owner before the release (the clone rehearsal).
