@@ -36,6 +36,38 @@ export function stagingProblems(env, config) {
     problems.push('wrangler.jsonc env.staging.vars.SL_PRODUCTION_SUPABASE_REF must name the production project, so the Worker can refuse it.');
   }
   if (config?.name === STAGING_WORKER) problems.push('The top-level Worker name must not be the staging Worker (only --env staging deploys it).');
+  problems.push(...mediaProblems(staging));
+  return problems;
+}
+
+// Staging media: exactly the three bindings, each to an sl-staging-* bucket, and a public https base for each that
+// is not a production media host. The Worker has no R2 credentials, so these bindings are its only R2 access.
+export const STAGING_BUCKETS = { R2_NEWS: 'news-images', R2_PLAYERS: 'player-images', R2_LOGOS: 'team-logos' };
+// The read-only home video (MEDIA_BASE_VIDEO) may use the production intro host; write targets may not.
+const PRODUCTION_HOST = /^pub-(faaac762b0254fb88c3967f021ced499|156b66d0ff7841bc9601620610a8ebd3|b7d837d92cb644838cb24feef9b3329e|44b1a3890e2b40c4836f3a3c8e18f090|5fcbf3326b604a8284068a24252f1585)\.r2\.dev$/;
+
+export function mediaProblems(staging) {
+  const problems = [];
+  const buckets = staging?.r2_buckets ?? [];
+  const bindings = buckets.map((b) => b.binding).sort();
+  if (JSON.stringify(bindings) !== JSON.stringify(Object.keys(STAGING_BUCKETS).sort())) {
+    problems.push(`env.staging.r2_buckets must bind exactly ${Object.keys(STAGING_BUCKETS).join(', ')}.`);
+  }
+  for (const b of buckets) {
+    if (!/^sl-staging-[a-z0-9-]+$/.test(b.bucket_name ?? '')) problems.push(`Refusing ${b.binding} -> "${b.bucket_name}": staging may bind only sl-staging-* buckets.`);
+    if (b.preview_bucket_name || b.jurisdiction) problems.push(`${b.binding} must not set preview_bucket_name or jurisdiction.`);
+  }
+  for (const name of ['MEDIA_BASE_NEWS', 'MEDIA_BASE_PLAYERS', 'MEDIA_BASE_LOGOS', 'MEDIA_BASE_VIDEO']) {
+    let url = null;
+    try {
+      url = new URL(staging?.vars?.[name] ?? '');
+    } catch {
+      problems.push(`env.staging.vars.${name} must be the public https URL of its bucket.`);
+      continue;
+    }
+    if (url.protocol !== 'https:') problems.push(`env.staging.vars.${name} must use https.`);
+    if (name !== 'MEDIA_BASE_VIDEO' && PRODUCTION_HOST.test(url.host)) problems.push(`env.staging.vars.${name} points at a production media host.`);
+  }
   return problems;
 }
 
