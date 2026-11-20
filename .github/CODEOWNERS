@@ -1,0 +1,17 @@
+# Code owners (D-10, option C; SL-081). The last matching line wins, so the repository owner appears on every line.
+# Root shared files (package.json, tests/, docs/, backlog/, scripts/) and every gate-defining file stay owner-only.
+*                          @kevinmatheuu
+
+# Backend: the shared route handlers and database (Ebin), and the API Worker that serves them.
+/backend/                  @kevinmatheuu @ebinthomas06
+/api/                      @kevinmatheuu @ebinthomas06
+
+# Frontend: the React app and its Pages Functions (Abhinav).
+/frontend/                 @kevinmatheuu @AbhiKamp
+
+# Gate-defining files stay owner-only (docs/process/workflow.md), even inside the areas above.
+/backend/tests/tooling/    @kevinmatheuu
+/api/scripts/              @kevinmatheuu
+/.github/                  @kevinmatheuu
+/.claude/                  @kevinmatheuu
+/.githooks/                @kevinmatheuu
