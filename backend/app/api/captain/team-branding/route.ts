@@ -1,4 +1,3 @@
-import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { keys, StorageError, storageFor, type Storage } from '@/lib/storage';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
@@ -152,13 +151,7 @@ export async function POST(request: Request) {
       // One logo per team identity (shared by all its seasons), keyed by the team id; a version query string makes
       // a replaced logo show at once despite caching.
       uploadedKey = keys.teamLogo(registration.team_id);
-      await storage.client().send(new PutObjectCommand({
-        Bucket: storage.bucket,
-        Key: uploadedKey,
-        Body: buffer,
-        ContentType: 'image/png',
-        CacheControl: 'public, max-age=3600',
-      }));
+      await storage.put(uploadedKey, buffer, 'image/png');
       logoUrl = `${storage.publicUrl(uploadedKey)}?v=${Date.now()}`;
     }
 
@@ -171,7 +164,7 @@ export async function POST(request: Request) {
       if (uploadedKey && store) {
         try {
           const s: Storage = store;
-          await s.client().send(new DeleteObjectCommand({ Bucket: s.bucket, Key: uploadedKey }));
+          await s.delete(uploadedKey);
         } catch (cleanupError) {
           console.error('Could not clean up an unreferenced team logo:', cleanupError);
         }

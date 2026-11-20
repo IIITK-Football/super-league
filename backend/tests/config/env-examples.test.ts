@@ -32,13 +32,8 @@ describe.each(files)('%s', (rel) => {
     expect(text).not.toMatch(/\b0x4[0-9A-Za-z_-]{15,}/);
   });
 
-  it('names media storage by purpose, with no legacy R2 bucket or public-URL names', () => {
-    expect(text).not.toMatch(/^(R2_BUCKET_NAME|R2_FRESHERS_BUCKET_NAME|R2_LOGO_BUCKET|R2_PUBLIC_URL|R2_LOGO_PUBLIC_URL|NEXT_PUBLIC_\w*R2\w*)=/m);
-    if (rel === 'backend/.env.example') {
-      for (const name of ['MEDIA_NEWS_BUCKET', 'MEDIA_PLAYERS_BUCKET', 'MEDIA_LOGOS_BUCKET', 'MEDIA_VIDEO_PUBLIC_URL']) {
-        expect(vars.map((v) => v.name)).toContain(name);
-      }
-    }
+  it('holds no R2 credentials or bucket settings: media is reached only through the Worker R2 bindings', () => {
+    expect(vars.map((v) => v.name).filter((n) => /^(R2_|NEXT_PUBLIC_\w*R2|MEDIA_)/.test(n))).toEqual([]);
   });
 
   it('points Supabase at the local stack', () => {
