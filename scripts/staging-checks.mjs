@@ -405,7 +405,8 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const matchTwo = await makeMatch();
     const assignScorer = await dictatorCall('assign_scorer', { p_user: scorer.id, p_season: null, p_match: matchOne, p_expires_at: null });
     const scorerToken = await session(scorer);
-    const score = (token, id) => call(`/rest/v1/matches?id=eq.${id}`, { method: 'PATCH', key: PUBLISHABLE, token, prefer: 'return=representation', body: { home_score: 1 } });
+    // The clock and status stay with the scorer; the score is a cache of the match events and is never written directly.
+    const score = (token, id) => call(`/rest/v1/matches?id=eq.${id}`, { method: 'PATCH', key: PUBLISHABLE, token, prefer: 'return=representation', body: { minute: '5' } });
     const scoredOwn = await score(scorerToken, matchOne);
     const scoredOther = await score(scorerToken, matchTwo);
     record('A scorer updates the match assigned to them and no other match', assignScorer.ok && scoredOwn.ok && scoredOwn.data?.length === 1 && scoredOther.ok && scoredOther.data?.length === 0 ? 'PASS' : 'FAIL',
@@ -414,8 +415,17 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const normalWrite = await score(userToken, matchOne);
     record('A captain and a normal account cannot update a match', captainWrite.ok && captainWrite.data?.length === 0 && normalWrite.ok && normalWrite.data?.length === 0 ? 'PASS' : 'FAIL',
       `captain ${captainWrite.data?.length ?? message(captainWrite)} row(s), normal ${normalWrite.data?.length ?? message(normalWrite)} row(s)`);
-    const scorerGoal = await call('/rest/v1/goals', { method: 'POST', key: PUBLISHABLE, token: scorerToken, prefer: 'return=minimal', body: { match_id: matchTwo, team_id: teamA.team } });
+    const scorerGoal = await call('/rest/v1/match_events', { method: 'POST', key: PUBLISHABLE, token: scorerToken, prefer: 'return=minimal', body: { match_id: matchTwo, team_id: teamA.team, kind: 'goal' } });
     expectRefused('A scorer cannot add a goal to a match that is not assigned to them', scorerGoal, /row-level security|42501/i);
+    // The assigned scorer's unattributed goal moves the cached score; nobody can write the score directly.
+    const ownGoal = await call('/rest/v1/match_events', { method: 'POST', key: PUBLISHABLE, token: scorerToken, prefer: 'return=minimal', body: { match_id: matchOne, team_id: teamA.team, kind: 'goal' } });
+    const cached = await admin(`/rest/v1/matches?id=eq.${matchOne}&select=home_score,away_score`);
+    record('An assigned scorer records a goal and the cached score follows the events', ownGoal.ok && cached.data?.[0]?.home_score === 1 && cached.data?.[0]?.away_score === 0 ? 'PASS' : 'FAIL',
+      `goal ${ownGoal.ok ? 'recorded' : message(ownGoal)}, score ${cached.data?.[0]?.home_score ?? '?'}-${cached.data?.[0]?.away_score ?? '?'}`);
+    const directScore = await admin(`/rest/v1/matches?id=eq.${matchOne}`, { method: 'PATCH', prefer: 'return=minimal', body: { home_score: 9 } });
+    expectRefused('The score cannot be written directly, even with the server key', directScore, /score follows the match events/i);
+    const deleteEvent = await admin(`/rest/v1/match_events?match_id=eq.${matchOne}`, { method: 'DELETE', prefer: 'return=minimal' });
+    expectRefused('A match event cannot be deleted (it is voided)', deleteEvent, /voided, never deleted/i);
     const grantSelf = await call('/rest/v1/user_roles', { method: 'POST', key: PUBLISHABLE, token: scorerToken, prefer: 'return=minimal', body: { user_id: scorer.id, role: 'dictator' } });
     expectRefused('A scorer cannot grant themselves a role', grantSelf, /row-level security|42501/i);
 

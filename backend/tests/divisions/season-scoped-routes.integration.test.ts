@@ -65,17 +65,17 @@ beforeAll(async () => {
   insertLocal('roster_memberships', made.players.map((player_id, i) => ({ player_id, team_entry_id: rovers.id, season_id: next, jersey_number: i + 1 })));
   const { data: match } = must(await admin.from('matches').insert({
     home_team_id: made.teams[0], away_team_id: made.teams[1], season_id: next,
-    status: 'completed', home_score: 1, away_score: 0, date: '2027-02-01T12:00:00Z',
+    status: 'completed', date: '2027-02-01T12:00:00Z',
   }).select('id').single());
   made.matches = [match!.id];
-  must(await admin.from('goals').insert({ match_id: match!.id, team_id: made.teams[0], player_id: made.players[0], assist_id: made.players[1], minute: 10 }));
+  must(await admin.from('match_events').insert({ match_id: match!.id, team_id: made.teams[0], kind: 'goal', player_id: made.players[0], assist_player_id: made.players[1], minute: 10 }));
   must(await admin.from('division_flairs').upsert({ user_id: LAMB, division_id: wsl.id, team_name: 'Falcone Family' }));
 }, 60000);
 
 afterAll(async () => {
   if (!admin) return;
   await admin.from('division_flairs').delete().eq('user_id', LAMB).eq('division_id', wsl?.id ?? '');
-  for (const id of made.matches) await admin.from('matches').delete().eq('id', id); // goals cascade
+  for (const id of made.matches) await admin.from('matches').delete().eq('id', id); // its events go with it
   await admin.from('roster_memberships').delete().in('season_id', made.seasons);
   for (const id of made.players) await admin.from('players').delete().eq('id', id);
   await admin.from('team_entries').delete().in('season_id', made.seasons);

@@ -77,13 +77,13 @@ beforeAll(async () => {
   made.other = must(await as.dictator.db.rpc('create_player_for_account', {
     p_user: as.other.id, p_team_entry_id: entries[1], p_first_name: `${tag}Other`, p_last_name: 'Player',
   })).data;
-  made.match = must(await admin.from('matches').insert({ home_team_id: made.teams[0], away_team_id: made.teams[1], season_id: made.season, status: 'completed', home_score: 1, away_score: 0 }).select('id').single()).data!.id;
-  must(await admin.from('goals').insert({ match_id: made.match, team_id: made.teams[0], player_id: made.player, minute: 12 }));
+  made.match = must(await admin.from('matches').insert({ home_team_id: made.teams[0], away_team_id: made.teams[1], season_id: made.season, status: 'completed' }).select('id').single()).data!.id;
+  must(await admin.from('match_events').insert({ match_id: made.match, team_id: made.teams[0], kind: 'goal', player_id: made.player, minute: 12 }));
 }, 120000);
 
 afterAll(async () => {
   if (!admin) return;
-  if (made.match) { await admin.from('goals').delete().eq('match_id', made.match); await admin.from('matches').delete().eq('id', made.match); }
+  if (made.match) await admin.from('matches').delete().eq('id', made.match); // its events go with it
   await admin.from('roster_memberships').delete().eq('season_id', made.season);
   await admin.from('players').delete().in('id', [made.player, made.other].filter(Boolean));
   await admin.from('team_entries').delete().eq('season_id', made.season);
@@ -128,7 +128,7 @@ describe('one identity everywhere', () => {
   it('the linked, self-edited card is the same player in the roster, goals, season statistics and the public player page', async () => {
     const place = (await admin.from('roster_memberships').select('player:players ( id, image_url )').eq('team_entry_id', made.entry)).data;
     expect(place).toEqual([{ player: { id: made.player, image_url: `https://media.example/players/${made.player}.png` } }]);
-    expect((await admin.from('goals').select('player_id').eq('match_id', made.match)).data).toEqual([{ player_id: made.player }]);
+    expect((await admin.from('match_events').select('player_id').eq('match_id', made.match)).data).toEqual([{ player_id: made.player }]);
     const stats = (await admin.from('season_player_stats').select('player_id, goals').eq('season_id', made.season).eq('player_id', made.player)).data;
     expect(stats).toEqual([{ player_id: made.player, goals: 1 }]);
     const { GET } = await import('../../app/api/players/[player_id]/route');

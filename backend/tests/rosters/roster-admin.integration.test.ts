@@ -165,9 +165,9 @@ describe('a dictator manages players and season rosters', () => {
 
   it('keeps history: a roster place with goals, and a player who scored or assisted, cannot be removed', async () => {
     const helper = (await create('dictator', made.entries[1], `${tag}Helper`)).data as string;
-    const { data: match } = must(await admin.from('matches').insert({ home_team_id: made.teams[1], away_team_id: made.teams[0], season_id: made.seasons[0], status: 'completed', home_score: 1, away_score: 0 }).select('id').single());
+    const { data: match } = must(await admin.from('matches').insert({ home_team_id: made.teams[1], away_team_id: made.teams[0], season_id: made.seasons[0], status: 'completed' }).select('id').single());
     made.matches.push(match!.id);
-    must(await admin.from('goals').insert({ match_id: match!.id, team_id: made.teams[1], player_id: player, assist_id: helper, minute: 5 }));
+    must(await admin.from('match_events').insert({ match_id: match!.id, team_id: made.teams[1], kind: 'goal', player_id: player, assist_player_id: helper, minute: 5 }));
     const keep = await as.dictator.db.from('roster_memberships').delete().eq('id', place);
     expect(keep.error?.message).toMatch(/goals or assists this season/);
     const helperPlace = (await admin.from('roster_memberships').select('id').eq('player_id', helper).single()).data!.id;

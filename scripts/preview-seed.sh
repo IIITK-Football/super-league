@@ -59,7 +59,7 @@ if [ "$MODE" = "seed" ]; then
       SELECT 'teams' AS table_name, count(*) AS rows FROM public.teams
       UNION ALL SELECT 'players', count(*) FROM public.players
       UNION ALL SELECT 'matches', count(*) FROM public.matches
-      UNION ALL SELECT 'goals', count(*) FROM public.goals
+      UNION ALL SELECT 'match_events', count(*) FROM public.match_events
       UNION ALL SELECT 'predictions', count(*) FROM public.predictions
       UNION ALL SELECT 'newsletter', count(*) FROM public.newsletter
       UNION ALL SELECT 'wc_matches', count(*) FROM public.wc_matches

@@ -50,7 +50,7 @@ export async function GET(request: Request) {
 
         const { data: allMatches } = await supabase
             .from('matches')
-            .select('id, home_team_id, away_team_id, home_score, away_score, status, date, minute, home:teams!home_team_id(name), away:teams!away_team_id(name), goals ( player_id, team_id, minute, is_own_goal, player:players!goals_player_id_fkey ( first_name, last_name ) )')
+            .select('id, home_team_id, away_team_id, home_score, away_score, status, date, minute, home:teams!home_team_id(name), away:teams!away_team_id(name), match_events ( kind, player_id, team_id, minute, voided_at, player:players!match_events_player_id_fkey ( first_name, last_name ) )')
             .eq('season_id', seasonId)
             .order('date', { ascending: true }); // MUST BE ASCENDING FOR CORRECT FORM
 
@@ -123,17 +123,15 @@ export async function GET(request: Request) {
                 return teamData.name || 'TBD';
             };
 
-            const homeGoals = targetMatch.goals?.filter((g: any) => g.team_id === targetMatch.home_team_id).map((g: any) => ({
-                name: g.player?.first_name || g.player?.last_name || 'Unknown',
-                minute: g.minute,
-                isOwnGoal: g.is_own_goal
-            })) || [];
-
-            const awayGoals = targetMatch.goals?.filter((g: any) => g.team_id === targetMatch.away_team_id).map((g: any) => ({
-                name: g.player?.first_name || g.player?.last_name || 'Unknown',
-                minute: g.minute,
-                isOwnGoal: g.is_own_goal
-            })) || [];
+            // Goals and own goals of the match (voided events are corrections, never shown); an unattributed goal has no name.
+            const goalEvents = (targetMatch.match_events ?? []).filter((e: any) => !e.voided_at && (e.kind === 'goal' || e.kind === 'own_goal'));
+            const toGoal = (e: any) => ({
+                name: e.player?.first_name || e.player?.last_name || 'Unknown scorer',
+                minute: e.minute,
+                isOwnGoal: e.kind === 'own_goal'
+            });
+            const homeGoals = goalEvents.filter((e: any) => e.team_id === targetMatch.home_team_id).map(toGoal);
+            const awayGoals = goalEvents.filter((e: any) => e.team_id === targetMatch.away_team_id).map(toGoal);
 
             // Grab the exact form history we just calculated!
             const homeStanding = scoreboard[targetMatch.home_team_id];
