@@ -52,6 +52,26 @@
         "MEDIA_BASE_LOGOS": "https://pub-489c77c12df044fc9c0f0ce27758deca.r2.dev",
         "MEDIA_BASE_VIDEO": "https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev"
       }
+    },
+    // Production: deployed only by Cloudflare Workers Builds from main (api/scripts/deploy-production.mjs), reached only
+    // through the production Pages project service binding. Bound to the existing production buckets; their public
+    // r2.dev hosts serve media straight to browsers. Secrets (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY,
+    // SUPABASE_SECRET_KEY) are set on the Worker, never here.
+    "production": {
+      "name": "super-league-api",
+      "workers_dev": false,
+      "r2_buckets": [
+        { "binding": "R2_NEWS", "bucket_name": "news-images" },
+        { "binding": "R2_PLAYERS", "bucket_name": "player-images" },
+        { "binding": "R2_LOGOS", "bucket_name": "team-logos" }
+      ],
+      "vars": {
+        "SL_ENVIRONMENT": "production",
+        "MEDIA_BASE_NEWS": "https://pub-07c808f42c4640ceb3db8a0ef856e898.r2.dev",
+        "MEDIA_BASE_PLAYERS": "https://pub-2120148333e34c86923298628f99f20f.r2.dev",
+        "MEDIA_BASE_LOGOS": "https://pub-faaac762b0254fb88c3967f021ced499.r2.dev",
+        "MEDIA_BASE_VIDEO": "https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev"
+      }
     }
   }
 }
