@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   snapshot-and-sync:
+    # It writes to production R2, so it runs only for main: a manual dispatch from any other branch does nothing.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout Code
