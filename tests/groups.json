@@ -497,29 +497,97 @@
       "run": []
     },
     "match-operations": {
-      "description": "Scorer workspace, match events, cards, lineups, brackets, statistics",
+      "description": "Canonical match events: live scoring by an assigned scorer, corrections and voids, awarded results, derived scores, standings and statistics, and the live tab, against the local Auth and Data API (allowed and denied cases)",
       "owner": "backend",
-      "status": "pending",
-      "pendingFor": "SL-022/SL-050/SL-053/SL-054",
+      "requiresLocalDb": true,
       "paths": [
         "backend/app/api/matches/**",
         "backend/app/api/admin/matches/**",
-        "backend/app/api/standings/**"
+        "backend/app/api/standings/**",
+        "backend/lib/matchEvents.ts",
+        "backend/tests/match-operations/**",
+        "backend/supabase/migrations/*match_events*",
+        "backend/supabase/rehearsal/*match_events*",
+        "scripts/rehearse-match-events.mjs",
+        "frontend/src/components/admin/LiveController.jsx",
+        "frontend/src/components/MatchTimeline.jsx",
+        "frontend/src/components/admin/__tests__/LiveController*.test.jsx"
       ],
-      "run": []
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/match-operations"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "src/components/admin/__tests__/LiveController.test.jsx"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/app/api/matches/**",
+        "backend/app/api/admin/matches/**",
+        "backend/app/api/standings/**",
+        "backend/lib/matchEvents.ts",
+        "backend/supabase/migrations/*match_events*",
+        "backend/supabase/rehearsal/*match_events*",
+        "scripts/rehearse-match-events.mjs",
+        "frontend/src/components/admin/LiveController.jsx",
+        "frontend/src/components/MatchTimeline.jsx"
+      ],
+      "testPaths": [
+        "backend/tests/match-operations/**",
+        "frontend/src/components/admin/__tests__/LiveController*.test.jsx"
+      ]
     },
     "fantasy": {
-      "description": "Division fantasy and World Cup fantasy scoring and predictions",
+      "description": "Division fantasy grading from match events (dictator-only grade and regrade, needs-regrade flag, history breakdown); World Cup paths stay mapped here and are frozen (D-02)",
       "owner": "backend",
-      "status": "pending",
-      "pendingFor": "SL-022/SL-043",
+      "requiresLocalDb": true,
       "paths": [
         "backend/app/api/leaderboard/**",
         "backend/app/api/predictions/**",
+        "backend/app/api/admin/predictions/**",
         "backend/app/api/wc/**",
+        "backend/lib/grading.ts",
+        "backend/tests/fantasy/**",
+        "frontend/src/components/admin/GradePredictions.jsx",
         "worldcup2026_current_group_standings.json"
       ],
-      "run": []
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/fantasy"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/app/api/admin/predictions/**",
+        "backend/app/api/predictions/**",
+        "backend/lib/grading.ts",
+        "frontend/src/components/admin/GradePredictions.jsx"
+      ],
+      "testPaths": [
+        "backend/tests/fantasy/**"
+      ]
     },
     "frontend-components": {
       "description": "React components, hooks and pages (Vitest)",
