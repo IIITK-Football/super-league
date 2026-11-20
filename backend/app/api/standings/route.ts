@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { scopeFromUrl, seasonTeamIds } from '@/lib/scope';
@@ -91,7 +90,7 @@ export async function GET(request: Request) {
 
     standingsArray.forEach((team, index) => { team.rank = index + 1; });
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       message: "Data retrieved successfully",
       data: {

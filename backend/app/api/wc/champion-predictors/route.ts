@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,12 +30,12 @@ export async function GET() {
     // 3. Clean up the output to just be an array of names
     const predictorNames = profiles.map(p => p.name);
 
-    return NextResponse.json({
+    return Response.json({
         total_predictors: predictorNames.length,
         names: predictorNames
     });
 
   } catch (error: any) {
-     return NextResponse.json({ error: error.message }, { status: 500 });
+     return Response.json({ error: error.message }, { status: 500 });
   }
 }

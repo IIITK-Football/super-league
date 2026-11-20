@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 
 export async function GET() {
   // Grab the key from the secure environment variables
@@ -17,9 +16,9 @@ const url = `https://apiv3.apifootball.com/?action=get_events&from=${fromDate}&t
     const data = await response.json();
     
     // Return the JSON data to your frontend
-    return NextResponse.json(data);
+    return Response.json(data);
   } catch (error) {
     console.error("Error fetching match data:", error);
-    return NextResponse.json({ error: "Failed to fetch matches" }, { status: 500 });
+    return Response.json({ error: "Failed to fetch matches" }, { status: 500 });
   }
 }

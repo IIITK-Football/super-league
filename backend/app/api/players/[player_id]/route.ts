@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../../lib/errorHandler';
@@ -19,7 +18,7 @@ type SeasonRef = { id: string; slug: string; name: string; starts_on: string | n
 export async function GET(request: Request, { params }: { params: Promise<{ player_id: string }> }) {
   try {
     const { player_id } = await params;
-    if (!UUID.test(player_id)) return NextResponse.json({ success: false, error: 'Player not found' }, { status: 404 });
+    if (!UUID.test(player_id)) return Response.json({ success: false, error: 'Player not found' }, { status: 404 });
     const requestedSeason = new URL(request.url).searchParams.get('season_id');
 
     const { data: card, error } = await supabase
@@ -28,7 +27,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ play
       .eq('id', player_id)
       .maybeSingle();
     if (error) throw error;
-    if (!card) return NextResponse.json({ success: false, error: 'Player not found' }, { status: 404 });
+    if (!card) return Response.json({ success: false, error: 'Player not found' }, { status: 404 });
 
     const seasonSelect = 'id, slug, name, starts_on, division:divisions ( slug, name )';
     const [{ data: places, error: placesError }, { data: lines, error: linesError }] = await Promise.all([
@@ -82,7 +81,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ play
       assists: seasons.reduce((n, s) => n + s.assists, 0),
     };
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: {
         id: card.id,

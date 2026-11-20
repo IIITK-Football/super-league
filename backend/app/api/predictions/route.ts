@@ -1,9 +1,8 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { handleError } from '../../../lib/errorHandler';
 import { z } from 'zod';
+import { noCookies } from '@/lib/http';
 
 // 1. ZOD SCHEMA WITH ADVANCED MATH VALIDATION
 const predictionSchema = z.object({
@@ -26,7 +25,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = predictionSchema.parse(body);
 
-    const cookieStore = await cookies();
+    const cookieStore = noCookies;
     const supabase = createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
       cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
     });
@@ -53,7 +52,7 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw error;
-    return NextResponse.json({ success: true, message: "Prediction locked in!", data });
+    return Response.json({ success: true, message: "Prediction locked in!", data });
 
   } catch (error) {
     return handleError(error, "Submit Prediction");

@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { secretKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../../lib/errorHandler';
@@ -53,7 +52,7 @@ export async function GET(request: Request) {
     
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data: data || [] });
+    return Response.json({ success: true, data: data || [] });
   } catch (error: any) {
     console.error('Player search error:', error);
     return handleError(error, 'Fetch WC Players');

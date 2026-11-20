@@ -1,15 +1,14 @@
 export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
+import { noCookies } from '@/lib/http';
 
 export async function GET(request: Request) {
   try {
-    const cookieStore = await cookies();
+    const cookieStore = noCookies;
     
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
@@ -50,7 +49,7 @@ export async function GET(request: Request) {
       flair: flairByUser.get(p.id) || null
     }));
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: {
         scope: { division: scope.division, season: scope.season },

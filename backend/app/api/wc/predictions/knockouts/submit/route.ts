@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { secretKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 
@@ -18,14 +17,14 @@ const corsHeaders = {
 };
 
 export async function OPTIONS() {
-    return new NextResponse(null, { status: 200, headers: corsHeaders });
+    return new Response(null, { status: 200, headers: corsHeaders });
 }
 
 export async function POST(req: Request) {
     try {
         // 1. DEADLINE CHECK: Blocks any submissions after June 20th 11:59:59 PM IST
         if (new Date() > PREDICTION_DEADLINE) {
-            return NextResponse.json({ 
+            return Response.json({ 
                 success: false, 
                 error: 'Deadline passed. Predictions are locked.' 
             }, { status: 403, headers: corsHeaders });
@@ -36,7 +35,7 @@ export async function POST(req: Request) {
 
         // Basic validation
         if (!user_id || !predictions || !predictions.champion_id) {
-            return NextResponse.json({ success: false, error: "Missing required prediction data." }, { status: 400, headers: corsHeaders });
+            return Response.json({ success: false, error: "Missing required prediction data." }, { status: 400, headers: corsHeaders });
         }
 
         // The frontend now sends the exact arrays of integer IDs (16, 8, 4, 2)
@@ -56,10 +55,10 @@ export async function POST(req: Request) {
 
         if (error) throw error;
 
-        return NextResponse.json({ success: true, message: "Knockout predictions saved successfully!" }, { headers: corsHeaders });
+        return Response.json({ success: true, message: "Knockout predictions saved successfully!" }, { headers: corsHeaders });
 
     } catch (error: any) {
         console.error("Submit Error:", error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
+        return Response.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
     }
 }

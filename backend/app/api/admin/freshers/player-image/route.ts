@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { isResponse, jsonError, requireUser, UUID } from '@/lib/roster/access';
 import { myRoles } from '@/lib/auth/roles';
 import { ImageError, portraitKey, readPortrait, uploadPortrait } from '@/lib/roster/playerImage';
@@ -42,10 +41,10 @@ export async function POST(request: Request) {
     const image = await readPortrait(form);
     if (!image) return jsonError('Choose a 500 x 500 PNG image.', 400);
     const imageUrl = await uploadPortrait(portraitKey(place.player_id), image);
-    return NextResponse.json({ success: true, imageUrl });
+    return Response.json({ success: true, imageUrl });
   } catch (error) {
     if (error instanceof ImageError) return jsonError(error.message, error.status);
     console.error('Player image upload failed:', error);
-    return NextResponse.json({ success: false, message: 'The player image could not be uploaded.' }, { status: 500 });
+    return Response.json({ success: false, message: 'The player image could not be uploaded.' }, { status: 500 });
   }
 }

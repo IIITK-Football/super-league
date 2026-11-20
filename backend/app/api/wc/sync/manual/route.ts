@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse } from 'next/server';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseServiceKey = secretKey(); 
@@ -25,7 +24,7 @@ export async function GET() {
 
     if (error) throw error;
 
-    return NextResponse.json({ 
+    return Response.json({ 
       success: true, 
       message: "Brazil squad update executed successfully!",
       affected_rows: data?.length || 0 
@@ -33,7 +32,7 @@ export async function GET() {
     
   } catch (error: any) {
     console.error("Manual Injection Error:", error);
-    return NextResponse.json({ 
+    return Response.json({ 
       error: "Failed to inject Brazil players", 
       details: error.message 
     }, { status: 500 });

@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { getOpponent } from '../../../lib/roundOf32';
@@ -24,7 +23,7 @@ const corsHeaders = {
 };
 
 export async function OPTIONS() {
-    return new NextResponse(null, { status: 200, headers: corsHeaders });
+    return new Response(null, { status: 200, headers: corsHeaders });
 }
 
 export async function POST(req: Request) {
@@ -33,7 +32,7 @@ export async function POST(req: Request) {
         const { user_id, advancing_third_place_groups } = body;
 
         if (!user_id || !advancing_third_place_groups || advancing_third_place_groups.length !== 8) {
-            return NextResponse.json({ success: false, error: "Invalid payload. Expected 8 third-place groups." }, { status: 400, headers: corsHeaders });
+            return Response.json({ success: false, error: "Invalid payload. Expected 8 third-place groups." }, { status: 400, headers: corsHeaders });
         }
 
         // 1. Fetch the user's GROUP STAGE predictions
@@ -78,10 +77,10 @@ export async function POST(req: Request) {
             };
         });
 
-        return NextResponse.json({ success: true, data: { round_of_32: roundOf32 } }, { headers: corsHeaders });
+        return Response.json({ success: true, data: { round_of_32: roundOf32 } }, { headers: corsHeaders });
 
     } catch (error: any) {
         console.error("Generator Error:", error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
+        return Response.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
     }
 }

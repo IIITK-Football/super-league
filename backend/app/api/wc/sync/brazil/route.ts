@@ -1,13 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse, NextRequest } from 'next/server';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseServiceKey = secretKey(); 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-export async function GET(request: NextRequest) {
-  const execute = request.nextUrl.searchParams.get('execute') === 'true';
+export async function GET(request: Request) {
+  const execute = new URL(request.url).searchParams.get('execute') === 'true';
   const teamId = 531; // Brazil
 
   // The official 26-man World Cup Squad
@@ -93,7 +92,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 4. Print out the beautiful summary to the screen
-    return NextResponse.json({
+    return Response.json({
       status: insertionResult,
       total_official_squad: officialSquad.length,
       currently_in_database: existingPlayers?.length || 0,
@@ -104,6 +103,6 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error("Smart Sync Error:", error);
-    return NextResponse.json({ error: "Failed to sync", details: error.message }, { status: 500 });
+    return Response.json({ error: "Failed to sync", details: error.message }, { status: 500 });
   }
 }

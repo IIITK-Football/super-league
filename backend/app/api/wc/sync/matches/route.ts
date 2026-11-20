@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse, NextRequest } from 'next/server'; // Added NextRequest
 
 // Added 'as string' to assure TypeScript these exist
 const supabaseUrl = process.env.SUPABASE_URL as string;
@@ -8,11 +7,11 @@ const supabaseServiceKey = secretKey();
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Added the type to the request parameter
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const apiKey = process.env.API_FOOTBALL_KEY as string;
@@ -44,10 +43,10 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, updated: data.length });
+    return Response.json({ success: true, updated: data.length });
     
   } catch (error) {
     console.error("Sync Error:", error);
-    return NextResponse.json({ error: "Failed to sync matches" }, { status: 500 });
+    return Response.json({ error: "Failed to sync matches" }, { status: 500 });
   }
 }   

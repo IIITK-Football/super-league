@@ -1,14 +1,13 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { handleError } from '../../../lib/errorHandler'; 
+import { noCookies } from '@/lib/http';
 
 export const dynamic = 'force-dynamic'; 
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
+    const cookieStore = noCookies;
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
       publishableKey(),
@@ -41,7 +40,7 @@ export async function GET() {
       .sort((a, b) => b.goalsScored - a.goalsScored || a.name.localeCompare(b.name))
       .slice(0, 10);
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       message: "Legends fetched successfully",
       data: data

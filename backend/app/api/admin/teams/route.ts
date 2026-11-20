@@ -1,13 +1,12 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
+import { noCookies } from '@/lib/http';
 
 // The Magic Fix for Middleware
 async function getSupabaseClient(request: Request) {
-  const cookieStore = await cookies();
+  const cookieStore = noCookies;
   const authHeader = request.headers.get('Authorization');
 
   return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
@@ -37,7 +36,7 @@ export async function POST(request: Request) {
     if (error) throw error;
     const { error: entryError } = await supabase.from('team_entries').insert({ team_id: data.id, season_id: scope.season.id });
     if (entryError) throw entryError;
-    return NextResponse.json({ success: true, message: "Team created successfully", data });
+    return Response.json({ success: true, message: "Team created successfully", data });
   } catch (error) {
     return handleError(error, "Admin Create Team");
   }
@@ -59,7 +58,7 @@ export async function DELETE(request: Request) {
       .eq('id', id);
 
     if (error) throw error;
-    return NextResponse.json({ success: true, message: "Team deleted successfully" });
+    return Response.json({ success: true, message: "Team deleted successfully" });
   } catch (error) {
     return handleError(error, "Admin Delete Team");
   }

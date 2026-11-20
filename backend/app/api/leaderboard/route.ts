@@ -1,8 +1,7 @@
-import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { handleError } from '../../../lib/errorHandler'; 
 import { resolveScope } from '@/lib/scope';
+import { noCookies } from '@/lib/http';
 
 // Turn off caching temporarily so you can test the Mens/Womens toggle instantly!
 export const revalidate = 0; 
@@ -12,7 +11,7 @@ export async function GET(request: Request) {
     // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
     const { searchParams } = new URL(request.url);
 
-    const cookieStore = await cookies();
+    const cookieStore = noCookies;
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_PUBLISHABLE_KEY!,
@@ -55,7 +54,7 @@ export async function GET(request: Request) {
     const topAssists = (assistRows ?? []).map(shape);
 
     // Send both lists neatly packaged together!
-    return NextResponse.json({
+    return Response.json({
       success: true,
       message: "Leaderboard fetched successfully",
       data: {

@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { secretKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 
@@ -16,7 +15,7 @@ const corsHeaders = {
 };
 
 export async function OPTIONS() {
-    return new NextResponse(null, { status: 200, headers: corsHeaders });
+    return new Response(null, { status: 200, headers: corsHeaders });
 }
 
 export async function GET(req: Request) {
@@ -24,7 +23,7 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const user_id = searchParams.get('user_id');
 
-        if (!user_id) return NextResponse.json({ success: false, error: "User ID required" }, { status: 400, headers: corsHeaders });
+        if (!user_id) return Response.json({ success: false, error: "User ID required" }, { status: 400, headers: corsHeaders });
 
         // 1. Fetch saved predictions
         const { data: savedBracket, error } = await supabase
@@ -34,7 +33,7 @@ export async function GET(req: Request) {
             .single();
 
         if (error || !savedBracket) {
-            return NextResponse.json({ success: true, data: null, message: "No knockout predictions found for this user." }, { status: 200, headers: corsHeaders });
+            return Response.json({ success: true, data: null, message: "No knockout predictions found for this user." }, { status: 200, headers: corsHeaders });
         }
 
         // 2. We must regenerate the base R32 bracket so the UI knows how to draw the starting positions!
@@ -55,7 +54,7 @@ export async function GET(req: Request) {
         const generatedBase = await generatorRes.json();
 
         // 3. Return the fully packaged state
-        return NextResponse.json({
+        return Response.json({
             success: true,
             data: {
                 advancing_third_place_groups: savedBracket.advancing_third_place,
@@ -71,6 +70,6 @@ export async function GET(req: Request) {
         }, { headers: corsHeaders });
 
     } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
+        return Response.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
     }
 }

@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse } from 'next/server';
 import { handleError } from '../../../../lib/errorHandler';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +19,7 @@ export async function GET() {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data: teams || [] });
+    return Response.json({ success: true, data: teams || [] });
   } catch (error: any) {
     console.error("Fetch Teams Error:", error);
     // Using your centralized error handler

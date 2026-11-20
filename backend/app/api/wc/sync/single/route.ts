@@ -1,24 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse, NextRequest } from 'next/server';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseServiceKey = secretKey(); 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   // Pass a secret to protect the route, plus the name and team_id
-  const searchParams = request.nextUrl.searchParams;
+  const searchParams = new URL(request.url).searchParams;
   const auth = searchParams.get('auth');
   const playerName = searchParams.get('name');
   const dbTeamId = searchParams.get('team_id');
 
   if (auth !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   if (!playerName || !dbTeamId) {
-    return NextResponse.json({ error: 'Missing ?name=PlayerName or &team_id=123' }, { status: 400 });
+    return Response.json({ error: 'Missing ?name=PlayerName or &team_id=123' }, { status: 400 });
   }
 
   try {
@@ -33,7 +32,7 @@ export async function GET(request: NextRequest) {
     const apiData = await response.json();
 
     if (!apiData.response || apiData.response.length === 0) {
-      return NextResponse.json({ error: "Player not found in API-SPORTS" }, { status: 404 });
+      return Response.json({ error: "Player not found in API-SPORTS" }, { status: 404 });
     }
 
     // Grab the best match
@@ -63,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ 
+    return Response.json({ 
       success: true, 
       message: `${playerData.name} safely added to DB!`,
       inserted_data: newPlayer
@@ -71,6 +70,6 @@ export async function GET(request: NextRequest) {
     
   } catch (error: any) {
     console.error("Single Sync Error:", error);
-    return NextResponse.json({ error: "Failed to add player", details: error.message }, { status: 500 });
+    return Response.json({ error: "Failed to add player", details: error.message }, { status: 500 });
   }
 }

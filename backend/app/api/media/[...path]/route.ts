@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +25,7 @@ function localMediaUrl(remoteUrl: URL, stream: string) {
 async function proxyMedia(request: Request, context: RouteContext) {
   const { path } = await context.params;
   const relativePath = getAllowedPath(path);
-  if (!relativePath) return NextResponse.json({ error: 'Media path not found' }, { status: 404 });
+  if (!relativePath) return Response.json({ error: 'Media path not found' }, { status: 404 });
 
   const upstreamUrl = `${videoBaseUrl}/${relativePath}`;
   const headers = new Headers();
@@ -35,7 +34,7 @@ async function proxyMedia(request: Request, context: RouteContext) {
 
   try {
     const response = await fetch(upstreamUrl, { headers, cache: 'no-store' });
-    if (!response.ok) return new NextResponse(null, { status: response.status });
+    if (!response.ok) return new Response(null, { status: response.status });
 
     const contentType = response.headers.get('content-type') || '';
     if (relativePath.endsWith('.m3u8') || contentType.includes('mpegurl')) {
@@ -57,7 +56,7 @@ async function proxyMedia(request: Request, context: RouteContext) {
         return localMediaUrl(resolved, stream) || line;
       }).join('\n');
 
-      return new NextResponse(rewritten, {
+      return new Response(rewritten, {
         headers: {
           'Content-Type': 'application/vnd.apple.mpegurl',
           'Cache-Control': 'public, max-age=30',
@@ -74,10 +73,10 @@ async function proxyMedia(request: Request, context: RouteContext) {
       const value = response.headers.get(header);
       if (value) responseHeaders.set(header, value);
     }
-    return new NextResponse(response.body, { status: response.status, headers: responseHeaders });
+    return new Response(response.body, { status: response.status, headers: responseHeaders });
   } catch (error) {
     console.error('Video proxy failed:', error);
-    return NextResponse.json({ error: 'Could not load this video' }, { status: 502 });
+    return Response.json({ error: 'Could not load this video' }, { status: 502 });
   }
 }
 
