@@ -1,0 +1,89 @@
+name: API Worker (staging)
+
+# Deploys the Hono API Worker (api/) to STAGING only, from develop. Production is never deployed by this workflow:
+# the production Worker is deployed once, by the owner, during the approved release (docs/release.md).
+#
+# GitHub environment "Worker Preview" (deployment branches: develop only) holds:
+#   secrets   CLOUDFLARE_API_TOKEN       a token limited to editing Workers scripts on this account (staging use only)
+#             CLOUDFLARE_ACCOUNT_ID
+#             STAGING_SUPABASE_URL, STAGING_SUPABASE_PUBLISHABLE_KEY, STAGING_SUPABASE_SECRET_KEY
+# The repository variable PRODUCTION_PROJECT_REF (already used by db-deploy.yml) lets the job refuse a production URL.
+# The Worker's runtime secrets are written from these on every deploy, so GitHub is their single source.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'api/**'
+      - 'backend/app/api/**'
+      - 'backend/lib/**'
+      - '.github/workflows/worker-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Worker Preview
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            backend/pnpm-lock.yaml
+            api/pnpm-lock.yaml
+
+      - name: Install (frozen lockfiles)
+        run: pnpm install --frozen-lockfile --filter ./api --filter ./backend
+
+      - name: Refuse anything but the staging project
+        env:
+          SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          PRODUCTION_PROJECT_REF: ${{ vars.PRODUCTION_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$PRODUCTION_PROJECT_REF" ]; then
+            echo "STAGING_SUPABASE_URL (environment secret) and PRODUCTION_PROJECT_REF (repository variable) must both be set."; exit 1
+          fi
+          case "$SUPABASE_URL" in
+            *"$PRODUCTION_PROJECT_REF"*) echo "Refusing: STAGING_SUPABASE_URL points at the production project."; exit 1 ;;
+          esac
+          echo "Target is not production: ok"
+
+      - name: Type-check the Worker
+        run: pnpm --dir api exec tsc --noEmit
+
+      - name: Deploy to staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --dir api exec wrangler deploy --env staging
+
+      - name: Write the Worker's runtime secrets (values never printed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.STAGING_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          f="$RUNNER_TEMP/worker-secrets.json"
+          node -e 'const k=["SUPABASE_URL","SUPABASE_PUBLISHABLE_KEY","SUPABASE_SECRET_KEY"];const o={};for(const n of k){if(!process.env[n])throw new Error(`missing ${n}`);o[n]=process.env[n]}require("fs").writeFileSync(process.argv[1],JSON.stringify(o))' "$f"
+          pnpm --dir api exec wrangler secret bulk "$f" --env staging
+          rm -f "$f"
