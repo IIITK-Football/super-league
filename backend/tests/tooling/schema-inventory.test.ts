@@ -85,8 +85,8 @@ describe('schema inventory on the local database', () => {
   it('reports what the migrations create in the public schema', () => {
     expect(by('table')).toHaveLength(31);
     expect(by('view')).toHaveLength(2);
-    expect(by('function')).toHaveLength(56);
-    expect(by('policy')).toHaveLength(50);
+    expect(by('function')).toHaveLength(63);
+    expect(by('policy')).toHaveLength(51);
     // the division and season model (20261119000000_divisions_and_seasons.sql)
     for (const t of ['divisions', 'seasons', 'section_types', 'season_sections', 'team_entries', 'division_flairs']) {
       expect(by('table').map((r) => r.object), t).toContain(`public.${t}`);
@@ -95,7 +95,7 @@ describe('schema inventory on the local database', () => {
     for (const t of ['legacy_division_map', 'polls', 'poll_options']) expect(by('table').map((r) => r.object), t).not.toContain(`public.${t}`);
     expect(by('view').map((r) => r.object).sort()).toEqual(['public.season_fantasy_points', 'public.season_player_stats']);
     // player identity and season rosters (20261124000000) replace the team-bound roster and the member table (20261125000000)
-    for (const t of ['roster_memberships', 'player_link_keys', 'player_email_migration_outcomes', 'legacy_roster_map', 'legacy_player_assist_counts']) {
+    for (const t of ['roster_memberships', 'player_link_keys', 'player_email_migration_outcomes', 'legacy_roster_map', 'match_events', 'match_event_migration_report']) {
       expect(by('table').map((r) => r.object), t).toContain(`public.${t}`);
     }
     expect(by('table').map((r) => r.object)).not.toContain('public.team_members');
@@ -119,7 +119,7 @@ describe('schema inventory on the local database', () => {
     for (const name of ['ensure_domain_lock', 'ensure_domain_lock_on_email_change', 'on_auth_user_created', 'on_auth_user_verified_link_player']) {
       expect(triggers, name).toContain(`auth.users.${name}`);
     }
-    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(29);
+    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(34);
   });
 
   it('includes function bodies and security-definer settings used to judge drift', () => {

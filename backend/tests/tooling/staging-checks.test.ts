@@ -155,10 +155,16 @@ function fakeStaging(opts: Opts = {}) {
       if (method === 'POST') {
         if (!asAdmin) return json(403, { code: '42501', message: 'new row violates row-level security policy for table "matches"' });
         const id = `mt${++n}`;
-        matchRows.set(id, { id, ...body });
+        matchRows.set(id, { id, home_score: 0, away_score: 0, ...body });
         return json(201, [{ id }]);
       }
+      if (method === 'GET') {
+        // The server key reads the cached score (select=home_score,away_score).
+        return json(200, [...matchRows.values()].filter((m) => !idEq || m.id === idEq).map((m) => ({ home_score: m.home_score, away_score: m.away_score })));
+      }
       if (method === 'PATCH') {
+        // The score is a cache of the match events: nobody writes it directly, the server key included.
+        if ('home_score' in (body ?? {}) || 'away_score' in (body ?? {})) return json(400, { code: '23514', message: 'The score follows the match events; record or correct a goal instead' });
         const changed = [...matchRows.values()].filter((m) => (!idEq || m.id === idEq) && canScore(m.id));
         for (const m of changed) Object.assign(m, body);
         return json(200, changed);
@@ -168,10 +174,16 @@ function fakeStaging(opts: Opts = {}) {
         return new Response(null, { status: 204 });
       }
     }
-    if (p === '/rest/v1/goals' && method === 'POST') {
+    if (p === '/rest/v1/match_events' && method === 'POST') {
       const caller = uid(headers.authorization);
       const ok = caller !== null && (roles.get(caller) === 'dictator' || (roles.get(caller) === 'scorer' && scorerOf.get(body.match_id)?.has(caller)));
-      return ok ? new Response(null, { status: 201 }) : json(403, { code: '42501', message: 'new row violates row-level security policy for table "goals"' });
+      if (!ok) return json(403, { code: '42501', message: 'new row violates row-level security policy for table "match_events"' });
+      const m = matchRows.get(body.match_id);
+      if (m && body.kind === 'goal') { if (body.team_id === m.home_team_id) m.home_score += 1; else m.away_score += 1; } // the score cache
+      return new Response(null, { status: 201 });
+    }
+    if (p === '/rest/v1/match_events' && method === 'DELETE') {
+      return json(403, { code: '42501', message: 'A match event is voided, never deleted' });
     }
     // Roster tables. The secret key without a user token administers; a user token gets RLS: public reads of cards
     // and rosters, nothing of private details, and writes for dictators only (none for the run's captains).

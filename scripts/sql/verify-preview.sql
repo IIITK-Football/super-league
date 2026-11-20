@@ -13,8 +13,9 @@ FROM (
   UNION ALL SELECT 4, 'every division has a live match in its current season',
          (SELECT count(DISTINCT s.division_id) FROM public.matches m JOIN public.seasons s ON s.id = m.season_id
           WHERE m.status = 'live' AND s.is_current) >= 3
-  UNION ALL SELECT 5, 'goals exist for completed matches',
-         (SELECT count(*) FROM public.goals) > 0
+  UNION ALL SELECT 5, 'match events exist and every cached score equals its events',
+         (SELECT count(*) FROM public.match_events) > 0
+         AND NOT EXISTS (SELECT 1 FROM public.matches m WHERE m.result_kind = 'played' AND m.home_score <> (SELECT count(*) FROM public.match_events e WHERE e.match_id = m.id AND e.voided_at IS NULL AND ((e.kind = 'goal' AND e.team_id = m.home_team_id) OR (e.kind = 'own_goal' AND e.team_id = m.away_team_id))))
   UNION ALL SELECT 6, 'no fixture match is duplicated (same season and same two teams)',
          NOT EXISTS (SELECT 1 FROM public.matches GROUP BY season_id, home_team_id, away_team_id HAVING count(*) > 1)
   UNION ALL SELECT 7, 'fixture dictator exists with the dictator role',

@@ -11,6 +11,7 @@ vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: 
 const tag = `fant${Date.now().toString(36)}`;
 let admin: SupabaseClient;
 let fan: { id: string; token: string };
+let dictator: { id: string; token: string };
 const made = { season: '', teams: [] as string[], entries: [] as string[], players: [] as string[], matches: [] as string[] };
 
 const must = <T extends { error: unknown }>(r: T): T => {
@@ -38,6 +39,13 @@ beforeAll(async () => {
   const link = must(await admin.auth.admin.generateLink({ type: 'magiclink', email }));
   const v = must(await c.anon().auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' }));
   fan = { id: created.data.user!.id, token: v.data.session!.access_token };
+  // Grading is a dictator's action: a second account holds the dictator grant.
+  const bossEmail = uniqueEmail('season-boss');
+  const boss = must(await admin.auth.admin.createUser({ email: bossEmail, email_confirm: true }));
+  must(await admin.from('user_roles').insert({ user_id: boss.data.user!.id, role: 'dictator' }));
+  const bossLink = must(await admin.auth.admin.generateLink({ type: 'magiclink', email: bossEmail }));
+  const bossSession = must(await c.anon().auth.verifyOtp({ token_hash: bossLink.data.properties!.hashed_token, type: 'magiclink' }));
+  dictator = { id: boss.data.user!.id, token: bossSession.data.session!.access_token };
   must(await admin.from('user_profiles').update({ nickname: `${tag}fan` }).eq('id', fan.id));
 
   const wsl = must(await admin.from('divisions').select('id').eq('slug', 'wsl').single()).data!;
@@ -55,8 +63,10 @@ beforeAll(async () => {
   ]);
   made.matches = must(await admin.from('matches').insert([
     { home_team_id: made.teams[0], away_team_id: made.teams[1], season_id: made.season, status: 'scheduled', date: '2027-03-01T12:00:00Z' },
-    { home_team_id: made.teams[1], away_team_id: made.teams[0], season_id: made.season, status: 'completed', home_score: 1, away_score: 0, date: '2027-02-01T12:00:00Z', scorers: [], assists: [] },
+    { home_team_id: made.teams[1], away_team_id: made.teams[0], season_id: made.season, status: 'completed', date: '2027-02-01T12:00:00Z' },
   ], { defaultToNull: false }).select('id')).data!.map((m) => m.id);
+  // The 1-0 comes from an event (the score is a cache of the match events): a goal whose scorer is not known.
+  must(await admin.from('match_events').insert({ match_id: made.matches[1], team_id: made.teams[1], kind: 'goal' }));
   must(await admin.from('predictions').insert({ user_id: fan.id, match_id: made.matches[1], predicted_home_score: 1, predicted_away_score: 0 }));
 }, 60000);
 
@@ -69,6 +79,7 @@ afterAll(async () => {
   for (const id of made.teams) await admin.from('teams').delete().eq('id', id);
   if (made.season) await admin.from('seasons').delete().eq('id', made.season);
   if (fan) await admin.auth.admin.deleteUser(fan.id);
+  if (dictator) await admin.auth.admin.deleteUser(dictator.id);
 }, 60000);
 
 describe('season rosters', () => {
@@ -109,7 +120,11 @@ describe('season fantasy', () => {
     const graded = await POST(new Request('http://localhost/api/admin/predictions/grade', {
       method: 'POST', headers: { Authorization: `Bearer ${fan.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: made.matches[1] }),
     }));
-    expect(graded.status).toBe(200);
+    expect(graded.status, 'a normal account cannot grade').toBe(403);
+    const asDictator = await POST(new Request('http://localhost/api/admin/predictions/grade', {
+      method: 'POST', headers: { Authorization: `Bearer ${dictator.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: made.matches[1] }),
+    }));
+    expect(asDictator.status).toBe(200);
     const { data: pred } = await admin.from('predictions').select('points_awarded, status').eq('match_id', made.matches[1]).single();
     expect(pred!.status).toBe('graded');
     expect(pred!.points_awarded).toBeGreaterThan(0);

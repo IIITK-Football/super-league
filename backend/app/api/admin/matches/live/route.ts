@@ -1,218 +1,170 @@
 import { NextResponse } from 'next/server';
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-import { handleError } from '../../../../../lib/errorHandler'; // Adjust path if needed
+import { handleError } from '../../../../../lib/errorHandler';
+import { callerClient } from '@/lib/roster/access';
+import { planScoreStep, parseEventInput, parseMinute, EVENT_KINDS, type EventRow } from '@/lib/matchEvents';
 
-// FIX 1: Add ': Request' to the parameter
-async function getSupabaseClient(request: Request) {
-  const cookieStore = await cookies();
-  const authHeader = request.headers.get('Authorization'); 
+// Live scoring on match events (D-08). Events are what happened; the score is a cache the database recomputes from
+// the non-voided events in the same transaction, so the route never writes a score. Authorization: a dictator or a
+// scorer assigned to the match (can_score), and every write runs as the caller, so row level security says the same.
+//
+// Actions (POST { match_id, action, ... }):
+//   add_event    { event: { id?, kind, team_id, player_id?, assist_player_id?, minute?, added_minute? } }
+//                idempotent on id: a replay returns the stored event, different content for the same id is a 409
+//   edit_event   { event_id, version, changes: { kind?, team_id?, player_id?, assist_player_id?, minute?, added_minute? } }
+//                the version is the one the client last saw; a mismatch is a 409 with the current event
+//   void_event   { event_id, version, reason }   removal is voiding: the event stays, with who and why
+//   score_step   { side: 'home' | 'away', delta: 1 | -1 }   +1 adds an unattributed goal; -1 voids the newest
+//                unattributed goal of that side, or answers 409 with the goals to choose from
+//   update_time, half_time, close_match   the clock and status
+const fail = (status: number, message: string, extra: Record<string, unknown> = {}) => NextResponse.json({ success: false, message, ...extra }, { status });
 
-  return createServerClient(
-    // FIX 2: Explicitly cast env variables as strings
-    process.env.SUPABASE_URL as string, 
-    publishableKey(), 
-    {
-      cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-      global: {
-        headers: {
-          Authorization: authHeader || '', 
-        },
-      },
-    }
-  );
+function mapDbError(error: { code?: string; message?: string }) {
+  if (error.code === '42501') return fail(403, 'Forbidden: you are not assigned to score this match.');
+  if (error.code === '23505') return fail(409, 'That event id is already used.');
+  if (error.code === '23514' || error.code === '23503' || error.code === '22P02' || error.code === '22003') {
+    const message = error.message ?? 'The event is not valid.';
+    return fail(/voided|awarded/i.test(message) ? 409 : 400, message);
+  }
+  return null;
 }
 
-// FIX 1: Add ': Request' to the parameter
+const EVENT_COLUMNS = 'id, match_id, team_id, kind, player_id, assist_player_id, minute, added_minute, version, source, created_at, updated_at, voided_at, void_reason';
+
+async function currentMatch(supabase: any, matchId: string) {
+  const { data } = await supabase.from('matches').select('id, home_team_id, away_team_id, home_score, away_score, status, minute, events_version, result_kind').eq('id', matchId).maybeSingle();
+  return data;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { match_id, action, player_id, team_id, minute } = body;
+    const { match_id, action } = body;
+    if (!match_id || !action) throw { status: 400, message: 'match_id and action are required.' };
 
-    if (!match_id || !action) {
-      throw { status: 400, message: "match_id and action are required." };
-    }
-
-    const supabase = await getSupabaseClient(request); 
-
-    // Security check
+    const supabase = await callerClient(request);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      throw { status: 401, message: "Unauthorized: Please log in." };
-    }
+    if (authError || !user) throw { status: 401, message: 'Unauthorized: Please log in.' };
 
     // A dictator, or a scorer with an unexpired assignment to this match or its season. A captain or a normal
     // account is refused, and the writes below also run as the caller, so row level security says the same.
     const { data: allowed, error: scoreErr } = await supabase.rpc('can_score', { p_match: match_id });
-    if (scoreErr) throw { status: 500, message: "Could not check scoring access." };
-    if (!allowed) {
-      throw { status: 403, message: "Forbidden: you are not assigned to score this match." };
-    }
+    if (scoreErr) throw { status: 500, message: 'Could not check scoring access.' };
+    if (!allowed) throw { status: 403, message: 'Forbidden: you are not assigned to score this match.' };
 
-    // Fetch the current state of the match
-    const { data: match, error: matchErr } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('id', match_id)
-      .single();
+    const match = await currentMatch(supabase, match_id);
+    if (!match) throw { status: 404, message: 'Match not found.' };
 
-    if (matchErr || !match) throw { status: 404, message: "Match not found." };
+    const done = async (message: string, extra: Record<string, unknown> = {}) => {
+      const fresh = await currentMatch(supabase, match_id);
+      return NextResponse.json({ success: true, message, match: fresh, ...extra });
+    };
+    const markLive = async () => {
+      if (match.status === 'scheduled') await supabase.from('matches').update({ status: 'live' }).eq('id', match_id);
+    };
 
-    // FIX 3: Tell TypeScript this object can hold any properties we add later
-    let updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-    let responseMessage = "Match updated.";
-
-    // THE ACTION SWITCHBOARD
     switch (action) {
-      case 'add_goal':
-        if (!player_id || !team_id) throw { status: 400, message: "player_id and team_id required for a goal." };
-        
-        const isHomePlayer = match.home_team_id === team_id;
-        
-        if (body.is_own_goal) {
-          updatePayload.home_score = !isHomePlayer ? (match.home_score || 0) + 1 : match.home_score;
-          updatePayload.away_score = isHomePlayer ? (match.away_score || 0) + 1 : match.away_score;
-          
-          const currentOwnGoals = match.own_goals || [];
-          updatePayload.own_goals = [...currentOwnGoals, player_id];
-          
-          responseMessage = "Own Goal registered! Point awarded to the opposition.";
-        } else {
-          updatePayload.home_score = isHomePlayer ? (match.home_score || 0) + 1 : match.home_score;
-          updatePayload.away_score = !isHomePlayer ? (match.away_score || 0) + 1 : match.away_score;
-          
-          const currentScorers = match.scorers || [];
-          updatePayload.scorers = [...currentScorers, player_id];
-
-          if (body.assist_id) {
-            const currentAssists = match.assists || [];
-            updatePayload.assists = [...currentAssists, body.assist_id];
-            // Assists are season statistics derived from the match (season_player_stats); nothing is counted on the player.
-          }
-          responseMessage = "Goal registered successfully!";
+      case 'add_event': {
+        const parsed = parseEventInput(body.event, match);
+        if (!parsed.ok) throw { status: 400, message: parsed.message };
+        const ev = parsed.event;
+        const { data: existing } = await supabase.from('match_events').select(EVENT_COLUMNS).eq('id', ev.id).maybeSingle();
+        if (existing) {
+          const same = existing.match_id === match_id && existing.kind === ev.kind && existing.team_id === ev.team_id
+            && (existing.player_id ?? null) === (ev.player_id ?? null) && (existing.assist_player_id ?? null) === (ev.assist_player_id ?? null)
+            && (existing.minute ?? null) === (ev.minute ?? null);
+          if (!same) return fail(409, 'That event id already holds a different event.', { event: existing });
+          return NextResponse.json({ success: true, message: 'Event already recorded.', replayed: true, event: existing, match: await currentMatch(supabase, match_id) });
         }
-        updatePayload.status = 'live';
-        
-        await supabase.from('goals').insert([{ 
-          match_id: match_id, 
-          player_id: player_id, 
-          team_id: team_id,
-          minute: body.minute || null,
-          assist_id: body.assist_id || null,
-          is_own_goal: body.is_own_goal || false
-        }]);
-        break;
-        
-      case 'add_assist':
-        if (!player_id) throw { status: 400, message: "player_id required for an assist." };
-        const currentAssists = match.assists || [];
-        updatePayload.assists = [...currentAssists, player_id];
-        responseMessage = "Assist registered successfully!";
-        break;
+        const { data, error } = await supabase.from('match_events').insert({ ...ev, match_id }).select(EVENT_COLUMNS).single();
+        if (error) return mapDbError(error) ?? Promise.reject(error);
+        if (ev.kind === 'goal' || ev.kind === 'own_goal') await markLive();
+        return done(ev.kind === 'yellow' || ev.kind === 'red' ? 'Card recorded.' : ev.player_id ? 'Goal recorded.' : 'Goal recorded; the scorer is not known yet.', { event: data });
+      }
 
-      case 'update_time':
-        updatePayload.status = 'live';
-        if (body.minute !== undefined) {
-          updatePayload.minute = body.minute;
+      case 'edit_event': {
+        if (!body.event_id || !Number.isInteger(body.version)) throw { status: 400, message: 'event_id and the version you last saw are required.' };
+        const parsed = parseEventInput({ ...(body.changes ?? {}), id: body.event_id }, match, { partial: true });
+        if (!parsed.ok) throw { status: 400, message: parsed.message };
+        const { id: _id, ...changes } = parsed.event as EventRow & { id: string };
+        if (!Object.keys(changes).length) throw { status: 400, message: 'Nothing to change.' };
+        const { data, error } = await supabase.from('match_events').update(changes).eq('id', body.event_id).eq('match_id', match_id).eq('version', body.version).select(EVENT_COLUMNS).maybeSingle();
+        if (error) return mapDbError(error) ?? Promise.reject(error);
+        if (!data) {
+          const { data: cur } = await supabase.from('match_events').select(EVENT_COLUMNS).eq('id', body.event_id).eq('match_id', match_id).maybeSingle();
+          if (!cur) throw { status: 404, message: 'Event not found.' };
+          return fail(409, 'This event changed since you loaded it. Review the current version and try again.', { event: cur });
         }
-        if (body.timer_start_time !== undefined) {
-          updatePayload.timer_start_time = body.timer_start_time;
-        }
-        if (body.timer_calibration !== undefined) {
-          updatePayload.timer_calibration = body.timer_calibration;
-        }
-        responseMessage = `Match clock synced to ${body.minute}`;
-        break;
+        return done('Event updated.', { event: data });
+      }
 
-      case 'half_time':
-        updatePayload.status = 'live'; 
-        updatePayload.minute = 'HT';
-        responseMessage = "Match paused for Half Time!";
-        break;
+      case 'void_event': {
+        if (!body.event_id || !Number.isInteger(body.version)) throw { status: 400, message: 'event_id and the version you last saw are required.' };
+        const reason = String(body.reason ?? '').trim();
+        if (!reason) throw { status: 400, message: 'A reason is required to void an event.' };
+        const { data, error } = await supabase.from('match_events')
+          .update({ voided_at: new Date().toISOString(), void_reason: reason })
+          .eq('id', body.event_id).eq('match_id', match_id).eq('version', body.version).is('voided_at', null).select(EVENT_COLUMNS).maybeSingle();
+        if (error) return mapDbError(error) ?? Promise.reject(error);
+        if (!data) {
+          const { data: cur } = await supabase.from('match_events').select(EVENT_COLUMNS).eq('id', body.event_id).eq('match_id', match_id).maybeSingle();
+          if (!cur) throw { status: 404, message: 'Event not found.' };
+          return fail(409, cur.voided_at ? 'This event is already voided.' : 'This event changed since you loaded it. Review the current version and try again.', { event: cur });
+        }
+        return done('Event voided and the score adjusted.', { event: data });
+      }
 
-      case 'close_match':
-        updatePayload.status = 'completed';
-        updatePayload.minute = 'FT';
+      case 'score_step': {
+        const { data: events } = await supabase.from('match_events').select(EVENT_COLUMNS).eq('match_id', match_id).is('voided_at', null);
+        const plan = planScoreStep((events ?? []) as EventRow[], match, body.side, body.delta);
+        if (!plan.ok) throw { status: 400, message: plan.message };
+        if (plan.action === 'choose') {
+          return fail(409, 'Every goal for that side has a scorer. Choose the goal to correct.', { candidates: plan.candidates });
+        }
+        if (plan.action === 'add') {
+          const { data, error } = await supabase.from('match_events').insert({ id: body.id ?? crypto.randomUUID(), match_id, team_id: plan.team_id, kind: 'goal', minute: parseMinute(body.minute).minute }).select(EVENT_COLUMNS).single();
+          if (error) return mapDbError(error) ?? Promise.reject(error);
+          await markLive();
+          return done('Goal added; the scorer is not known yet.', { event: data });
+        }
+        const { data, error } = await supabase.from('match_events')
+          .update({ voided_at: new Date().toISOString(), void_reason: 'Score corrected (-1)' })
+          .eq('id', plan.event_id).eq('match_id', match_id).is('voided_at', null).select(EVENT_COLUMNS).maybeSingle();
+        if (error) return mapDbError(error) ?? Promise.reject(error);
+        if (!data) return fail(409, 'That goal changed; try again.');
+        return done('The unattributed goal was voided and the score adjusted.', { event: data });
+      }
+
+      case 'update_time': {
+        const patch: Record<string, unknown> = { status: 'live' };
+        if (body.minute !== undefined) patch.minute = body.minute;
+        if (body.timer_start_time !== undefined) patch.timer_start_time = body.timer_start_time;
+        if (body.timer_calibration !== undefined) patch.timer_calibration = body.timer_calibration;
+        const { error } = await supabase.from('matches').update(patch).eq('id', match_id);
+        if (error) return mapDbError(error) ?? Promise.reject(error);
+        return done(`Match clock synced to ${body.minute}`);
+      }
+
+      case 'half_time': {
+        const { error } = await supabase.from('matches').update({ status: 'live', minute: 'HT' }).eq('id', match_id);
+        if (error) return mapDbError(error) ?? Promise.reject(error);
+        return done('Match paused for Half Time!');
+      }
+
+      case 'close_match': {
+        const patch: Record<string, unknown> = { status: 'completed', minute: 'FT' };
         if (body.home_penalties !== undefined && body.away_penalties !== undefined) {
-          updatePayload.home_penalties = body.home_penalties;
-          updatePayload.away_penalties = body.away_penalties;
+          patch.home_penalties = body.home_penalties;
+          patch.away_penalties = body.away_penalties;
         }
-        responseMessage = "Match officially closed! Ready for grading.";
-        break;
-      
-      case 'delete_goal':
-        if (!body.goal_id) throw { status: 400, message: "goal_id is required to delete." };
-
-        const { data: goalToDelete, error: goalFetchErr } = await supabase
-          .from('goals')
-          .select('*')
-          .eq('id', body.goal_id)
-          .single();
-
-        if (goalFetchErr || !goalToDelete) throw { status: 404, message: "Goal not found." };
-
-        const isHomeTeam = match.home_team_id === goalToDelete.team_id;
-
-        if (goalToDelete.is_own_goal) {
-          updatePayload.home_score = !isHomeTeam ? Math.max(0, (match.home_score || 0) - 1) : match.home_score;
-          updatePayload.away_score = isHomeTeam ? Math.max(0, (match.away_score || 0) - 1) : match.away_score;
-          
-          const ogIndex = (match.own_goals || []).indexOf(goalToDelete.player_id);
-          if (ogIndex > -1) {
-             const newOg = [...match.own_goals];
-             newOg.splice(ogIndex, 1);
-             updatePayload.own_goals = newOg;
-          }
-        } else {
-          updatePayload.home_score = isHomeTeam ? Math.max(0, (match.home_score || 0) - 1) : match.home_score;
-          updatePayload.away_score = !isHomeTeam ? Math.max(0, (match.away_score || 0) - 1) : match.away_score;
-          
-          const scorerIndex = (match.scorers || []).indexOf(goalToDelete.player_id);
-          if (scorerIndex > -1) {
-             const newScorers = [...match.scorers];
-             newScorers.splice(scorerIndex, 1);
-             updatePayload.scorers = newScorers;
-          }
-
-          if (goalToDelete.assist_id) {
-             const assistIndex = (match.assists || []).indexOf(goalToDelete.assist_id);
-             if (assistIndex > -1) {
-                const newAssists = [...match.assists];
-                newAssists.splice(assistIndex, 1);
-                updatePayload.assists = newAssists;
-             }
-          }
-        }
-
-        await supabase.from('goals').delete().eq('id', body.goal_id);
-        responseMessage = "Goal deleted and score adjusted.";
-        break;
-
-      case 'edit_goal':
-        throw { status: 501, message: "Edit is handled via deleting and re-adding currently. (For backend safety)" };
+        const { error } = await supabase.from('matches').update(patch).eq('id', match_id);
+        if (error) return mapDbError(error) ?? Promise.reject(error);
+        return done('Match officially closed! Ready for grading.');
+      }
 
       default:
-        throw { status: 400, message: "Unknown action type." };
+        throw { status: 400, message: `Unknown action type. Use one of add_event, edit_event, void_event, score_step, update_time, half_time, close_match (event kinds: ${EVENT_KINDS.join(', ')}).` };
     }
-
-    const { data: updatedMatch, error: updateErr } = await supabase
-      .from('matches')
-      .update(updatePayload)
-      .eq('id', match_id)
-      .select()
-      .single();
-
-    if (updateErr) throw updateErr;
-
-    return NextResponse.json({ 
-      success: true, 
-      message: responseMessage, 
-      data: updatedMatch 
-    });
-
   } catch (error) {
-    return handleError(error, "Live Match Controller");
+    return handleError(error, 'Live Match Update');
   }
 }

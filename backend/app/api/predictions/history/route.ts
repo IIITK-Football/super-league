@@ -6,6 +6,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
+import { actualPlayers, frequencyMap } from '@/lib/grading';
 
 async function getSupabaseClient(request: Request) {
   const cookieStore = await cookies();
@@ -19,16 +20,10 @@ async function getSupabaseClient(request: Request) {
   });
 }
 
-// Mirror of the grading logic — builds a frequency map for player-based scoring
-function getFrequencyMap(arr: string[] | null): Record<string, number> {
-  const map: Record<string, number> = {};
-  for (const item of (arr || [])) {
-    map[item] = (map[item] || 0) + 1;
-  }
-  return map;
-}
+// Grading logic lives in lib/grading.ts (events are the source); the breakdown here only explains the points.
+const getFrequencyMap = frequencyMap;
 
-function computeBreakdown(prediction: any, match: any) {
+function computeBreakdown(prediction: any, match: any, actual: { scorers: string[]; assists: string[] }) {
   const breakdown: { label: string; points: number; detail: string }[] = [];
 
   const predHome = prediction.predicted_home_score;
@@ -79,7 +74,7 @@ function computeBreakdown(prediction: any, match: any) {
 
   // Stage B: Scorers
   const predScorers = prediction.predicted_scorers || [];
-  const actScorers = match.scorers || [];
+  const actScorers = actual.scorers;
   const predScorerMap = getFrequencyMap(predScorers);
   const actScorerMap = getFrequencyMap(actScorers);
 
@@ -110,7 +105,7 @@ function computeBreakdown(prediction: any, match: any) {
 
   // Stage C: Assists
   const predAssists = prediction.predicted_assists || [];
-  const actAssists = match.assists || [];
+  const actAssists = actual.assists;
   const predAssistMap = getFrequencyMap(predAssists);
   const actAssistMap = getFrequencyMap(actAssists);
 
@@ -175,8 +170,7 @@ export async function GET(request: Request) {
           away_score,
           date,
           status,
-          scorers,
-          assists,
+          match_events(kind, player_id, assist_player_id, voided_at),
           home:teams!home_team_id(id, name),
           away:teams!away_team_id(id, name)
         )
@@ -204,7 +198,7 @@ export async function GET(request: Request) {
       return {
         ...pred,
         matches: match,
-        breakdown: pred.status === 'graded' ? computeBreakdown(pred, match) : null
+        breakdown: pred.status === 'graded' ? computeBreakdown(pred, match, actualPlayers(rawMatch.match_events ?? [])) : null
       };
     });
 
