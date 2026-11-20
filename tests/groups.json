@@ -110,7 +110,8 @@
         "scripts/**",
         "tests/gate-baseline.json",
         "tests/gate-exemptions.json",
-        "tests/groups.json"
+        "tests/groups.json",
+        ".github/CODEOWNERS"
       ],
       "run": [
         {
@@ -136,7 +137,8 @@
         "scripts/**",
         "tests/gate-baseline.json",
         "tests/gate-exemptions.json",
-        "tests/groups.json"
+        "tests/groups.json",
+        ".github/CODEOWNERS"
       ],
       "testPaths": [
         "backend/tests/tooling/**"
