@@ -1,0 +1,42 @@
+{
+  "head": "070642f8e9e46f3fab57193a9c2670828c57a505",
+  "tree": "6b450503c69ad9699c34f28761c60f98fa235c26",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-20T05:44:57.536Z",
+  "groups": [
+    {
+      "name": "tooling",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/tooling",
+          "exit": 0,
+          "ms": 13920
+        }
+      ]
+    },
+    {
+      "name": "database",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": ".",
+          "cmd": "bash scripts/local-db.sh test",
+          "exit": 0,
+          "ms": 3312
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "tooling",
+    "database"
+  ],
+  "commandChecks": {},
+  "id": "SL-080",
+  "base": "629a5bb~1"
+}
