@@ -22,7 +22,7 @@ async function signIn(role: string, c: ReturnType<typeof clients>) {
   const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true });
   if (error) throw error;
   users.push(data.user.id);
-  await admin.from('user_roles').update({ role }).eq('user_id', data.user.id);
+  if (role !== 'default') await admin.from('user_roles').upsert({ user_id: data.user.id, role: role }, { onConflict: 'user_id,role', ignoreDuplicates: true });
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   const db = c.anon();
   const { data: v, error: vErr } = await db.auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
@@ -86,8 +86,8 @@ beforeAll(async () => {
     { player_id: fixed[0].id, team_entry_id: made.entries[0], season_id: made.seasons[0], jersey_number: 1 },
     { player_id: fixed[1].id, team_entry_id: made.entries[1], season_id: made.seasons[0], jersey_number: 1 },
   ]);
-  // The captain holds team One's registration for season A only.
-  made.regs = must(await admin.from('team_registrations').insert({ captain_id: as.captain.id, team_name: `${tag} One`, season_id: made.seasons[0], team_id: made.teams[0] }).select('id')).data!.map((r) => r.id);
+  // The captain is assigned to team One's entry in season A only.
+  must(await admin.from('captain_assignments').insert({ team_entry_id: made.entries[0], user_id: as.captain.id }));
 }, 90000);
 
 afterAll(async () => {
@@ -96,7 +96,7 @@ afterAll(async () => {
   await admin.from('roster_memberships').delete().in('season_id', made.seasons);
   const { data: left } = await admin.from('players').select('id').ilike('first_name', `${tag}%`);
   await admin.from('players').delete().in('id', (left ?? []).map((p) => p.id));
-  await admin.from('team_registrations').delete().in('id', made.regs);
+  await admin.from('captain_assignments').delete().in('team_entry_id', made.entries);
   await admin.from('team_entries').delete().in('season_id', made.seasons);
   await admin.from('teams').delete().in('id', made.teams);
   await admin.from('seasons').delete().in('id', made.seasons);
@@ -225,13 +225,5 @@ describe('the captain portrait upload route', () => {
     expect((await upload('captain', other)).status).toBe(403);
     for (const who of ['editor', 'default']) expect((await upload(who, own)).status).toBe(403);
     expect((await upload(null, own)).status).toBe(401);
-  });
-});
-
-describe('the team registration route', () => {
-  it('no longer writes players: a request with members is refused', async () => {
-    const res = await route('admin/team-registrations', 'dictator', { team_name: `${tag} Reg`, captain_id: as.default.id, division: 'wsl', members: [{ name: 'Old Way' }] });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/season roster/);
   });
 });

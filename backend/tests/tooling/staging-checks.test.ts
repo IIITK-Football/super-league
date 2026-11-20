@@ -21,8 +21,10 @@ function fakeStaging(opts: Opts = {}) {
   const auditLog = new Map<string, { id: string; actor_id: string | null; actor_role?: string; table_name: string; record_id: string; action: string }>();
   const users = new Map<string, { id: string; email: string; confirmed?: boolean }>();
   const roles = new Map<string, string>();
-  const regs = new Map<string, { id: string; captain_id: string }>();
-  const regTeams = new Map<string, { team_id: string; season_id: string }>();
+  // Captain assignments (one per team entry), scorer assignments, and matches written by the role checks.
+  const regs = new Map<string, { id: string; captain_id: string; team_entry_id: string }>();
+  const scorerOf = new Map<string, Set<string>>(); // match -> assigned scorer accounts
+  const matchRows = new Map<string, any>();
   // Rosters: teams, season entries, players (cards), private details and roster places.
   const rows: Record<string, Map<string, any>> = {
     teams: new Map(), team_entries: new Map(), players: new Map(), player_private_details: new Map(), roster_memberships: new Map(),
@@ -37,7 +39,7 @@ function fakeStaging(opts: Opts = {}) {
     ['super-league', 'wsl', 'freshers'].map((slug, i) => [`d${i}`, { id: `d${i}`, slug, visibility: 'public' }]),
   );
   const sections = new Map<string, { season_id: string; section_key: string }>();
-  const seasons = new Map<string, { id: string; division_id: string; is_current: boolean; slug?: string }>(
+  const seasons = new Map<string, { id: string; division_id: string; is_current: boolean; slug?: string; status?: string }>(
     ['d0', 'd1', 'd2'].map((d, i) => [`s${i}`, { id: `s${i}`, division_id: d, is_current: true }]),
   );
   const calls: { method: string; url: string; headers: Record<string, string>; body: any }[] = [];
@@ -70,7 +72,7 @@ function fakeStaging(opts: Opts = {}) {
         for (const pl of rows.players.values()) if (pl.user_id === id) pl.user_id = null; // ON DELETE SET NULL keeps the player
         users.delete(id);
         roles.delete(id);
-        for (const [rid, r] of regs) if (r.captain_id === id) regs.delete(rid);
+        for (const [rid, r] of regs) if (r.captain_id === id) regs.delete(rid); // ON DELETE CASCADE
         return json(200, {});
       }
     }
@@ -102,24 +104,74 @@ function fakeStaging(opts: Opts = {}) {
       return json(200, { access_token: 'at-x' });
     }
     if (p === '/auth/v1/user' && method === 'PUT') return uid(headers.authorization) ? json(200, { id: uid(headers.authorization) }) : json(401, {});
-    if (p === '/rest/v1/user_roles' && method === 'POST') { roles.set(body.user_id, body.role); return new Response(null, { status: 204 }); }
+    if (p === '/rest/v1/user_roles' && method === 'POST') {
+      // Grants are written by the server key or a dictator (row level security refuses everyone else).
+      const caller = uid(headers.authorization);
+      if (caller !== null && roles.get(caller) !== 'dictator') return json(403, { code: '42501', message: 'new row violates row-level security policy for table "user_roles"' });
+      roles.set(body.user_id, body.role);
+      return new Response(null, { status: 204 });
+    }
     if (p === '/rest/v1/user_roles' && method === 'GET') {
       const ids = (u.searchParams.get('user_id') ?? '').replace(/^in\.\(|\)$/g, '').split(',').filter(Boolean);
       return json(200, ids.filter((i) => roles.has(i)).map((i) => ({ user_id: i })));
     }
-    if (p === '/rest/v1/team_registrations' && method === 'POST') {
-      // Like team_registrations_captain_id_key: an account holds one registration.
-      if ([...regs.values()].some((r) => r.captain_id === body.captain_id)) {
-        return json(409, { code: '23505', message: 'duplicate key value violates unique constraint "team_registrations_captain_id_key"' });
+    if (p === '/rest/v1/captain_assignments' && method === 'POST') {
+      // Like captain_assignments_one_per_entry: a team entry has one captain.
+      if ([...regs.values()].some((r) => r.team_entry_id === body.team_entry_id)) {
+        return json(409, { code: '23505', message: 'duplicate key value violates unique constraint "captain_assignments_one_per_entry"' });
       }
       const id = `r${++n}`;
-      regs.set(id, { id, captain_id: body.captain_id });
-      regTeams.set(id, { team_id: body.team_id, season_id: body.season_id });
+      regs.set(id, { id, captain_id: body.user_id, team_entry_id: body.team_entry_id });
       return json(201, [{ id }]);
     }
-    if (p === '/rest/v1/team_registrations' && method === 'GET') {
-      const ids = (u.searchParams.get('captain_id') ?? '').replace(/^in\.\(|\)$/g, '').split(',').filter(Boolean);
-      return json(200, [...regs.values()].filter((r) => ids.includes(r.captain_id)).map((r) => ({ id: r.id })));
+    if (p === '/rest/v1/captain_assignments' && method === 'GET') {
+      const ids = (u.searchParams.get('user_id') ?? '').replace(/^in\.\(|\)$/g, '').split(',').filter(Boolean);
+      const entry = u.searchParams.get('team_entry_id')?.replace(/^eq\./, '');
+      return json(200, [...regs.values()].filter((r) => (entry ? r.team_entry_id === entry : ids.includes(r.captain_id))).map((r) => ({ id: r.id, user_id: r.captain_id })));
+    }
+    if (p === '/rest/v1/rpc/assign_captain' && method === 'POST') {
+      const me = uid(headers.authorization);
+      if (!me || roles.get(me) !== 'dictator') return json(403, { code: '42501', message: 'Only a dictator can assign captains' });
+      const existing = [...regs.values()].find((r) => r.team_entry_id === body.p_entry);
+      if (existing && existing.captain_id !== body.p_user && !body.p_replace) return json(409, { code: '23505', message: 'This team already has a captain' });
+      if (existing) existing.captain_id = body.p_user;
+      else { const id = `r${++n}`; regs.set(id, { id, captain_id: body.p_user, team_entry_id: body.p_entry }); }
+      if (roles.get(body.p_user) === 'default') roles.set(body.p_user, 'captain');
+      return json(200, existing?.id ?? 'ok');
+    }
+    if (p === '/rest/v1/rpc/assign_scorer' && method === 'POST') {
+      const me = uid(headers.authorization);
+      if (!me || roles.get(me) !== 'dictator') return json(403, { code: '42501', message: 'Only a dictator can assign scorers' });
+      if (body.p_match) scorerOf.set(body.p_match, (scorerOf.get(body.p_match) ?? new Set()).add(body.p_user));
+      if (roles.get(body.p_user) === 'default') roles.set(body.p_user, 'scorer');
+      return json(200, `sa${++n}`);
+    }
+    if (p === '/rest/v1/matches') {
+      const asAdmin = !headers.authorization && headers.apikey?.startsWith('sb_secret_');
+      const caller = uid(headers.authorization);
+      const canScore = (id: string) => asAdmin || (caller !== null && (roles.get(caller) === 'dictator' || (roles.get(caller) === 'scorer' && scorerOf.get(id)?.has(caller))));
+      const idEq = u.searchParams.get('id')?.replace(/^eq\./, '');
+      const inTeams = (k: string) => (u.searchParams.get(k) ?? '').replace(/^in\.\(|\)$/g, '').split(',').filter(Boolean);
+      if (method === 'POST') {
+        if (!asAdmin) return json(403, { code: '42501', message: 'new row violates row-level security policy for table "matches"' });
+        const id = `mt${++n}`;
+        matchRows.set(id, { id, ...body });
+        return json(201, [{ id }]);
+      }
+      if (method === 'PATCH') {
+        const changed = [...matchRows.values()].filter((m) => (!idEq || m.id === idEq) && canScore(m.id));
+        for (const m of changed) Object.assign(m, body);
+        return json(200, changed);
+      }
+      if (method === 'DELETE') {
+        for (const m of [...matchRows.values()]) if (asAdmin && (inTeams('home_team_id').includes(m.home_team_id) || inTeams('away_team_id').includes(m.away_team_id))) matchRows.delete(m.id);
+        return new Response(null, { status: 204 });
+      }
+    }
+    if (p === '/rest/v1/goals' && method === 'POST') {
+      const caller = uid(headers.authorization);
+      const ok = caller !== null && (roles.get(caller) === 'dictator' || (roles.get(caller) === 'scorer' && scorerOf.get(body.match_id)?.has(caller)));
+      return ok ? new Response(null, { status: 201 }) : json(403, { code: '42501', message: 'new row violates row-level security policy for table "goals"' });
     }
     // Roster tables. The secret key without a user token administers; a user token gets RLS: public reads of cards
     // and rosters, nothing of private details, and writes for dictators only (none for the run's captains).
@@ -179,11 +231,11 @@ function fakeStaging(opts: Opts = {}) {
       const role = roles.get(me);
       if (!openRpc) {
         const entry = m ? rows.team_entries.get(m.team_entry_id) : undefined;
-        const assigned = entry && [...regs.values()].some((r) => r.captain_id === me && regTeams.get(r.id)?.team_id === entry.team_id && regTeams.get(r.id)?.season_id === m.season_id);
+        const assigned = entry && [...regs.values()].some((r) => r.captain_id === me && r.team_entry_id === m.team_entry_id);
         if (!m || (!assigned && role !== 'dictator')) return json(400, { message: 'Player is not part of your assigned roster' });
         if (role !== 'captain' && role !== 'dictator') return json(400, { message: 'Captain access is required to update players' });
-        if (role === 'captain' && !opts.anySeasonCaptain && seasons.get(m.season_id)?.is_current === false) {
-          return json(400, { message: 'Only the current season\'s roster can be edited by its captain' });
+        if (role === 'captain' && !opts.anySeasonCaptain && seasons.get(m.season_id)?.status === 'completed') {
+          return json(400, { message: 'Only a current or upcoming season\'s roster can be edited by its captain' });
         }
       }
       if (m) { m.jersey_number = body.p_jersey_number; m.position = body.p_position; }
@@ -243,6 +295,11 @@ function fakeStaging(opts: Opts = {}) {
         const rows = (Array.isArray(body) ? body : [body]).map((b: any) => ({ id: `s${++n}`, division_id: b.division_id, is_current: !!b.is_current, slug: b.slug }));
         for (const r of rows) seasons.set(r.id, r);
         return json(201, rows.map((r) => ({ id: r.id, slug: r.slug })));
+      }
+      if (method === 'PATCH') {
+        const target = seasons.get(u.searchParams.get('id')?.replace(/^eq\./, '') ?? '');
+        if (manager && target) Object.assign(target, body);
+        return new Response(null, { status: 204 });
       }
       if (method === 'DELETE') {
         for (const x of [...seasons.values()]) if (manager && divisionIds.includes(x.division_id)) {
@@ -371,7 +428,7 @@ describe('runChecks against a healthy staging', () => {
     expect(results.filter((r: { status: string }) => r.status === 'FAIL')).toEqual([]);
     for (const re of [/anonymous.*closed/i, /captcha/i, /captain.*own/i, /other team/i, /without the captain role/i, /normal user/i, /rename a player/i, /match keys are hidden/i, /dictator/i, /recovery/i, /clean/i,
                       /legacy divisions/i, /new hidden division/i, /current season switches/i, /hidden division is invisible/i, /cannot create a division/i,
-                      /recorded in the audit history/i, /audit history is hidden/i, /change or remove audit history/i, /season that is not current/i,
+                      /recorded in the audit history/i, /audit history is hidden/i, /change or remove audit history/i, /in a completed season/i,
                       /unverified account cannot be linked/i, /normal user cannot link/i, /dictator links a player/i, /server key cannot write the account link/i,
                       /anonymous visitors cannot read the account link/i, /signed-in account cannot read the account link/i, /dictator unlinks a player/i,
                       /server key cannot create a player/i, /without an account cannot join a roster/i, /linked automatically/i]) {
@@ -388,16 +445,18 @@ describe('runChecks against a healthy staging', () => {
     expect(s.sections.size).toBe(0);
   });
 
-  it('registers synthetic teams in the current Freshers season, never by a division string', async () => {
+  it('enters synthetic teams in the current Freshers season and assigns captains, never by a division string', async () => {
     const s = fakeStaging();
     await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
-    const regs = s.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/rest/v1/team_registrations'));
-    expect(regs.length).toBeGreaterThan(0);
-    // Team D is the past-season check, deliberately in a non-current season of the run's own division.
-    for (const c of regs.filter((r) => r.body.team_name !== 'SL CHECK D')) {
-      expect(c.body.season_id).toBe('s2'); // the fake's current Freshers season
-      expect(c.body).not.toHaveProperty('division');
-    }
+    const entries = s.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/rest/v1/team_entries'));
+    expect(entries.length).toBeGreaterThan(0);
+    // The captains are assigned to those entries (team_registrations is retired). Team D is the completed-season check,
+    // deliberately in a past season of the run's own division.
+    expect(s.calls.some((c) => c.method === 'POST' && c.url.endsWith('/rest/v1/captain_assignments'))).toBe(true);
+    expect(s.calls.some((c) => c.url.endsWith('/rest/v1/team_registrations'))).toBe(false);
+    const current = entries.filter((e) => e.body.season_id === 's2');
+    expect(current.length).toBeGreaterThan(0); // the fake's current Freshers season
+    for (const c of entries) expect(c.body).not.toHaveProperty('division');
   });
 
   it('only ever talks to the staging host', async () => {
@@ -461,7 +520,7 @@ describe('runChecks detects a broken staging', () => {
   it('fails the past-season check when a captain may edit any season', async () => {
     const s = fakeStaging({ anySeasonCaptain: true });
     const results = await runChecks({ env: goodEnv(), fetchImpl: s.fetchImpl as unknown as typeof fetch, log });
-    expect(by(results, /season that is not current/i)?.status).toBe('FAIL');
+    expect(by(results, /in a completed season/i)?.status).toBe('FAIL');
     expect(s.users.size).toBe(0); // and still cleans up
   });
 

@@ -19,7 +19,7 @@ async function signIn(role: string, c: ReturnType<typeof clients>) {
   const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true });
   if (error) throw error;
   users.push(data.user.id);
-  await admin.from('user_roles').update({ role }).eq('user_id', data.user.id);
+  if (role !== 'default') await admin.from('user_roles').upsert({ user_id: data.user.id, role: role }, { onConflict: 'user_id,role', ignoreDuplicates: true });
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   const db = c.anon();
   const { error: vErr } = await db.auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
@@ -62,10 +62,11 @@ describe('recording', () => {
   });
 
   it('records a role change and an account-first player, keeping email addresses out', async () => {
-    expect((await as.dictator.db.from('user_roles').update({ role: 'captain' }).eq('user_id', as.default.id).select('user_id')).data).toHaveLength(1);
-    const { data: roleRows } = await history('user_roles', as.default.id);
-    expect(roleRows!.at(-1)).toMatchObject({ actor_id: as.dictator.id, action: 'update', changes: { role: { from: 'default', to: 'captain' } } });
-    await admin.from('user_roles').update({ role: 'default' }).eq('user_id', as.default.id);
+    // A grant is recorded with the dictator as actor (a normal user holds no grant to begin with).
+    expect((await as.dictator.db.from('user_roles').insert({ user_id: as.default.id, role: 'captain' }).select('user_id')).data).toHaveLength(1);
+    const { data: roleRows } = await history('user_roles', `${as.default.id}:captain`);
+    expect(roleRows!.at(-1)).toMatchObject({ actor_id: as.dictator.id, action: 'insert', changes: { role: 'captain' } });
+    await admin.from('user_roles').delete().eq('user_id', as.default.id);
 
     const entry = (await admin.from('team_entries').select('id').limit(1).single()).data!;
     const email = uniqueEmail('audit-ada');

@@ -23,6 +23,9 @@ function run(setup: string) {
     INSERT INTO public.team_registrations (id, captain_id, team_name, season_id)
       SELECT 'b1000000-0000-4000-8000-0000000000aa', '${USER}', 'Guard Team', s.id
       FROM public.seasons s JOIN public.divisions d ON d.id = s.division_id WHERE d.slug = 'freshers' AND s.is_current;
+    -- The guard predates multi-grant roles and joins one role row per person: drop the seed's extra scorer grants so
+    -- each captain has a single row, as when the migration ran (the block is only run here, never again for real).
+    DELETE FROM public.user_roles WHERE role = 'scorer';
     ${setup}
     ${guardBlock()}
     ROLLBACK;`;
@@ -37,8 +40,9 @@ describe('captain role guard in the migration', () => {
     expect(guardBlock()).toMatch(/scripts\/sql\/captain-role-audit\.sql/);
   });
 
-  it('stops when an assigned captain only has the default role, without naming anyone', () => {
-    const r = run(`UPDATE public.user_roles SET role = 'default' WHERE user_id = '${USER}';`);
+  it('stops when an assigned captain holds no role, without naming anyone', () => {
+    // Roles are grants now: a normal account has no row, so the user holds no role at all.
+    const r = run(`DELETE FROM public.user_roles WHERE user_id = '${USER}';`);
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/assigned captain without the captain role/);
     expect(r.stderr).toMatch(/Nothing was changed/);
@@ -48,7 +52,7 @@ describe('captain role guard in the migration', () => {
   // (A legacy admin can no longer be stored: 20261130000000 retired that role value.)
   it('stops for an editor and a missing role row (no role implies another)', () => {
     for (const setup of [
-      `UPDATE public.user_roles SET role = 'editor' WHERE user_id = '${USER}';`,
+      `INSERT INTO public.user_roles (user_id, role) VALUES ('${USER}', 'editor');`,
       `DELETE FROM public.user_roles WHERE user_id = '${USER}';`,
     ]) {
       const r = run(setup);
@@ -59,7 +63,7 @@ describe('captain role guard in the migration', () => {
 
   it('passes when every assigned captain holds the captain role, or is a dictator', () => {
     for (const role of ['captain', 'dictator']) {
-      const r = run(`UPDATE public.user_roles SET role = '${role}' WHERE user_id = '${USER}';`);
+      const r = run(`INSERT INTO public.user_roles (user_id, role) VALUES ('${USER}', '${role}');`);
       expect(r.stderr, role).toBe('');
       expect(r.status, role).toBe(0);
     }

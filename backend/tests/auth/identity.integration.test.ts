@@ -90,8 +90,9 @@ describe('Google-style account adds a website password (same user)', () => {
 
     const after = await admin.from('user_profiles').select('id,email,real_name').eq('id', user.id).single();
     expect(after.data).toEqual(before.data);
-    const role = await admin.from('user_roles').select('role').eq('user_id', user.id).single();
-    expect(role.data?.role).toBe('default');
+    // A normal user holds no role grant, and adding a password does not create one.
+    const roles = await admin.from('user_roles').select('role').eq('user_id', user.id);
+    expect(roles.data ?? []).toEqual([]);
   });
 
   it('does not create a second account when signing up again with an existing email', async () => {

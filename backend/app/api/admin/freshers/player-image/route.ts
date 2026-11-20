@@ -1,19 +1,20 @@
 import { NextResponse } from 'next/server';
 import { isResponse, jsonError, requireUser, UUID } from '@/lib/roster/access';
+import { myRoles } from '@/lib/auth/roles';
 import { ImageError, portraitKey, readPortrait, uploadPortrait } from '@/lib/roster/playerImage';
 
 export const runtime = 'nodejs';
 
-// A captain (or a dictator) uploads the portrait for a player on their current-season roster: multipart
+// A captain (or a dictator) uploads the portrait for a player on their team's roster: multipart
 // { membership_id, image }.
-// The same rule as captain_update_roster_player applies: the captain role AND the team's registration for that
-// season, or the dictator role. The upload returns the URL; the team builder then saves it on the player's card
+// The same rule as captain_update_roster_player applies: the captain grant AND a writable captain assignment on the
+// place's team entry, or the dictator role. The upload returns the URL; the team builder then saves it on the player's card
 // through the captain RPC. The key is the player's id, never an email.
 export async function POST(request: Request) {
   try {
     const caller = await requireUser(request);
     if (isResponse(caller)) return caller;
-    const { supabase, user } = caller;
+    const { supabase } = caller;
 
     const form = await request.formData();
     const membershipId = String(form.get('membership_id') || '');
@@ -21,26 +22,19 @@ export async function POST(request: Request) {
 
     const { data: place, error: placeError } = await supabase
       .from('roster_memberships')
-      .select('player_id, season_id, entry:team_entries ( team_id ), season:seasons ( is_current )')
+      .select('player_id, team_entry_id')
       .eq('id', membershipId)
       .maybeSingle();
     if (placeError) throw placeError;
-    const teamId = (place?.entry as { team_id?: string } | null)?.team_id;
 
-    const { data: roles } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
-    const held = new Set((roles ?? []).map((r) => r.role));
-    let allowed = held.has('dictator');
-    // The portrait belongs to the player's shared card, so a captain changes it only through the current season.
-    const current = (place?.season as { is_current?: boolean } | null)?.is_current === true;
-    if (!allowed && place && teamId && current && held.has('captain')) {
-      const { data: registration } = await supabase
-        .from('team_registrations')
-        .select('id')
-        .eq('captain_id', user.id)
-        .eq('team_id', teamId)
-        .eq('season_id', place.season_id)
-        .maybeSingle();
-      allowed = Boolean(registration);
+    // A dictator, or the captain holding the captain grant and a writable assignment (current or upcoming season,
+    // not completed or archived) on this exact team entry. The portrait belongs to the player's shared card.
+    const roles = await myRoles(supabase);
+    let allowed = roles.includes('dictator');
+    if (!allowed && place) {
+      const { data: isCaptain, error: captainError } = await supabase.rpc('is_captain_of', { p_entry: place.team_entry_id });
+      if (captainError) throw captainError;
+      allowed = isCaptain === true;
     }
     // A missing roster place and someone else's give the same answer.
     if (!place || !allowed) return jsonError('Only the captain of this player\'s team, or a dictator, can upload this portrait.', 403);

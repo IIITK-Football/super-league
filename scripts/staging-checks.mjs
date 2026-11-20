@@ -93,7 +93,8 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     created.push(r.data.id);
     return { id: r.data.id, email };
   };
-  const setRole = (id, role) => admin('/rest/v1/user_roles?on_conflict=user_id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', body: { user_id: id, role } });
+  // Roles are independent grants; a normal account holds none ('default' means no grant).
+  const setRole = async (id, role) => (role === 'default' ? { ok: true } : admin('/rest/v1/user_roles?on_conflict=user_id,role', { method: 'POST', prefer: 'resolution=ignore-duplicates,return=minimal', body: { user_id: id, role } }));
   // Synthetic registrations join the current Freshers season (registrations belong to a season, not a division string).
   let freshersSeason = null;
   const currentFreshersSeason = async () => {
@@ -118,7 +119,7 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     };
     const team = await post('/rest/v1/teams', { name: `${tag} ${name}` }, 'team');
     const entry = await post('/rest/v1/team_entries', { team_id: team, season_id: season }, 'season entry');
-    await post('/rest/v1/team_registrations', { captain_id: captain.id, team_name: `SL CHECK ${name}`, season_id: season, team_id: team }, 'registration');
+    await post('/rest/v1/captain_assignments', { team_entry_id: entry, user_id: captain.id }, 'captain assignment');
     const account = await makeUser(`player-${name.toLowerCase()}`);
     const made = await call('/rest/v1/rpc/create_player_for_account', {
       method: 'POST', key: PUBLISHABLE, token: dictatorToken,
@@ -128,7 +129,7 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const player = made.data;
     const member = (await admin(`/rest/v1/roster_memberships?player_id=eq.${player}&team_entry_id=eq.${entry}&select=id`)).data?.[0]?.id;
     if (!member) throw new Error(`the ${name} player has no roster place`);
-    return { member, player, entry };
+    return { member, player, entry, team, season };
   };
   const session = async (user, type = 'magiclink') => {
     const link = await admin('/auth/v1/admin/generate_link', { method: 'POST', body: { type, email: user.email } });
@@ -164,6 +165,10 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
   const sweepRosters = async () => {
     const teams = ((await admin(`/rest/v1/teams?name=like.${PREFIX}*&select=id`)).data ?? []).map((t) => t.id);
     const entries = teams.length ? ((await admin(`/rest/v1/team_entries?team_id=in.(${teams.join(',')})&select=id`)).data ?? []).map((e) => e.id) : [];
+    if (teams.length) {
+      await admin(`/rest/v1/matches?home_team_id=in.(${teams.join(',')})`, { method: 'DELETE' });
+      await admin(`/rest/v1/matches?away_team_id=in.(${teams.join(',')})`, { method: 'DELETE' });
+    }
     if (entries.length) await admin(`/rest/v1/roster_memberships?team_entry_id=in.(${entries.join(',')})`, { method: 'DELETE' });
     const players = ((await admin(`/rest/v1/players?first_name=like.${PREFIX}*&select=id`)).data ?? []).map((p) => p.id);
     if (players.length) {
@@ -296,15 +301,16 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
 
     // A captain edits only the current season's roster: a registration and roster place in a past season of the
     // check division are refused, so an old captain cannot change a player who has since moved team.
-    const pastName = 'A captain cannot change a player on their team in a season that is not current';
+    const pastName = 'A captain cannot change a player on their team in a completed season';
     const past = divisionId ? await admin(`/rest/v1/seasons?division_id=eq.${divisionId}&is_current=eq.false&select=id`) : null;
     const pastSeason = past?.data?.[0]?.id;
     if (pastSeason) {
-      // A separate captain: an account holds one registration at a time.
+      // A completed season is read-only for its captain (a planned or registration season would be writable).
+      await admin(`/rest/v1/seasons?id=eq.${pastSeason}`, { method: 'PATCH', prefer: 'return=minimal', body: { status: 'completed' } });
       const captainPast = await makeUser('captain-past');
       await setRole(captainPast.id, 'captain');
       const teamD = await makeTeam(captainPast, 'D', pastSeason);
-      expectRefused(pastName, await rpc(await session(captainPast), teamD.member), /only the current season/i);
+      expectRefused(pastName, await rpc(await session(captainPast), teamD.member), /only a current or upcoming season/i);
     }
     else record(pastName, 'FAIL', 'the check division has no past season');
 
@@ -378,6 +384,41 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
         `before: ${before === null ? 'unlinked' : 'linked'}, after: ${after === signup.data.id ? 'linked to the account' : 'not linked'}, audited as auto-link: ${audited.length > 0}${why}`);
     }
 
+    // Roles and assignments: a captain is changed in place (with a clear refusal when the team already has one), a
+    // scorer scores only the assigned match, and captains and normal accounts cannot write match data at all.
+    const dictatorCall = (name, body) => call(`/rest/v1/rpc/${name}`, { method: 'POST', key: PUBLISHABLE, token: managerToken, body });
+    const noReplace = await dictatorCall('assign_captain', { p_entry: teamA.entry, p_user: captainB.id });
+    expectRefused('A team that already has a captain is refused a second one unless the dictator changes it', noReplace, /already has a captain|23505/i);
+    const change = await dictatorCall('assign_captain', { p_entry: teamA.entry, p_user: captainB.id, p_replace: true });
+    const back = await dictatorCall('assign_captain', { p_entry: teamA.entry, p_user: captainA.id, p_replace: true });
+    const assignmentsAfter = (await admin(`/rest/v1/captain_assignments?team_entry_id=eq.${teamA.entry}&select=user_id`)).data ?? [];
+    record('Changing a captain and back keeps one assignment for the team entry', change.ok && back.ok && assignmentsAfter.length === 1 && assignmentsAfter[0].user_id === captainA.id ? 'PASS' : 'FAIL',
+      `change ${change.ok ? 'ok' : message(change)}, back ${back.ok ? 'ok' : message(back)}, ${assignmentsAfter.length} assignment(s)`);
+
+    const scorer = await makeUser('scorer');
+    const makeMatch = async () => {
+      const r = await admin('/rest/v1/matches', { method: 'POST', prefer: 'return=representation', body: { home_team_id: teamA.team, away_team_id: teamB.team, season_id: teamA.season, status: 'scheduled', date: new Date(Date.now() + 86400000).toISOString() } });
+      if (!r.ok) throw new Error(`could not create a synthetic match (${message(r)})`);
+      return r.data[0].id;
+    };
+    const matchOne = await makeMatch();
+    const matchTwo = await makeMatch();
+    const assignScorer = await dictatorCall('assign_scorer', { p_user: scorer.id, p_season: null, p_match: matchOne, p_expires_at: null });
+    const scorerToken = await session(scorer);
+    const score = (token, id) => call(`/rest/v1/matches?id=eq.${id}`, { method: 'PATCH', key: PUBLISHABLE, token, prefer: 'return=representation', body: { home_score: 1 } });
+    const scoredOwn = await score(scorerToken, matchOne);
+    const scoredOther = await score(scorerToken, matchTwo);
+    record('A scorer updates the match assigned to them and no other match', assignScorer.ok && scoredOwn.ok && scoredOwn.data?.length === 1 && scoredOther.ok && scoredOther.data?.length === 0 ? 'PASS' : 'FAIL',
+      `assign ${assignScorer.ok ? 'ok' : message(assignScorer)}, assigned match ${scoredOwn.data?.length ?? message(scoredOwn)} row(s), other match ${scoredOther.data?.length ?? message(scoredOther)} row(s)`);
+    const captainWrite = await score(await session(captainA), matchOne);
+    const normalWrite = await score(userToken, matchOne);
+    record('A captain and a normal account cannot update a match', captainWrite.ok && captainWrite.data?.length === 0 && normalWrite.ok && normalWrite.data?.length === 0 ? 'PASS' : 'FAIL',
+      `captain ${captainWrite.data?.length ?? message(captainWrite)} row(s), normal ${normalWrite.data?.length ?? message(normalWrite)} row(s)`);
+    const scorerGoal = await call('/rest/v1/goals', { method: 'POST', key: PUBLISHABLE, token: scorerToken, prefer: 'return=minimal', body: { match_id: matchTwo, team_id: teamA.team } });
+    expectRefused('A scorer cannot add a goal to a match that is not assigned to them', scorerGoal, /row-level security|42501/i);
+    const grantSelf = await call('/rest/v1/user_roles', { method: 'POST', key: PUBLISHABLE, token: scorerToken, prefer: 'return=minimal', body: { user_id: scorer.id, role: 'dictator' } });
+    expectRefused('A scorer cannot grant themselves a role', grantSelf, /row-level security|42501/i);
+
     // Recovery: the one-time token flow, without sending any mail (this does not test email delivery or redirect URLs).
     const recoveryToken = await session(normal, 'recovery');
     const reset = await call('/auth/v1/user', { method: 'PUT', key: PUBLISHABLE, token: recoveryToken, body: { password: rand(16) } });
@@ -391,7 +432,7 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
       const gone = [];
       for (const id of created) gone.push((await admin(`/auth/v1/admin/users/${id}`)).status === 404);
       const ids = created.join(',');
-      const leftoverRegs = created.length ? (await admin(`/rest/v1/team_registrations?captain_id=in.(${ids})&select=id`)).data ?? [] : [];
+      const leftoverRegs = created.length ? (await admin(`/rest/v1/captain_assignments?user_id=in.(${ids})&select=id`)).data ?? [] : [];
       const leftoverRoles = created.length ? (await admin(`/rest/v1/user_roles?user_id=in.(${ids})&select=user_id`)).data ?? [] : [];
       const leftoverDivisions = (await admin(`/rest/v1/divisions?slug=like.${PREFIX}*&select=id`)).data ?? [];
       const leftoverPlayers = (await admin(`/rest/v1/players?first_name=like.${PREFIX}*&select=id`)).data ?? [];

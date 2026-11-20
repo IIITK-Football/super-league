@@ -43,16 +43,12 @@ export async function POST(request: Request) {
       throw { status: 401, message: "Unauthorized: Please log in." };
     }
 
-    const { data: roleData } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['dictator', 'captain'])
-      .limit(1)
-      .single();
-
-    if (!roleData) {
-      throw { status: 403, message: "Forbidden: Admin clearance required." };
+    // A dictator, or a scorer with an unexpired assignment to this match or its season. A captain or a normal
+    // account is refused, and the writes below also run as the caller, so row level security says the same.
+    const { data: allowed, error: scoreErr } = await supabase.rpc('can_score', { p_match: match_id });
+    if (scoreErr) throw { status: 500, message: "Could not check scoring access." };
+    if (!allowed) {
+      throw { status: 403, message: "Forbidden: you are not assigned to score this match." };
     }
 
     // Fetch the current state of the match

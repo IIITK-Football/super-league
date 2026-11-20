@@ -22,7 +22,7 @@ beforeAll(async () => {
   const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true });
   if (error) throw error;
   userId = data.user.id;
-  await admin.from('user_roles').update({ role: 'dictator' }).eq('user_id', userId);
+  await admin.from('user_roles').upsert({ user_id: userId, role: 'dictator' }, { onConflict: 'user_id,role', ignoreDuplicates: true });
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   const v = await c.anon().auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
   if (v.error) throw v.error;

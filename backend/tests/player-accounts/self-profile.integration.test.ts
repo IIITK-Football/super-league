@@ -25,7 +25,7 @@ async function signIn(label: string, role: string, c: ReturnType<typeof clients>
   const { data, error } = await admin.auth.admin.createUser({ email: uniqueEmail(`${tag}-${label}`), email_confirm: true });
   if (error) throw error;
   users.push(data.user.id);
-  await admin.from('user_roles').update({ role }).eq('user_id', data.user.id);
+  if (role !== 'default') await admin.from('user_roles').upsert({ user_id: data.user.id, role: role }, { onConflict: 'user_id,role', ignoreDuplicates: true });
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email: data.user.email! });
   const db = c.anon();
   const v = await db.auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
