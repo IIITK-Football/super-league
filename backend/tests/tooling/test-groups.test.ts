@@ -1,5 +1,5 @@
 // Group: tooling. Test-group selection logic (scripts/test-groups.mjs).
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { affectedGroups, globToRegExp, loadGroups, needsLocalDatabase, validateGroups } from '../../../scripts/test-groups.mjs';
@@ -84,5 +84,14 @@ describe('groups.json', () => {
       }
     }
     expect(existsSync(join(root, 'scripts/test-groups.mjs'))).toBe(true);
+  });
+
+  it('runs the API Worker tests for Worker and shared handler changes, against the local stack', () => {
+    expect(config.groups['api-services'].status).toBeUndefined();
+    expect(affectedGroups(['api/src/app.ts'], config)).toContain('api-services');
+    expect(affectedGroups(['backend/app/api/news/route.ts'], config)).toContain('api-services');
+    expect(needsLocalDatabase(['api-services'], config)).toBe(true);
+    const workspace = readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(workspace).toMatch(/^\s+- api$/m);
   });
 });

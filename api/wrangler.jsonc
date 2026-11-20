@@ -1,0 +1,24 @@
+// The Super League API Worker. Non-secret settings only; secrets (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY,
+// SUPABASE_SECRET_KEY, the R2 values) are Worker secrets set per environment, never committed.
+// Local development reads them from api/.dev.vars (git-ignored; copy api/.dev.vars.example).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "super-league-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  // nodejs_compat exposes bindings as process.env (compatibility date >= 2025-04-01) and provides the Node APIs
+  // the shared handlers and the Supabase and S3 clients use.
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // Local development: no public route; the Vite dev server proxies /api to wrangler dev on :8787.
+  "workers_dev": false,
+  "env": {
+    // Staging: deployed by .github/workflows/worker-staging.yml from develop. Reached only through the
+    // staging Pages project's service binding, so it needs no public URL.
+    "staging": {
+      "name": "super-league-api-staging",
+      "workers_dev": false,
+      "vars": { "SL_ENVIRONMENT": "staging" }
+    }
+  }
+}

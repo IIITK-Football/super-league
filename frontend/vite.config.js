@@ -20,5 +20,11 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
     ],
+    // Local development is same-origin like the deployed site: /api goes to the API Worker (`pnpm --dir api dev`).
+    server: {
+      proxy: {
+        '/api': { target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:8787', changeOrigin: false },
+      },
+    },
   }
 })
