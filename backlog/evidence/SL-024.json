@@ -1,9 +1,9 @@
 {
-  "head": "3622b347d9e44a3d7a8bcaeaa611872e20f1836a",
-  "tree": "3abcbbc2675669b2c0fb5225cf31ccd6c23bd6e5",
+  "head": "c9a1993f733b9c1fa325ac38ceecca3713ffcc1d",
+  "tree": "6c8d7bafd32747310a89aa5a242989073c4344df",
   "clean": true,
   "dryRun": false,
-  "at": "2026-11-20T07:42:04.132Z",
+  "at": "2026-11-20T07:43:45.430Z",
   "groups": [
     {
       "name": "database",
@@ -14,7 +14,7 @@
           "cwd": ".",
           "cmd": "bash scripts/local-db.sh test",
           "exit": 0,
-          "ms": 3783
+          "ms": 3642
         }
       ]
     },
@@ -27,13 +27,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/roles",
           "exit": 0,
-          "ms": 8511
+          "ms": 8423
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageRoles.local.test.jsx",
           "exit": 0,
-          "ms": 4971
+          "ms": 4841
         }
       ]
     },
@@ -46,13 +46,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/auth",
           "exit": 0,
-          "ms": 7063
+          "ms": 6780
         },
         {
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run src/lib/__tests__/authRules.test.js src/lib/__tests__/authApi.test.js src/lib/__tests__/authApi.captcha.test.js src/lib/__tests__/authApi.reauth.test.js src/pages/__tests__ src/components/__tests__",
           "exit": 0,
-          "ms": 4358
+          "ms": 4364
         }
       ]
     },
@@ -65,7 +65,7 @@
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run --passWithNoTests",
           "exit": 0,
-          "ms": 7392
+          "ms": 7449
         }
       ]
     },
@@ -78,13 +78,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/rosters",
           "exit": 0,
-          "ms": 7394
+          "ms": 7710
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageRosters.local.test.jsx src/pages/__tests__/TeamBuilder.local.test.jsx",
           "exit": 0,
-          "ms": 5232
+          "ms": 5272
         }
       ]
     },
@@ -97,7 +97,7 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/tooling",
           "exit": 0,
-          "ms": 14368
+          "ms": 14505
         }
       ]
     }
