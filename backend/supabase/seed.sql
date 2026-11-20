@@ -431,6 +431,8 @@ CROSS JOIN LATERAL (
   SELECT (mod(abs(hashtext(m.id::text || s.side || g.goal_no::text)::bigint), 8) + 1)::integer AS slot
 ) p
 WHERE m.status IN ('completed', 'live')
+  -- A match that already has events (earlier seeds, or goals converted by the migration) keeps them.
+  AND NOT EXISTS (SELECT 1 FROM public.match_events x WHERE x.match_id = m.id)
 ON CONFLICT (id) DO NOTHING;
 
 -- The live match shows both a goal whose scorer is not known yet and a card (they appear in the live tab and the timeline).
@@ -440,7 +442,10 @@ WHERE id = (SELECT e.id FROM public.match_events e JOIN public.matches m ON m.id
 INSERT INTO public.match_events (id, match_id, team_id, kind, player_id, minute, source)
 SELECT md5('mega-card:' || m.id::text)::uuid, m.id, m.home_team_id, 'yellow',
        md5('mega-player:' || m.home_team_id::text || ':1')::uuid, 30, 'seed'
-FROM public.matches m WHERE m.status = 'live'
+FROM public.matches m
+WHERE m.status = 'live'
+  AND EXISTS (SELECT 1 FROM public.roster_memberships rm JOIN public.team_entries te ON te.id = rm.team_entry_id
+              WHERE rm.player_id = md5('mega-player:' || m.home_team_id::text || ':1')::uuid AND rm.season_id = m.season_id AND te.team_id = m.home_team_id)
 ON CONFLICT (id) DO NOTHING;
 
 -- Two freshers team-builder captain assignments (the team entry is the Freshers 2026 season's).
