@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Group: frontend-components. The captain's team builder shows exactly the roster places of their registered team in
-// that registration's season (never another team's, another season's, or a stale earlier answer), names the team by
+// Group: frontend-components. The captain's team builder shows exactly the roster places of the team entry they are assigned to in
+// that assignment's season (never another team's, another season's, or a stale earlier answer), names the team by
 // the team record, keeps empty card values empty (no generated stats or rating), and saves only changed players'
 // allow-listed fields through captain_update_roster_player. It never shows or sends a player's private email. Against an in-memory Data API fake; the real
 // path is TeamBuilder.local.test.jsx (rosters group).
@@ -9,18 +9,18 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const db = { tables: {}, rpcError: null, rosterError: null, slowEntry: null };
-const auth = { role: 'captain' };
+const auth = { roles: ['captain'] };
 const rpc = vi.fn(async () => ({ data: null, error: db.rpcError }));
 
 function seed({ roster = true, pastSeason = false } = {}) {
   db.tables = {
-    // The registration keeps an older copy of the team name; the team record is what is shown.
     divisions: [{ id: 'd1', name: 'Freshers', sort_order: 1 }, { id: 'd2', name: 'Empty Division', sort_order: 2 }],
     seasons: [{ id: 's1', division_id: 'd1', name: '2026', is_current: true, sort_order: 2 }, { id: 's0', division_id: 'd1', name: '2025', is_current: false, sort_order: 1 }],
-    team_registrations: [
-      { id: 'r1', captain_id: 'c1', team_id: 't1', team_name: 'Old Copy Name', season_id: 's1', season: { id: 's1', name: '2026', is_current: true, division: { id: 'd1', name: 'Freshers' } } },
-      { id: 'r2', captain_id: 'c2', team_id: 't2', team_name: 'Beta', season_id: 's1', season: { id: 's1', name: '2026', is_current: true, division: { id: 'd1', name: 'Freshers' } } },
-      ...(pastSeason ? [{ id: 'r0', captain_id: 'c1', team_id: 't1', team_name: 'Alpha', season_id: 's0', season: { id: 's0', name: '2025', is_current: false, division: { id: 'd1', name: 'Freshers' } } }] : []),
+    // A captain's assignments, each with its team entry and season (the team record is what is shown).
+    captain_assignments: [
+      { id: 'r1', user_id: 'c1', team_entry: { id: 'e1', team_id: 't1', season_id: 's1', season: { id: 's1', name: '2026', is_current: true, status: 'active', archived_at: null, division: { id: 'd1', name: 'Freshers' } } } },
+      { id: 'r2', user_id: 'c2', team_entry: { id: 'e2', team_id: 't2', season_id: 's1', season: { id: 's1', name: '2026', is_current: true, status: 'active', archived_at: null, division: { id: 'd1', name: 'Freshers' } } } },
+      ...(pastSeason ? [{ id: 'r0', user_id: 'c1', team_entry: { id: 'e0', team_id: 't1', season_id: 's0', season: { id: 's0', name: '2025', is_current: false, status: 'completed', archived_at: null, division: { id: 'd1', name: 'Freshers' } } } }] : []),
     ],
     teams: [{ id: 't1', name: 'Alpha', logo_url: 'https://img/alpha.png', team_color: '#112233' }, { id: 't2', name: 'Beta', logo_url: null, team_color: null }],
     team_entries: [{ id: 'e1', team_id: 't1', season_id: 's1' }, { id: 'e2', team_id: 't2', season_id: 's1' }, { id: 'e0', team_id: 't1', season_id: 's0' }],
@@ -38,7 +38,7 @@ function seed({ roster = true, pastSeason = false } = {}) {
   db.rpcError = null;
   db.rosterError = null;
   db.slowEntry = null;
-  auth.role = 'captain';
+  auth.roles = ['captain'];
 }
 
 function from(table) {
@@ -55,8 +55,8 @@ function from(table) {
       const slow = table === 'roster_memberships' && db.slowEntry && filters.some(([c, v]) => c === 'team_entry_id' && v === db.slowEntry);
       return (slow ? new Promise((r) => setTimeout(r, 60)) : Promise.resolve()).then(() => {
         if (table === 'roster_memberships' && db.rosterError) return { data: null, error: db.rosterError };
-        // The captain's own registration only, as row level security returns it.
-        const visible = table === 'team_registrations' && auth.role === 'captain' ? rows().filter((r) => r.captain_id === 'c1') : rows();
+        // The captain's own assignments only, as row level security returns them.
+        const visible = table === 'captain_assignments' && !auth.roles.includes('dictator') ? rows().filter((r) => r.user_id === 'c1') : rows();
         return { data: single ? visible[0] ?? null : visible, error: null };
       }).then(resolve, reject);
     },
@@ -65,7 +65,7 @@ function from(table) {
 }
 
 vi.mock('../../lib/supabase', () => ({ supabase: { from: (t) => from(t), rpc: (...a) => rpc(...a), auth: { getSession: async () => ({ data: { session: null } }) } } }));
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'c1' }, role: auth.role }) }));
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'c1' }, roles: auth.roles, hasRole: (r) => auth.roles.includes(r) }) }));
 
 import { TeamBuilder, attributesForSave, fromMember } from '../TeamBuilder';
 
@@ -179,7 +179,7 @@ describe('TeamBuilder on season rosters', () => {
   });
 
   it('a dictator who also captains a team starts on it and can edit (no read-only preview)', async () => {
-    auth.role = 'dictator';
+    auth.roles = ['dictator'];
     renderBuilder();
     await screen.findByRole('button', { name: /01 Ada Striker/ });
     expect(screen.getByLabelText('Team').value).toBe('t1');
@@ -191,8 +191,8 @@ describe('TeamBuilder on season rosters', () => {
   });
 
   it('a dictator picks division, season and team and edits any roster', async () => {
-    auth.role = 'dictator';
-    db.tables.team_registrations = db.tables.team_registrations.filter((r) => r.captain_id !== 'c1'); // not a captain
+    auth.roles = ['dictator'];
+    db.tables.captain_assignments = db.tables.captain_assignments.filter((r) => r.user_id !== 'c1'); // not a captain
     renderBuilder();
     expect(await screen.findByText(/Pick a division, season and team/)).toBeTruthy();
     expect(screen.getByLabelText('Season').disabled).toBe(true);
@@ -213,7 +213,7 @@ describe('TeamBuilder on season rosters', () => {
   });
 
   it('a dictator\'s late roster answer for a previously chosen team is ignored', async () => {
-    auth.role = 'dictator';
+    auth.roles = ['dictator'];
     renderBuilder();
     await screen.findByRole('button', { name: /01 Ada Striker/ });
     db.slowEntry = 'e2'; // Beta's roster answers late
