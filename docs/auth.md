@@ -122,7 +122,7 @@ Production is the original hosted Supabase project, and (as far as we know) the 
 |---|---|
 | Triggers on `auth.users` after the migration | `ensure_domain_lock`, `ensure_domain_lock_on_email_change`, `on_auth_user_created` (the default-role trigger was removed with the role grants, 20261201000000) |
 | Sign up with a non-college email | Rejected |
-| Sign up with a college address | Needs the emailed confirmation; a profile and the default role appear after it |
+| Sign up with a college address | Needs the emailed confirmation; a profile appears after it (a normal user holds no role grant) |
 | Password sign-in with the widget | Succeeds |
 | Password sign-in with no token (for example by blocking the widget script) | "The verification did not complete" |
 | Forgot password | Email arrives; its link opens `/reset-password`; the new password works |

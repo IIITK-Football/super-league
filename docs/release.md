@@ -111,7 +111,7 @@ The repository work is finished and tested locally. The steps below need you (Gi
 
 **Production: before the merge**
 7. **See the exposure for yourself, harmlessly:** `node scripts/verify-rpc-closed.mjs <production URL> <production publishable key>`. It uses a random player id, so it changes nothing. Before the fix it should print `OPEN` for the 7-argument overload.
-8. **Captain role audit (read-only):** run `scripts/sql/captain-role-audit.sql` in the **production** SQL Editor. It lists team entries whose assigned captain does not hold the captain role. Share only the count and the role values. If it returns **no rows**, go on to step 10.
+8. **Captain role audit (read-only; historical, done for the 2026-11-19 release; the script was retired with `team_registrations`):** run `scripts/sql/captain-role-audit.sql` in the **production** SQL Editor. It lists team entries whose assigned captain does not hold the captain role. Share only the count and the role values. If it returns **no rows**, go on to step 10.
 9. **If it returns rows, resolve them deliberately** (the migration refuses to run otherwise, rather than locking a real captain out or granting roles automatically). For each person who really is the captain, assign the role, then re-run the audit until it is empty. Run this only after reviewing the list (one person per uuid; only a `default` role is changed, any other role needs a separate decision):
    ```sql
    UPDATE public.user_roles SET role = 'captain'
@@ -175,3 +175,16 @@ The first release of the canonical schema to production, in the order performed:
 4. Database deploy run `44610257088` (dispatch on `main`, `dry_run: false`): pre-migration backup `automated-prod/pre-migration/20261119T203759Z-44610257088-1.dump.age` (restore test passed), confirmed 3 minutes old at approval, then all 19 pending migrations applied through `20261130000007_drop_contact_emails`. The automatic run for the merge push (`44605660405`) was cancelled because its backup predated the data scripts.
 
 Still the owner's: check the live site against the new schema, and attest SL-080 C4.
+
+## Roles and assignments (SL-024): release notes and clone rehearsal
+
+Migrations `20261201000000_roles_and_assignments` and `20261201000001_retire_team_registrations`. Both go to production in one release, because the application code and the schema change together.
+
+**Rehearsal on the production-shaped clone** (2026-11-20; `/Users/kevinmathew/sl-prod-clone`, ports 563xx only, restored from the scheduled production backup `automated-prod/scheduled/20261120T022815Z-44660969060-1.dump.age` with the read-only R2 profile and the offline key; refreshed because this migration changes every account's role rows):
+- Before: 8 captain, 2 dictator and 49 default rows; 6 registrations; no admin rows.
+- Both migrations applied, guards passed. After (`scripts/sql/role-migration-report.sql`): 8 captain and 2 dictator grants (every one kept), the 49 default rows gone, 6 captain assignments, 6 registrations kept whole as history, every registration has its assignment, 0 registration names differed from the team name.
+- No captain's assignment is in a season that is no longer writable, so no captain grant lapses at the next season change. Two captain grants have no assignment (they could not act before either: no registration). The dictator can assign them or remove the grant.
+
+**Staging** (2026-11-20): the Database deploy for `a6a05c9` applied both migrations and the verification SQL; `node scripts/staging-checks.mjs` passed all 37 checks, including a captain change and its refusal, a scorer allowed on the assigned match only, and captains and normal accounts refused match writes.
+
+**Release steps** (the owner): the `develop` into `main` pull request merged with a merge commit; wait for the workflow's verified pre-migration backup; approve `Database Production`; then run `scripts/sql/role-migration-report.sql` read-only in the production SQL Editor and compare it with the clone numbers above (the counts can differ if accounts changed since the backup).
