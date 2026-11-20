@@ -2,7 +2,7 @@
 --
 -- * match_events holds goals, own goals and cards. A goal without a known scorer is an unattributed goal (player_id
 --   NULL; an own goal may also have an unknown player): it counts toward the score and toward no player's statistics. Removal is voiding (with a reason); rows are
---   never deleted. Edits carry a version so two scorers cannot overwrite each other silently.
+--   deleted only with their whole match. Edits carry a version so two scorers cannot overwrite each other silently.
 -- * matches.home_score / away_score become a cache: an AFTER trigger on match_events recomputes them in the same
 --   transaction, and a guard refuses every other write to a played match's score (any role, the server key included).
 -- * Walkovers and forfeits are explicit awarded results (result_kind, a required reason and the awarded score) with no
@@ -25,7 +25,7 @@ COMMENT ON COLUMN public.matches.events_version IS 'Counts changes to the match'
 
 CREATE TABLE public.match_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  match_id uuid NOT NULL REFERENCES public.matches(id) ON DELETE RESTRICT,
+  match_id uuid NOT NULL REFERENCES public.matches(id) ON DELETE CASCADE,
   team_id uuid NOT NULL REFERENCES public.teams(id) ON DELETE RESTRICT,
   kind text NOT NULL CONSTRAINT match_events_kind_check CHECK (kind IN ('goal', 'own_goal', 'yellow', 'red')),
   player_id uuid REFERENCES public.players(id) ON DELETE RESTRICT,
@@ -126,6 +126,10 @@ LANGUAGE plpgsql
 SET search_path TO ''
 AS $$
 BEGIN
+  -- Only deleting the whole match (a dictator cancelling a fixture) removes its events; the audit history keeps them.
+  IF TG_OP = 'DELETE' AND NOT EXISTS (SELECT 1 FROM public.matches WHERE id = OLD.match_id) THEN
+    RETURN OLD;
+  END IF;
   RAISE EXCEPTION 'A match event is voided, never deleted' USING ERRCODE = '42501';
 END;
 $$;
