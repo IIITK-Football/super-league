@@ -76,12 +76,15 @@ export default function GradePredictions() {
 
   // Reusable Match Row Component
   const MatchRow = ({ m, isGraded }) => (
-    <div className={`border rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${isGraded ? 'bg-black/20 border-white/5 opacity-70' : 'bg-black/50 border-white/10 hover:bg-white/5'}`}>
+    <div className={`border rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${isGraded ? (m.needs_regrade ? 'bg-amber-500/5 border-amber-500/30' : 'bg-black/20 border-white/5 opacity-70') : 'bg-black/50 border-white/10 hover:bg-white/5'}`}>
       <div>
         <div className="flex items-center gap-3 mb-1">
           <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-black tracking-widest ${isGraded ? 'bg-zinc-500/20 text-zinc-400' : 'bg-green-500/20 text-green-400'}`}>
             {isGraded ? 'Graded' : 'Action Required'}
           </span>
+          {isGraded && m.needs_regrade && (
+            <span className="text-[10px] px-2 py-0.5 rounded uppercase font-black tracking-widest bg-amber-500/20 text-amber-300" title="The match events changed after grading">Needs regrade</span>
+          )}
           {/* Fixed the Invalid Date bug here! */}
           <span className="text-xs text-zinc-500 font-mono">
             {m.date ? new Date(m.date).toLocaleDateString() : 'Date TBD'}
