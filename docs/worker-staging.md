@@ -38,3 +38,20 @@ request (503) if `SUPABASE_URL` is missing or contains the production reference.
 - The build log ends with `Deployed super-league-api-staging` and the deployment lists the `develop` commit.
 - The Worker has no public URL; once the staging Pages project has its `API` service binding, `GET /api/health` on
   the staging site returns `{"ok":true,"service":"super-league-api","environment":"staging"}`.
+
+## Automated staging checks behind Cloudflare Access
+The staging site (`*.super-league.pages.dev` previews) is protected by Cloudflare Access. Scripted checks reach it with
+a **service token** that is allowed only on the preview hostnames, never the production site.
+
+One-time setup (owner):
+1. Zero Trust → Access → Service credentials → Service tokens → Create a service token named `sl-staging-checks`.
+   Copy the Client ID and Client Secret; the secret is shown only once.
+2. Zero Trust → Access → Applications → the application protecting the Pages previews → add a policy with Action
+   **Service Auth** that includes the `sl-staging-checks` token. Do not add it to any production application.
+3. Store both values in the macOS Keychain with hidden input (nothing reaches the repository or a chat):
+   `security add-generic-password -U -a "$USER" -s sl-staging-access-client-id -w` and
+   `security add-generic-password -U -a "$USER" -s sl-staging-access-client-secret -w`
+
+Run: `node scripts/staging-media-check.mjs` uploads a portrait, a team logo and a news image through the staging site,
+checks each lands in its `sl-staging-*` bucket and serves the image, checks a normal account is refused, and cleans up.
+Revoke the token in Zero Trust to stop all automated access at once.
