@@ -2,7 +2,7 @@
 -- division-string paths were retired (docs/decisions/D-01-division-season-mapping.md). Seeded local database,
 -- inside a transaction that is rolled back.
 BEGIN;
-SELECT plan(47);
+SELECT plan(45);
 
 CREATE FUNCTION pg_temp.exec_as(p_role text, p_uid uuid, p_sql text)
 RETURNS text LANGUAGE plpgsql AS $$
@@ -50,8 +50,8 @@ SELECT is((SELECT count(*) FROM public.matches)::int, 168, 'every seeded match i
 SELECT is((SELECT count(*) FROM public.matches m JOIN public.seasons s ON s.id = m.season_id WHERE s.slug = '2026')::int, 168,
   'every match belongs to a 2026 season');
 SELECT is((SELECT count(*) FROM public.team_entries)::int, 24, 'every team is entered in its division''s 2026 season');
-SELECT is((SELECT count(*) FROM public.team_registrations WHERE season_id IS NOT NULL)::int, (SELECT count(*) FROM public.team_registrations)::int,
-  'every registration belongs to a season');
+SELECT is((SELECT count(*) FROM public.captain_assignments ca JOIN public.team_entries e ON e.id = ca.team_entry_id)::int, (SELECT count(*) FROM public.captain_assignments)::int,
+  'every captain assignment belongs to a team entry, so to a season');
 SELECT is((SELECT count(*) FROM public.season_sections)::int, 3 * (SELECT count(*) FROM public.section_types)::int,
   'each season has every section configured');
 SELECT ok((SELECT bool_and(starts_on IS NOT NULL AND ends_on >= starts_on) FROM public.seasons), 'season dates follow their matches');
@@ -59,7 +59,6 @@ SELECT ok((SELECT bool_and(starts_on IS NOT NULL AND ends_on >= starts_on) FROM 
 -- The legacy division-string paths are gone -----------------------------------------------------------------
 SELECT hasnt_column('public', 'teams', 'division', 'teams.division is gone');
 SELECT hasnt_column('public', 'matches', 'division', 'matches.division is gone');
-SELECT hasnt_column('public', 'team_registrations', 'division', 'team_registrations.division is gone');
 SELECT hasnt_column('public', 'user_profiles', 'mens_team_flair', 'the mens flair column is gone');
 SELECT hasnt_column('public', 'user_profiles', 'womens_team_flair', 'the womens flair column is gone');
 SELECT has_column('public', 'user_profiles', 'wc_team_flair', 'the World Cup flair stays (separate domain)');
@@ -73,7 +72,6 @@ SELECT is((SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.prona
                              'legacy_current_season', 'legacy_key_for_season', 'increment_vote'))::int, 0,
   'the compatibility and polls functions are gone');
 SELECT col_not_null('public', 'matches', 'season_id', 'a match always belongs to a season');
-SELECT col_not_null('public', 'team_registrations', 'season_id', 'a registration always belongs to a season');
 
 -- D-01 season naming (kept for future backfills and documentation) ------------------------------------------
 SELECT is(public.season_label('2026-08-01', '2026-12-03', '2020-01-01'), '2026', 'one calendar year -> "2026"');

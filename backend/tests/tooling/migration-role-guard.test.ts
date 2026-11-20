@@ -18,6 +18,9 @@ function guardBlock(): string {
 const USER = 'b0000000-0000-4000-8000-0000000000aa';
 function run(setup: string) {
   const script = `BEGIN;
+    -- team_registrations is retired (20261201000001); the guard predates that, so the table is recreated inside this
+    -- always-rolled-back transaction to run the guard exactly as it ran when the migration applied.
+    CREATE TABLE public.team_registrations (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, captain_id uuid NOT NULL, team_name text, season_id uuid, team_id uuid, created_at timestamptz DEFAULT now());
     INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
       VALUES ('${USER}', 'authenticated', 'authenticated', 'guard.captain@iiitkottayam.ac.in', '', now(), now());
     INSERT INTO public.team_registrations (id, captain_id, team_name, season_id)
@@ -70,7 +73,7 @@ describe('captain role guard in the migration', () => {
   });
 
   it('leaves the database unchanged (the test always rolls back)', () => {
-    const r = spawnSync('psql', [LOCAL_DB, '-Atc', `select (select count(*) from auth.users where id = '${USER}') || ',' || (select count(*) from public.team_registrations where team_name = 'Guard Team')`], { encoding: 'utf8' });
-    expect(r.stdout.trim()).toBe('0,0');
+    const r = spawnSync('psql', [LOCAL_DB, '-Atc', `select (select count(*) from auth.users where id = '${USER}') || ',' || (select count(*) from pg_class where relname = 'team_registrations')`], { encoding: 'utf8' });
+    expect(r.stdout.trim()).toBe('0,0'); // no account left behind, and the retired table was only ever created inside the rolled-back transaction
   });
 });

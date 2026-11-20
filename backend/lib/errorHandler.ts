@@ -21,6 +21,9 @@ export function handleError(error: any, context: string) {
   } else if (error.status === 401) {
     statusCode = 401;
     safeMessage = "Unauthorized.";
+  } else if (error.status === 403 || error.status === 404) {
+    // Thrown by the routes themselves with a fixed message ("not assigned to score this match"), never a database error.
+    statusCode = error.status;
   }
 
   // 3. UNIFIED RESPONSE FORMAT: The client NEVER sees raw database details or tokens

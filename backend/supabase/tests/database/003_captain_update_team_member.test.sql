@@ -8,6 +8,9 @@
 -- docs/decisions/SL-003-role-capability-matrix.md. Editor and normal users (including a former legacy admin, now an ordinary user) are tested.
 BEGIN;
 SELECT plan(40);
+-- Captain fixtures are written as registrations (who captains which team in which season) and turned into the
+-- team entries' captain assignments, which is what the roster function reads.
+CREATE TEMP TABLE _registrations (id uuid DEFAULT gen_random_uuid(), captain_id uuid, team_name text, season_id uuid, team_id uuid) ON COMMIT DROP;
 
 -- Fixtures -------------------------------------------------------------------------------------------------
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -40,12 +43,12 @@ INSERT INTO public.team_entries (id, team_id, season_id) VALUES
   ('f1000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000003', (SELECT id FROM _season)),
   ('f1000000-0000-4000-8000-000000000004', 'f0000000-0000-4000-8000-000000000001', 'f9000000-0000-4000-8000-000000000001');
 
-INSERT INTO public.team_registrations (id, captain_id, team_name, season_id, team_id) VALUES
+INSERT INTO _registrations (id, captain_id, team_name, season_id, team_id) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'RPC Team A', (SELECT id FROM _season), 'f0000000-0000-4000-8000-000000000001'),
   ('d0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000002', 'RPC Team B', (SELECT id FROM _season), 'f0000000-0000-4000-8000-000000000002'),
   ('d0000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000007', 'RPC Team C', (SELECT id FROM _season), 'f0000000-0000-4000-8000-000000000003');
 INSERT INTO public.captain_assignments (team_entry_id, user_id)
-SELECT e.id, r.captain_id FROM public.team_registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
+SELECT e.id, r.captain_id FROM _registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
 ON CONFLICT (team_entry_id) DO NOTHING;
 
 INSERT INTO public.players (id, first_name, last_name, overall_rating, attributes, image_url) VALUES
@@ -129,10 +132,10 @@ SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8
   'P0001', 'Player is not part of your assigned roster', 'the captain''s assignment does not reach the same team in another season');
 
 -- A captain of the same team in an earlier, no longer current season cannot reach the player's shared card.
-INSERT INTO public.team_registrations (id, captain_id, team_name, season_id, team_id) VALUES
+INSERT INTO _registrations (id, captain_id, team_name, season_id, team_id) VALUES
   ('d0000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000008', 'RPC Team A old', 'f9000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001');
 INSERT INTO public.captain_assignments (team_entry_id, user_id)
-SELECT e.id, r.captain_id FROM public.team_registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
+SELECT e.id, r.captain_id FROM _registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
 ON CONFLICT (team_entry_id) DO NOTHING;
 SELECT throws_ok($$SELECT pg_temp.call_as('authenticated', 'c0000000-0000-4000-8000-000000000008', 'a1000000-0000-4000-8000-000000000005',
   'CB', 5, 70, '{}'::jsonb, 'stale')$$,
