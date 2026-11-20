@@ -37,7 +37,7 @@ beforeAll(async () => {
   const keys = localKeys();
   Object.assign(process.env, {
     SUPABASE_URL: keys.url, SUPABASE_PUBLISHABLE_KEY: keys.publishable, SUPABASE_SECRET_KEY: keys.secret,
-    R2_ACCOUNT_ID: 'test', R2_ACCESS_KEY_ID: 'test', R2_SECRET_ACCESS_KEY: 'test',
+    R2_ACCOUNT_ID: 'test', R2_ACCESS_KEY_ID: 'test', R2_SECRET_ACCESS_KEY: 'test', MEDIA_LOGOS_BUCKET: 'sl-local-team-logos', MEDIA_LOGOS_PUBLIC_URL: 'https://logos.example.test',
   });
   const c = clients(keys);
   admin = c.admin;

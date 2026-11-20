@@ -90,6 +90,8 @@ describe('groups.json', () => {
     expect(config.groups['api-services'].status).toBeUndefined();
     expect(affectedGroups(['api/src/app.ts'], config)).toContain('api-services');
     expect(affectedGroups(['backend/app/api/news/route.ts'], config)).toContain('api-services');
+    expect(affectedGroups(['backend/lib/storage.ts'], config)).toContain('api-services');
+    expect(config.groups['api-services'].covers).toContain('backend/lib/storage.ts');
     expect(needsLocalDatabase(['api-services'], config)).toBe(true);
     const workspace = readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8');
     expect(workspace).toMatch(/^\s+- api$/m);

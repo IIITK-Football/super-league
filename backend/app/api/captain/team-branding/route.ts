@@ -1,4 +1,5 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { keys, StorageError, storageFor, type Storage } from '@/lib/storage';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { myRoles } from '@/lib/auth/roles';
@@ -23,41 +24,29 @@ function isPngBuffer(buffer: Buffer): boolean {
   );
 }
 
-function getPublicLogoUrl(key: string, publicBaseUrl: string) {
-  const publicUrl = publicBaseUrl.replace(/\/+$/, '');
-  return `${publicUrl}/${key.split('/').map(encodeURIComponent).join('/')}`;
-}
 
 export async function POST(request: Request) {
   let uploadedKey: string | null = null;
 
   try {
-    const accountId = process.env.R2_ACCOUNT_ID;
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    const bucket = process.env.R2_LOGO_BUCKET || 'team-logos';
-    const publicLogoBaseUrl =
-      process.env.R2_LOGO_PUBLIC_URL ||
-      'https://pub-faaac762b0254fb88c3967f021ced499.r2.dev';
     const supabaseUrl = process.env.SUPABASE_URL;
     const publishable = process.env.SUPABASE_PUBLISHABLE_KEY;
     const secret = process.env.SUPABASE_SECRET_KEY;
 
-    if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
-      return Response.json({ error: 'Team logo storage is not configured on the server.' }, { status: 503 });
-    }
-    if (!publicLogoBaseUrl) {
-      return Response.json({ error: 'The public team logo URL is not configured on the server.' }, { status: 503 });
-    }
     if (!supabaseUrl || !publishable || !secret) {
       return Response.json({ error: 'Team setup is not configured on the server.' }, { status: 503 });
     }
-
-    const r2 = new S3Client({
-      region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-      credentials: { accessKeyId, secretAccessKey },
-    });
+    // Storage is needed only when a logo is uploaded; a name or colour change works without it.
+    let store: Storage | null = null;
+    const logoStorage = () => {
+      try {
+        store ??= storageFor('logos');
+        return store;
+      } catch (error) {
+        if (error instanceof StorageError) return null;
+        throw error;
+      }
+    };
     const authHeader = request.headers.get('Authorization') || '';
     const cookieStore = noCookies;
     const authClient = createServerClient(supabaseUrl, publishable, {
@@ -157,28 +146,20 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
 
-      const nameForKey = team.name || 'team';
-      const teamSlug = nameForKey
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9._-]/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^[.-]+|[.-]+$/g, '') || registration.team_id;
+      const storage = logoStorage();
+      if (!storage) return Response.json({ error: 'Team logo storage is not configured on the server.' }, { status: 503 });
 
-      // Logos are stored per division (Freshers logos keep their existing "freshers/" folder).
-      const season = (Array.isArray(registration.season) ? registration.season[0] : registration.season) as any;
-      const divisionSlug = (Array.isArray(season?.division) ? season.division[0] : season?.division)?.slug as string | undefined;
-      const folder = divisionSlug || 'freshers';
-
-      uploadedKey = `${folder}/${teamSlug}.png`;
-      await r2.send(new PutObjectCommand({
-        Bucket: bucket,
+      // One logo per team identity (shared by all its seasons), keyed by the team id; a version query string makes
+      // a replaced logo show at once despite caching.
+      uploadedKey = keys.teamLogo(registration.team_id);
+      await storage.client().send(new PutObjectCommand({
+        Bucket: storage.bucket,
         Key: uploadedKey,
         Body: buffer,
         ContentType: 'image/png',
         CacheControl: 'public, max-age=3600',
       }));
-      logoUrl = getPublicLogoUrl(uploadedKey, publicLogoBaseUrl);
+      logoUrl = `${storage.publicUrl(uploadedKey)}?v=${Date.now()}`;
     }
 
     const { error: updateError } = await adminClient
@@ -187,9 +168,10 @@ export async function POST(request: Request) {
       .eq('id', registration.team_id);
 
     if (updateError) {
-      if (uploadedKey) {
+      if (uploadedKey && store) {
         try {
-          await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: uploadedKey }));
+          const s: Storage = store;
+          await s.client().send(new DeleteObjectCommand({ Bucket: s.bucket, Key: uploadedKey }));
         } catch (cleanupError) {
           console.error('Could not clean up an unreferenced team logo:', cleanupError);
         }
