@@ -1,7 +1,8 @@
 
+import { StorageError, videoBase } from '@/lib/storage';
+
 export const dynamic = 'force-dynamic';
 
-const videoBaseUrl = (process.env.NEXT_PUBLIC_VIDEO_R2_URL || 'https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev').replace(/\/$/, '');
 const allowedStreams = new Set([
   'superLeague1', 'superLeague2', 'superLeague3',
   'wsl1', 'wsl2', 'wsl3',
@@ -16,7 +17,7 @@ function getAllowedPath(path: string[]) {
   return path.join('/');
 }
 
-function localMediaUrl(remoteUrl: URL, stream: string) {
+function localMediaUrl(remoteUrl: URL, stream: string, videoBaseUrl: string) {
   const remoteHost = new URL(videoBaseUrl).host;
   if (remoteUrl.host !== remoteHost || !remoteUrl.pathname.startsWith(`/${stream}/`)) return null;
   return `/api/media${remoteUrl.pathname}`;
@@ -27,6 +28,13 @@ async function proxyMedia(request: Request, context: RouteContext) {
   const relativePath = getAllowedPath(path);
   if (!relativePath) return Response.json({ error: 'Media path not found' }, { status: 404 });
 
+  let videoBaseUrl: string;
+  try {
+    videoBaseUrl = videoBase();
+  } catch (error) {
+    if (error instanceof StorageError) return Response.json({ error: "Video storage is not configured" }, { status: 503 });
+    throw error;
+  }
   const upstreamUrl = `${videoBaseUrl}/${relativePath}`;
   const headers = new Headers();
   const range = request.headers.get('range');
@@ -47,13 +55,13 @@ async function proxyMedia(request: Request, context: RouteContext) {
         if (trimmed.startsWith('#')) {
           return line.replace(/URI="([^"]+)"/g, (match, uri: string) => {
             const resolved = new URL(uri, upstreamUrl);
-            const localUrl = localMediaUrl(resolved, stream);
+            const localUrl = localMediaUrl(resolved, stream, videoBaseUrl);
             return localUrl ? `URI="${localUrl}"` : match;
           });
         }
 
         const resolved = new URL(trimmed, upstreamUrl);
-        return localMediaUrl(resolved, stream) || line;
+        return localMediaUrl(resolved, stream, videoBaseUrl) || line;
       }).join('\n');
 
       return new Response(rewritten, {

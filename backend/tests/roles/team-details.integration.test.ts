@@ -24,7 +24,7 @@ const team = async (id: string) => (await f.admin.from('teams').select('name, sh
 
 beforeAll(async () => {
   const keys = f.keys;
-  Object.assign(process.env, { SUPABASE_URL: keys.url, SUPABASE_PUBLISHABLE_KEY: keys.publishable, SUPABASE_SECRET_KEY: keys.secret, R2_ACCOUNT_ID: 'test', R2_ACCESS_KEY_ID: 'test', R2_SECRET_ACCESS_KEY: 'test' });
+  Object.assign(process.env, { SUPABASE_URL: keys.url, SUPABASE_PUBLISHABLE_KEY: keys.publishable, SUPABASE_SECRET_KEY: keys.secret, R2_ACCOUNT_ID: 'test', R2_ACCESS_KEY_ID: 'test', R2_SECRET_ACCESS_KEY: 'test', MEDIA_LOGOS_BUCKET: 'sl-local-team-logos', MEDIA_LOGOS_PUBLIC_URL: 'https://logos.example.test' });
   w = await world(f, tag);
   await f.admin.from('teams').update({ logo_url: 'data:image/png;base64,AA==', team_color: '#000000' }).in('id', w.teams);
   who.dictator = await account(f, 'dictator', ['dictator']);

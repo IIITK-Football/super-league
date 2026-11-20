@@ -1,19 +1,10 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { publishableKey } from '@/lib/supabase/keys';
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createServerClient } from '@supabase/ssr';
 import { hasAnyRole, myRoles } from '@/lib/auth/roles';
 import { noCookies } from '@/lib/http';
-
-// Initialize the R2 client using standard S3 configuration
-const r2Client = new S3Client({
-  region: "auto",
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-  },
-});
+import { IMAGE_EXTENSIONS, keys, StorageError, storageFor } from '@/lib/storage';
 
 export async function POST(req: Request) {
   try {
@@ -27,29 +18,26 @@ export async function POST(req: Request) {
     if (authError || !user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     if (!hasAnyRole(await myRoles(supabase), ['editor', 'dictator'])) return Response.json({ error: 'Insufficient role' }, { status: 403 });
 
-    const { filename, contentType } = await req.json();
-
-    if (!filename || !contentType) {
-      return Response.json({ error: "Filename and content type are required" }, { status: 400 });
+    // The client's filename is accepted for compatibility but never used: the server generates the key.
+    const { contentType } = await req.json();
+    if (!contentType || !IMAGE_EXTENSIONS[contentType]) {
+      return Response.json({ error: "News images must be PNG, JPEG, WebP or GIF." }, { status: 400 });
     }
 
-    // Create a unique filename so old images aren't accidentally overwritten
-    const uniqueFilename = `${Date.now()}-${filename.replace(/\s+/g, '-')}`;
+    let storage;
+    try {
+      storage = storageFor('news');
+    } catch (error) {
+      if (error instanceof StorageError) return Response.json({ error: 'News image storage is not configured on the server.' }, { status: 503 });
+      throw error;
+    }
 
-    // Prepare the command for Cloudflare R2
-    const command = new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME,
-      Key: uniqueFilename,
-      ContentType: contentType,
-    });
+    const key = keys.newsImage(crypto.randomUUID(), contentType);
+    const command = new PutObjectCommand({ Bucket: storage.bucket, Key: key, ContentType: contentType });
 
-    // Generate a secure URL that expires in 60 seconds
-    const signedUrl = await getSignedUrl(r2Client, command, { expiresIn: 60 });
-    
-    // Construct the final public URL that will be saved in Supabase
-    const publicUrl = `${process.env.NEXT_PUBLIC_R2_URL}/${uniqueFilename}`;
-
-    return Response.json({ success: true, signedUrl, publicUrl });
+    // A signed upload URL valid for 60 seconds; the browser uploads the image straight to the bucket.
+    const signedUrl = await getSignedUrl(storage.client(), command, { expiresIn: 60 });
+    return Response.json({ success: true, signedUrl, publicUrl: storage.publicUrl(key) });
   } catch (error) {
     console.error("Presigned URL error:", error);
     return Response.json({ success: false, error: "Failed to generate upload URL" }, { status: 500 });

@@ -516,7 +516,10 @@
       ],
       "covers": [
         "api/**",
-        "backend/lib/http.ts"
+        "backend/lib/http.ts",
+        "backend/lib/storage.ts",
+        "backend/app/api/media/**",
+        "backend/app/api/admin/newsletter/upload-url/**"
       ],
       "testPaths": [
         "api/test/**"

@@ -1,7 +1,8 @@
 // Player portraits: validation and upload for the portrait route (captains and dictators).
 // The R2 client is created only when an image is uploaded, so routes that do not upload work without R2 settings.
 // Keys are the player's id (players/<id>.png); existing portraits and their URLs are never touched.
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { keys, StorageError, storageFor } from '@/lib/storage';
 
 export const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
@@ -24,28 +25,22 @@ export function validatePortrait(buffer: Buffer): void {
 }
 
 function storage() {
-  const bucket = process.env.R2_FRESHERS_BUCKET_NAME || process.env.R2_BUCKET_NAME;
-  // Same public base as before this change; moving it into configuration belongs to the storage work.
-  const publicBase = (process.env.NEXT_PUBLIC_FRESHERS_R2_URL || process.env.R2_PUBLIC_URL || 'https://pub-156b66d0ff7841bc9601620610a8ebd3.r2.dev').replace(/\/+$/, '');
-  if (!bucket || !process.env.R2_ACCOUNT_ID || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
-    throw new ImageError('Cloudflare image storage is not configured on the server.', 503);
+  try {
+    return storageFor('players');
+  } catch (error) {
+    if (error instanceof StorageError) throw new ImageError('Player image storage is not configured on the server.', 503);
+    throw error;
   }
-  const client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY },
-  });
-  return { client, bucket, publicBase };
 }
 
 export function portraitKey(playerId: string): string {
-  return `players/${playerId}.png`;
+  return keys.player(playerId);
 }
 
 export async function uploadPortrait(key: string, buffer: Buffer): Promise<string> {
-  const { client, bucket, publicBase } = storage();
-  await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: 'image/png', CacheControl: 'public, max-age=3600' }));
-  return `${publicBase}/${key.split('/').map(encodeURIComponent).join('/')}`;
+  const store = storage();
+  await store.client().send(new PutObjectCommand({ Bucket: store.bucket, Key: key, Body: buffer, ContentType: 'image/png', CacheControl: 'public, max-age=3600' }));
+  return store.publicUrl(key);
 }
 
 export async function readPortrait(form: FormData): Promise<Buffer | null> {
