@@ -147,11 +147,9 @@ describe('captain team branding refusals', () => {
   });
 });
 
-describe('admin stats and the removed polls feature', () => {
-  it('admin stats no longer counts polls and still refuses a caller without a session', async () => {
-    const { GET } = await import('../../app/api/admin/stats/route');
-    const res = await GET(new Request('http://localhost/api/admin/stats'));
-    expect(res.status).toBe(401);
+describe('retired unused routes', () => {
+  it('the uncalled admin stats route is gone (no frontend caller; cookie-only auth the API never receives)', () => {
+    expect(existsSync(join(__dirname, '../../app/api/admin/stats'))).toBe(false);
   });
 
   it('the unused polls routes are gone', () => {
