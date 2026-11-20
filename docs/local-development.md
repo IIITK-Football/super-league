@@ -24,6 +24,17 @@
 
 The dev servers serve whatever checkout they were started from. When work happens in a git worktree or on another branch, start the web and API servers **from that checkout** (or switch the running checkout to the branch) before verifying a screen, and note the commit that was served: `git -C <checkout> rev-parse --short HEAD`. A dashboard that still shows a retired screen or queries a dropped table is almost always a server started from an older checkout against a database that has already been migrated. The UI walkthrough evidence required by rule R10 names that commit.
 
+Starting the web and API servers from a checkout (their environment files live in that checkout and are git-ignored):
+
+```bash
+pnpm db:start                      # local Supabase on 54322, if it is not running
+(cd backend && pnpm dev)           # API on http://localhost:3000
+(cd frontend && pnpm dev)          # web on http://localhost:5173
+git rev-parse --short HEAD         # the commit being served
+```
+
+If a server is already listening on 3000 or 5173, stop it first (`lsof -nP -iTCP:5173 -sTCP:LISTEN`), so the port serves the checkout you mean to verify.
+
 ## Explicit local commands
 
 Run from `backend/`. Use `pnpm`, never `npm`.
