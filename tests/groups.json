@@ -519,7 +519,8 @@
         "backend/lib/http.ts",
         "backend/lib/storage.ts",
         "backend/app/api/media/**",
-        "backend/app/api/admin/newsletter/image/**"
+        "backend/app/api/admin/newsletter/image/**",
+        "backend/app/api/wc/flair/**"
       ],
       "testPaths": [
         "api/test/**"
