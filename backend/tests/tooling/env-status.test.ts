@@ -23,8 +23,8 @@ beforeEach(() => {
 
 describe('envStatus', () => {
   it('reports set, empty and missing by name', () => {
-    write('backend/.env.local', `SUPABASE_URL=http://127.0.0.1:54321\nSUPABASE_PUBLISHABLE_KEY=${KEY}\nSUPABASE_SECRET_KEY=\n`);
-    const r = (envStatus(root) as any[]).find((t: { file: string }) => t.file === 'backend/.env.local');
+    write('api/.dev.vars', `SUPABASE_URL=http://127.0.0.1:54321\nSUPABASE_PUBLISHABLE_KEY=${KEY}\nSUPABASE_SECRET_KEY=\n`);
+    const r = (envStatus(root) as any[]).find((t: { file: string }) => t.file === 'api/.dev.vars');
     const by = Object.fromEntries(r.vars.map((v: { name: string; state: string }) => [v.name, v.state]));
     expect(r.exists).toBe(true);
     expect(by.SUPABASE_URL).toBe('set');
@@ -56,7 +56,7 @@ describe('envStatus', () => {
   });
 
   it('never returns or prints a value, in the data or in the formatted report', () => {
-    write('backend/.env.local', `SUPABASE_SECRET_KEY=${SECRET}\nSUPABASE_PUBLISHABLE_KEY=${KEY}\n`);
+    write('api/.dev.vars', `SUPABASE_SECRET_KEY=${SECRET}\nSUPABASE_PUBLISHABLE_KEY=${KEY}\n`);
     write('backend/.env.staging.local', `SUPABASE_SECRET_KEY=${SECRET}\n`);
     const data = envStatus(root);
     expect(JSON.stringify(data)).not.toContain(SECRET);
@@ -69,7 +69,9 @@ describe('envStatus', () => {
 
   it('covers local and staging targets, and none of them names production or the backup project', () => {
     const files = TARGETS.map((t: { file: string }) => t.file);
-    expect(files).toContain('backend/.env.local');
+    expect(files).toContain('api/.dev.vars');
+    // The Next dev server is no longer how the API runs locally.
+    expect(files).not.toContain('backend/.env.local');
     expect(files).toContain('frontend/.env.local');
     expect(files).toContain('backend/supabase/.env');
     expect(files).toContain('backend/.env.staging.local');

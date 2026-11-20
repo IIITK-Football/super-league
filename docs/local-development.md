@@ -28,12 +28,23 @@ Starting the web and API servers from a checkout (their environment files live i
 
 ```bash
 pnpm db:start                      # local Supabase on 54322, if it is not running
-(cd backend && pnpm dev)           # API on http://localhost:3000
-(cd frontend && pnpm dev)          # web on http://localhost:5173
+pnpm --dir api dev                 # API Worker (Hono under wrangler dev) on http://127.0.0.1:8787
+pnpm dev:frontend                  # web on http://localhost:5173; Vite proxies /api to the Worker
 git rev-parse --short HEAD         # the commit being served
 ```
 
-If a server is already listening on 3000 or 5173, stop it first (`lsof -nP -iTCP:5173 -sTCP:LISTEN`), so the port serves the checkout you mean to verify.
+The browser only ever calls `/api` on its own origin: Vite forwards it to the Worker locally (`API_PROXY_TARGET` overrides
+the target), and the Pages site forwards it through its `API` service binding when hosted. Leave `VITE_API_URL` blank.
+The Next.js dev server (`pnpm dev:backend`, port 3000) is no longer how the API runs.
+
+If a server is already listening on 8787 or 5173, stop it first (`lsof -nP -iTCP:5173 -sTCP:LISTEN`), so the port serves the checkout you mean to verify.
+
+### Media and R2, locally
+- `wrangler dev` emulates the R2 buckets the Worker writes to (`R2_NEWS`, `R2_PLAYERS`, `R2_LOGOS` bound to `sl-local-*`
+  in `api/wrangler.jsonc`) on disk under `api/.wrangler/`. No Cloudflare account or credentials are involved. Uploaded
+  files are served back from `/api/local-media/<purpose>/<key>`, a route that exists only when `SL_ENVIRONMENT=local`.
+- Existing read-only media still comes from public R2 hosts over the internet: the home video (proxied by `/api/media`
+  from `MEDIA_BASE_VIDEO`), its posters and the play-style icons. Without internet those do not load; nothing else is affected.
 
 ## Explicit local commands
 
@@ -61,8 +72,12 @@ Stop immediately if `status` is not reachable, shows a port other than 54322, or
 
 ## Environment files
 
-- `backend/.env.local`, `frontend/.env.local` and `frontend/.dev.vars` are git-ignored. Their Supabase URLs must be `http://127.0.0.1:54321`. A hosted `*.supabase.co` URL in any of them is a mistake for local work.
-- Copy the examples (`frontend/.env.example`, `frontend/.dev.vars.example`, `backend/.env.example`) and fill them from `pnpm exec supabase status`, which prints the local **publishable** and **secret** keys. Every variable, where it belongs and which key may be used where is in [`environment.md`](environment.md). The secret key is backend-only; startup validation and the frontend build refuse it under a public prefix.
+- Normal development needs two git-ignored files, both pointing at `http://127.0.0.1:54321`:
+  - `api/.dev.vars` (copy `api/.dev.vars.example`): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SL_ENVIRONMENT=local`, read by `wrangler dev`;
+  - `frontend/.env.local` (copy `frontend/.env.example`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, the Turnstile test key, and a blank `VITE_API_URL`.
+- Fill the keys from `pnpm exec supabase status -o env` (in `backend/`), which prints the local `PUBLISHABLE_KEY` and `SECRET_KEY`. A hosted `*.supabase.co` URL in either file is a mistake for local work. The secret key belongs only in `api/.dev.vars`; the frontend build refuses it under a public prefix.
+- Optional: `frontend/.dev.vars` (only for `wrangler pages dev`, the Pages Functions) and `backend/supabase/.env` (local Google sign-in or a real Turnstile secret). `backend/.env.example` is the maintainers' template for `backend/.env.staging.local`, used only by the scripted staging checks.
+- `node scripts/env-status.mjs` reports which of these variables are set, by name only. Every variable, where it belongs and which key may be used where is in [`environment.md`](environment.md).
 - If you still have the old names (`SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_ANON_KEY`), rename them; startup tells you what each was renamed to.
 
 ## Guarded helper (SL-013)
