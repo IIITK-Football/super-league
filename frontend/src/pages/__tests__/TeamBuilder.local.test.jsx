@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // Group: rosters. The real captain flow: the TeamBuilder page talks to a REAL Supabase Data API through a real
-// supabase-js client signed in as a captain who holds a team's registration for a season. The captain changes a
+// supabase-js client signed in as a captain assigned to a team entry in a season. The captain changes a
 // player's jersey number and rating; the database shows the change on the roster place and the player's card, and
 // another team's player is untouched. A user assigned to a team without the captain role is refused and nothing is
-// written.
+// written. A captain can also prepare an upcoming season, and a completed season opens read-only.
 //
 // Targets (skipped unless one is chosen):
 //   SL_LOCAL_SUPABASE=1     this repository's local stack only (127.0.0.1:54321); run by the rosters test group
@@ -33,7 +33,9 @@ vi.mock('../../lib/supabase', () => ({
     auth: { getSession: (...a) => holder.client.auth.getSession(...a) },
   },
 }));
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: holder.user, role: holder.user?.role }) }));
+vi.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({ user: holder.user, roles: holder.user?.roles ?? [], hasRole: (r) => Boolean(holder.user?.roles?.includes(r)) }),
+}));
 
 import { TeamBuilder } from '../TeamBuilder';
 
@@ -69,7 +71,8 @@ async function signedInAs(role, label = role) {
   const { data, error } = await admin.auth.admin.createUser({ email, password: randomBytes(16).toString('hex'), email_confirm: true });
   if (error) throw error;
   users.push(data.user.id);
-  must(await admin.from('user_roles').upsert({ user_id: data.user.id, role }, { onConflict: 'user_id' }));
+  // Roles are grants: a normal user ('default') holds none.
+  if (role !== 'default') must(await admin.from('user_roles').upsert({ user_id: data.user.id, role }, { onConflict: 'user_id,role', ignoreDuplicates: true }));
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   if (link.error) throw link.error;
   const client = createClient(conn.url, conn.publishable, opts);
@@ -113,14 +116,14 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
     made.places.push(must(await setup.client.rpc('add_player_to_roster', { p_player: made.players[0], p_team_entry_id: made.entries[1], p_jersey_number: 9, p_position: 'CM' })));
     captain = await signedInAs('captain');
     noRole = await signedInAs('default');
-    made.regs.push(must(await admin.from('team_registrations').insert({ captain_id: captain.id, team_name: `${tag} Own`, season_id: made.season, team_id: made.teams[0] }).select('id').single()).id);
+    made.regs.push(must(await admin.from('captain_assignments').insert({ team_entry_id: made.entries[0], user_id: captain.id }).select('id').single()).id);
   }, 90000);
 
   afterEach(cleanup);
 
   afterAll(async () => {
     if (!admin) return;
-    await admin.from('team_registrations').delete().in('id', made.regs);
+    await admin.from('captain_assignments').delete().in('id', made.regs);
     await admin.from('roster_memberships').delete().in('season_id', [made.season, made.season2]);
     await admin.from('players').delete().in('id', made.players);
     await admin.from('team_entries').delete().in('season_id', [made.season, made.season2]);
@@ -132,7 +135,7 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
 
   it('a captain edits their own roster player; the roster place and card change, another team does not', async () => {
     holder.client = captain.client;
-    holder.user = { id: captain.id, role: 'captain' };
+    holder.user = { id: captain.id, roles: ['captain'] };
     render(<MemoryRouter><TeamBuilder /></MemoryRouter>);
     await screen.findByRole('button', { name: new RegExp(`01 ${tag}Ada`) }, { timeout: 15000 });
     expect(screen.queryByText(new RegExp(`${tag}Zed`))).toBeNull();
@@ -160,9 +163,9 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
 
   it('a dictator who also captains a team keeps dictator access: picks another team and saves', async () => {
     const boss = await signedInAs('dictator');
-    made.regs.push(must(await admin.from('team_registrations').insert({ captain_id: boss.id, team_name: `${tag} Other`, season_id: made.season2, team_id: made.teams[1] }).select('id').single()).id);
+    made.regs.push(must(await admin.from('captain_assignments').insert({ team_entry_id: made.entries[1], user_id: boss.id }).select('id').single()).id);
     holder.client = boss.client;
-    holder.user = { id: boss.id, role: 'dictator' };
+    holder.user = { id: boss.id, roles: ['dictator'] };
     render(<MemoryRouter><TeamBuilder /></MemoryRouter>);
     await screen.findByRole('button', { name: new RegExp(`${tag}Zed`) }, { timeout: 15000 }); // starts on the team they captain
     fireEvent.change(screen.getByLabelText('Division'), { target: { value: made.division } });
@@ -179,9 +182,9 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
   }, 60000);
 
   it('a user assigned to the team without the captain role is refused and nothing is written', async () => {
-    must(await admin.from('team_registrations').update({ captain_id: noRole.id }).eq('id', made.regs[0]));
+    must(await admin.from('captain_assignments').update({ user_id: noRole.id }).eq('id', made.regs[0]));
     holder.client = noRole.client;
-    holder.user = { id: noRole.id, role: 'default' };
+    holder.user = { id: noRole.id, roles: [] };
     render(<MemoryRouter><TeamBuilder /></MemoryRouter>);
     await screen.findByRole('button', { name: new RegExp(`01 ${tag}Ada`) }, { timeout: 15000 });
     fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '99' } });

@@ -92,14 +92,18 @@ export async function loadRoster(registration) {
     }));
 }
 
-// A team context the builder works on: a team in a season, with the signed-in user's own registration for it if they
-// have one (only then may branding be changed). Captains get their own registrations; dictators pick any team.
-const SEASON_FIELDS = 'id, name, is_current, division:divisions(id, name)';
+// A team context the builder works on: a team in a season, with the signed-in user's own captain assignment for it if
+// they have one (only then may the team's details be changed here). Captains get their own assignments; dictators
+// pick any team.
+const SEASON_FIELDS = 'id, name, is_current, status, archived_at, division:divisions(id, name)';
+// A captain writes only while the season is current or upcoming and not completed or archived (D-03 addendum); the
+// database says the same. A completed or archived season opens read-only.
+const seasonReadOnly = (season) => Boolean(season) && (season.status === 'completed' || season.archived_at != null);
 
 export function TeamBuilder() {
-    const { user, role } = useAuth();
+    const { user, hasRole } = useAuth();
     // Dictator first: a dictator keeps dictator access even when they also captain a team.
-    const isDictator = role === 'dictator';
+    const isDictator = hasRole('dictator');
     const [registration, setRegistration] = useState(null);
     const [registrations, setRegistrations] = useState([]);
     const [players, setPlayers] = useState([]);
@@ -111,6 +115,8 @@ export function TeamBuilder() {
     const [saving, setSaving] = useState(false);
     const [teamLogoFile, setTeamLogoFile] = useState(null);
     const [teamColor, setTeamColor] = useState('#ffffff');
+    const [teamName, setTeamName] = useState('');
+    const [shortName, setShortName] = useState('');
     const [teamColorSelected, setTeamColorSelected] = useState(false);
     const [savingBranding, setSavingBranding] = useState(false);
     const [error, setError] = useState('');
@@ -128,8 +134,9 @@ export function TeamBuilder() {
     const [picking, setPicking] = useState({ seasons: false, teams: false });
     const latestRegistration = useRef(null);
     const latestPick = useRef({ seasons: 0, teams: 0 });
-    // A captain edits only the current season; an earlier season of their own team opens read-only.
-    const readOnly = !isDictator && registration?.season?.is_current === false;
+    const entryByTeam = useRef({}); // the chosen season's team entries, by team (the dictator's choice)
+    // A captain edits only a current or upcoming season; a completed season of their own team opens read-only.
+    const readOnly = !isDictator && seasonReadOnly(registration?.season);
 
     // Loads the context's roster; only the latest choice may fill it (a late answer for an earlier choice is ignored).
     const openContext = (context) => {
@@ -139,6 +146,8 @@ export function TeamBuilder() {
         setActiveTab('basic');
         setTeamLogoFile(null);
         setTeamColor(context?.team?.team_color || '#ffffff');
+        setTeamName(context?.team?.name || '');
+        setShortName(context?.team?.short_name || '');
         setTeamColorSelected(Boolean(context?.team?.team_color));
         setError(''); setSuccess(''); setBrandingError(''); setBrandingSuccess('');
         const key = context?.id ?? null;
@@ -153,7 +162,7 @@ export function TeamBuilder() {
 
     const teamsById = async (ids) => {
         if (!ids.length) return {};
-        const { data: rows, error: teamsError } = await supabase.from('teams').select('id, name, logo_url, team_color').in('id', ids);
+        const { data: rows, error: teamsError } = await supabase.from('teams').select('id, name, short_name, logo_url, team_color').in('id', ids);
         if (teamsError) setError(teamsError.message);
         return Object.fromEntries((rows || []).map((team) => [team.id, team]));
     };
@@ -162,16 +171,19 @@ export function TeamBuilder() {
         let cancelled = false;
         const start = async () => {
             if (!user?.id) return;
-            // The user's own registrations (any number): a captain's teams, or the teams a dictator also captains.
-            const { data: own, error: ownError } = await supabase
-                .from('team_registrations')
-                .select(`id, team_id, team_name, season_id, season:seasons(${SEASON_FIELDS})`)
-                .eq('captain_id', user.id);
+            // The user's own captain assignments (any number): a captain's team entries, or the ones a dictator also captains.
+            const { data: assigned, error: ownError } = await supabase
+                .from('captain_assignments')
+                .select(`id, team_entry:team_entries!inner(id, team_id, season_id, season:seasons(${SEASON_FIELDS}))`)
+                .eq('user_id', user.id);
             if (cancelled) return;
             if (ownError) setError(ownError.message);
-            const byId = await teamsById((own || []).map((r) => r.team_id).filter(Boolean));
+            const own = (assigned || []).filter((a) => a.team_entry).map((a) => ({
+                id: a.id, team_entry_id: a.team_entry.id, team_id: a.team_entry.team_id, season_id: a.team_entry.season_id, season: a.team_entry.season,
+            }));
+            const byId = await teamsById(own.map((r) => r.team_id).filter(Boolean));
             if (cancelled) return;
-            const mine = (own || []).map((r) => ({ ...r, registrationId: r.id, team: byId[r.team_id] || null }))
+            const mine = own.map((r) => ({ ...r, registrationId: r.id, team: byId[r.team_id] || null }))
                 .sort((a, b) => Number(b.season?.is_current === true) - Number(a.season?.is_current === true) || teamLabel(a).localeCompare(teamLabel(b)));
             setRegistrations(mine);
             if (isDictator) {
@@ -211,8 +223,9 @@ export function TeamBuilder() {
     const loadTeams = async (sId) => {
         const n = ++latestPick.current.teams;
         setPicking((p) => ({ ...p, teams: true }));
-        const { data: entries, error: err } = await supabase.from('team_entries').select('team_id').eq('season_id', sId);
+        const { data: entries, error: err } = await supabase.from('team_entries').select('id, team_id').eq('season_id', sId);
         const byId = await teamsById((entries || []).map((e) => e.team_id));
+        entryByTeam.current = Object.fromEntries((entries || []).map((e) => [e.team_id, e.id]));
         if (n !== latestPick.current.teams) return;
         if (err) setError(err.message);
         setTeams(Object.values(byId).sort((a, b) => a.name.localeCompare(b.name)));
@@ -235,7 +248,7 @@ export function TeamBuilder() {
         const division = divisions.find((d) => d.id === divisionId);
         const own = registrations.find((r) => r.team_id === id && r.season_id === seasonId);
         openContext({
-            id: own?.id || `${id}:${seasonId}`, registrationId: own?.id || null, team_id: id, season_id: seasonId,
+            id: own?.id || `${id}:${seasonId}`, registrationId: own?.id || null, team_entry_id: entryByTeam.current[id] || null, team_id: id, season_id: seasonId,
             season: { ...season, division }, team: teams.find((t) => t.id === id) || null,
         });
     };
@@ -296,7 +309,7 @@ export function TeamBuilder() {
 
     const handleBrandingSubmit = async (event) => {
         event.preventDefault();
-        if (!registration?.registrationId || readOnly) return; // branding needs the user's own current registration
+        if (!registration?.registrationId || readOnly) return; // team details need the user's own writable assignment
         setError('');
         setSuccess('');
         setBrandingError('');
@@ -323,8 +336,10 @@ export function TeamBuilder() {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const formData = new FormData();
-            formData.append('registration_id', registration.registrationId);
+            formData.append('team_entry_id', registration.team_entry_id);
             formData.append('team_color', teamColor);
+            if (teamName.trim() && teamName.trim() !== registration.team?.name) formData.append('team_name', teamName.trim());
+            if (shortName.trim() !== (registration.team?.short_name || '')) formData.append('short_name', shortName.trim());
             if (teamLogoFile) formData.append('logo', teamLogoFile);
 
             const response = await fetch(`${API_URL}/captain/team-branding`, {
@@ -334,7 +349,7 @@ export function TeamBuilder() {
                 body: formData,
             });
             const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Could not save team branding.');
+            if (!response.ok) throw new Error(result.error || 'Could not save team details.');
 
             setRegistration((current) => ({
                 ...current,
@@ -342,8 +357,8 @@ export function TeamBuilder() {
             }));
             setTeamLogoFile(null);
             setTeamColorSelected(true);
-            setSuccess('Team logo and color saved.');
-            setBrandingSuccess('Team logo and color saved.');
+            setSuccess('Team details saved.');
+            setBrandingSuccess('Team details saved.');
             setTimeout(() => {
                 setBrandingModalOpen(false);
                 setBrandingSuccess('');
@@ -590,7 +605,7 @@ export function TeamBuilder() {
             <div className="team-builder-modal-backdrop" onClick={() => !savingBranding && setBrandingModalOpen(false)}>
                 <div className="team-builder-modal-card" onClick={(e) => e.stopPropagation()}>
                     <div className="team-builder-modal-head">
-                        <h2><Shield size={18} className="text-[#d9ff4a]" /> Change Team Logo & Color</h2>
+                        <h2><Shield size={18} className="text-[#d9ff4a]" /> Team details</h2>
                         <button type="button" onClick={() => !savingBranding && setBrandingModalOpen(false)} aria-label="Close modal">
                             <X size={20} />
                         </button>
@@ -606,6 +621,12 @@ export function TeamBuilder() {
                             )}
                             <strong>{teamLabel(registration)}</strong>
                         </div>
+                        <label>Team name
+                            <input type="text" value={teamName} maxLength={60} onChange={(event) => setTeamName(event.target.value)} aria-label="Team name" />
+                        </label>
+                        <label>Short name
+                            <input type="text" value={shortName} maxLength={5} onChange={(event) => setShortName(event.target.value)} aria-label="Short name" />
+                        </label>
                         <label>New team logo
                             <input
                                 type="file"
