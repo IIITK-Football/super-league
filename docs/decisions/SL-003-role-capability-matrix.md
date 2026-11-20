@@ -22,7 +22,8 @@
 - **Captain** is scoped to a team entry (team + season) and acts only there.
 - **Scorer** is scoped to assignments (division/season, optionally matches). Dictators are unscoped.
 - **Editor** is global to newsletter content (no division scope required).
-- Whether one person may hold several roles is an open Phase 2 item (backlog §5); each role's scope above applies regardless.
+- A person may hold several roles at once; each is an independent grant and none implies another (D-03). Captain and scorer powers need an assignment on top of the grant, and a captain assignment is writable while its season is current or upcoming (D-03 addendum, 2026-11-20).
+- **Implemented (SL-024):** `user_roles` holds the grants, `captain_assignments` and `scorer_assignments` hold the scopes, and the database helpers `has_role`, `is_captain_of` and `can_score` decide. Row level security, the API routes and the dashboard use the same helpers. See `docs/decisions/D-03-roles-and-assignments.md`.
 
 ## Captain: explicit field allow-list
 
