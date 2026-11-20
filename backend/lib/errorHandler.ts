@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { ScopeError } from './scope';
 
 export function handleError(error: any, context: string) {
@@ -27,7 +26,7 @@ export function handleError(error: any, context: string) {
   }
 
   // 3. UNIFIED RESPONSE FORMAT: The client NEVER sees raw database details or tokens
-  return NextResponse.json(
+  return Response.json(
     { 
       success: false, 
       message: safeMessage 

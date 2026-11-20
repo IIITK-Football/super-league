@@ -1,15 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse, NextRequest } from 'next/server';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseServiceKey = secretKey(); 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const apiKey = process.env.API_FOOTBALL_KEY as string;
@@ -42,10 +41,10 @@ export async function GET(request: NextRequest) {
 
     await Promise.all(updatePromises);
 
-    return NextResponse.json({ success: true, updated_groups: validGroupsOnly.length });
+    return Response.json({ success: true, updated_groups: validGroupsOnly.length });
     
   } catch (error) {
     console.error("Group Sync Error:", error);
-    return NextResponse.json({ error: "Failed to sync groups" }, { status: 500 });
+    return Response.json({ error: "Failed to sync groups" }, { status: 500 });
   }
 }

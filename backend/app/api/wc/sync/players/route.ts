@@ -1,15 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse, NextRequest } from 'next/server';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseServiceKey = secretKey(); 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const apiKey = process.env.API_FOOTBALL_KEY as string;
@@ -23,7 +22,7 @@ export async function GET(request: NextRequest) {
     // NEW SAFETY CHECK: If the API returns an error object, stop and show it!
     if (!Array.isArray(teams)) {
       console.error("API returned an unexpected response:", teams);
-      return NextResponse.json({ 
+      return Response.json({ 
         error: "API-Football request failed", 
         api_response: teams 
       }, { status: 400 });
@@ -63,12 +62,12 @@ export async function GET(request: NextRequest) {
       if (data) totalUpdated += data.length;
     }
 
-    return NextResponse.json({ success: true, updated: totalUpdated });
+    return Response.json({ success: true, updated: totalUpdated });
     
   } catch (error: any) {
     console.error("Player Sync Error:", error);
     // Send the actual error message back to the curl response!
-    return NextResponse.json({ 
+    return Response.json({ 
       error: "Failed to sync players", 
       details: error.message || error.toString() 
     }, { status: 500 });

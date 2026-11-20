@@ -1,12 +1,11 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler'; 
+import { noCookies } from '@/lib/http';
 
 // 1. THE MAGIC FIX: Helper to read the Auth Header from the frontend!
 async function getSupabaseClient(request: Request) {
-  const cookieStore = await cookies();
+  const cookieStore = noCookies;
   const authHeader = request.headers.get('Authorization'); 
 
   return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
@@ -44,7 +43,7 @@ export async function GET(
 
     if (error) throw error;
 
-    return NextResponse.json({ 
+    return Response.json({ 
       success: true, 
       has_predicted: !!data,
       data: data || null 
@@ -103,7 +102,7 @@ export async function POST(
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, message: "Prediction locked in!", data });
+    return Response.json({ success: true, message: "Prediction locked in!", data });
 
   } catch (error) {
     return handleError(error, "Submit Prediction");

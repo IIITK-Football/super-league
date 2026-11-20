@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { handleError } from '../../../../../lib/errorHandler';
 import { callerClient } from '@/lib/roster/access';
 import { planScoreStep, parseEventInput, parseMinute, EVENT_KINDS, type EventRow } from '@/lib/matchEvents';
@@ -16,7 +15,7 @@ import { planScoreStep, parseEventInput, parseMinute, EVENT_KINDS, type EventRow
 //   score_step   { side: 'home' | 'away', delta: 1 | -1 }   +1 adds an unattributed goal; -1 voids the newest
 //                unattributed goal of that side, or answers 409 with the goals to choose from
 //   update_time, half_time, close_match   the clock and status
-const fail = (status: number, message: string, extra: Record<string, unknown> = {}) => NextResponse.json({ success: false, message, ...extra }, { status });
+const fail = (status: number, message: string, extra: Record<string, unknown> = {}) => Response.json({ success: false, message, ...extra }, { status });
 
 function mapDbError(error: { code?: string; message?: string }) {
   if (error.code === '42501') return fail(403, 'Forbidden: you are not assigned to score this match.');
@@ -56,7 +55,7 @@ export async function POST(request: Request) {
 
     const done = async (message: string, extra: Record<string, unknown> = {}) => {
       const fresh = await currentMatch(supabase, match_id);
-      return NextResponse.json({ success: true, message, match: fresh, ...extra });
+      return Response.json({ success: true, message, match: fresh, ...extra });
     };
     const markLive = async () => {
       if (match.status === 'scheduled') await supabase.from('matches').update({ status: 'live' }).eq('id', match_id);
@@ -73,7 +72,7 @@ export async function POST(request: Request) {
             && (existing.player_id ?? null) === (ev.player_id ?? null) && (existing.assist_player_id ?? null) === (ev.assist_player_id ?? null)
             && (existing.minute ?? null) === (ev.minute ?? null);
           if (!same) return fail(409, 'That event id already holds a different event.', { event: existing });
-          return NextResponse.json({ success: true, message: 'Event already recorded.', replayed: true, event: existing, match: await currentMatch(supabase, match_id) });
+          return Response.json({ success: true, message: 'Event already recorded.', replayed: true, event: existing, match: await currentMatch(supabase, match_id) });
         }
         const { data, error } = await supabase.from('match_events').insert({ ...ev, match_id }).select(EVENT_COLUMNS).single();
         if (error) return mapDbError(error) ?? Promise.reject(error);

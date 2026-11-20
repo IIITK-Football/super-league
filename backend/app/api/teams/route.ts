@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../lib/errorHandler';
@@ -32,7 +31,7 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data: data || [] });
+    return Response.json({ success: true, data: data || [] });
   } catch (error) {
     return handleError(error, 'Fetch Teams');
   }

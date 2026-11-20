@@ -1,10 +1,9 @@
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
 import { myRoles } from '@/lib/auth/roles';
 import { UUID } from '@/lib/roster/access';
+import { noCookies } from '@/lib/http';
 
 export const runtime = 'nodejs';
 
@@ -45,13 +44,13 @@ export async function POST(request: Request) {
     const secret = process.env.SUPABASE_SECRET_KEY;
 
     if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
-      return NextResponse.json({ error: 'Team logo storage is not configured on the server.' }, { status: 503 });
+      return Response.json({ error: 'Team logo storage is not configured on the server.' }, { status: 503 });
     }
     if (!publicLogoBaseUrl) {
-      return NextResponse.json({ error: 'The public team logo URL is not configured on the server.' }, { status: 503 });
+      return Response.json({ error: 'The public team logo URL is not configured on the server.' }, { status: 503 });
     }
     if (!supabaseUrl || !publishable || !secret) {
-      return NextResponse.json({ error: 'Team setup is not configured on the server.' }, { status: 503 });
+      return Response.json({ error: 'Team setup is not configured on the server.' }, { status: 503 });
     }
 
     const r2 = new S3Client({
@@ -60,14 +59,14 @@ export async function POST(request: Request) {
       credentials: { accessKeyId, secretAccessKey },
     });
     const authHeader = request.headers.get('Authorization') || '';
-    const cookieStore = await cookies();
+    const cookieStore = noCookies;
     const authClient = createServerClient(supabaseUrl, publishable, {
       cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} },
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
     const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
+      return Response.json({ error: 'Please sign in again.' }, { status: 401 });
     }
 
     const adminClient = createClient(supabaseUrl, secret);
@@ -78,12 +77,12 @@ export async function POST(request: Request) {
     const roles = await myRoles(authClient);
     const isDictator = roles.includes('dictator');
     if (!isDictator && !roles.includes('captain')) {
-      return NextResponse.json({ error: 'Only the team\'s captain can change its details.' }, { status: 403 });
+      return Response.json({ error: 'Only the team\'s captain can change its details.' }, { status: 403 });
     }
     const entryId = String(formData.get('team_entry_id') || '').trim();
     let candidateIds: string[];
     if (isDictator) {
-      if (!UUID.test(entryId)) return NextResponse.json({ error: 'Choose a team entry.' }, { status: 400 });
+      if (!UUID.test(entryId)) return Response.json({ error: 'Choose a team entry.' }, { status: 400 });
       candidateIds = [entryId];
     } else {
       const { data: mine, error: mineError } = await adminClient.from('captain_assignments').select('team_entry_id').eq('user_id', user.id);
@@ -97,10 +96,10 @@ export async function POST(request: Request) {
       if (ok === true || isDictator) writable.push(id);
     }
     if (!writable.length) {
-      return NextResponse.json({ error: 'You do not captain a team in a current or upcoming season. Contact your dictator.' }, { status: 409 });
+      return Response.json({ error: 'You do not captain a team in a current or upcoming season. Contact your dictator.' }, { status: 409 });
     }
     if (writable.length > 1) {
-      return NextResponse.json({ error: 'Choose which of your teams to change.' }, { status: 400 });
+      return Response.json({ error: 'Choose which of your teams to change.' }, { status: 400 });
     }
     const { data: entryRow, error: entryError } = await adminClient
       .from('team_entries')
@@ -108,7 +107,7 @@ export async function POST(request: Request) {
       .eq('id', writable[0])
       .maybeSingle();
     if (entryError) throw entryError;
-    if (!entryRow) return NextResponse.json({ error: 'Team entry not found.' }, { status: 404 });
+    if (!entryRow) return Response.json({ error: 'Team entry not found.' }, { status: 404 });
     const registration = entryRow as any;
 
     const team = Array.isArray(registration.teams) ? registration.teams[0] : registration.teams;
@@ -118,42 +117,42 @@ export async function POST(request: Request) {
     const newName = rawName === null ? team.name : String(rawName).trim();
     const newShort = rawShort === null ? team.short_name : String(rawShort).trim().toUpperCase();
     if (rawName !== null && (newName.length < 2 || newName.length > 60)) {
-      return NextResponse.json({ error: 'The team name must be 2 to 60 characters.' }, { status: 400 });
+      return Response.json({ error: 'The team name must be 2 to 60 characters.' }, { status: 400 });
     }
     if (rawShort !== null && newShort && !/^[A-Z0-9]{2,5}$/.test(newShort)) {
-      return NextResponse.json({ error: 'The short name must be 2 to 5 letters or numbers.' }, { status: 400 });
+      return Response.json({ error: 'The short name must be 2 to 5 letters or numbers.' }, { status: 400 });
     }
     const teamColor = String(formData.get('team_color') || '').trim();
     const logo = formData.get('logo');
 
     if (!/^#[0-9a-f]{6}$/i.test(teamColor)) {
-      return NextResponse.json({ error: 'Choose a valid team color.' }, { status: 400 });
+      return Response.json({ error: 'Choose a valid team color.' }, { status: 400 });
     }
     if (logo !== null && !(logo instanceof File)) {
-      return NextResponse.json({ error: 'Choose a valid logo image.' }, { status: 400 });
+      return Response.json({ error: 'Choose a valid logo image.' }, { status: 400 });
     }
     if (!(logo instanceof File) && !team.logo_url) {
-      return NextResponse.json({ error: 'Upload a team logo before continuing.' }, { status: 400 });
+      return Response.json({ error: 'Upload a team logo before continuing.' }, { status: 400 });
     }
 
     let logoUrl = team.logo_url;
     if (logo instanceof File) {
       if (!logo.size || logo.size > MAX_LOGO_SIZE) {
-        return NextResponse.json({ error: 'Team logos must be no larger than 5 MB.' }, { status: 413 });
+        return Response.json({ error: 'Team logos must be no larger than 5 MB.' }, { status: 413 });
       }
       if (logo.type !== 'image/png') {
-        return NextResponse.json({ error: 'Club logo must be in PNG format.' }, { status: 400 });
+        return Response.json({ error: 'Club logo must be in PNG format.' }, { status: 400 });
       }
 
       const buffer = Buffer.from(await logo.arrayBuffer());
       if (!isPngBuffer(buffer)) {
-        return NextResponse.json({ error: 'The selected file is not a valid PNG image.' }, { status: 400 });
+        return Response.json({ error: 'The selected file is not a valid PNG image.' }, { status: 400 });
       }
 
       const width = buffer.readUInt32BE(16);
       const height = buffer.readUInt32BE(20);
       if (width !== 256 || height !== 256) {
-        return NextResponse.json({
+        return Response.json({
           error: `Club logo must be exactly 256x256 pixels (received ${width}x${height}). Do not crop, please upload a 256x256 PNG.`,
         }, { status: 400 });
       }
@@ -196,14 +195,14 @@ export async function POST(request: Request) {
         }
       }
       if ((updateError as { code?: string }).code === '23505') {
-        return NextResponse.json({ error: 'Another team already uses that name.' }, { status: 409 });
+        return Response.json({ error: 'Another team already uses that name.' }, { status: 409 });
       }
       throw updateError;
     }
 
-    return NextResponse.json({ success: true, data: { name: newName, short_name: newShort || null, logo_url: logoUrl, team_color: teamColor } });
+    return Response.json({ success: true, data: { name: newName, short_name: newShort || null, logo_url: logoUrl, team_color: teamColor } });
   } catch (error) {
     console.error('Captain team branding update failed:', error);
-    return NextResponse.json({ error: 'Could not save your team branding.' }, { status: 500 });
+    return Response.json({ error: 'Could not save your team branding.' }, { status: 500 });
   }
 }

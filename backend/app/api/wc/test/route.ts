@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 
@@ -11,5 +10,5 @@ const supabase = createClient(
 
 export async function GET() {
   const { data, error } = await supabase.from('wc_player').select('*').limit(1);
-  return NextResponse.json({ data, error });
+  return Response.json({ data, error });
 }

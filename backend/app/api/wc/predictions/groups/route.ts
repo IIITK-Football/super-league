@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse, NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,12 +10,12 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // Set the global deadline
 const PREDICTION_DEADLINE = new Date('2026-06-22T00:00:00Z');
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   console.log("GROUP POST HIT");
   try {
     // 1. DEADLINE CHECK
     if (new Date() > PREDICTION_DEADLINE) {
-      return NextResponse.json({ success: false, error: 'Deadline passed. Predictions are locked.' }, { status: 403 });
+      return Response.json({ success: false, error: 'Deadline passed. Predictions are locked.' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -24,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     // predictions should be an array of objects from the frontend
     if (!user_id || !Array.isArray(predictions) || predictions.length === 0) {
-       return NextResponse.json({ success: false, error: 'Invalid payload data' }, { status: 400 });
+       return Response.json({ success: false, error: 'Invalid payload data' }, { status: 400 });
     }
 
     // 2. ONE-TIME SUBMISSION CHECK
@@ -36,7 +35,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (existingRecords && existingRecords.length > 0) {
-      return NextResponse.json({ success: false, error: 'Predictions have already been submitted and cannot be changed.' }, { status: 403 });
+      return Response.json({ success: false, error: 'Predictions have already been submitted and cannot be changed.' }, { status: 403 });
     }
 
     // 3. IF SAFE, FORMAT AND SAVE TO DATABASE
@@ -60,22 +59,22 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, saved_count: data ? data.length : formattedPredictions.length });
+    return Response.json({ success: true, saved_count: data ? data.length : formattedPredictions.length });
 
   } catch (error: any) {
     console.error("Group Prediction Error:", error);
-    return NextResponse.json({ success: false, error: error.message || "Failed to save group predictions" }, { status: 500 });
+    return Response.json({ success: false, error: error.message || "Failed to save group predictions" }, { status: 500 });
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
     // Grab the user_id from the URL query
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');
 
     if (!userId) {
-      return NextResponse.json({ success: false, error: "Missing user_id parameter" }, { status: 400 });
+      return Response.json({ success: false, error: "Missing user_id parameter" }, { status: 400 });
     }
 
     const { data, error } = await supabase
@@ -94,9 +93,9 @@ export async function GET(request: NextRequest) {
       fourth_place_id: d.predicted_4th_place
     }));
 
-    return NextResponse.json({ success: true, data: formattedData });
+    return Response.json({ success: true, data: formattedData });
   } catch (error: any) {
     console.error("Group Prediction Fetch Error:", error);
-    return NextResponse.json({ success: false, error: error.message || "Failed to fetch predictions" }, { status: 500 });
+    return Response.json({ success: false, error: error.message || "Failed to fetch predictions" }, { status: 500 });
   }
 }

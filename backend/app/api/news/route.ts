@@ -1,7 +1,6 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { noCookies } from '@/lib/http';
 
 export async function GET(request: Request) {
   try {
@@ -13,7 +12,7 @@ export async function GET(request: Request) {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    const cookieStore = await cookies();
+    const cookieStore = noCookies;
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
       publishableKey(),
@@ -44,7 +43,7 @@ export async function GET(request: Request) {
 
     const totalPages = count ? Math.ceil(count / limit) : 0;
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: data,
       meta: {
@@ -57,7 +56,7 @@ export async function GET(request: Request) {
 
   } catch (error) {
     console.error("News fetch error:", error);
-    return NextResponse.json(
+    return Response.json(
       { success: false, message: "Failed to fetch news" },
       { status: 500 }
     );

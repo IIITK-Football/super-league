@@ -1,14 +1,13 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
 import { hasAnyRole, myRoles, type Role } from '../../../../lib/auth/roles';
+import { noCookies } from '@/lib/http';
 // Note: Zod is removed here to keep it simple, but you can add it back if you have it installed!
 
 // 1. THE MAGIC FIX: Teach the client to read the Auth Header!
 async function getSupabaseClient(request: Request) {
-  const cookieStore = await cookies();
+  const cookieStore = noCookies;
   const authHeader = request.headers.get('Authorization'); // Grab the VIP Pass from the frontend!
 
   return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
@@ -52,7 +51,7 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw error;
-    return NextResponse.json({ success: true, message: "Article published", data });
+    return Response.json({ success: true, message: "Article published", data });
   } catch (error) {
     return handleError(error, "Admin Create Article");
   }
@@ -74,7 +73,7 @@ export async function DELETE(request: Request) {
       .eq('id', id);
 
     if (error) throw error;
-    return NextResponse.json({ success: true, message: "Article deleted successfully" });
+    return Response.json({ success: true, message: "Article deleted successfully" });
   } catch (error) {
     return handleError(error, "Admin Delete Article");
   }

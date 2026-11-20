@@ -1,15 +1,14 @@
 export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
 import { actualPlayers, frequencyMap } from '@/lib/grading';
+import { noCookies } from '@/lib/http';
 
 async function getSupabaseClient(request: Request) {
-  const cookieStore = await cookies();
+  const cookieStore = noCookies;
   const authHeader = request.headers.get('Authorization');
 
   return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
@@ -202,7 +201,7 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: enriched
     });

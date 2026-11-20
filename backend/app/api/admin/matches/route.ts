@@ -1,16 +1,15 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
+import { noCookies } from '@/lib/http';
 
 // Turn off caching so the admin sees live updates instantly!
 export const revalidate = 0;
 
 // 1. THE MAGIC FIX: Teach the client to read the Auth Header!
 async function getSupabaseClient(request: Request) {
-  const cookieStore = await cookies();
+  const cookieStore = noCookies;
   const authHeader = request.headers.get('Authorization'); 
 
   return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
@@ -98,7 +97,7 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ success: true, data: formattedData });
+    return Response.json({ success: true, data: formattedData });
   } catch (error) {
     return handleError(error, "Fetch Matches");
   }
@@ -149,7 +148,7 @@ export async function POST(request: Request) {
       data.away_score = awardAway;
     }
     if (error) throw error;
-    return NextResponse.json({ success: true, message: "Match scheduled successfully", data });
+    return Response.json({ success: true, message: "Match scheduled successfully", data });
   } catch (error) {
     return handleError(error, "Admin Create Match");
   }
@@ -181,7 +180,7 @@ export async function PUT(request: Request) {
       if ((error as { code?: string }).code === '23514') throw { status: 409, message: (error as { message: string }).message };
       throw error;
     }
-    return NextResponse.json({ success: true, message: "Match rescheduled successfully", data });
+    return Response.json({ success: true, message: "Match rescheduled successfully", data });
   } catch (error) {
     return handleError(error, "Admin Update Match");
   }
@@ -203,7 +202,7 @@ export async function DELETE(request: Request) {
       .eq('id', id);
 
     if (error) throw error;
-    return NextResponse.json({ success: true, message: "Match deleted successfully" });
+    return Response.json({ success: true, message: "Match deleted successfully" });
   } catch (error) {
     return handleError(error, "Admin Delete Match");
   }

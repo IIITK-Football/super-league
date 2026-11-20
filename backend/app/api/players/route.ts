@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { resolveScope } from '@/lib/scope';
 import { createClient } from '@supabase/supabase-js';
@@ -63,7 +62,7 @@ export async function GET(request: Request) {
       }))
       .sort((a, b) => (a.position || '').localeCompare(b.position || '') || (a.last_name || '').localeCompare(b.last_name || ''));
 
-    return NextResponse.json({ success: true, data: players });
+    return Response.json({ success: true, data: players });
   } catch (error) {
     return handleError(error, 'Fetch Players');
   }

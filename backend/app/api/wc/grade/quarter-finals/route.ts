@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse, NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,13 +7,13 @@ const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseServiceKey = secretKey(); 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-export async function GET(request: NextRequest) {
-  const auth = request.nextUrl.searchParams.get('auth');
+export async function GET(request: Request) {
+  const auth = new URL(request.url).searchParams.get('auth');
   if (auth !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const execute = request.nextUrl.searchParams.get('execute') === 'true';
+  const execute = new URL(request.url).searchParams.get('execute') === 'true';
 
   // The official 8 teams that qualified for Quarter-Finals
   const qualifiedTeams = [
@@ -43,7 +42,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (unmappedTeams.length > 0) {
-        return NextResponse.json({ 
+        return Response.json({ 
             error: "Could not find these teams in your database. Check spelling!", 
             unmapped_teams: unmappedTeams 
         }, { status: 400 });
@@ -58,7 +57,7 @@ export async function GET(request: NextRequest) {
         
     if (predErr) throw predErr;
     if (!predictions || predictions.length === 0) {
-        return NextResponse.json({ status: "All users have already been graded for Quarter-Finals!" });
+        return Response.json({ status: "All users have already been graded for Quarter-Finals!" });
     }
 
     const userScores: Record<string, number> = {};
@@ -133,7 +132,7 @@ export async function GET(request: NextRequest) {
             await supabase.from('wc_leaderboard').upsert(finalLeaderboardUpsert, { onConflict: 'user_id' });
         }
 
-        return NextResponse.json({ 
+        return Response.json({ 
             status: "SUCCESS: Quarter-Finals graded and leaderboard updated!", 
             ungraded_rows_processed: updatesToMake.length,
             users_updated: Object.keys(userScores).length
@@ -141,7 +140,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 5. DRY RUN Output
-    return NextResponse.json({
+    return Response.json({
         status: "DRY RUN: Ready to grade.",
         ungraded_rows_found: updatesToMake.length,
         official_qualified_ids: qualifiedIds,
@@ -151,6 +150,6 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
      console.error("Grading Error:", error);
-     return NextResponse.json({ error: error.message }, { status: 500 });
+     return Response.json({ error: error.message }, { status: 500 });
   }
 }

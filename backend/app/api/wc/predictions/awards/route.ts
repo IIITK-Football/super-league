@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse, NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,13 +11,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const PREDICTION_DEADLINE = new Date('2026-06-22T00:00:00Z');
 
 // GET: Retrieve a user's award predictions
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');
 
     if (!userId) {
-      return NextResponse.json({ error: "Missing user_id parameter" }, { status: 400 });
+      return Response.json({ error: "Missing user_id parameter" }, { status: 400 });
     }
 
     const { data: awardData, error } = await supabase
@@ -29,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // PGRST116 means no rows were found (the user hasn't predicted yet), which is completely fine
     if (error && error.code !== 'PGRST116') throw error;
-    if (!awardData) return NextResponse.json({ success: true, data: null });
+    if (!awardData) return Response.json({ success: true, data: null });
 
     // Fetch player names
     const playerIds = [awardData.golden_boot_id, awardData.golden_ball_id, awardData.golden_glove_id].filter(Boolean);
@@ -47,28 +46,28 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, data: awardData });
+    return Response.json({ success: true, data: awardData });
   } catch (error) {
     console.error("Fetch Awards Error:", error);
-    return NextResponse.json({ error: "Failed to fetch award predictions" }, { status: 500 });
+    return Response.json({ error: "Failed to fetch award predictions" }, { status: 500 });
   }
 }
 
 // POST: Save or update a user's award predictions (Secured)
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   console.log("AWARDS POST HIT");
 
   try {
     // 1. DEADLINE CHECK
     if (new Date() > PREDICTION_DEADLINE) {
-      return NextResponse.json({ success: false, error: 'Deadline passed. Predictions are locked.' }, { status: 403 });
+      return Response.json({ success: false, error: 'Deadline passed. Predictions are locked.' }, { status: 403 });
     }
 
     const body = await request.json();
     const { user_id, golden_boot_id, golden_ball_id, golden_glove_id } = body;
 
     if (!user_id) {
-       return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
+       return Response.json({ error: 'Missing user_id' }, { status: 400 });
     }
 
     // 2. ONE-TIME SUBMISSION CHECK
@@ -80,7 +79,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existingRecord) {
-      return NextResponse.json({ success: false, error: 'Predictions have already been submitted and cannot be changed.' }, { status: 403 });
+      return Response.json({ success: false, error: 'Predictions have already been submitted and cannot be changed.' }, { status: 403 });
     }
 
     // 3. IF SAFE, SAVE TO DATABASE
@@ -101,10 +100,10 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data: data[0] });
+    return Response.json({ success: true, data: data[0] });
 
   } catch (error) {
     console.error("Award Prediction Error:", error);
-    return NextResponse.json({ error: "Failed to save award predictions" }, { status: 500 });
+    return Response.json({ error: "Failed to save award predictions" }, { status: 500 });
   }
 }

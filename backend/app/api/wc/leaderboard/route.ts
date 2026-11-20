@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { secretKey } from '@/lib/supabase/keys';
-import { NextResponse } from 'next/server';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseKey = secretKey();
@@ -21,9 +20,9 @@ export async function GET() {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data });
+    return Response.json({ success: true, data });
   } catch (error) {
     console.error("Leaderboard Error:", error);
-    return NextResponse.json({ error: "Failed to fetch leaderboard" }, { status: 500 });
+    return Response.json({ error: "Failed to fetch leaderboard" }, { status: 500 });
   }
 }

@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../../../lib/errorHandler';
 import { callerClient } from '@/lib/roster/access';
@@ -11,7 +10,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     if (!body.match_id) throw { status: 400, message: 'match_id is required for grading.' };
     if (!process.env.SUPABASE_SECRET_KEY) {
-      return NextResponse.json({ success: false, message: 'Server configuration error: SUPABASE_SECRET_KEY is missing.' }, { status: 500 });
+      return Response.json({ success: false, message: 'Server configuration error: SUPABASE_SECRET_KEY is missing.' }, { status: 500 });
     }
 
     const supabase = await callerClient(request);
@@ -22,9 +21,9 @@ export async function POST(request: Request) {
 
     const admin = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_SECRET_KEY as string, { auth: { autoRefreshToken: false, persistSession: false } });
     const graded = await gradeMatch(admin, body.match_id);
-    return NextResponse.json({ success: true, message: graded ? `Graded ${graded} predictions from the match events.` : 'No predictions found for this match.' });
+    return Response.json({ success: true, message: graded ? `Graded ${graded} predictions from the match events.` : 'No predictions found for this match.' });
   } catch (error) {
-    if (error instanceof GradingError) return NextResponse.json({ success: false, message: error.message }, { status: error.status });
+    if (error instanceof GradingError) return Response.json({ success: false, message: error.message }, { status: error.status });
     return handleError(error, 'Grade Predictions Engine');
   }
 }

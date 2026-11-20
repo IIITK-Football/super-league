@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createClient } from '@supabase/supabase-js';
 import { scopeFromUrl, seasonTeamIds } from '@/lib/scope';
@@ -174,7 +173,7 @@ export async function GET(request: Request) {
             flair: flairByUser.get(user.id) || null
         })) || [];
 
-        return NextResponse.json({
+        return Response.json({
             success: true,
             data: {
                 standings: top4,

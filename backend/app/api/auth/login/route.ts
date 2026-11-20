@@ -1,8 +1,7 @@
-import { NextResponse } from 'next/server';
 import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { COLLEGE_EMAIL_MESSAGE, isCollegeEmail } from '@/lib/auth/collegeEmail';
+import { noCookies } from '@/lib/http';
 
 export async function POST(request: Request) {
   try {
@@ -15,13 +14,13 @@ export async function POST(request: Request) {
 
     // Trusted-side domain rule: reject before contacting Supabase Auth.
     if (!isCollegeEmail(email) || typeof password !== 'string' || password.length === 0) {
-      return NextResponse.json(
+      return Response.json(
         { success: false, message: isCollegeEmail(email) ? 'Invalid login credentials' : COLLEGE_EMAIL_MESSAGE },
         { status: 400 }
       );
     }
 
-    const cookieStore = await cookies();
+    const cookieStore = noCookies;
 
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
@@ -48,7 +47,7 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       message: "Admin logged in successfully",
       data: {
@@ -59,7 +58,7 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error("Auth error:", error.message);
-    return NextResponse.json(
+    return Response.json(
       { success: false, message: "Invalid login credentials" },
       { status: 401 }
     );
