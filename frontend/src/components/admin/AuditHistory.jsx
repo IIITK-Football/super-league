@@ -13,7 +13,9 @@ export const AUDITED_TABLES = [
   { value: 'section_types', label: 'Section types' },
   { value: 'team_entries', label: 'Teams in seasons' },
   { value: 'user_roles', label: 'Roles' },
-  { value: 'team_registrations', label: 'Captains' },
+  { value: 'captain_assignments', label: 'Captain assignments' },
+  { value: 'scorer_assignments', label: 'Scorer assignments' },
+  { value: 'team_registrations', label: 'Captains (earlier registrations)' },
   { value: 'matches', label: 'Matches' },
   { value: 'goals', label: 'Goals' },
   { value: 'players', label: 'Players' },
@@ -122,7 +124,7 @@ export default function AuditHistory() {
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><History size={20} /> Audit history</h2>
-        <p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Who changed configuration, roles, captains, matches and rosters, and when. The history cannot be edited.</p>
+        <p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Who changed configuration, roles, captain and scorer assignments, matches and rosters, and when. The history cannot be edited.</p>
       </div>
       <button type="button" onClick={() => load()} disabled={loading} className={ghostButton}><RefreshCw size={13} /> Refresh</button>
     </div>

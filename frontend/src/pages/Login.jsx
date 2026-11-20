@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { TurnstileWidget, turnstileSiteKey } from '../components/TurnstileWidget';
 
 export function Login() {
-  const { signInWithGoogle, signInWithPassword, signUpWithPassword, requestPasswordReset, role, loading, user } = useAuth();
+  const { signInWithGoogle, signInWithPassword, signUpWithPassword, requestPasswordReset, roles, loading, user } = useAuth();
   const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'reset'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,17 +31,17 @@ export function Login() {
 
   // 3. When the user comes back and is authenticated, send them to the saved route
   useEffect(() => {
-    if (user && role) {
-      const roleDestination = {
-        captain: '/team-builder',
-        editor: '/editor',
-        dictator: '/dictator',
-        default: '/',
-      }[role] || '/';
+    if (user && roles) {
+      // The first workspace the person's grants open: dictator, then captain, editor and scorer. A normal user goes home.
+      const destination = roles.includes('dictator') ? '/dictator'
+        : roles.includes('captain') ? '/team-builder'
+        : roles.includes('editor') ? '/editor'
+        : roles.includes('scorer') ? '/dictator'
+        : '/';
       sessionStorage.removeItem('authRedirect'); 
-      navigate(roleDestination, { replace: true });
+      navigate(destination, { replace: true });
     }
-  }, [user, role, navigate]);
+  }, [user, roles, navigate]);
 
   const switchMode = (next) => {
     setMode(next);

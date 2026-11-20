@@ -244,6 +244,7 @@ export default function ManageDivisions() {
     const { data, error: err } = await supabase.from('seasons')
       .update({ name: season.name.trim(), status: season.status, format: season.format, starts_on: season.starts_on || null, ends_on: season.ends_on || null })
       .eq('id', season.id).select('id');
+    if (!err && data?.length) await supabase.rpc('refresh_captain_grants'); // a completed season is read-only: lapse captain grants with no writable assignment left
     setBusy('');
     if (!err && !data?.length) { report({ code: '42501' }); return; }
     if (report(err, `Season "${season.name.trim()}" saved.`)) loadSeasons(selectedDivision.id);
@@ -261,6 +262,7 @@ export default function ManageDivisions() {
     const { data, error: err } = await supabase.from('seasons')
       .update({ archived_at: archived ? new Date().toISOString() : null })
       .eq('id', season.id).select('id');
+    if (!err && data?.length && archived) await supabase.rpc('refresh_captain_grants'); // an archived season is read-only: lapse captain grants with no writable assignment left
     setBusy('');
     if (!err && !data?.length) { report({ code: '42501' }); return; }
     if (report(err, archived ? `Season "${season.name}" archived.` : `Season "${season.name}" restored.`)) loadSeasons(selectedDivision.id);

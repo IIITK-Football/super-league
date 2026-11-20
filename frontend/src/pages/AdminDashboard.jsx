@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Users, Shield, Calendar, Newspaper, Activity, LogOut, Menu, X ,Calculator, Layers, History} from 'lucide-react';
 import { GlassPanel } from '../components/GlassPanel';
@@ -7,67 +6,44 @@ import LiveController from '../components/admin/LiveController';
 import ScheduleMatches from '../components/admin/ScheduleMatches';
 import ManageNews from '../components/admin/ManageNews';
 import GradePredictions from '../components/admin/GradePredictions';
-import ManageRegistrations from '../components/admin/ManageRegistrations';
+import ManageCaptains from '../components/admin/ManageCaptains';
+import ManageScorers from '../components/admin/ManageScorers';
 import ManageRoles from '../components/admin/ManageRoles';
 import ManageDivisions from '../components/admin/ManageDivisions';
 import ManageRosters from '../components/admin/ManageRosters';
 import AuditHistory from '../components/admin/AuditHistory';
 export function AdminDashboard() {
-  const { user, signOut } = useAuth();
+  const { user, hasRole, roles, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('live');
-  const [isAdmin, setIsAdmin] = useState(false);
-  // The stored role, not the UI label: only a real dictator gets dictator-only tabs (RLS enforces the same rule).
-  const [storedRole, setStoredRole] = useState(null);
-  const [checkingRole, setCheckingRole] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // NEW: Mobile menu state
 
-  useEffect(() => {
-    async function checkAdminStatus() {
-      if (!user) {
-        setCheckingRole(false);
-        return;
-      }
+  // The grants held now (my_roles), never a UI label. A dictator gets every tab; a scorer only Live Matches (the match
+  // workspace); nobody else gets in. Row level security and the API enforce the same rules.
+  const isDictator = hasRole('dictator');
+  const isScorer = hasRole('scorer');
+  if (!roles) return <div className="min-h-screen bg-black flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest">Verifying Clearance...</div>;
 
-      // Check the user_roles table!
-      const { data } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('role', 'dictator')
-        .maybeSingle();
-
-      if (data) {
-        setIsAdmin(true);
-        setStoredRole(data.role);
-      }
-      setCheckingRole(false);
-    }
-    
-    checkAdminStatus();
-  }, [user]);
-
-  if (checkingRole) return <div className="min-h-screen bg-black flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest">Verifying Clearance...</div>;
-  
-  // The Ultimate Kick-Out: No user OR not an admin!
-  if (!user || !isAdmin) return (
+  // The Ultimate Kick-Out: No user OR neither a dictator nor a scorer!
+  if (!user || (!isDictator && !isScorer)) return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-10 space-y-4">
       <h1 className="text-4xl font-black text-red-500 uppercase tracking-widest">403 Forbidden</h1>
       <p className="text-zinc-500 tracking-widest uppercase text-sm">You do not have command clearance.</p>
     </div>
   );
 
-  const tabs = [
+  const tabs = isDictator ? [
     { id: 'live', label: 'Live Matches', icon: Activity, color: 'text-red-500' },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
-    { id: 'registrations', label: 'Captains', icon: Users },
+    { id: 'captains', label: 'Captains', icon: Users },
+    { id: 'scorers', label: 'Scorers', icon: Activity },
     { id: 'roles', label: 'Access Control', icon: Shield },
     { id: 'grading', label: 'Grade Fantasy', icon: Calculator, color: 'text-[#E8C881]' },
     { id: 'news', label: 'Newsletter', icon: Newspaper },
-    ...(storedRole === 'dictator' ? [
-      { id: 'divisions', label: 'Divisions & Seasons', icon: Layers },
-      { id: 'rosters', label: 'Teams & Rosters', icon: Users },
-      { id: 'audit', label: 'Audit History', icon: History },
-    ] : []),
+    { id: 'divisions', label: 'Divisions & Seasons', icon: Layers },
+    { id: 'rosters', label: 'Teams & Rosters', icon: Users },
+    { id: 'audit', label: 'Audit History', icon: History },
+  ] : [
+    { id: 'live', label: 'Live Matches', icon: Activity, color: 'text-red-500' },
   ];
 
   return (
@@ -153,14 +129,15 @@ export function AdminDashboard() {
       <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-full">
         <GlassPanel className="min-h-full border border-white/10 bg-black/60">
           {activeTab === 'live' && <LiveController />}
-          {activeTab === 'schedule' && <ScheduleMatches />}
-          {activeTab === 'registrations' && <ManageRegistrations />}
-          {activeTab === 'roles' && <ManageRoles currentUserId={user.id} />}
-          {activeTab === 'grading' && <GradePredictions />}
-          {activeTab === 'news' && <ManageNews />}
-          {activeTab === 'divisions' && storedRole === 'dictator' && <ManageDivisions />}
-          {activeTab === 'rosters' && storedRole === 'dictator' && <ManageRosters />}
-          {activeTab === 'audit' && storedRole === 'dictator' && <AuditHistory />}
+          {isDictator && activeTab === 'schedule' && <ScheduleMatches />}
+          {isDictator && activeTab === 'captains' && <ManageCaptains />}
+          {isDictator && activeTab === 'scorers' && <ManageScorers />}
+          {isDictator && activeTab === 'roles' && <ManageRoles currentUserId={user.id} />}
+          {isDictator && activeTab === 'grading' && <GradePredictions />}
+          {isDictator && activeTab === 'news' && <ManageNews />}
+          {isDictator && activeTab === 'divisions' && <ManageDivisions />}
+          {isDictator && activeTab === 'rosters' && <ManageRosters />}
+          {isDictator && activeTab === 'audit' && <AuditHistory />}
         </GlassPanel>
       </div>
 
