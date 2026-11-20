@@ -59,7 +59,7 @@ describe('grading from events', () => {
 
   it('grading again gives the same points', async () => {
     await post('admin/predictions/grade', who.dictator.token, { match_id: M() });
-    await post('admin/predictions/regrade-all', who.dictator.token, {});
+    // regrade-all is not called here: it regrades every graded prediction in the shared database, seed rows included.
     expect((await prediction()).points_awarded).toBe(300);
   });
 
