@@ -13,12 +13,17 @@
   // Local development: no public route; the Vite dev server proxies /api to wrangler dev on :8787.
   "workers_dev": false,
   "env": {
-    // Staging: deployed by .github/workflows/worker-staging.yml from develop. Reached only through the
-    // staging Pages project's service binding, so it needs no public URL.
+    // Staging: deployed only by Cloudflare Workers Builds from develop (api/scripts/deploy-staging.mjs,
+    // docs/worker-staging.md). Reached only through the staging Pages project's service binding, so it needs no
+    // public URL. SL_PRODUCTION_SUPABASE_REF is the production project's public reference: the Worker refuses to
+    // serve anything if its SUPABASE_URL ever points there.
     "staging": {
       "name": "super-league-api-staging",
       "workers_dev": false,
-      "vars": { "SL_ENVIRONMENT": "staging" }
+      "vars": {
+        "SL_ENVIRONMENT": "staging",
+        "SL_PRODUCTION_SUPABASE_REF": "obkxfepdpdufxawhzaen"
+      }
     }
   }
 }

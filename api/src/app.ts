@@ -26,10 +26,32 @@ async function sessionUserId(authorization: string | undefined): Promise<string 
   return data.claims.sub;
 }
 
+// Fail closed on configuration: a non-production Worker (staging, local) never talks to the production database.
+// Staging must carry the production project's reference (wrangler.jsonc) so this check cannot be skipped by omission.
+export function configProblem(env: Record<string, string | undefined> = process.env): string | null {
+  const environment = env.SL_ENVIRONMENT;
+  const url = env.SUPABASE_URL ?? '';
+  const productionRef = env.SL_PRODUCTION_SUPABASE_REF ?? '';
+  if (!url) return 'SUPABASE_URL is not set.';
+  if (environment === 'production') return null;
+  if (environment === 'staging' && !productionRef) return 'SL_PRODUCTION_SUPABASE_REF is not set for staging.';
+  if (productionRef && url.includes(productionRef)) return 'This non-production Worker is configured with the production database.';
+  return null;
+}
+
 export function createApp() {
   const app = new Hono().basePath('/api');
 
-  app.get('/health', (c) => c.json({ ok: true, service: 'super-league-api' }));
+  app.use('*', async (_c, next) => {
+    const problem = configProblem();
+    if (problem) {
+      console.error(`[CONFIG] refusing all requests: ${problem}`);
+      return fail(503, 'The API is not configured correctly.');
+    }
+    return next();
+  });
+
+  app.get('/health', (c) => c.json({ ok: true, service: 'super-league-api', environment: process.env.SL_ENVIRONMENT ?? 'unknown' }));
 
   app.use('*', async (c, next) => {
     const method = c.req.method;

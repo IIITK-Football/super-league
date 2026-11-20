@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { createApp } from '../src/app';
+import { configProblem, createApp } from '../src/app';
 import { routes } from '../src/routes';
 import { localKeys } from '../../backend/tests/auth/local-supabase';
 
@@ -22,7 +22,25 @@ describe('api worker', () => {
   it('reports health', async () => {
     const res = await call('/health');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, service: 'super-league-api' });
+    expect(await res.json()).toMatchObject({ ok: true, service: 'super-league-api' });
+  });
+
+  it('fails closed when a non-production Worker is pointed at the production database', async () => {
+    const saved = { ...process.env };
+    try {
+      Object.assign(process.env, { SL_ENVIRONMENT: 'staging', SL_PRODUCTION_SUPABASE_REF: 'obkxfepdpdufxawhzaen', SUPABASE_URL: 'https://obkxfepdpdufxawhzaen.supabase.co' });
+      expect((await call('/health')).status).toBe(503);
+      expect((await call('/standings')).status).toBe(503);
+    } finally {
+      process.env = saved;
+    }
+  });
+
+  it('fails closed when staging lacks the production marker or the database URL', () => {
+    expect(configProblem({ SL_ENVIRONMENT: 'staging', SUPABASE_URL: 'https://yecozsiccsfwphlmxozt.supabase.co' })).toMatch(/SL_PRODUCTION_SUPABASE_REF/);
+    expect(configProblem({ SL_ENVIRONMENT: 'staging', SL_PRODUCTION_SUPABASE_REF: 'obkxfepdpdufxawhzaen' })).toMatch(/SUPABASE_URL/);
+    expect(configProblem({ SL_ENVIRONMENT: 'staging', SL_PRODUCTION_SUPABASE_REF: 'obkxfepdpdufxawhzaen', SUPABASE_URL: 'https://yecozsiccsfwphlmxozt.supabase.co' })).toBeNull();
+    expect(configProblem({ SL_ENVIRONMENT: 'local', SUPABASE_URL: 'http://127.0.0.1:54321' })).toBeNull();
   });
 
   it('serves a public read through the shared handler, scoped to a division', async () => {

@@ -1,5 +1,9 @@
-name: API Worker (staging)
+name: API Worker (staging, superseded)
 
+# SUPERSEDED: the staging Worker is now deployed by Cloudflare Workers Builds (docs/worker-staging.md). This workflow
+# no longer runs on push, so there is only one automatic deploy path. It is kept, manual-only, until the first
+# Workers Builds deploy of develop is confirmed, then deleted together with the "Worker Preview" environment.
+#
 # Deploys the Hono API Worker (api/) to STAGING only, from develop. Production is never deployed by this workflow:
 # the production Worker is deployed once, by the owner, during the approved release (docs/release.md).
 #
@@ -11,13 +15,6 @@ name: API Worker (staging)
 # The Worker's runtime secrets are written from these on every deploy, so GitHub is their single source.
 
 on:
-  push:
-    branches: [develop]
-    paths:
-      - 'api/**'
-      - 'backend/app/api/**'
-      - 'backend/lib/**'
-      - '.github/workflows/worker-staging.yml'
   workflow_dispatch:
 
 permissions:
