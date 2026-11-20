@@ -516,6 +516,87 @@ export function TeamBuilder() {
         </div>
     </main>;
 
+    // The team details dialog, shared by the lineup view and the roster-pending view (a captain preparing a season
+    // with no roster yet still edits the team's name, short name, logo and colour).
+    const brandingModal = brandingModalOpen && (
+        <div className="team-builder-modal-backdrop" onClick={() => !savingBranding && setBrandingModalOpen(false)}>
+            <div className="team-builder-modal-card" onClick={(e) => e.stopPropagation()}>
+                <div className="team-builder-modal-head">
+                    <h2><Shield size={18} className="text-[#d9ff4a]" /> Team details</h2>
+                    <button type="button" onClick={() => !savingBranding && setBrandingModalOpen(false)} aria-label="Close modal">
+                        <X size={20} />
+                    </button>
+                </div>
+                <form onSubmit={handleBrandingSubmit} className="team-builder-form team-builder-brand-form">
+                    <div className="team-builder-brand-preview" style={{ borderColor: teamColor }}>
+                        {teamLogoFile ? (
+                            <span>{teamLogoFile.name} (Selected)</span>
+                        ) : registration.team?.logo_url ? (
+                            <img src={registration.team.logo_url} alt={`${teamLabel(registration)} logo`} />
+                        ) : (
+                            <Shield size={38} />
+                        )}
+                        <strong>{teamLabel(registration)}</strong>
+                    </div>
+                    <label>Team name
+                        <input type="text" value={teamName} maxLength={60} onChange={(event) => setTeamName(event.target.value)} aria-label="Team name" />
+                    </label>
+                    <label>Short name
+                        <input type="text" value={shortName} maxLength={5} onChange={(event) => setShortName(event.target.value)} aria-label="Short name" />
+                    </label>
+                    <label>New team logo
+                        <input
+                            type="file"
+                            accept="image/png"
+                            onChange={handleLogoChange}
+                        />
+                    </label>
+                    <span className="team-builder-brand-hint">PNG only, exactly 256x256 px; maximum file size 5 MB. Cropping is disabled.</span>
+                    <label className="team-builder-color-label">Team color
+                        <span className="team-builder-color-picker">
+                            <input
+                                type="color"
+                                value={teamColor}
+                                onChange={(event) => {
+                                    setTeamColor(event.target.value);
+                                    setTeamColorSelected(true);
+                                }}
+                                aria-label="Choose your team's color"
+                            />
+                            <span>{teamColor.toUpperCase()}</span>
+                        </span>
+                    </label>
+                    {(brandingError || brandingSuccess) && (
+                        <p className={brandingError ? 'team-builder-error' : 'team-builder-success'}>
+                            {brandingError || brandingSuccess}
+                        </p>
+                    )}
+                    <div className="flex gap-3 mt-2">
+                        <button
+                            className="team-builder-submit flex-1"
+                            type="submit"
+                            disabled={savingBranding}
+                        >
+                            {savingBranding ? (
+                                <><Loader2 size={18} className="animate-spin" /> Saving team details...</>
+                            ) : (
+                                <><UploadCloud size={18} /> Save team details</>
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            className="px-4 py-2 border border-[#303536] bg-[#191c1d] hover:bg-[#252a2b] text-zinc-300 rounded text-xs font-bold uppercase tracking-wider transition-colors"
+                            onClick={() => setBrandingModalOpen(false)}
+                            disabled={savingBranding}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+
     if (!players.length) return <main className="team-builder">
         <Link to="/" className="team-builder-back"><ArrowLeft size={16} /> Back to tournaments</Link>
         {dictatorPicker}{captainPicker}
@@ -524,6 +605,8 @@ export function TeamBuilder() {
             : error
             ? <><h1>Roster<br /><em>unavailable.</em></h1><span role="alert" className="team-builder-error">The roster could not be loaded: {error}</span></>
             : <><h1>Roster<br /><em>pending.</em></h1><span>{isDictator ? 'No players on this roster yet. Add them in Teams & Rosters.' : 'Your dictator is forming the player roster.'}</span></>}</div>
+        {registration.registrationId && !readOnly && <button type="button" className="team-builder-identity-edit-btn" onClick={() => { setBrandingModalOpen(true); setBrandingError(''); setBrandingSuccess(''); setTeamLogoFile(null); }}><Shield size={14} /> Edit team details</button>}
+        {brandingModal}
     </main>;
 
     return <main className="team-builder">
@@ -556,7 +639,7 @@ export function TeamBuilder() {
                             }}
                             className="team-builder-identity-edit-btn"
                         >
-                            <Shield size={14} /> Change Logo
+                            <Shield size={14} /> Edit team details
                         </button>
                     )}
                 </div>
@@ -601,83 +684,6 @@ export function TeamBuilder() {
             </form>
         </div>
 
-        {brandingModalOpen && (
-            <div className="team-builder-modal-backdrop" onClick={() => !savingBranding && setBrandingModalOpen(false)}>
-                <div className="team-builder-modal-card" onClick={(e) => e.stopPropagation()}>
-                    <div className="team-builder-modal-head">
-                        <h2><Shield size={18} className="text-[#d9ff4a]" /> Team details</h2>
-                        <button type="button" onClick={() => !savingBranding && setBrandingModalOpen(false)} aria-label="Close modal">
-                            <X size={20} />
-                        </button>
-                    </div>
-                    <form onSubmit={handleBrandingSubmit} className="team-builder-form team-builder-brand-form">
-                        <div className="team-builder-brand-preview" style={{ borderColor: teamColor }}>
-                            {teamLogoFile ? (
-                                <span>{teamLogoFile.name} (Selected)</span>
-                            ) : registration.team?.logo_url ? (
-                                <img src={registration.team.logo_url} alt={`${teamLabel(registration)} logo`} />
-                            ) : (
-                                <Shield size={38} />
-                            )}
-                            <strong>{teamLabel(registration)}</strong>
-                        </div>
-                        <label>Team name
-                            <input type="text" value={teamName} maxLength={60} onChange={(event) => setTeamName(event.target.value)} aria-label="Team name" />
-                        </label>
-                        <label>Short name
-                            <input type="text" value={shortName} maxLength={5} onChange={(event) => setShortName(event.target.value)} aria-label="Short name" />
-                        </label>
-                        <label>New team logo
-                            <input
-                                type="file"
-                                accept="image/png"
-                                onChange={handleLogoChange}
-                            />
-                        </label>
-                        <span className="team-builder-brand-hint">PNG only, exactly 256x256 px; maximum file size 5 MB. Cropping is disabled.</span>
-                        <label className="team-builder-color-label">Team color
-                            <span className="team-builder-color-picker">
-                                <input
-                                    type="color"
-                                    value={teamColor}
-                                    onChange={(event) => {
-                                        setTeamColor(event.target.value);
-                                        setTeamColorSelected(true);
-                                    }}
-                                    aria-label="Choose your team's color"
-                                />
-                                <span>{teamColor.toUpperCase()}</span>
-                            </span>
-                        </label>
-                        {(brandingError || brandingSuccess) && (
-                            <p className={brandingError ? 'team-builder-error' : 'team-builder-success'}>
-                                {brandingError || brandingSuccess}
-                            </p>
-                        )}
-                        <div className="flex gap-3 mt-2">
-                            <button
-                                className="team-builder-submit flex-1"
-                                type="submit"
-                                disabled={savingBranding}
-                            >
-                                {savingBranding ? (
-                                    <><Loader2 size={18} className="animate-spin" /> Saving identity...</>
-                                ) : (
-                                    <><UploadCloud size={18} /> Update Logo & Color</>
-                                )}
-                            </button>
-                            <button
-                                type="button"
-                                className="px-4 py-2 border border-[#303536] bg-[#191c1d] hover:bg-[#252a2b] text-zinc-300 rounded text-xs font-bold uppercase tracking-wider transition-colors"
-                                onClick={() => setBrandingModalOpen(false)}
-                                disabled={savingBranding}
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        )}
+        {brandingModal}
     </main>;
 }
