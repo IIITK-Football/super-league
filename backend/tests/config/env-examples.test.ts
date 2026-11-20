@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = join(__dirname, '../../..');
-const files = ['frontend/.env.example', 'frontend/.dev.vars.example', 'backend/.env.example', 'backend/supabase/.env.example'];
+const files = ['frontend/.env.example', 'frontend/.dev.vars.example', 'api/.dev.vars.example', 'backend/.env.example', 'backend/supabase/.env.example'];
 
 describe.each(files)('%s', (rel) => {
   const path = join(root, rel);
@@ -62,11 +62,19 @@ describe('where each Supabase key may be configured', () => {
     expect(read('frontend/.dev.vars.example')).toMatch(/^SUPABASE_PUBLISHABLE_KEY=$/m);
   });
 
-  it('only the backend example holds the secret key, and without a public prefix', () => {
-    const backend = read('backend/.env.example');
-    expect(backend).toMatch(/^SUPABASE_PUBLISHABLE_KEY=$/m);
-    expect(backend).toMatch(/^SUPABASE_SECRET_KEY=$/m);
-    expect(backend).not.toMatch(/^(NEXT_PUBLIC|VITE)_[A-Z_]*SECRET/m);
+  it('only the server-side examples (the API Worker and the staging-check template) hold the secret key, without a public prefix', () => {
+    for (const rel of ['api/.dev.vars.example', 'backend/.env.example']) {
+      const text = read(rel);
+      expect(text, rel).toMatch(/^SUPABASE_PUBLISHABLE_KEY=$/m);
+      expect(text, rel).toMatch(/^SUPABASE_SECRET_KEY=$/m);
+      expect(text, rel).not.toMatch(/^(NEXT_PUBLIC|VITE)_[A-Z_]*SECRET/m);
+    }
+  });
+
+  it('the API Worker example runs as the local environment and holds no R2 credentials', () => {
+    const api = read('api/.dev.vars.example');
+    expect(api).toMatch(/^SL_ENVIRONMENT=local$/m);
+    expect(api).not.toMatch(/^R2_/m);
   });
 
   it('the Pages Function example keeps its variables separate from the browser ones', () => {

@@ -9,9 +9,9 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const TARGETS = [
-  { scope: 'local', file: 'backend/.env.local', purpose: 'backend API against the local stack', vars: ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY'] },
+  { scope: 'local', file: 'api/.dev.vars', purpose: 'API Worker (wrangler dev) against the local stack', vars: ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY', 'SL_ENVIRONMENT'] },
   { scope: 'local', file: 'frontend/.env.local', purpose: 'frontend against the local stack', vars: ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_API_URL', 'VITE_TURNSTILE_SITE_KEY'] },
-  { scope: 'local', file: 'frontend/.dev.vars', purpose: 'Pages Functions (share previews) locally', vars: ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY'] },
+  { scope: 'local', file: 'frontend/.dev.vars', purpose: 'Pages Functions (share previews) under wrangler pages dev; optional', vars: ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY'] },
   { scope: 'local', file: 'backend/supabase/.env', purpose: 'local Supabase Auth (Google sign-in, Turnstile secret)', vars: ['SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID', 'SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET', 'SUPABASE_AUTH_CAPTCHA_SECRET'] },
   { scope: 'staging', file: 'frontend/.env.staging.local', purpose: 'frontend against the staging project (vite --mode staging)', vars: ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_ALLOW_REMOTE_SUPABASE', 'VITE_TURNSTILE_SITE_KEY'] },
   { scope: 'staging', file: 'backend/.env.staging.local', purpose: 'scripted staging checks (synthetic accounts, anonymous probe)', vars: ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY', 'ALLOW_REMOTE_SUPABASE'] },

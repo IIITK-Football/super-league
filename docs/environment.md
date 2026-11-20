@@ -15,19 +15,23 @@ New keys are **not JWTs**: never send one as `Authorization: Bearer`. supabase-j
 
 | Variable | Where it is set | What it does |
 |---|---|---|
-| `VITE_SUPABASE_URL` | Frontend `.env.local` (local), Pages **build** variables (hosted) | Project URL for the browser client |
+| `VITE_SUPABASE_URL` | `frontend/.env.local` (local), Pages **build** variables (hosted) | Project URL for the browser client |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | same | Browser client key |
-| `VITE_TURNSTILE_SITE_KEY` | same | Public Cloudflare Turnstile site key |
-| `VITE_API_URL` | same | Backend API base (blank = same origin) |
+| `VITE_TURNSTILE_SITE_KEY` | same | Public Cloudflare Turnstile site key (the example holds Cloudflare's always-pass test key) |
+| `VITE_API_URL` | same | Leave **blank**: the app calls `/api` on its own origin (Vite proxies it locally; the Pages `API` service binding when hosted) |
 | `VITE_ALLOW_REMOTE_SUPABASE` | ignored local files only | Dev opt-in to use a non-local Supabase project |
-| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | `frontend/.dev.vars` (local), Pages **Functions** variables (hosted) | Share-preview lookup in `frontend/functions/_middleware.js` |
-| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` | `backend/.env.local` (local), Vercel (hosted) | Backend routes: publishable for user-level clients, secret for the routes in `supabase-key-usage.md` |
-| `ALLOW_REMOTE_SUPABASE` | ignored local files only | Dev opt-in for a non-local project |
-| `CRON_SECRET`, `API_FOOTBALL_KEY`, `API_SPORTS_KEY` | backend env | Scheduled jobs and third-party APIs (not Supabase keys) |
-| `R2_*`, `NEXT_PUBLIC_*R2*` | backend env | Cloudflare R2 media (unchanged; storage redesign is separate) |
+| `API_PROXY_TARGET` | your shell, optional | Where Vite forwards `/api` locally (default `http://127.0.0.1:8787`, the Worker) |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` | `api/.dev.vars` (local), API Worker **Secrets** (hosted) | The API Worker: publishable for user-level clients, secret only for the routes in `supabase-key-usage.md` |
+| `SL_ENVIRONMENT` | `api/wrangler.jsonc` vars (`local` at top level, `staging`, `production`); `api/.dev.vars` | Which environment the Worker is; outside `production` it refuses production media hosts |
+| `SL_PRODUCTION_SUPABASE_REF` | `api/wrangler.jsonc` (staging) | The production project reference: the staging Worker refuses every request if its `SUPABASE_URL` points there |
+| `R2_NEWS`, `R2_PLAYERS`, `R2_LOGOS` | `api/wrangler.jsonc` `r2_buckets` per environment | R2 **bindings** (not credentials): `sl-local-*` emulated by `wrangler dev`, `sl-staging-*` on staging, the production buckets in production. The Worker holds no R2 keys; Pages has no R2 binding |
+| `MEDIA_BASE_NEWS`, `MEDIA_BASE_PLAYERS`, `MEDIA_BASE_LOGOS` | `api/wrangler.jsonc` vars per environment | Public base URL of each bucket, used to build the stored image URLs (locally `/api/local-media/<purpose>`) |
+| `MEDIA_BASE_VIDEO` | `api/wrangler.jsonc` vars | Public host of the home video, read through `/api/media` (read-only; needs internet locally) |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | `frontend/.dev.vars` (only for `wrangler pages dev`), Pages **Functions** variables (hosted) | Share-preview lookup in `frontend/functions/_middleware.js` |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `ALLOW_REMOTE_SUPABASE` | `backend/.env.staging.local` (maintainers) | Scripted staging checks (`scripts/staging-checks.mjs`, `scripts/staging-media-check.mjs`); they refuse any project but staging |
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/_SECRET`, `SUPABASE_AUTH_CAPTCHA_SECRET` | `backend/supabase/.env` (local Auth config) | Local Google sign-in and Turnstile secret. Without **both** Google values, `pnpm db:start` switches local Google sign-in off (the button says it is not set up) rather than sending users to a Google `invalid_client` error |
 
-Examples: [`frontend/.env.example`](../frontend/.env.example) (browser), [`frontend/.dev.vars.example`](../frontend/.dev.vars.example) (Pages Functions), [`backend/.env.example`](../backend/.env.example) (server), [`backend/supabase/.env.example`](../backend/supabase/.env.example) (local Auth).
+Examples: [`frontend/.env.example`](../frontend/.env.example) (browser), [`api/.dev.vars.example`](../api/.dev.vars.example) (API Worker), [`frontend/.dev.vars.example`](../frontend/.dev.vars.example) (Pages Functions, optional), [`backend/.env.example`](../backend/.env.example) (staging-check template), [`backend/supabase/.env.example`](../backend/supabase/.env.example) (local Auth).
 
 ## Not API keys: migration credentials (GitHub Actions only)
 
@@ -37,10 +41,10 @@ Examples: [`frontend/.env.example`](../frontend/.env.example) (browser), [`front
 
 | | Local | Staging | Production |
 |---|---|---|---|
-| Source of keys | `pnpm exec supabase status` (backend/) prints the local publishable and secret keys | Dashboard of the staging project: Project Settings -> API Keys | Dashboard of the production project: Project Settings -> API Keys |
-| Frontend | `frontend/.env.local` | `frontend/.env.staging.local` with `vite --mode staging` | Cloudflare Pages build variables |
-| Pages Function | `frontend/.dev.vars` | n/a | Pages Functions variables |
-| Backend | `backend/.env.local` | `backend/.env.local` pointed at staging with `ALLOW_REMOTE_SUPABASE=true` | Vercel environment variables |
+| Source of keys | `pnpm exec supabase status -o env` (backend/) prints the local publishable and secret keys | Dashboard of the staging project: Project Settings -> API Keys | Dashboard of the production project: Project Settings -> API Keys |
+| Frontend | `frontend/.env.local` | Pages Preview build variables (`VITE_API_URL` unset) | Pages Production build variables (`VITE_API_URL` unset) |
+| API Worker | `api/.dev.vars` + top-level `api/wrangler.jsonc` | Worker `super-league-api-staging`: Secrets + `env.staging` in `wrangler.jsonc`, deployed by Workers Builds from `develop` | Worker `super-league-api`: Secrets + `env.production`, deployed by Workers Builds from `main` |
+| Pages Function | `frontend/.dev.vars` (optional) | Pages Functions variables | Pages Functions variables |
 
 Put values only in git-ignored files or host settings. Use a **separate named secret key per environment** so one can be revoked without touching the others.
 

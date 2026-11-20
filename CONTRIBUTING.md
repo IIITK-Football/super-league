@@ -18,20 +18,62 @@ live in the database (row level security and RPCs), so many features are a migra
 
 ## Set up locally
 
-Prerequisites: Node.js 22.19+ (`.nvmrc`), pnpm 10 (`corepack enable`), and Docker for local Supabase. Use **pnpm only**.
+Prerequisites: Node.js 22.19+ (`.nvmrc`), pnpm 10 (`corepack enable`), Docker (for local Supabase) and an internet
+connection. Use **pnpm only**. You need no Cloudflare, Supabase or Vercel account.
+
+**1. Install and start the local database**
 
 ```bash
-pnpm install --frozen-lockfile        # installs every workspace and the git hooks
-pnpm db:start                         # local Supabase on 127.0.0.1:54322 (API on 54321), with the synthetic seed
-cp frontend/.env.example frontend/.env.local   # fill in the local publishable key from `pnpm --dir backend exec supabase status`
-cp api/.dev.vars.example api/.dev.vars         # local Supabase URL and keys, same source
-pnpm --dir api dev                    # the API Worker on :8787 (R2 buckets are emulated on disk; no Cloudflare account needed)
-pnpm dev:frontend                     # Vite on :5173; /api is proxied to the Worker
+pnpm install --frozen-lockfile    # every workspace (frontend, api, backend) and the git hooks
+pnpm db:start                     # local Supabase: API 127.0.0.1:54321, Postgres 54322, Studio 54323, Mailpit 54324
 ```
 
-Local media uploads go to emulated buckets and are served from `/api/local-media/...`. To rebuild the local database
-from migrations and seed: `bash scripts/local-db.sh reset --yes` (local only; it refuses any other database).
-More detail: `docs/local-development.md`, `docs/environment.md`.
+The first start applies every migration and the synthetic seed (`backend/supabase/seed.sql`). `pnpm db:check` confirms
+the stack; `pnpm db:reset` rebuilds it from migrations and seed (local only; it asks first and refuses any other
+database).
+
+**2. Create the two local env files** (both git-ignored). The values come from the local stack:
+
+```bash
+pnpm --dir backend exec supabase status -o env   # prints API_URL, PUBLISHABLE_KEY and SECRET_KEY (local only)
+cp api/.dev.vars.example api/.dev.vars           # SUPABASE_PUBLISHABLE_KEY and SUPABASE_SECRET_KEY from the output
+cp frontend/.env.example frontend/.env.local     # VITE_SUPABASE_PUBLISHABLE_KEY from the output; leave VITE_API_URL blank
+```
+
+The URLs are already `http://127.0.0.1:54321`, `SL_ENVIRONMENT=local` is set, and the Turnstile test key is filled in.
+Never put the secret key in a `VITE_` variable: it belongs only in `api/.dev.vars`.
+
+**3. Run the API Worker and the web app** (two terminals)
+
+```bash
+pnpm --dir api dev     # Hono API Worker under wrangler dev on http://127.0.0.1:8787
+pnpm dev:frontend      # Vite on http://localhost:5173; it proxies /api to the Worker
+```
+
+Open http://localhost:5173. The app calls `/api` on its own origin, as on the real site. Sign in with an account you
+create locally; confirmation mail arrives in Mailpit at http://127.0.0.1:54324.
+
+**Media, locally**
+- Uploads (player portraits, team logos, news images) go to R2 buckets that `wrangler dev` **emulates on disk**
+  (`sl-local-*` in `api/wrangler.jsonc`). No Cloudflare credentials are needed, and they are served back from
+  `/api/local-media/...`.
+- Some existing media is **read** from public R2 hosts and needs internet: the home video (proxied through
+  `/api/media`), its posters and the play-style icons. Offline, those images and the video simply do not load.
+
+**Optional**
+- `frontend/.dev.vars` (from `frontend/.dev.vars.example`) is only for `wrangler pages dev`, to try the Pages
+  Functions (share-preview meta tags). Vite does not run them.
+- `backend/supabase/.env` (from its example) is only for trying Google sign-in locally or a real Turnstile secret.
+- `backend/.env.example` is not part of local setup: it is the maintainers' template for the scripted staging checks.
+
+**Troubleshooting**
+- `/api` requests fail or time out: the Worker is not running (step 3), or something else holds port 8787.
+- The API answers `503 "The API is not configured correctly."`: `api/.dev.vars` is missing a value.
+- A blank page with `Missing environment variables: VITE_SUPABASE_...` in the browser console: `frontend/.env.local` is
+  missing a value (restart Vite after editing it).
+- `pnpm db:start` refuses to start: another process holds port 54322 (see `docs/local-development.md`).
+
+More detail: `docs/local-development.md`, `docs/environment.md`, `docs/testing.md`.
 
 ## Make a change
 
