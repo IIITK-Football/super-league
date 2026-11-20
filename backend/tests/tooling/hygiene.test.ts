@@ -79,6 +79,33 @@ describe('checkRange', () => {
     expect(checkRange(base, 'HEAD', { cwd: repo }).join('\n')).toMatch(/merge commit/i);
   });
 
+  it('still rejects merging a non-main branch when a main ref exists', () => {
+    const base = git('rev-parse', 'HEAD');
+    git('branch', 'main');
+    git('checkout', '-q', '-b', 'side');
+    commit('s.txt', 's\n', 'feat(core): side work');
+    git('checkout', '-q', 'develop');
+    commit('d.txt', 'd\n', 'feat(core): develop work');
+    git('-c', 'core.hooksPath=/dev/null', 'merge', '--no-ff', '-q', 'side', '-m', 'chore: merge side into develop');
+    expect(checkRange(base, 'HEAD', { cwd: repo, mainRef: 'main' }).join('\n')).toMatch(/merge commit/i);
+  });
+
+  it("allows merging main into develop, without re-judging main's own release merge", () => {
+    // develop work released to main through a merge commit (as GitHub does), then develop continues.
+    commit('d1.txt', 'd1\n', 'feat(core): first feature');
+    const base = git('rev-parse', 'HEAD');
+    git('checkout', '-q', '-b', 'main');
+    git('checkout', '-q', '--detach', 'HEAD~1');
+    git('-c', 'core.hooksPath=/dev/null', 'merge', '--no-ff', '-q', 'develop', '-m', 'Merge pull request #1 from org/develop');
+    git('branch', '-f', 'main', 'HEAD');
+    git('checkout', '-q', 'develop');
+    commit('d2.txt', 'd2\n', 'feat(core): second feature');
+    git('-c', 'core.hooksPath=/dev/null', 'merge', '--no-ff', '-q', 'main', '-m', 'chore: merge main into develop');
+    expect(checkRange(base, 'HEAD', { cwd: repo, mainRef: 'main' })).toEqual([]);
+    // Without a main ref the old rule applies unchanged.
+    expect(checkRange(base, 'HEAD', { cwd: repo, mainRef: 'no-such-ref' }).join('\n')).toMatch(/merge commit/i);
+  });
+
   it('rejects environment and key files', () => {
     const base = git('rev-parse', 'HEAD');
     commit('backend/.env', 'X=1\n', 'feat(core): add config');
