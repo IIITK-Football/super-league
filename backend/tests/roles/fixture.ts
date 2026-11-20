@@ -23,21 +23,22 @@ export async function account(f: Roles, label: string, grants: string[] = []) {
   const email = uniqueEmail(`roles-${label}`);
   const { data, error } = await f.admin.auth.admin.createUser({ email, email_confirm: true });
   if (error) throw error;
-  f.users.push(data.user.id);
+  const created = data.user!;
+  f.users.push(created.id);
   for (const role of grants) {
-    const r = await f.admin.from('user_roles').insert({ user_id: data.user.id, role });
+    const r = await f.admin.from('user_roles').insert({ user_id: created.id, role });
     if (r.error) throw r.error;
   }
   const link = await f.admin.auth.admin.generateLink({ type: 'magiclink', email });
   const db = f.anon();
   const { data: v, error: vErr } = await db.auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
   if (vErr) throw vErr;
-  return { id: data.user.id, token: v.session!.access_token, db };
+  return { id: created.id, token: v.session!.access_token, db };
 }
 
-const must = <T>(r: { data: T | null; error: { message: string } | null }): T => {
+const must = <T>(r: { data: T | null; error: { message: string } | null }): NonNullable<T> => {
   if (r.error) throw new Error(r.error.message);
-  return r.data as T;
+  return r.data as NonNullable<T>;
 };
 
 /** A division with a current, a completed and an upcoming season, two teams entered in each, and two matches in the current one. */

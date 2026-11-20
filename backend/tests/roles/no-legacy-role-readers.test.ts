@@ -36,7 +36,7 @@ describe('retired role surfaces', () => {
   });
 
   it('no code reads one role row per person or treats a stored default or admin value as a role', () => {
-    expect(offenders(/from\(['"]user_roles['"]\)\s*\.select\(['"]role['"]\)[^;]*\.(maybeSingle|single)\(/s)).toEqual([]);
+    expect(offenders(/from\(['"]user_roles['"]\)\s*\.select\(['"]role['"]\)[^;]*\.(maybeSingle|single)\(/)).toEqual([]);
     expect(offenders(/role\s*===?\s*['"]default['"]|role:\s*['"]default['"]/)).toEqual([]);
   });
 

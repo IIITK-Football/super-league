@@ -51,7 +51,7 @@ describe('team details', () => {
   it('omitted fields keep their value, and invalid ones are refused without changes', async () => {
     expect((await save(who.captain.token, { team_color: '#654321' })).status).toBe(200);
     expect((await team(w.teams[0])).name).toBe(`${tag} Reds United`);
-    for (const bad of [{ team_color: 'red' }, { team_color: '#111111', team_name: 'x' }, { team_color: '#111111', short_name: 'toolong1' }]) {
+    for (const bad of [{ team_color: 'red' }, { team_color: '#111111', team_name: 'x' }, { team_color: '#111111', short_name: 'toolong1' }] as Record<string, string>[]) {
       expect((await save(who.captain.token, bad)).status, JSON.stringify(bad)).toBe(400);
     }
     expect((await team(w.teams[0])).team_color).toBe('#654321');
