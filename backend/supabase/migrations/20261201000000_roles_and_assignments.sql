@@ -7,14 +7,14 @@
 --     the assignment is writable while its season is current or upcoming (planned/registration) and not completed or
 --     archived;
 --   - scorer_assignments: scoped to one season or one match, with an optional expiry.
--- * team_registrations is backfilled into captain_assignments (it is dropped by the next migration, after every
---   caller is ported). Registration names that differ from the team's name are kept in
---   legacy_team_registration_names; teams.name stays authoritative.
+-- * team_registrations is backfilled into captain_assignments and snapshotted whole into legacy_team_registrations
+--   (it is dropped by the next migration, after every caller is ported); teams.name stays authoritative.
 -- * Writes to matches, goals, teams, news, grants and assignments are limited to the roles that own them.
 --
 -- One transaction: it stops on the first failed guard and changes nothing.
 
 -- Guards -------------------------------------------------------------------------------------------------------------
+-- role-migration-guard:start
 DO $$
 DECLARE
   n integer;
@@ -35,6 +35,7 @@ BEGIN
   END IF;
 END;
 $$;
+-- role-migration-guard:end
 
 -- Snapshot of the per-role counts, checked after the conversion.
 CREATE TEMP TABLE _role_counts ON COMMIT DROP AS
@@ -196,23 +197,28 @@ SELECT e.id, r.captain_id, NULL, r.created_at
 FROM public.team_registrations r
 JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id;
 
-CREATE TABLE public.legacy_team_registration_names (
+-- A full snapshot of every registration, kept as history when team_registrations is retired (the next migration
+-- refuses to drop it unless every row is here). registration_name is the name the registration carried; teams.name
+-- stays authoritative and is never overwritten, so a differing name is only reported (a dictator or the captain
+-- renames the team deliberately).
+CREATE TABLE public.legacy_team_registrations (
   registration_id uuid PRIMARY KEY,
-  team_id uuid NOT NULL,
-  season_id uuid NOT NULL,
+  captain_id uuid,
+  team_id uuid,
+  season_id uuid,
   registration_name text NOT NULL,
-  team_name text NOT NULL,
+  team_name text,
+  registered_at timestamptz,
   recorded_at timestamptz NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE public.legacy_team_registration_names IS 'Registration names that differed from the team name when team_registrations was retired. teams.name stays authoritative; a dictator or the captain renames the team deliberately.';
-ALTER TABLE public.legacy_team_registration_names ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Dictators read registration names" ON public.legacy_team_registration_names FOR SELECT TO authenticated USING (public.is_dictator());
-REVOKE ALL ON public.legacy_team_registration_names FROM anon;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.legacy_team_registration_names FROM authenticated;
-INSERT INTO public.legacy_team_registration_names (registration_id, team_id, season_id, registration_name, team_name)
-SELECT r.id, r.team_id, r.season_id, r.team_name, t.name
-FROM public.team_registrations r JOIN public.teams t ON t.id = r.team_id
-WHERE r.team_name IS DISTINCT FROM t.name;
+COMMENT ON TABLE public.legacy_team_registrations IS 'Snapshot of team_registrations at its retirement: who captained which team in which season, and the name the registration carried. Captain assignments are the live data; this is history.';
+ALTER TABLE public.legacy_team_registrations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Dictators read registration history" ON public.legacy_team_registrations FOR SELECT TO authenticated USING (public.is_dictator());
+REVOKE ALL ON public.legacy_team_registrations FROM anon;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.legacy_team_registrations FROM authenticated;
+INSERT INTO public.legacy_team_registrations (registration_id, captain_id, team_id, season_id, registration_name, team_name, registered_at)
+SELECT r.id, r.captain_id, r.team_id, r.season_id, r.team_name, t.name, r.created_at
+FROM public.team_registrations r LEFT JOIN public.teams t ON t.id = r.team_id;
 
 DO $$
 DECLARE
@@ -231,7 +237,7 @@ BEGIN
   IF n_mismatch > 0 THEN
     RAISE EXCEPTION '% registrations have no identical captain assignment; nothing was changed', n_mismatch;
   END IF;
-  RAISE NOTICE 'captain assignments created: %; registration names kept as history: %', n_asg, (SELECT count(*) FROM public.legacy_team_registration_names);
+  RAISE NOTICE 'captain assignments created: %; registrations whose name differs from the team name: %', n_asg, (SELECT count(*) FROM public.legacy_team_registrations WHERE registration_name IS DISTINCT FROM team_name);
 END;
 $$;
 
@@ -564,6 +570,44 @@ CREATE TRIGGER audit_captain_assignments AFTER INSERT OR UPDATE OR DELETE ON pub
   FOR EACH ROW EXECUTE FUNCTION public.audit_row_change();
 CREATE TRIGGER audit_scorer_assignments AFTER INSERT OR UPDATE OR DELETE ON public.scorer_assignments
   FOR EACH ROW EXECUTE FUNCTION public.audit_row_change();
+
+-- The account directory lists each person's grants (a normal user has none) instead of one role.
+DROP FUNCTION public.account_directory(text, uuid[], integer);
+CREATE FUNCTION public.account_directory(p_query text DEFAULT NULL, p_ids uuid[] DEFAULT NULL, p_limit integer DEFAULT 50)
+RETURNS TABLE (user_id uuid, label text, roles text[])
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO ''
+AS $$
+  WITH words AS (
+    SELECT coalesce(array_agg('%' || replace(replace(replace(w, '\', '\\'), '%', '\%'), '_', '\_') || '%'), '{}') AS pats
+    FROM regexp_split_to_table(btrim(coalesce(p_query, '')), '[[:space:]]+') AS w
+    WHERE w <> ''
+  ), people AS (
+    SELECT u.id,
+           NULLIF(btrim(u.email::text), '') AS email,
+           COALESCE(NULLIF(regexp_replace(p.real_name, '^[[:space:]]+|[[:space:]]+$', '', 'g'), ''),
+                    NULLIF(regexp_replace(p.nickname, '^[[:space:]]+|[[:space:]]+$', '', 'g'), '')) AS name,
+           COALESCE((SELECT array_agg(r.role ORDER BY r.role) FROM public.user_roles r WHERE r.user_id = u.id), '{}') AS roles
+    FROM auth.users u
+    LEFT JOIN public.user_profiles p ON p.id = u.id
+    CROSS JOIN words
+    WHERE public.is_dictator()
+      AND (p_ids IS NULL OR u.id = ANY (p_ids))
+      AND NOT EXISTS (SELECT 1 FROM unnest(words.pats) AS pat
+                      WHERE concat_ws(' ', u.email::text, p.real_name, p.nickname) NOT ILIKE pat)
+  )
+  SELECT id,
+         CASE WHEN name IS NOT NULL AND email IS NOT NULL THEN name || ' (' || email || ')'
+              ELSE COALESCE(email, name, 'Account without an email') END,
+         roles
+  FROM people
+  ORDER BY 2, 1
+  LIMIT LEAST(GREATEST(COALESCE(p_limit, 50), 1), 200);
+$$;
+REVOKE ALL ON FUNCTION public.account_directory(text, uuid[], integer) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.account_directory(text, uuid[], integer) TO authenticated, service_role;
 
 -- The helper that only managed roles is replaced by is_dictator() and the scoped helpers above.
 DROP FUNCTION public.is_role_manager();

@@ -4,6 +4,9 @@
 -- Rolled back.
 BEGIN;
 SELECT plan(55);
+-- Captain fixtures are written as registrations (who captains which team in which season) and turned into the
+-- team entries' captain assignments, which is what the roster function reads.
+CREATE TEMP TABLE _registrations (id uuid DEFAULT gen_random_uuid(), captain_id uuid, team_name text, season_id uuid, team_id uuid) ON COMMIT DROP;
 
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('b7000000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated',
@@ -22,10 +25,10 @@ SELECT e.id AS entry_id, e.team_id, e.season_id,
        (SELECT rm.player_id FROM public.roster_memberships rm WHERE rm.team_entry_id = e.id ORDER BY rm.jersey_number LIMIT 1) AS player_id
 FROM public.team_entries e JOIN public.seasons s ON s.id = e.season_id JOIN public.divisions d ON d.id = s.division_id
 WHERE d.slug = 'super-league' ORDER BY e.id LIMIT 1;
-INSERT INTO public.team_registrations (captain_id, team_name, season_id, team_id)
+INSERT INTO _registrations (captain_id, team_name, season_id, team_id)
 SELECT 'b7000000-0000-4000-8000-000000000002', 'Roster captain team', season_id, team_id FROM _fx;
 INSERT INTO public.captain_assignments (team_entry_id, user_id)
-SELECT e.id, r.captain_id FROM public.team_registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
+SELECT e.id, r.captain_id FROM _registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
 ON CONFLICT (team_entry_id) DO NOTHING;
 GRANT SELECT ON _fx TO anon, authenticated;
 

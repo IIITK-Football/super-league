@@ -5,6 +5,9 @@
 -- 50, NULL can be saved and cleared, and an out-of-range rating is refused. Rolled back.
 BEGIN;
 SELECT plan(16);
+-- Captain fixtures are written as registrations (who captains which team in which season) and turned into the
+-- team entries' captain assignments, which is what the roster function reads.
+CREATE TEMP TABLE _registrations (id uuid DEFAULT gen_random_uuid(), captain_id uuid, team_name text, season_id uuid, team_id uuid) ON COMMIT DROP;
 
 -- Two current seasons in two divisions, a team in each, and one player on both rosters (one shared card).
 INSERT INTO public.divisions (id, slug, name) VALUES ('c1d00000-0000-4000-8000-000000000001', 'cs-a', 'Scope A'), ('c1d00000-0000-4000-8000-000000000002', 'cs-b', 'Scope B');
@@ -28,11 +31,11 @@ SELECT ('c1b00000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'aut
 FROM generate_series(1, 2) AS n;
 INSERT INTO public.user_roles (user_id, role) SELECT id, 'captain' FROM auth.users WHERE id = 'c1b00000-0000-4000-8000-000000000001' ON CONFLICT DO NOTHING;
 INSERT INTO public.user_roles (user_id, role) SELECT id, 'dictator' FROM auth.users WHERE id = 'c1b00000-0000-4000-8000-000000000002' ON CONFLICT DO NOTHING;
-INSERT INTO public.team_registrations (captain_id, team_name, season_id, team_id) VALUES
+INSERT INTO _registrations (captain_id, team_name, season_id, team_id) VALUES
   ('c1b00000-0000-4000-8000-000000000001', 'Scope Reds', 'c1500000-0000-4000-8000-000000000001', 'c1700000-0000-4000-8000-000000000001'),
   ('c1b00000-0000-4000-8000-000000000002', 'Scope Blues', 'c1500000-0000-4000-8000-000000000002', 'c1700000-0000-4000-8000-000000000002');
 INSERT INTO public.captain_assignments (team_entry_id, user_id)
-SELECT e.id, r.captain_id FROM public.team_registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
+SELECT e.id, r.captain_id FROM _registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
 ON CONFLICT (team_entry_id) DO NOTHING;
 
 CREATE FUNCTION pg_temp.as_user(p_n integer, p_sql text)

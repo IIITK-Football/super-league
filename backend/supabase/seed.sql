@@ -457,8 +457,7 @@ SET
   ), '[]'::jsonb)
 WHERE m.id IN (SELECT id FROM _mega_match_defs);
 
--- Two freshers team-builder registrations. A registration's team_name is the team's own name (the captain's name
--- here once made The Beef's registration read "Cartwright").
+-- Two freshers team-builder captain assignments (the team entry is the Freshers 2026 season's).
 CREATE TEMP TABLE _mega_registrations (
   id uuid PRIMARY KEY,
   captain_id uuid NOT NULL,
@@ -480,12 +479,7 @@ INSERT INTO _mega_registrations VALUES
     md5('mega-team:freshers:EVER')::uuid
   );
 
-INSERT INTO public.team_registrations (id, captain_id, team_name, season_id, team_id)
-SELECT id, captain_id, team_name, (SELECT season_id FROM _mega_seasons WHERE division = 'freshers'), team_id
-FROM _mega_registrations
-ON CONFLICT (id) DO NOTHING;
-
--- Each registration is the captain assignment of its team entry (team_registrations is retired in a later migration).
+-- Each captain is assigned to their team entry (the retired registrations are history only).
 INSERT INTO public.captain_assignments (team_entry_id, user_id, assigned_at)
 SELECT e.id, r.captain_id, now()
 FROM _mega_registrations r

@@ -416,17 +416,73 @@
       ]
     },
     "auth-roles": {
-      "description": "Five-role authorization: API checks and RLS (user, captain, scorer, editor, dictator)",
+      "description": "Five-role authorization: independent grants, captain and scorer assignments, the dictator RPCs, RLS on matches, goals, teams and news, the role-aware routes and the dashboard flows (allowed and denied cases, through the local Auth and Data API)",
       "owner": "backend",
-      "status": "pending",
-      "pendingFor": "SL-024/SL-025",
+      "requiresLocalDb": true,
       "paths": [
-        "backend/lib/auth/**",
-        "backend/supabase/migrations/**",
-        "backend/app/api/admin/**",
-        "backend/app/api/captain/**"
+        "backend/tests/roles/**",
+        "backend/lib/auth/roles.ts",
+        "backend/lib/errorHandler.ts",
+        "backend/supabase/migrations/*roles*",
+        "backend/supabase/migrations/*registrations*",
+        "backend/supabase/seed.sql",
+        "backend/app/api/admin/matches/**",
+        "backend/app/api/admin/newsletter/**",
+        "backend/app/api/admin/freshers/**",
+        "backend/app/api/captain/**",
+        "frontend/src/context/AuthContext.jsx",
+        "frontend/src/pages/AdminDashboard.jsx",
+        "frontend/src/pages/RoleWorkspace.jsx",
+        "frontend/src/pages/Login.jsx",
+        "frontend/src/pages/TeamBuilder.jsx",
+        "frontend/src/components/admin/ManageRoles.jsx",
+        "frontend/src/components/admin/ManageCaptains.jsx",
+        "frontend/src/components/admin/ManageScorers.jsx",
+        "frontend/src/components/admin/LiveController.jsx",
+        "frontend/src/components/admin/__tests__/ManageRoles.local.test.jsx"
       ],
-      "run": []
+      "run": [
+        {
+          "cwd": "backend",
+          "cmd": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "--no-file-parallelism",
+            "tests/roles"
+          ]
+        },
+        {
+          "cwd": "frontend",
+          "cmd": [
+            "env",
+            "SL_LOCAL_SUPABASE=1",
+            "pnpm",
+            "exec",
+            "vitest",
+            "run",
+            "src/components/admin/__tests__/ManageRoles.local.test.jsx"
+          ]
+        }
+      ],
+      "covers": [
+        "backend/lib/auth/roles.ts",
+        "backend/supabase/migrations/*roles*",
+        "backend/supabase/migrations/*registrations*",
+        "backend/app/api/admin/matches/**",
+        "backend/app/api/admin/newsletter/**",
+        "backend/app/api/admin/freshers/**",
+        "backend/app/api/captain/**",
+        "frontend/src/components/admin/ManageRoles.jsx",
+        "frontend/src/components/admin/ManageCaptains.jsx",
+        "frontend/src/components/admin/ManageScorers.jsx"
+      ],
+      "testPaths": [
+        "backend/tests/roles/**",
+        "backend/tests/tooling/role-migration-guard.test.ts",
+        "frontend/src/components/admin/__tests__/ManageRoles.local.test.jsx"
+      ]
     },
     "api-services": {
       "description": "Backend API services and contracts",
