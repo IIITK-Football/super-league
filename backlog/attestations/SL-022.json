@@ -1,0 +1,23 @@
+{
+  "id": "SL-022",
+  "attestations": [
+    {
+      "checkId": "C10",
+      "by": "oreoruuser",
+      "at": "2026-11-20T11:32:15.134Z",
+      "note": "Real-app walkthrough scripts/ui-walkthrough/match-events.mjs passed 12 of 12 steps locally at served commit 5e04258 (scorer, dictator, fan); recorded in docs/walkthroughs/SL-022.md"
+    },
+    {
+      "checkId": "C12",
+      "by": "oreoruuser",
+      "at": "2026-11-20T11:32:15.405Z",
+      "note": "Database deploy run 44726308773 (workflow_dispatch on develop, ef82bd6) applied both migrations and the seed; the seed is idempotent locally and the deploy's seed-rerun check passed; staging-checks passed 40 of 40"
+    },
+    {
+      "checkId": "C13",
+      "by": "oreoruuser",
+      "at": "2026-11-20T11:32:15.675Z",
+      "note": "Scorer flow passed in the real app locally (12 of 12 steps, commit 5e04258); on staging the API-level checks passed: an assigned scorer records a goal and the cached score follows, a direct score write and an event delete are refused, other scorers and captains are refused. The attribute, void and card steps were not repeated on staging"
+    }
+  ]
+}
