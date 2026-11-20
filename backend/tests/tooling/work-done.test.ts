@@ -93,6 +93,42 @@ describe('walkthrough module', () => {
     return { item: bl.items.get('SL-100'), bl, evidence, commits: [{ sha: 'c'.repeat(40), subject: 'feat(x): y' }], files: ['x/a.ts'], attestations: [{ checkId: 'C2', by: 'Owner', at: '2026-11-17T00:00:00Z', note: 'ok' }] };
   };
 
+  // Rule R10: a person-facing item needs recorded evidence of a run against the app served from its commit.
+  describe('R10 UI walkthrough', () => {
+    const r10Ctx = (at: string) => {
+      const c = ctx();
+      return { ...c, bl: { ...c.bl, rules: [...c.bl.rules, { id: 'R10', text: 'ui', enforcement: 'attest', uiWalkthroughFrom: '2026-11-20T06:00:00.000Z' }] }, evidence: { ...c.evidence, at } };
+    };
+    const base = (c: any) => wt.buildSkeleton(c).replace(/^- (R\d+): .*$/gm, '- $1: pass').replace(/TODO(?! (the commit|the roles|the screens|what was))[^\n]*/g, 'Done.');
+    const ui = (c: any, fields: string) => base(c).replace(/(## UI walkthrough \(R10\)\n\n)[\s\S]*?(?=\n## |$)/, `$1${fields}\n`);
+
+    it('the skeleton asks for the served commit, roles, steps and result', () => {
+      const text = wt.buildSkeleton(r10Ctx('2026-11-21T00:00:00.000Z'));
+      expect(text).toContain('## UI walkthrough (R10)');
+      for (const [f] of wt.UI_FIELDS) expect(text).toContain(`- ${f}: TODO`);
+    });
+
+    it('rejects R10 pass without the section, or with TODO, a missing field or a bad commit', () => {
+      const c = r10Ctx('2026-11-21T00:00:00.000Z');
+      const none = base(c).replace(/## UI walkthrough \(R10\)[\s\S]*?(?=\n## |$)/, '');
+      expect(wt.walkthroughProblems(none, c).join('\n')).toMatch(/needs a "UI walkthrough \(R10\)" section/);
+      expect(wt.walkthroughProblems(wt.buildSkeleton(c).replace(/^- (R\d+): .*$/gm, '- $1: pass').replace(/TODO(?! the)[^\n]*/g, 'Done.'), c).join('\n')).toMatch(/Served commit still contains TODO/);
+      const good = '- Served commit: abc1234\n- Roles: dictator, scorer\n- Steps: signed in, assigned a captain\n- Result: stored in the database';
+      expect(wt.walkthroughProblems(ui(c, good), c).filter((p: string) => /UI walkthrough/.test(p))).toEqual([]);
+      expect(wt.walkthroughProblems(ui(c, good.replace('- Roles: dictator, scorer\n', '')), c).join('\n')).toMatch(/Roles is missing/);
+      expect(wt.walkthroughProblems(ui(c, good.replace('abc1234', 'not-a-hash')), c).join('\n')).toMatch(/must start with a commit hash/);
+    });
+
+    it('does not apply when R10 is n/a, or to evidence recorded before the cutoff', () => {
+      const c = r10Ctx('2026-11-21T00:00:00.000Z');
+      const na = base(c).replace('- R10: pass', '- R10: n/a: backend only').replace(/## UI walkthrough \(R10\)[\s\S]*?(?=\n## |$)/, '');
+      expect(wt.walkthroughProblems(na, c).filter((p: string) => /UI walkthrough/.test(p))).toEqual([]);
+      const old = r10Ctx('2026-11-19T00:00:00.000Z');
+      const text = base(old).replace(/## UI walkthrough \(R10\)[\s\S]*?(?=\n## |$)/, '');
+      expect(wt.walkthroughProblems(text, old).filter((p: string) => /UI walkthrough/.test(p))).toEqual([]);
+    });
+  });
+
   it('a new skeleton lists every section, every check and every cross-cutting rule', () => {
     const text = wt.buildSkeleton(ctx());
     for (const s of wt.SECTIONS) expect(text, s).toContain(`## ${s}`);

@@ -47,8 +47,9 @@
     },
     {
       "id": "R10",
-      "text": "A capability a person uses or configures ships a minimally usable flow in the existing frontend in its own item and phase (real authorized action; loading, empty, success and error states; UI-to-API-to-database path tested locally and on staging). The Phase 9 redesign consolidates and refines; it is never where a feature first becomes usable. Backend infrastructure and security changes need no UI. World Cup stays separate from division flows.",
-      "enforcement": "attest: n/a for items with no user-facing capability"
+      "text": "A capability a person uses or configures ships a minimally usable flow in the existing frontend in its own item and phase (real authorized action; loading, empty, success and error states). \"Real UI\" means the actual app served from the item's commit (the web app and the API running against the local stack, or the staging build), driven through the screens down to the stored result; component tests with mocks or a jsdom render do not satisfy it. The walkthrough records the served commit, roles, steps and result in its \"UI walkthrough (R10)\" section. The Phase 9 redesign consolidates and refines; it is never where a feature first becomes usable. Backend infrastructure and security changes need no UI. World Cup stays separate from division flows.",
+      "enforcement": "auto: `pnpm work done` rejects a walkthrough with R10 `pass` and no complete UI walkthrough section (items recorded from the cutoff); attest: n/a for items with no user-facing capability",
+      "uiWalkthroughFrom": "2026-11-20T06:00:00.000Z"
     }
   ]
 }

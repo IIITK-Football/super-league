@@ -25,6 +25,20 @@ const PROMPTS = {
   Rollback: 'how to undo this change.',
 };
 
+// Rule R10 (a person-facing capability is usable in the real app) needs recorded evidence of a run against the app
+// served from the item's commit, not a component test. It applies to walkthroughs whose evidence was recorded at or
+// after the rule's `uiWalkthroughFrom` (earlier items predate it).
+export const UI_SECTION = 'UI walkthrough (R10)';
+export const UI_FIELDS = [
+  ['Served commit', 'the commit the app was served from, as 7 to 40 hex characters'],
+  ['Roles', 'the roles or accounts used (for example dictator, scorer, captain, normal user)'],
+  ['Steps', 'the screens and actions clicked, from sign-in to the stored result'],
+  ['Result', 'what was observed in the app and the database, and where (local or staging)'],
+];
+const uiRule = (ctx) => ctx.bl.rules.find((r) => r.id === 'R10' && r.uiWalkthroughFrom);
+const uiRequired = (ctx, r10Value) =>
+  Boolean(uiRule(ctx)) && r10Value === 'pass' && String(ctx.evidence?.at ?? '9999') >= uiRule(ctx).uiWalkthroughFrom;
+
 const marker = (name) => ({ start: `<!-- generated:${name} -->`, end: '<!-- /generated -->' });
 
 function groupOfFile(file, groups) {
@@ -98,6 +112,11 @@ export function buildSkeleton(ctx) {
       for (const r of ctx.bl.rules) lines.push(`- ${r.id}: TODO (${r.text})`);
     } else lines.push(`TODO: ${PROMPTS[s]}`);
     lines.push('');
+    if (s === 'Cross-cutting rules' && uiRule(ctx)) {
+      lines.push(`## ${UI_SECTION}`, '', 'Required when R10 is `pass`; delete this section when R10 is `n/a`.', '');
+      for (const [f, hint] of UI_FIELDS) lines.push(`- ${f}: TODO ${hint}`);
+      lines.push('');
+    }
   }
   return `${lines.join('\n').trimEnd()}\n`;
 }
@@ -151,6 +170,21 @@ export function walkthroughProblems(text, ctx) {
     else if (value === 'pass') continue;
     else if (value === 'n/a' || (value.startsWith('n/a:') && value.slice(4).trim().length < 3)) problems.push(`${r.id}: n/a needs a reason (n/a: why it does not apply)`);
     else if (!value.startsWith('n/a:')) problems.push(`${r.id}: write "pass" or "n/a: <reason>"`);
+  }
+
+  const r10Line = rulesText.split('\n').find((l) => l.startsWith('- R10:'));
+  if (uiRequired(ctx, r10Line ? r10Line.slice('- R10:'.length).trim() : '')) {
+    const ui = sections.get(UI_SECTION);
+    if (ui === undefined) problems.push(`R10 is pass, so the walkthrough needs a "${UI_SECTION}" section (served commit, roles, steps, result)`);
+    else {
+      for (const [f] of UI_FIELDS) {
+        const line = ui.split('\n').find((l) => l.startsWith(`- ${f}:`));
+        const value = line ? line.slice(`- ${f}:`.length).trim() : '';
+        if (!value) problems.push(`"${UI_SECTION}": ${f} is missing`);
+        else if (/\bTODO\b/.test(value)) problems.push(`"${UI_SECTION}": ${f} still contains TODO`);
+        else if (f === 'Served commit' && !/^[0-9a-f]{7,40}\b/.test(value)) problems.push(`"${UI_SECTION}": Served commit must start with a commit hash`);
+      }
+    }
   }
 
   const evidenceText = sections.get('Evidence');
