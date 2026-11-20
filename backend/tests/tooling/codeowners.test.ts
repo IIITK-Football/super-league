@@ -24,6 +24,11 @@ const BACKEND = '@ebinthomas06';
 const FRONTEND = '@AbhiKamp';
 
 describe('CODEOWNERS', () => {
+  it('is mapped to and covered by the tooling group', () => {
+    const groups = JSON.parse(readFileSync(join(__dirname, '../../../tests/groups.json'), 'utf8')).groups;
+    expect(groups.tooling.covers).toContain('.github/CODEOWNERS');
+  });
+
   it('lists only the three agreed handles, with the owner on every line', () => {
     for (const { owners } of lines) {
       expect(owners).toContain(OWNER);
