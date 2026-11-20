@@ -1,7 +1,7 @@
 -- Group: database. Verifies the deterministic local seed (supabase/seed.sql).
 -- Run: pnpm exec supabase test db --local   (from backend/, local stack only)
 BEGIN;
-SELECT plan(29);
+SELECT plan(33);
 
 -- Row volumes (documented in docs/local-seed.md)
 SELECT is((SELECT count(*) FROM public.teams)::int, 24, 'teams: 8 per division x 3');
@@ -10,7 +10,10 @@ SELECT is((SELECT count(*) FROM public.matches)::int, 168, 'matches: 56 per divi
 SELECT is((SELECT count(*) FROM public.matches WHERE status = 'live')::int, 3, 'one live match per division');
 SELECT is((SELECT count(*) FROM public.matches WHERE status = 'completed')::int, 120, 'completed matches');
 SELECT is((SELECT count(*) FROM public.matches WHERE status = 'scheduled')::int, 45, 'scheduled matches');
-SELECT cmp_ok((SELECT count(*) FROM public.goals)::int, '>', 400, 'goals seeded');
+SELECT cmp_ok((SELECT count(*) FROM public.match_events WHERE kind = 'goal')::int, '>', 400, 'goal events seeded');
+SELECT is((SELECT count(*) FROM public.match_events WHERE kind = 'goal' AND player_id IS NULL AND voided_at IS NULL)::int, 1, 'the live match shows one goal whose scorer is not known yet');
+SELECT is((SELECT count(*) FROM public.match_events WHERE kind = 'yellow')::int, 3, 'a yellow card in each live match');
+SELECT hasnt_table('public', 'goals', 'the goals table is retired');
 -- Seed accounts are identified by address, so accounts a developer creates locally while
 -- testing sign-in do not change these counts.
 CREATE TEMP VIEW seed_users AS
@@ -62,8 +65,9 @@ SELECT is((SELECT count(*) FROM public.players WHERE image_url !~ '^data:image/'
 SELECT is((SELECT count(*) FROM public.wc_teams WHERE logo_url !~ '^data:image/')::int, 0, 'World Cup logos are offline placeholders');
 SELECT is((SELECT count(*) FROM public.newsletter WHERE image_url !~ '^data:image/')::int, 0, 'news images are offline placeholders');
 
--- Referential sanity for goals
-SELECT is((SELECT count(*) FROM public.goals g LEFT JOIN public.matches m ON m.id = g.match_id WHERE m.id IS NULL)::int, 0, 'no orphan goals');
+-- Referential sanity and the score cache
+SELECT is((SELECT count(*) FROM public.match_events e LEFT JOIN public.matches m ON m.id = e.match_id WHERE m.id IS NULL)::int, 0, 'no orphan events');
+SELECT is((SELECT count(*) FROM public.matches m WHERE m.home_score <> (SELECT count(*) FROM public.match_events e WHERE e.match_id = m.id AND e.voided_at IS NULL AND ((e.kind = 'goal' AND e.team_id = m.home_team_id) OR (e.kind = 'own_goal' AND e.team_id = m.away_team_id))))::int, 0, 'every cached home score equals its events');
 
 SELECT * FROM finish();
 ROLLBACK;

@@ -66,13 +66,17 @@ SELECT lives_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.delete_unplayed_pla
   'a dictator deletes a player who never played');
 SELECT is((SELECT count(*) FROM public.players WHERE id = (SELECT fresh FROM _p))::int, 0, 'the player and their roster place are gone');
 
+-- A team entry of the test season whose team plays a match there.
+CREATE TEMP TABLE _pick AS
+SELECT te.id AS entry, te.team_id AS team, (SELECT m.id FROM public.matches m WHERE m.season_id = te.season_id AND te.team_id IN (m.home_team_id, m.away_team_id) ORDER BY m.id LIMIT 1) AS match_id
+FROM public.team_entries te WHERE te.season_id = (SELECT id FROM _s) AND EXISTS (SELECT 1 FROM public.matches m WHERE m.season_id = te.season_id AND te.team_id IN (m.home_team_id, m.away_team_id))
+ORDER BY te.id LIMIT 1;
 -- A player whose only goal is an own goal still has match history.
 CREATE TEMP TABLE _og AS
-SELECT pg_temp.new_player((SELECT id FROM public.team_entries WHERE season_id = (SELECT id FROM _s) ORDER BY id LIMIT 1), 'Own', 'Goal', 96) AS p;
+SELECT pg_temp.new_player((SELECT entry FROM _pick), 'Own', 'Goal', 96) AS p;
 GRANT SELECT ON _og TO authenticated;
-INSERT INTO public.goals (match_id, player_id, team_id, is_own_goal)
-SELECT (SELECT id FROM public.matches WHERE season_id = (SELECT id FROM _s) ORDER BY id LIMIT 1), p,
-       (SELECT team_id FROM public.team_entries WHERE season_id = (SELECT id FROM _s) ORDER BY id LIMIT 1), true FROM _og;
+INSERT INTO public.match_events (match_id, player_id, team_id, kind, source)
+SELECT (SELECT match_id FROM _pick), p, (SELECT team FROM _pick), 'own_goal', 'seed' FROM _og;
 SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.delete_unplayed_player((SELECT p FROM _og))::text$q$)$$,
   '23503', 'This player has match history, so the player is kept', 'an own-goal scorer is kept');
 SELECT is((SELECT count(*) FROM public.roster_memberships WHERE player_id = (SELECT p FROM _og))::int, 1, 'and keeps their roster place: nothing changed');
@@ -81,14 +85,14 @@ SELECT is((SELECT count(*) FROM public.roster_memberships WHERE player_id = (SEL
 SELECT throws_ok($$DELETE FROM public.roster_memberships WHERE player_id = (SELECT p FROM _og)$$,
   '23503', NULL, 'the roster place of a player whose only record is an own goal is kept');
 
--- A player named only in a match's own-goal list (legacy JSON record) is kept.
+-- A player with only a card is kept too.
 CREATE TEMP TABLE _jog AS
-SELECT pg_temp.new_player((SELECT id FROM public.team_entries WHERE season_id = (SELECT id FROM _s) ORDER BY id LIMIT 1), 'Json', 'OwnGoal', 95) AS p;
+SELECT pg_temp.new_player((SELECT entry FROM _pick), 'Json', 'OwnGoal', 95) AS p;
 GRANT SELECT ON _jog TO authenticated;
-UPDATE public.matches SET own_goals = COALESCE(own_goals, '[]'::jsonb) || jsonb_build_array((SELECT p FROM _jog)::text)
-WHERE id = (SELECT id FROM public.matches WHERE season_id = (SELECT id FROM _s) ORDER BY id LIMIT 1);
+INSERT INTO public.match_events (match_id, player_id, team_id, kind, source)
+SELECT (SELECT match_id FROM _pick), p, (SELECT team FROM _pick), 'yellow', 'seed' FROM _jog;
 SELECT throws_ok($$SELECT pg_temp.as_user(1, $q$SELECT public.delete_unplayed_player((SELECT p FROM _jog))::text$q$)$$,
-  '23503', 'This player has match history, so the player is kept', 'a player with only a recorded own goal in the match list is kept');
+  '23503', 'This player has match history, so the player is kept', 'a player with only a card is kept');
 SELECT throws_ok($$DELETE FROM public.roster_memberships WHERE player_id = (SELECT p FROM _jog)$$,
   '23503', NULL, 'and so is their roster place');
 

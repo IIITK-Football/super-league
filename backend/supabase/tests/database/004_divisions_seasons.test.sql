@@ -95,9 +95,9 @@ SELECT throws_ok($$INSERT INTO public.matches (home_team_id, away_team_id) SELEC
   '23502', NULL, 'a match cannot be created without a season');
 
 -- Season statistics -----------------------------------------------------------------------------------------
-SELECT is((SELECT sum(goals) FROM public.season_player_stats)::int, (SELECT count(*) FROM public.goals WHERE NOT is_own_goal AND player_id IS NOT NULL)::int,
-  'season goals add up to every non-own goal');
-SELECT is((SELECT sum(assists) FROM public.season_player_stats)::int, (SELECT count(*) FROM public.goals WHERE assist_id IS NOT NULL)::int,
+SELECT is((SELECT sum(goals) FROM public.season_player_stats)::int, (SELECT count(*) FROM public.match_events WHERE kind = 'goal' AND player_id IS NOT NULL AND voided_at IS NULL)::int,
+  'season goals add up to every attributed goal event');
+SELECT is((SELECT sum(assists) FROM public.season_player_stats)::int, (SELECT count(*) FROM public.match_events WHERE assist_player_id IS NOT NULL AND voided_at IS NULL)::int,
   'season assists add up to every assist');
 SELECT is((SELECT count(DISTINCT season_id) FROM public.season_player_stats)::int, 3, 'statistics are split by season');
 

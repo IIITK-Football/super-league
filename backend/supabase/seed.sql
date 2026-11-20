@@ -367,15 +367,15 @@ FROM pairs;
 
 INSERT INTO public.matches (
   id, home_team_id, away_team_id, home_score, away_score,
-  status, date, venue, season_id, scorers, assists, own_goals,
+  status, date, venue, season_id,
   minute, is_graded, timer_start_time, timer_calibration
 )
 SELECT
   m.id,
   m.home_team_id,
   m.away_team_id,
-  m.home_score,
-  m.away_score,
+  0,
+  0,
   m.status,
   m.match_date,
   CASE m.home_show
@@ -384,20 +384,16 @@ SELECT
     ELSE 'Gotham'
   END,
   (SELECT season_id FROM _mega_seasons s WHERE s.division = m.division),
-  '[]'::jsonb,
-  '[]'::jsonb,
-  '[]'::jsonb,
   CASE m.status WHEN 'completed' THEN '90' WHEN 'live' THEN '67' ELSE '0' END,
   m.status = 'completed',
   CASE WHEN m.status = 'live' THEN now() - interval '67 minutes' ELSE NULL END,
   0
 FROM _mega_match_defs m
 -- A rerun refreshes the time-dependent match state (the live match and the upcoming fixtures are
--- relative to "now") and restores fixture scores, without ever inserting a second row. Everything
--- else in this seed stays DO NOTHING, so edits made by testers to teams, players and so on survive.
+-- relative to "now"), without ever inserting a second row. Scores are never written here: they follow the match
+-- events (a cache the database maintains), so a rerun keeps whatever the events say. Everything else in this seed
+-- stays DO NOTHING, so edits made by testers to teams, players and so on survive.
 ON CONFLICT (id) DO UPDATE SET
-  home_score = EXCLUDED.home_score,
-  away_score = EXCLUDED.away_score,
   status = EXCLUDED.status,
   date = EXCLUDED.date,
   minute = EXCLUDED.minute,
@@ -405,23 +401,24 @@ ON CONFLICT (id) DO UPDATE SET
   timer_start_time = EXCLUDED.timer_start_time,
   timer_calibration = EXCLUDED.timer_calibration;
 
--- Normalized goals for completed and live matches.
-INSERT INTO public.goals (
-  id, match_id, player_id, team_id, minute, assist_id, is_own_goal, scored_at
+-- Match events for completed and live matches (the score columns follow them).
+INSERT INTO public.match_events (
+  id, match_id, team_id, kind, player_id, assist_player_id, minute, source, created_at
 )
 SELECT
   md5('mega-goal:' || m.id::text || ':' || s.side || ':' || g.goal_no)::uuid,
   m.id,
-  md5('mega-player:' || s.scoring_team_id::text || ':' || p.slot)::uuid,
   s.scoring_team_id,
-  ((g.goal_no * 13 + m.match_no) % 89 + 1)::text,
+  'goal',
+  md5('mega-player:' || s.scoring_team_id::text || ':' || p.slot)::uuid,
   CASE
     WHEN mod(g.goal_no, 3) = 0 THEN NULL
     ELSE md5(
       'mega-player:' || s.scoring_team_id::text || ':' || (mod(p.slot, 8) + 1)
     )::uuid
   END,
-  false,
+  ((g.goal_no * 13 + m.match_no) % 89 + 1)::smallint,
+  'seed',
   m.match_date + (((g.goal_no * 13 + m.match_no) % 89 + 1) * interval '1 minute')
 FROM _mega_match_defs m
 CROSS JOIN LATERAL (
@@ -436,26 +433,15 @@ CROSS JOIN LATERAL (
 WHERE m.status IN ('completed', 'live')
 ON CONFLICT (id) DO NOTHING;
 
--- Populate the legacy JSON scorer fields from normalized goals.
-UPDATE public.matches m
-SET
-  scorers = COALESCE((
-    SELECT jsonb_agg(
-      jsonb_build_object('player_id', g.player_id, 'team_id', g.team_id, 'minute', g.minute)
-      ORDER BY g.scored_at
-    )
-    FROM public.goals g
-    WHERE g.match_id = m.id
-  ), '[]'::jsonb),
-  assists = COALESCE((
-    SELECT jsonb_agg(
-      jsonb_build_object('player_id', g.assist_id, 'team_id', g.team_id, 'minute', g.minute)
-      ORDER BY g.scored_at
-    )
-    FROM public.goals g
-    WHERE g.match_id = m.id AND g.assist_id IS NOT NULL
-  ), '[]'::jsonb)
-WHERE m.id IN (SELECT id FROM _mega_match_defs);
+-- The live match shows both a goal whose scorer is not known yet and a card (they appear in the live tab and the timeline).
+UPDATE public.match_events SET player_id = NULL, assist_player_id = NULL
+WHERE id = (SELECT e.id FROM public.match_events e JOIN public.matches m ON m.id = e.match_id
+            WHERE m.status = 'live' AND e.source = 'seed' ORDER BY e.id LIMIT 1);
+INSERT INTO public.match_events (id, match_id, team_id, kind, player_id, minute, source)
+SELECT md5('mega-card:' || m.id::text)::uuid, m.id, m.home_team_id, 'yellow',
+       md5('mega-player:' || m.home_team_id::text || ':1')::uuid, 30, 'seed'
+FROM public.matches m WHERE m.status = 'live'
+ON CONFLICT (id) DO NOTHING;
 
 -- Two freshers team-builder captain assignments (the team entry is the Freshers 2026 season's).
 CREATE TEMP TABLE _mega_registrations (
@@ -816,5 +802,9 @@ WHERE p.user_id IS NULL
   AND (k.email = 'fan01@iiitkottayam.ac.in'
        OR NOT EXISTS (SELECT 1 FROM public.players o JOIN auth.users u ON u.id = o.user_id WHERE u.email = k.email))
 ON CONFLICT (player_id) DO NOTHING;
+
+-- Seeded graded predictions were graded from these events: they are current, not "needs regrade".
+UPDATE public.predictions p SET graded_events_version = m.events_version
+FROM public.matches m WHERE m.id = p.match_id AND p.status = 'graded' AND p.graded_events_version IS DISTINCT FROM m.events_version;
 
 COMMIT;
