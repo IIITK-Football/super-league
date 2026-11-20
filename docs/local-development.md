@@ -20,6 +20,10 @@
 3. Check where the link points with `cat backend/supabase/.temp/project-ref`. If it is the production reference, relink to staging as described in `release.md`.
 4. Assistants and scripts in this repository never run these commands without your explicit approval.
 
+## Which checkout is being served
+
+The dev servers serve whatever checkout they were started from. When work happens in a git worktree or on another branch, start the web and API servers **from that checkout** (or switch the running checkout to the branch) before verifying a screen, and note the commit that was served: `git -C <checkout> rev-parse --short HEAD`. A dashboard that still shows a retired screen or queries a dropped table is almost always a server started from an older checkout against a database that has already been migrated. The UI walkthrough evidence required by rule R10 names that commit.
+
 ## Explicit local commands
 
 Run from `backend/`. Use `pnpm`, never `npm`.
