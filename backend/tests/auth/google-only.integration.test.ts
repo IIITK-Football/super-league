@@ -87,8 +87,9 @@ describe('Google-only account (no email identity)', () => {
 
     const after = await admin.from('user_profiles').select('id,email,real_name').eq('id', id).single();
     expect(after.data).toEqual(before.data);
-    const role = await admin.from('user_roles').select('role').eq('user_id', id).single();
-    expect(role.data?.role).toBe('default');
+    // A normal user holds no role grant, and adding a password does not create one.
+    const roles = await admin.from('user_roles').select('role').eq('user_id', id);
+    expect(roles.data ?? []).toEqual([]);
   });
 
   it('keeps the google identity after the password is added', async () => {

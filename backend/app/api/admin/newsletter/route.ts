@@ -3,6 +3,7 @@ import { publishableKey } from '@/lib/supabase/keys';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
+import { hasAnyRole, myRoles, type Role } from '../../../../lib/auth/roles';
 // Note: Zod is removed here to keep it simple, but you can add it back if you have it installed!
 
 // 1. THE MAGIC FIX: Teach the client to read the Auth Header!
@@ -25,13 +26,8 @@ async function requireRole(request: Request, allowedRoles: string[]) {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) throw { status: 401, message: 'Unauthorized' };
 
-  const { data: roleRecord } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .maybeSingle();
-  const role = roleRecord?.role;
-  if (!allowedRoles.includes(role)) throw { status: 403, message: 'Insufficient role' };
+  const roles = await myRoles(supabase);
+  if (!hasAnyRole(roles, allowedRoles as Role[])) throw { status: 403, message: 'Insufficient role' };
   return { supabase, user };
 }
 

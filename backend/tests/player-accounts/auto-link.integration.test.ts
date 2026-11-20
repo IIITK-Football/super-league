@@ -46,7 +46,7 @@ beforeAll(async () => {
   admin = c.admin;
   const email = emailFor('dictator');
   const id = await createAccount(email, true);
-  await admin.from('user_roles').update({ role: 'dictator' }).eq('user_id', id);
+  await admin.from('user_roles').upsert({ user_id: id, role: 'dictator' }, { onConflict: 'user_id,role', ignoreDuplicates: true });
   dictator = c.anon();
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   const v = await dictator.auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });

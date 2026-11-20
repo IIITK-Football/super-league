@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { myRoles } from '@/lib/auth/roles';
+import { UUID } from '@/lib/roster/access';
 
 export const runtime = 'nodejs';
 
@@ -70,31 +72,57 @@ export async function POST(request: Request) {
 
     const adminClient = createClient(supabaseUrl, secret);
     const formData = await request.formData();
-    // Branding is a captain's (or a dictator's) change to a team they captain in the current season. A captain with
-    // several such teams names the registration; the team is always the registration's own team.
-    const { data: roleRow } = await adminClient.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
-    if (!['captain', 'dictator'].includes(String(roleRow?.role))) {
-      return NextResponse.json({ error: 'Only the team\'s captain can change its branding.' }, { status: 403 });
+    // Team details (name, short name, colour, logo) are the shared team's, changed by a dictator or by the captain of a
+    // team entry whose assignment is writable (current or upcoming season, not completed or archived). The database
+    // helper is_captain_of() decides, as the caller. A captain with several writable entries names the entry.
+    const roles = await myRoles(authClient);
+    const isDictator = roles.includes('dictator');
+    if (!isDictator && !roles.includes('captain')) {
+      return NextResponse.json({ error: 'Only the team\'s captain can change its details.' }, { status: 403 });
     }
-    const registrationId = String(formData.get('registration_id') || '').trim();
-    let query = adminClient
-      .from('team_registrations')
-      .select('id, team_id, team_name, season:seasons!inner(slug, is_current, division:divisions!inner(slug)), teams!inner(id, name, logo_url, team_color)')
-      .eq('captain_id', user.id)
-      .eq('season.is_current', true);
-    if (registrationId) query = query.eq('id', registrationId);
-    const { data: registrations, error: registrationError } = await query;
-
-    if (registrationError) throw registrationError;
-    if (!registrations?.length) {
-      return NextResponse.json({ error: 'You do not captain a team in the current season. Contact your dictator.' }, { status: 409 });
+    const entryId = String(formData.get('team_entry_id') || '').trim();
+    let candidateIds: string[];
+    if (isDictator) {
+      if (!UUID.test(entryId)) return NextResponse.json({ error: 'Choose a team entry.' }, { status: 400 });
+      candidateIds = [entryId];
+    } else {
+      const { data: mine, error: mineError } = await adminClient.from('captain_assignments').select('team_entry_id').eq('user_id', user.id);
+      if (mineError) throw mineError;
+      candidateIds = (mine ?? []).map((a) => a.team_entry_id as string).filter((id) => !entryId || id === entryId);
     }
-    if (registrations.length > 1) {
-      return NextResponse.json({ error: 'Choose which of your teams to brand.' }, { status: 400 });
+    const writable: string[] = [];
+    for (const id of candidateIds) {
+      const { data: ok, error: okError } = await authClient.rpc('is_captain_of', { p_entry: id });
+      if (okError) throw okError;
+      if (ok === true || isDictator) writable.push(id);
     }
-    const registration = registrations[0];
+    if (!writable.length) {
+      return NextResponse.json({ error: 'You do not captain a team in a current or upcoming season. Contact your dictator.' }, { status: 409 });
+    }
+    if (writable.length > 1) {
+      return NextResponse.json({ error: 'Choose which of your teams to change.' }, { status: 400 });
+    }
+    const { data: entryRow, error: entryError } = await adminClient
+      .from('team_entries')
+      .select('id, team_id, season:seasons!inner(slug, division:divisions!inner(slug)), teams!inner(id, name, short_name, logo_url, team_color)')
+      .eq('id', writable[0])
+      .maybeSingle();
+    if (entryError) throw entryError;
+    if (!entryRow) return NextResponse.json({ error: 'Team entry not found.' }, { status: 404 });
+    const registration = entryRow as any;
 
     const team = Array.isArray(registration.teams) ? registration.teams[0] : registration.teams;
+    // Name and short name are optional: an omitted field keeps the current value.
+    const rawName = formData.get('team_name');
+    const rawShort = formData.get('short_name');
+    const newName = rawName === null ? team.name : String(rawName).trim();
+    const newShort = rawShort === null ? team.short_name : String(rawShort).trim().toUpperCase();
+    if (rawName !== null && (newName.length < 2 || newName.length > 60)) {
+      return NextResponse.json({ error: 'The team name must be 2 to 60 characters.' }, { status: 400 });
+    }
+    if (rawShort !== null && newShort && !/^[A-Z0-9]{2,5}$/.test(newShort)) {
+      return NextResponse.json({ error: 'The short name must be 2 to 5 letters or numbers.' }, { status: 400 });
+    }
     const teamColor = String(formData.get('team_color') || '').trim();
     const logo = formData.get('logo');
 
@@ -130,8 +158,8 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
 
-      const rawName = team.name || 'team';
-      const teamSlug = rawName
+      const nameForKey = team.name || 'team';
+      const teamSlug = nameForKey
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9._-]/g, '-')
@@ -156,7 +184,7 @@ export async function POST(request: Request) {
 
     const { error: updateError } = await adminClient
       .from('teams')
-      .update({ logo_url: logoUrl, team_color: teamColor })
+      .update({ name: newName, short_name: newShort || null, logo_url: logoUrl, team_color: teamColor })
       .eq('id', registration.team_id);
 
     if (updateError) {
@@ -167,10 +195,13 @@ export async function POST(request: Request) {
           console.error('Could not clean up an unreferenced team logo:', cleanupError);
         }
       }
+      if ((updateError as { code?: string }).code === '23505') {
+        return NextResponse.json({ error: 'Another team already uses that name.' }, { status: 409 });
+      }
       throw updateError;
     }
 
-    return NextResponse.json({ success: true, data: { logo_url: logoUrl, team_color: teamColor } });
+    return NextResponse.json({ success: true, data: { name: newName, short_name: newShort || null, logo_url: logoUrl, team_color: teamColor } });
   } catch (error) {
     console.error('Captain team branding update failed:', error);
     return NextResponse.json({ error: 'Could not save your team branding.' }, { status: 500 });

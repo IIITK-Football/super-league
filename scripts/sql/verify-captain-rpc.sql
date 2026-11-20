@@ -2,7 +2,7 @@
 -- passed = t. Run it in the SQL Editor of staging or production after the migrations (it changes nothing: a READ
 -- ONLY transaction that is always rolled back). captain_update_roster_player replaced captain_update_team_member when
 -- the Freshers member table became season roster memberships (20261124000000, 20261125000000); the retired
--- overloads must be gone. Check 11 reads only a count of registrations. Checks 12-16 cover the dictator roster
+-- overloads must be gone. Check 11 reads only a yes or no about captain assignments; 21 and 22 cover the role and assignment helpers (20261201000000). Checks 12-16 cover the dictator roster
 -- functions and the roster history guard (20261127000000) and the audit history's write protection (20261126000000).
 -- Checks 17-20 cover the account-linked players and verified-email matching (20261130000005-7).
 BEGIN READ ONLY;
@@ -38,10 +38,9 @@ FROM (
          to_regprocedure('public.captain_update_team_member(uuid,text,integer,integer,jsonb,text,text)') IS NULL
          AND to_regprocedure('public.captain_update_team_member(uuid,text,integer,integer,jsonb)') IS NULL
   UNION ALL
-  SELECT 11, 'every assigned team captain holds the captain role (or is a dictator)',
-         NOT EXISTS (SELECT 1 FROM public.team_registrations r
-                     LEFT JOIN public.user_roles ur ON ur.user_id = r.captain_id
-                     WHERE ur.role IS DISTINCT FROM 'captain' AND ur.role IS DISTINCT FROM 'dictator')
+  SELECT 11, 'every captain assignment belongs to someone holding the captain role (or a dictator)',
+         NOT EXISTS (SELECT 1 FROM public.captain_assignments ca
+                     WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = ca.user_id AND ur.role IN ('captain', 'dictator')))
   UNION ALL
   SELECT 12, 'the dictator roster functions exist (new team in a season / save a player / remove an unplayed player / history check)',
          to_regprocedure('public.create_team_in_season(uuid,text)') IS NOT NULL
@@ -100,6 +99,20 @@ FROM (
          to_regclass('public.player_link_keys') IS NOT NULL
          AND NOT has_table_privilege('anon', 'public.player_link_keys', 'SELECT')
          AND NOT has_table_privilege('authenticated', 'public.player_link_keys', 'SELECT')
+  UNION ALL
+  SELECT 21, 'the role and assignment helpers exist and are closed to anonymous callers and PUBLIC',
+         (SELECT bool_and(fn IS NOT NULL AND NOT has_function_privilege('anon', fn, 'EXECUTE') AND has_function_privilege('authenticated', fn, 'EXECUTE')
+                          AND NOT EXISTS (SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee = 0))
+          FROM unnest(ARRAY['public.has_role(text)', 'public.my_roles()', 'public.is_captain_of(uuid)', 'public.can_score(uuid)',
+                            'public.scorable_match_ids(uuid[])', 'public.season_is_writable(uuid)', 'public.assign_captain(uuid,uuid,boolean)',
+                            'public.revoke_captain(uuid)', 'public.assign_scorer(uuid,uuid,uuid,timestamp with time zone)', 'public.revoke_scorer(uuid)',
+                            'public.refresh_captain_grants(uuid)']) AS name
+          CROSS JOIN LATERAL (SELECT to_regprocedure(name) AS fn) r
+          LEFT JOIN pg_proc p ON p.oid = r.fn) IS TRUE
+  UNION ALL
+  SELECT 22, 'only the four role grants are stored with no stored default or admin role and the old helpers are gone',
+         NOT EXISTS (SELECT 1 FROM public.user_roles WHERE role NOT IN ('captain', 'scorer', 'editor', 'dictator'))
+         AND to_regprocedure('public.is_role_manager()') IS NULL AND to_regprocedure('public.get_user_role()') IS NULL
 ) c
 ORDER BY n;
 

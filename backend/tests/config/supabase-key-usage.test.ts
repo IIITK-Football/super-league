@@ -43,7 +43,6 @@ const ELEVATED: Record<string, string> = {
   'app/api/admin/predictions/grade/route.ts': 'admin grading',
   'app/api/admin/predictions/regrade-all/route.ts': 'admin grading',
   // Role-checked writes: to be replaced by RLS and role policies in the authorization work
-  'app/api/admin/team-registrations/route.ts': 'role-checked write (to downscope)',
   'app/api/captain/team-branding/route.ts': 'role-checked write (to downscope)',
   // User-facing routes that use the elevated key today (candidates to downscope; see audit notes)
   'app/api/wc/leaderboard/route.ts': 'to downscope',

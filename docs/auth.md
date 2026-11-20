@@ -120,7 +120,7 @@ Production is the original hosted Supabase project, and (as far as we know) the 
 ### Checks on staging (expected result in brackets)
 | Check | Expected |
 |---|---|
-| Triggers on `auth.users` after the migration | Four: `ensure_domain_lock`, `ensure_domain_lock_on_email_change`, `on_auth_user_created`, `on_auth_user_role_created` |
+| Triggers on `auth.users` after the migration | `ensure_domain_lock`, `ensure_domain_lock_on_email_change`, `on_auth_user_created` (the default-role trigger was removed with the role grants, 20261201000000) |
 | Sign up with a non-college email | Rejected |
 | Sign up with a college address | Needs the emailed confirmation; a profile and the default role appear after it |
 | Password sign-in with the widget | Succeeds |

@@ -23,14 +23,13 @@ FROM (
          EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = '60000000-0000-4000-8000-000000000003' AND role = 'editor')
   UNION ALL SELECT 9, 'both fixture captains hold the captain role',
          (SELECT count(*) FROM public.user_roles WHERE role = 'captain' AND user_id IN ('60000000-0000-4000-8000-000000000002', '60000000-0000-4000-8000-000000000004')) = 2
-  UNION ALL SELECT 10, 'every team assignment has a captain or dictator holder',
-         NOT EXISTS (SELECT 1 FROM public.team_registrations r LEFT JOIN public.user_roles ur ON ur.user_id = r.captain_id
-                     WHERE ur.role IS DISTINCT FROM 'captain' AND ur.role IS DISTINCT FROM 'dictator')
-  UNION ALL SELECT 11, 'team builder registrations exist and their teams have season rosters',
-         (SELECT count(*) FROM public.team_registrations) >= 2
-         AND NOT EXISTS (SELECT 1 FROM public.team_registrations r
-                         WHERE NOT EXISTS (SELECT 1 FROM public.roster_memberships rm JOIN public.team_entries e ON e.id = rm.team_entry_id
-                                           WHERE e.team_id = r.team_id AND e.season_id = r.season_id))
+  UNION ALL SELECT 10, 'every captain assignment has a captain or dictator holder',
+         NOT EXISTS (SELECT 1 FROM public.captain_assignments ca
+                     WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = ca.user_id AND ur.role IN ('captain', 'dictator')))
+  UNION ALL SELECT 11, 'team builder captain assignments exist and their team entries have rosters',
+         (SELECT count(*) FROM public.captain_assignments) >= 2
+         AND NOT EXISTS (SELECT 1 FROM public.captain_assignments ca
+                         WHERE NOT EXISTS (SELECT 1 FROM public.roster_memberships rm WHERE rm.team_entry_id = ca.team_entry_id))
   UNION ALL SELECT 12, 'league predictions exist',
          (SELECT count(*) FROM public.predictions) > 0
   UNION ALL SELECT 13, 'newsletter items exist and every division has a current season with its teams',
@@ -42,8 +41,9 @@ FROM (
          AND (SELECT count(*) FROM public.wc_leaderboard) > 0
   UNION ALL SELECT 15, 'college-domain trigger is on auth.users',
          EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'ensure_domain_lock' AND NOT tgisinternal)
-  UNION ALL SELECT 16, 'new-user profile and role triggers are on auth.users',
-         (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname IN ('on_auth_user_created', 'on_auth_user_role_created') AND NOT tgisinternal) = 2
+  UNION ALL SELECT 16, 'new-user profile trigger is on auth.users and no default-role trigger remains',
+         (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_created' AND NOT tgisinternal) = 1
+         AND NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_role_created')
   UNION ALL SELECT 17, 'fixture media are offline placeholders (no third-party or production image hosts)',
          NOT EXISTS (SELECT 1 FROM public.teams WHERE logo_url !~ '^data:image/')
   UNION ALL SELECT 18, 'every player linked to an account is linked to a verified account',

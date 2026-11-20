@@ -21,8 +21,10 @@ async function signedIn(role: Role) {
   const email = uniqueEmail(`division-${role}`);
   const { data, error } = await admin.auth.admin.createUser({ email, password: PASSWORD, email_confirm: true });
   if (error) throw error;
-  const { error: roleError } = await admin.from('user_roles').update({ role }).eq('user_id', data.user.id);
-  if (roleError) throw roleError;
+  if (role !== 'default') {
+    const { error: roleError } = await admin.from('user_roles').upsert({ user_id: data.user.id, role }, { onConflict: 'user_id,role', ignoreDuplicates: true });
+    if (roleError) throw roleError;
+  }
   const client = anon();
   const { error: signInError } = await client.auth.signInWithPassword({ email, password: PASSWORD });
   if (signInError) throw signInError;

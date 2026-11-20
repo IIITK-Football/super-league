@@ -9,8 +9,8 @@
 --   select pg_get_functiondef('public.handle_new_user()'::regprocedure);
 --   select tgname, pg_get_triggerdef(oid) from pg_trigger where tgrelid = 'auth.users'::regclass and not tgisinternal;
 --
--- Deliberately kept: ensure_domain_lock (new accounts), on_auth_user_created and
--- on_auth_user_role_created. Dropping those would stop new users getting a profile and role.
+-- Deliberately kept: ensure_domain_lock (new accounts) and on_auth_user_created. Dropping those would stop new users
+-- getting a profile. (The default-role trigger no longer exists: a normal user holds no role grant.)
 
 BEGIN;
 

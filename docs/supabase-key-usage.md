@@ -13,7 +13,7 @@ Where each Supabase API key is used and why. The list of files using the **secre
 | Cron sync, protected by `CRON_SECRET` | `wc/sync/{groups,matches,players,single,teams}` | Server-to-server, no user |
 | Cron grading, protected by `CRON_SECRET` | `wc/grade/{awards,champion,finals,groups,quarter-finals,round-of-16,semi-finals}` | Grades every user's predictions |
 | Admin grading | `admin/predictions/{grade,regrade-all}` | Writes other users' rows |
-| Role-checked writes | `admin/team-registrations`, `captain/team-branding` | Verify the caller, then write with elevated access. **To downscope** once RLS and role policies are redesigned |
+| Role-checked writes | `captain/team-branding` (identity and assignment verified as the caller through `is_captain_of`, then the team row is written) | Verify the caller, then write with elevated access. **To downscope** once RLS and role policies are redesigned |
 | User-facing routes | `wc/{leaderboard,teams,players,champion-predictors,flair}`, `wc/predictions/{awards,groups,knockouts,knockouts/submit}` | Use elevated access today although most could run as the user under RLS. **Candidates to downscope** |
 | **Unauthenticated today** | `wc/sync/manual`, `wc/sync/brazil` | Use elevated access with **no authentication check** |
 

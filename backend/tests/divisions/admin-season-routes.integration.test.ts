@@ -22,7 +22,7 @@ async function tokenFor(role: string) {
   const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true });
   if (error) throw error;
   users.push(data.user.id);
-  await admin.from('user_roles').update({ role }).eq('user_id', data.user.id);
+  if (role !== 'default') await admin.from('user_roles').upsert({ user_id: data.user.id, role: role }, { onConflict: 'user_id,role', ignoreDuplicates: true });
   const link = await admin.auth.admin.generateLink({ type: 'magiclink', email });
   const { data: v, error: vErr } = await anon().auth.verifyOtp({ token_hash: link.data.properties!.hashed_token, type: 'magiclink' });
   if (vErr) throw vErr;
@@ -50,7 +50,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!admin) return;
   for (const id of made.matches) await admin.from('matches').delete().eq('id', id);
-  for (const id of made.regs) await admin.from('team_registrations').delete().eq('id', id);
+  for (const id of made.regs) await admin.from('captain_assignments').delete().eq('id', id);
   if (made.teams.length) await admin.from('team_entries').delete().in('team_id', made.teams);
   for (const id of made.teams) await admin.from('teams').delete().eq('id', id);
   for (const id of made.seasons) await admin.from('seasons').delete().eq('id', id);
@@ -93,11 +93,12 @@ describe('admin teams', () => {
 });
 
 describe('captain team branding', () => {
-  it('finds the captain\'s registration through its season and saves the colour', async () => {
+  it('finds the captain\'s assignment through its team entry and saves the colour', async () => {
     const captain = await tokenFor('captain');
     const { data: team } = await admin.from('teams').insert({ name: `Branding Test ${Date.now()}`, short_name: 'BRT', logo_url: 'data:image/png;base64,AA==', team_color: '#000000' }).select('id').single();
     made.teams.push(team!.id);
-    const { data: reg } = await admin.from('team_registrations').insert({ captain_id: captain.id, team_name: 'Branding Test', season_id: current.freshers, team_id: team!.id }).select('id').single();
+    const { data: entry } = await admin.from('team_entries').insert({ team_id: team!.id, season_id: current.freshers }).select('id').single();
+    const { data: reg } = await admin.from('captain_assignments').insert({ team_entry_id: entry!.id, user_id: captain.id }).select('id').single();
     made.regs.push(reg!.id);
 
     const { POST } = await import('../../app/api/captain/team-branding/route');
@@ -121,7 +122,9 @@ describe('captain team branding refusals', () => {
     const { data: team, error } = await admin.from('teams').insert({ name: `Branding Refused ${stamp}`, short_name: `R${stamp.slice(-3)}`, logo_url: 'data:image/png;base64,AA==', team_color: '#000000' }).select('id').single();
     if (error) throw error;
     made.teams.push(team!.id);
-    const { data: reg, error: regError } = await admin.from('team_registrations').insert({ captain_id: captainId, team_name: 'Branding Refused', season_id: seasonId, team_id: team!.id }).select('id').single();
+    const { data: entry, error: entryError } = await admin.from('team_entries').insert({ team_id: team!.id, season_id: seasonId }).select('id').single();
+    if (entryError) throw entryError;
+    const { data: reg, error: regError } = await admin.from('captain_assignments').insert({ team_entry_id: entry!.id, user_id: captainId }).select('id').single();
     if (regError) throw regError;
     made.regs.push(reg!.id);
     return team!.id;
@@ -134,9 +137,9 @@ describe('captain team branding refusals', () => {
     expect((await admin.from('teams').select('team_color').eq('id', teamId).single()).data!.team_color).toBe('#000000');
   });
 
-  it('refuses a captain whose registration is not in the current season, changing nothing', async () => {
+  it('refuses a captain whose assignment is in a completed season, changing nothing', async () => {
     const captain = await tokenFor('captain');
-    const { data: past } = await admin.from('seasons').insert({ division_id: (await admin.from('seasons').select('division_id').eq('id', current.freshers).single()).data!.division_id, slug: `past-${Date.now()}`, name: 'Past', is_current: false }).select('id').single();
+    const { data: past } = await admin.from('seasons').insert({ division_id: (await admin.from('seasons').select('division_id').eq('id', current.freshers).single()).data!.division_id, slug: `past-${Date.now()}`, name: 'Past', is_current: false, status: 'completed' }).select('id').single();
     made.seasons.push(past!.id);
     const teamId = await registeredTeam(captain.id, past!.id);
     expect((await brand(captain.token)).status).toBe(409);

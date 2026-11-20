@@ -31,14 +31,14 @@ describe('auth college-domain rollback script', () => {
         IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'ensure_domain_lock_on_email_change') THEN
           RAISE EXCEPTION 'email-change guard still present'; END IF;
         IF (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'auth.users'::regclass
-              AND tgname IN ('ensure_domain_lock','on_auth_user_created','on_auth_user_role_created')) <> 3 THEN
+              AND tgname IN ('ensure_domain_lock','on_auth_user_created')) <> 2 THEN
           RAISE EXCEPTION 'a trigger that must be kept was removed'; END IF;
       END $$;`);
     expect(r.stderr).toBe('');
     expect(r.status).toBe(0);
   });
 
-  it('restores the previous check and new users still get a profile and role', () => {
+  it('restores the previous check and new users still get a profile (and no role grant)', () => {
     const r = run(`
       DO $$ BEGIN
         IF pg_get_functiondef('public.enforce_college_domain()'::regprocedure) LIKE '%lower(%' THEN
@@ -47,8 +47,8 @@ describe('auth college-domain rollback script', () => {
           VALUES ('91000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', 'rollback@iiitkottayam.ac.in', '', now(), now());
         IF NOT EXISTS (SELECT 1 FROM public.user_profiles WHERE id = '91000000-0000-4000-8000-000000000001') THEN
           RAISE EXCEPTION 'profile not created'; END IF;
-        IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = '91000000-0000-4000-8000-000000000001' AND role = 'default') THEN
-          RAISE EXCEPTION 'default role not created'; END IF;
+        IF EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = '91000000-0000-4000-8000-000000000001') THEN
+          RAISE EXCEPTION 'a new user must hold no role grant'; END IF;
         BEGIN
           INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
             VALUES ('91000000-0000-4000-8000-000000000002', 'authenticated', 'authenticated', 'outsider@gmail.com', '', now(), now());

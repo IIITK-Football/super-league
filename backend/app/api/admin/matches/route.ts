@@ -59,7 +59,20 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    const formattedData = data?.map((m:any) => {
+    // The dashboard lists matches for scoring: a dictator sees them all, a scorer only the matches assigned to them
+    // (their season or one match, unexpired). Anyone else, and anyone not signed in, sees none.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw { status: 401, message: "Unauthorized: Please log in." };
+    const { data: isDictator } = await supabase.rpc('is_dictator');
+    let visible = data ?? [];
+    if (!isDictator && visible.length > 0) {
+      const { data: ids, error: idsError } = await supabase.rpc('scorable_match_ids', { p_ids: visible.map((m: any) => m.id) });
+      if (idsError) throw idsError;
+      const allowed = new Set<string>((ids ?? []) as string[]);
+      visible = visible.filter((m: any) => allowed.has(m.id));
+    }
+
+    const formattedData = visible.map((m:any) => {
       // MAGIC FIX: Check if Supabase returned an array or an object!
       const homeData = Array.isArray(m.home) ? m.home[0] : m.home;
       const awayData = Array.isArray(m.away) ? m.away[0] : m.away;
