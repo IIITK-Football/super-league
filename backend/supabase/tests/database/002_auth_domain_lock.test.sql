@@ -10,8 +10,8 @@ SELECT lives_ok(
 
 SELECT is((SELECT real_name FROM public.user_profiles WHERE id = '90000000-0000-4000-8000-000000000001'),
   'Test Student', 'a profile row is created for the new user');
-SELECT is((SELECT role FROM public.user_roles WHERE user_id = '90000000-0000-4000-8000-000000000001'),
-  'default', 'new users start with the default role');
+SELECT is((SELECT count(*)::int FROM public.user_roles WHERE user_id = '90000000-0000-4000-8000-000000000001'),
+  0, 'new users start with no role grant (a normal user)');
 
 SELECT lives_ok(
   $$INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)

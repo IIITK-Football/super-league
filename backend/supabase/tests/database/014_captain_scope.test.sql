@@ -26,11 +26,14 @@ INSERT INTO public.roster_memberships (id, player_id, team_entry_id, season_id, 
 INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 SELECT ('c1b00000-0000-4000-8000-00000000000' || n)::uuid, 'authenticated', 'authenticated', (ARRAY['cs.captain','cs.boss'])[n] || '@iiitkottayam.ac.in', '', now(), now()
 FROM generate_series(1, 2) AS n;
-UPDATE public.user_roles SET role = 'captain' WHERE user_id = 'c1b00000-0000-4000-8000-000000000001';
-UPDATE public.user_roles SET role = 'dictator' WHERE user_id = 'c1b00000-0000-4000-8000-000000000002';
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'captain' FROM auth.users WHERE id = 'c1b00000-0000-4000-8000-000000000001' ON CONFLICT DO NOTHING;
+INSERT INTO public.user_roles (user_id, role) SELECT id, 'dictator' FROM auth.users WHERE id = 'c1b00000-0000-4000-8000-000000000002' ON CONFLICT DO NOTHING;
 INSERT INTO public.team_registrations (captain_id, team_name, season_id, team_id) VALUES
   ('c1b00000-0000-4000-8000-000000000001', 'Scope Reds', 'c1500000-0000-4000-8000-000000000001', 'c1700000-0000-4000-8000-000000000001'),
   ('c1b00000-0000-4000-8000-000000000002', 'Scope Blues', 'c1500000-0000-4000-8000-000000000002', 'c1700000-0000-4000-8000-000000000002');
+INSERT INTO public.captain_assignments (team_entry_id, user_id)
+SELECT e.id, r.captain_id FROM public.team_registrations r JOIN public.team_entries e ON e.team_id = r.team_id AND e.season_id = r.season_id
+ON CONFLICT (team_entry_id) DO NOTHING;
 
 CREATE FUNCTION pg_temp.as_user(p_n integer, p_sql text)
 RETURNS text LANGUAGE plpgsql AS $$
