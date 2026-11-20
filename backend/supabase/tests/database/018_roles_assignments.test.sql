@@ -92,11 +92,11 @@ SELECT is(pg_temp.as_user(2, $$SELECT public.can_score('d0300000-0000-4000-8000-
 SELECT is(pg_temp.as_user(6, $$SELECT public.can_score('d0300000-0000-4000-8000-000000000002')::text$$), 'true', 'a dictator can score any match');
 
 -- Matches, goals, teams, news ---------------------------------------------------------------------------------------
-SELECT is(pg_temp.rows_as(1, $$UPDATE public.matches SET home_score = 9 WHERE id = 'd0300000-0000-4000-8000-000000000001'$$), 0, 'a normal account cannot write a match');
-SELECT is(pg_temp.rows_as(2, $$UPDATE public.matches SET home_score = 9 WHERE id = 'd0300000-0000-4000-8000-000000000001'$$), 0, 'a captain cannot write a match');
-SELECT is(pg_temp.rows_as(3, $$UPDATE public.matches SET home_score = 1 WHERE id = 'd0300000-0000-4000-8000-000000000001'$$), 1, 'the assigned scorer updates the assigned match');
-SELECT is(pg_temp.rows_as(3, $$UPDATE public.matches SET home_score = 1 WHERE id = 'd0300000-0000-4000-8000-000000000002'$$), 0, 'but not another match');
-SELECT is(pg_temp.rows_as(8, $$UPDATE public.matches SET home_score = 5 WHERE id = 'd0300000-0000-4000-8000-000000000001'$$), 0, 'an expired scorer updates nothing');
+SELECT is(pg_temp.rows_as(1, $$UPDATE public.matches SET minute = '9' WHERE id = 'd0300000-0000-4000-8000-000000000001'$$), 0, 'a normal account cannot write a match');
+SELECT is(pg_temp.rows_as(2, $$UPDATE public.matches SET minute = '9' WHERE id = 'd0300000-0000-4000-8000-000000000001'$$), 0, 'a captain cannot write a match');
+SELECT is(pg_temp.rows_as(3, $$UPDATE public.matches SET minute = '1' WHERE id = 'd0300000-0000-4000-8000-000000000001'$$), 1, 'the assigned scorer updates the assigned match');
+SELECT is(pg_temp.rows_as(3, $$UPDATE public.matches SET minute = '1' WHERE id = 'd0300000-0000-4000-8000-000000000002'$$), 0, 'but not another match');
+SELECT is(pg_temp.rows_as(8, $$UPDATE public.matches SET minute = '5' WHERE id = 'd0300000-0000-4000-8000-000000000001'$$), 0, 'an expired scorer updates nothing');
 SELECT throws_ok($$SELECT pg_temp.rows_as(3, $q$UPDATE public.matches SET home_team_id = away_team_id WHERE id = 'd0300000-0000-4000-8000-000000000001'$q$)$$, '42501', NULL, 'a scorer cannot change which teams play');
 SELECT throws_ok($$SELECT pg_temp.rows_as(3, $q$INSERT INTO public.matches (home_team_id, away_team_id, season_id) VALUES ('d0700000-0000-4000-8000-000000000001', 'd0700000-0000-4000-8000-000000000002', 'd0500000-0000-4000-8000-000000000001')$q$)$$, '42501', NULL, 'a scorer cannot create fixtures');
 SELECT is(pg_temp.rows_as(6, $$DELETE FROM public.matches WHERE id = 'd0300000-0000-4000-8000-000000000002'$$), 1, 'a dictator deletes a match');
