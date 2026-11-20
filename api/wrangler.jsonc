@@ -1,28 +1,56 @@
 // The Super League API Worker. Non-secret settings only; secrets (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY,
-// SUPABASE_SECRET_KEY, the R2 values) are Worker secrets set per environment, never committed.
+// SUPABASE_SECRET_KEY) are Worker secrets set per environment, never committed.
 // Local development reads them from api/.dev.vars (git-ignored; copy api/.dev.vars.example).
+//
+// Media (D-06): each environment binds its own R2 buckets (R2_<PURPOSE>) and names their public bases
+// (MEDIA_BASE_<PURPOSE>). The bindings are the only R2 access: the Worker holds no R2 credentials, and Pages has no
+// R2 binding. Bindings and vars are not inherited by environments, so staging declares all of its own.
+// `wrangler deploy` replaces dashboard bindings with these, so this file is the source of truth for them.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "super-league-api",
   "main": "src/index.ts",
   "compatibility_date": "2025-09-01",
-  // nodejs_compat exposes bindings as process.env (compatibility date >= 2025-04-01) and provides the Node APIs
-  // the shared handlers and the Supabase and S3 clients use.
+  // nodejs_compat exposes text bindings as process.env (compatibility date >= 2025-04-01) and provides the Node APIs
+  // the shared handlers and the Supabase client use.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  // Local development: no public route; the Vite dev server proxies /api to wrangler dev on :8787.
+  // Local development (never deployed): no public route; the Vite dev server proxies /api to wrangler dev on :8787.
+  // The sl-local-* buckets are emulated on disk by wrangler dev and served by the local-only /api/local-media route.
   "workers_dev": false,
+  "r2_buckets": [
+    { "binding": "R2_NEWS", "bucket_name": "sl-local-news-images" },
+    { "binding": "R2_PLAYERS", "bucket_name": "sl-local-player-images" },
+    { "binding": "R2_LOGOS", "bucket_name": "sl-local-team-logos" }
+  ],
+  "vars": {
+    "SL_ENVIRONMENT": "local",
+    "MEDIA_BASE_NEWS": "http://127.0.0.1:5173/api/local-media/news",
+    "MEDIA_BASE_PLAYERS": "http://127.0.0.1:5173/api/local-media/players",
+    "MEDIA_BASE_LOGOS": "http://127.0.0.1:5173/api/local-media/logos",
+    "MEDIA_BASE_VIDEO": "https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev"
+  },
   "env": {
     // Staging: deployed only by Cloudflare Workers Builds from develop (api/scripts/deploy-staging.mjs,
     // docs/worker-staging.md). Reached only through the staging Pages project's service binding, so it needs no
     // public URL. SL_PRODUCTION_SUPABASE_REF is the production project's public reference: the Worker refuses to
-    // serve anything if its SUPABASE_URL ever points there.
+    // serve anything if its SUPABASE_URL ever points there. The home video is read-only, so it is read from the
+    // existing public intro host.
     "staging": {
       "name": "super-league-api-staging",
       "workers_dev": false,
+      "r2_buckets": [
+        { "binding": "R2_NEWS", "bucket_name": "sl-staging-news-images" },
+        { "binding": "R2_PLAYERS", "bucket_name": "sl-staging-player-images" },
+        { "binding": "R2_LOGOS", "bucket_name": "sl-staging-team-logos" }
+      ],
       "vars": {
         "SL_ENVIRONMENT": "staging",
-        "SL_PRODUCTION_SUPABASE_REF": "obkxfepdpdufxawhzaen"
+        "SL_PRODUCTION_SUPABASE_REF": "obkxfepdpdufxawhzaen",
+        "MEDIA_BASE_NEWS": "https://pub-c999a250934d4712a25333ceff10c73b.r2.dev",
+        "MEDIA_BASE_PLAYERS": "https://pub-b62195e579bd4e96b5b0c15cb5e55bb7.r2.dev",
+        "MEDIA_BASE_LOGOS": "https://pub-489c77c12df044fc9c0f0ce27758deca.r2.dev",
+        "MEDIA_BASE_VIDEO": "https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev"
       }
     }
   }

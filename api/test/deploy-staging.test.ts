@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain ESM script without types
-import { readConfig, stagingProblems, STAGING_WORKER } from '../scripts/deploy-staging.mjs';
+import { mediaProblems, readConfig, stagingProblems, STAGING_WORKER } from '../scripts/deploy-staging.mjs';
 
 const script = join(__dirname, '../scripts/deploy-staging.mjs');
 const ci = { WORKERS_CI: '1', WORKERS_CI_BRANCH: 'develop' };
@@ -43,6 +43,45 @@ describe('staging deploy command', () => {
     const topLevel = structuredClone(good);
     topLevel.name = STAGING_WORKER;
     expect(stagingProblems(ci, topLevel).join()).toContain('top-level');
+  });
+
+  it('binds staging to exactly its three sl-staging-* buckets', () => {
+    const staging = readConfig().env.staging;
+    expect(Object.fromEntries(staging.r2_buckets.map((b: { binding: string; bucket_name: string }) => [b.binding, b.bucket_name]))).toEqual({
+      R2_NEWS: 'sl-staging-news-images',
+      R2_PLAYERS: 'sl-staging-player-images',
+      R2_LOGOS: 'sl-staging-team-logos',
+    });
+    expect(mediaProblems(staging).filter((p: string) => !p.includes('MEDIA_BASE'))).toEqual([]);
+  });
+
+  it('refuses a production bucket, a missing binding or an extra binding for staging', () => {
+    const base = structuredClone(readConfig().env.staging);
+    Object.assign(base.vars, { MEDIA_BASE_NEWS: 'https://pub-a.r2.dev', MEDIA_BASE_PLAYERS: 'https://pub-b.r2.dev', MEDIA_BASE_LOGOS: 'https://pub-c.r2.dev' });
+    expect(mediaProblems(base)).toEqual([]);
+    const prod = structuredClone(base);
+    prod.r2_buckets[0].bucket_name = 'news-images';
+    expect(mediaProblems(prod).join()).toContain('only sl-staging-* buckets');
+    const missing = structuredClone(base);
+    missing.r2_buckets.pop();
+    expect(mediaProblems(missing).join()).toContain('must bind exactly');
+    const extra = structuredClone(base);
+    extra.r2_buckets.push({ binding: 'R2_BACKUP', bucket_name: 'sl-staging-backup' });
+    expect(mediaProblems(extra).join()).toContain('must bind exactly');
+  });
+
+  it('refuses missing, non-https or production public bases for staging media', () => {
+    const base = structuredClone(readConfig().env.staging);
+    Object.assign(base.vars, { MEDIA_BASE_NEWS: 'https://pub-a.r2.dev', MEDIA_BASE_PLAYERS: 'https://pub-b.r2.dev', MEDIA_BASE_LOGOS: 'https://pub-c.r2.dev' });
+    const placeholder = structuredClone(base);
+    placeholder.vars.MEDIA_BASE_NEWS = 'STAGING_NEWS_PUBLIC_URL';
+    expect(mediaProblems(placeholder).join()).toContain('MEDIA_BASE_NEWS must be the public https URL');
+    const http = structuredClone(base);
+    http.vars.MEDIA_BASE_LOGOS = 'http://pub-c.r2.dev';
+    expect(mediaProblems(http).join()).toContain('must use https');
+    const prodHost = structuredClone(base);
+    prodHost.vars.MEDIA_BASE_PLAYERS = 'https://pub-156b66d0ff7841bc9601620610a8ebd3.r2.dev';
+    expect(mediaProblems(prodHost).join()).toContain('production media host');
   });
 
   it('defines no environment other than staging', () => {
