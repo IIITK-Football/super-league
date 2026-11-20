@@ -3,8 +3,8 @@
 // only when that route is called.
 //
 // Routes deliberately NOT mounted (no frontend caller, no schedule; see docs/worker-routes.md): auth/login,
-// admin/teams, the predictions root, legends, and the finished World Cup's test, matches, champion-predictors,
-// sync/* and grade/* jobs.
+// admin/teams, the predictions root and legends. The finished World Cup's test, matches, champion-predictors, sync/*
+// and grade/* routes were removed (no caller, no schedule).
 
 // Handlers declare their own param shapes ({ team_id }, { path: string[] }); the router supplies them by name.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

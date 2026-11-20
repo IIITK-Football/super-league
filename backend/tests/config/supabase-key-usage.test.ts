@@ -26,36 +26,19 @@ const read = (p: string) => readFileSync(p, 'utf8');
 
 // Files that genuinely use the secret key, with why. Reasons are summarised in docs/supabase-key-usage.md.
 const ELEVATED: Record<string, string> = {
-  // Server-to-server jobs protected by CRON_SECRET: no user context
-  'app/api/wc/sync/groups/route.ts': 'cron sync',
-  'app/api/wc/sync/matches/route.ts': 'cron sync',
-  'app/api/wc/sync/players/route.ts': 'cron sync',
-  'app/api/wc/sync/single/route.ts': 'cron sync',
-  'app/api/wc/sync/teams/route.ts': 'cron sync',
-  'app/api/wc/grade/awards/route.ts': 'cron grading',
-  'app/api/wc/grade/champion/route.ts': 'cron grading',
-  'app/api/wc/grade/finals/route.ts': 'cron grading',
-  'app/api/wc/grade/groups/route.ts': 'cron grading',
-  'app/api/wc/grade/quarter-finals/route.ts': 'cron grading',
-  'app/api/wc/grade/round-of-16/route.ts': 'cron grading',
-  'app/api/wc/grade/semi-finals/route.ts': 'cron grading',
   // Admin grading writes other users' rows
   'app/api/admin/predictions/grade/route.ts': 'admin grading',
   'app/api/admin/predictions/regrade-all/route.ts': 'admin grading',
   // Role-checked writes: to be replaced by RLS and role policies in the authorization work
   'app/api/captain/team-branding/route.ts': 'role-checked write (to downscope)',
-  // User-facing routes that use the elevated key today (candidates to downscope; see audit notes)
+  // World Cup archive routes (frozen, D-02): reads, and submissions that refuse every write since the deadline
   'app/api/wc/leaderboard/route.ts': 'to downscope',
   'app/api/wc/teams/route.ts': 'to downscope',
   'app/api/wc/players/route.ts': 'to downscope',
-  'app/api/wc/champion-predictors/route.ts': 'to downscope',
   'app/api/wc/predictions/awards/route.ts': 'to downscope',
   'app/api/wc/predictions/groups/route.ts': 'to downscope; trusts a client user_id',
   'app/api/wc/predictions/knockouts/route.ts': 'to downscope',
   'app/api/wc/predictions/knockouts/submit/route.ts': 'to downscope; trusts a client user_id',
-  // Unauthenticated today: must gain authentication in the authorization work
-  'app/api/wc/sync/brazil/route.ts': 'UNAUTHENTICATED; to fix',
-  'app/api/wc/sync/manual/route.ts': 'UNAUTHENTICATED; to fix',
 };
 
 describe('Supabase key usage (backend)', () => {
