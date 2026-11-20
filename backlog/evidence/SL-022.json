@@ -1,0 +1,157 @@
+{
+  "head": "b483830c46676e57bc003b2bb4e62aad938fa8c7",
+  "tree": "2cf5ff79549b4d2f1739eb1acf39e69839d6ed3b",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-20T12:30:04.082Z",
+  "groups": [
+    {
+      "name": "database",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": ".",
+          "cmd": "bash scripts/local-db.sh test",
+          "exit": 0,
+          "ms": 3723
+        }
+      ]
+    },
+    {
+      "name": "match-operations",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/match-operations",
+          "exit": 0,
+          "ms": 9207
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run src/components/admin/__tests__/LiveController.test.jsx",
+          "exit": 0,
+          "ms": 1726
+        }
+      ]
+    },
+    {
+      "name": "fantasy",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/fantasy",
+          "exit": 0,
+          "ms": 3073
+        }
+      ]
+    },
+    {
+      "name": "frontend-components",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run --passWithNoTests",
+          "exit": 0,
+          "ms": 8098
+        }
+      ]
+    },
+    {
+      "name": "tooling",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/tooling",
+          "exit": 0,
+          "ms": 15164
+        }
+      ]
+    },
+    {
+      "name": "rosters",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/rosters",
+          "exit": 0,
+          "ms": 7704
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageRosters.local.test.jsx src/pages/__tests__/TeamBuilder.local.test.jsx",
+          "exit": 0,
+          "ms": 5630
+        }
+      ]
+    },
+    {
+      "name": "divisions",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/divisions",
+          "exit": 0,
+          "ms": 12057
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageDivisions.local.test.jsx",
+          "exit": 0,
+          "ms": 3451
+        }
+      ]
+    },
+    {
+      "name": "auth-roles",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/roles",
+          "exit": 0,
+          "ms": 8161
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageRoles.local.test.jsx",
+          "exit": 0,
+          "ms": 4814
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "database",
+    "match-operations",
+    "fantasy",
+    "frontend-components",
+    "tooling",
+    "rosters",
+    "divisions",
+    "auth-roles"
+  ],
+  "commandChecks": {
+    "C2": {
+      "exit": 0
+    },
+    "C3": {
+      "exit": 0
+    }
+  },
+  "id": "SL-022",
+  "base": "ea694ec"
+}
