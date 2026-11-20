@@ -49,9 +49,10 @@ export function Onboarding() {
 
     try {
       const API_URL = API_BASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${API_URL}/wc/flair`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ user_id: user.id, wc_team_flair: wcFlair })
       });
       if (!res.ok) throw new Error('Failed to update World Cup flair via API');
@@ -63,16 +64,20 @@ export function Onboarding() {
     }
 
     const updatedProfile = {
-      id: user.id,
-      email: user.email,
       nickname: nickname.trim(),
       wc_team_flair: wcFlair
     };
 
-    // 1. USE UPSERT: This guarantees it saves
-    const { error: updateError } = await supabase
+    // 1. Update the user's own profile row (created at sign-up). The email is the Auth account's and is never written
+    //    here. If the row is somehow missing, create it without an email.
+    let { data: savedRows, error: updateError } = await supabase
       .from('user_profiles')
-      .upsert(updatedProfile);
+      .update(updatedProfile)
+      .eq('id', user.id)
+      .select('id');
+    if (!updateError && (!savedRows || savedRows.length === 0)) {
+      ({ error: updateError } = await supabase.from('user_profiles').insert({ id: user.id, ...updatedProfile }));
+    }
 
     if (updateError) {
       console.error("Profile saving error:", updateError.message);
