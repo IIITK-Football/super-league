@@ -84,7 +84,10 @@ describe('staging deploy command', () => {
     expect(mediaProblems(prodHost).join()).toContain('production media host');
   });
 
-  it('defines no environment other than staging', () => {
-    expect(Object.keys(readConfig().env)).toEqual(['staging']);
+  it('defines only the staging and production environments, and staging binds no production bucket', () => {
+    const config = readConfig();
+    expect(Object.keys(config.env).sort()).toEqual(['production', 'staging']);
+    const production = new Set(config.env.production.r2_buckets.map((b: { bucket_name: string }) => b.bucket_name));
+    expect(config.env.staging.r2_buckets.some((b: { bucket_name: string }) => production.has(b.bucket_name))).toBe(false);
   });
 });

@@ -44,7 +44,7 @@ export function stagingProblems(env, config) {
 // is not a production media host. The Worker has no R2 credentials, so these bindings are its only R2 access.
 export const STAGING_BUCKETS = { R2_NEWS: 'news-images', R2_PLAYERS: 'player-images', R2_LOGOS: 'team-logos' };
 // The read-only home video (MEDIA_BASE_VIDEO) may use the production intro host; write targets may not.
-const PRODUCTION_HOST = /^pub-(faaac762b0254fb88c3967f021ced499|156b66d0ff7841bc9601620610a8ebd3|b7d837d92cb644838cb24feef9b3329e|44b1a3890e2b40c4836f3a3c8e18f090|5fcbf3326b604a8284068a24252f1585)\.r2\.dev$/;
+const PRODUCTION_HOST = /^pub-(faaac762b0254fb88c3967f021ced499|156b66d0ff7841bc9601620610a8ebd3|b7d837d92cb644838cb24feef9b3329e|44b1a3890e2b40c4836f3a3c8e18f090|5fcbf3326b604a8284068a24252f1585|07c808f42c4640ceb3db8a0ef856e898|2120148333e34c86923298628f99f20f)\.r2\.dev$/;
 
 export function mediaProblems(staging) {
   const problems = [];

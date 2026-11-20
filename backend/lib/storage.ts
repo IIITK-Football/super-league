@@ -28,6 +28,8 @@ export const PRODUCTION_MEDIA_HOSTS = [
   'pub-b7d837d92cb644838cb24feef9b3329e.r2.dev', // intro video
   'pub-44b1a3890e2b40c4836f3a3c8e18f090.r2.dev', // playstyles
   'pub-5fcbf3326b604a8284068a24252f1585.r2.dev', // screenshot
+  'pub-07c808f42c4640ceb3db8a0ef856e898.r2.dev', // news-images
+  'pub-2120148333e34c86923298628f99f20f.r2.dev', // player-images
 ];
 
 export class StorageError extends Error {
