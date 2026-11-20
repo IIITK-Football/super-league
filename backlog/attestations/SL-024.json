@@ -1,0 +1,17 @@
+{
+  "id": "SL-024",
+  "attestations": [
+    {
+      "checkId": "C12",
+      "by": "oreoruuser",
+      "at": "2026-11-20T07:40:49.830Z",
+      "note": "Staging deploy for a6a05c9 applied both role migrations and its verification SQL; scripts/staging-checks.mjs passed 37 of 37 on 2026-11-20; the migration guard leaves no stored admin role."
+    },
+    {
+      "checkId": "C14",
+      "by": "oreoruuser",
+      "at": "2026-11-20T07:40:50.097Z",
+      "note": "Real-app walkthrough from develop (served commit 5314fae) via scripts/ui-walkthrough/roles.mjs passed 9 of 9: dictator grants roles and assigns, changes and revokes captains and scorers; scorer sees only the assigned match in Live Matches; captain edits team details; normal user redirected."
+    }
+  ]
+}
