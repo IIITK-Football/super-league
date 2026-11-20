@@ -188,3 +188,15 @@ Migrations `20261201000000_roles_and_assignments` and `20261201000001_retire_tea
 **Staging** (2026-11-20): the Database deploy for `a6a05c9` applied both migrations and the verification SQL; `node scripts/staging-checks.mjs` passed all 37 checks, including a captain change and its refusal, a scorer allowed on the assigned match only, and captains and normal accounts refused match writes.
 
 **Release steps** (the owner): the `develop` into `main` pull request merged with a merge commit; wait for the workflow's verified pre-migration backup; approve `Database Production`; then run `scripts/sql/role-migration-report.sql` read-only in the production SQL Editor and compare it with the clone numbers above (the counts can differ if accounts changed since the backup).
+
+## Canonical match events (SL-022): release notes and clone rehearsal
+
+Migrations `20261202000000_match_events` and `20261202000001_retire_legacy_match_events`, released with the application code that reads events (live route, grading, timeline, statistics). Events are the truth; the stored score is a cache the database recomputes from non-voided events, and clients can no longer write it. A walkover or forfeit is an awarded result set by a dictator with a reason. Grading is dictator-only and a match whose events changed after grading shows "Needs regrade".
+
+**Rehearsal on the production-shaped clone** (2026-11-20; `/Users/kevinmathew/sl-prod-clone`, ports 563xx only, already at `20261201000001` with the production backup data; both migrations applied in their own transactions, guards passed):
+- 76 goal rows kept with their ids and 37 further events created from the match JSON and score surplus: **113 events**, 15 of them unattributed goals (scorer unknown, in 5 matches), shown as "Unknown scorer" until a scorer attributes them.
+- Report rows: 5 `unattributed_surplus`, 21 `unparsed_minute`, 3 `walkover_candidate` (completed matches with a score and no goals: a dictator may award them as walkovers), 201 `assist_snapshot` (the retired assists counter, kept for comparison).
+- Every match score unchanged, every score equals its goal events, prediction points unchanged (64080), no graded prediction flagged for regrade.
+- Local edge-case rehearsal: `pnpm db:rehearse-match-events --yes` (assist equal to the scorer, own goal with assist, non-numeric minute, score-only matches, JSON-only goal; and a blocker case, more goal rows than the score, which stops the migration with nothing changed).
+
+**Release steps** (the owner): merge with a merge commit; wait for the verified pre-migration backup; approve `Database Production`; then read `match_event_migration_report` grouped by finding in the production SQL Editor and compare with the numbers above (they can differ if matches changed since the backup).
