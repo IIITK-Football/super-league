@@ -438,7 +438,7 @@ ON CONFLICT (id) DO NOTHING;
 -- The live match shows both a goal whose scorer is not known yet and a card (they appear in the live tab and the timeline).
 UPDATE public.match_events SET player_id = NULL, assist_player_id = NULL
 WHERE id = (SELECT e.id FROM public.match_events e JOIN public.matches m ON m.id = e.match_id
-            WHERE m.status = 'live' AND e.source = 'seed' ORDER BY e.id LIMIT 1);
+            WHERE m.status = 'live' AND e.source = 'seed' AND e.kind = 'goal' ORDER BY e.id LIMIT 1);
 INSERT INTO public.match_events (id, match_id, team_id, kind, player_id, minute, source)
 SELECT md5('mega-card:' || m.id::text)::uuid, m.id, m.home_team_id, 'yellow',
        md5('mega-player:' || m.home_team_id::text || ':1')::uuid, 30, 'seed'
