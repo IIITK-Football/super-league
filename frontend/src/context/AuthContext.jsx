@@ -25,7 +25,8 @@ export function AuthProvider({ children }) {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('*')
+        // Explicit columns: the email column is not readable through the Data API (the session has the user's email).
+        .select('id, real_name, nickname, team_flair_id, wc_team_flair, created_at')
         .eq('id', userId)
         .maybeSingle();
 

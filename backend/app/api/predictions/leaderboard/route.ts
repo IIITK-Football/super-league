@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     const pointsByUser = new Map((ranked ?? []).map((r: any) => [r.user_id, r.points]));
     const rankedIds = (ranked ?? []).map((r: any) => r.user_id);
     const { data: profileRows, error: profilesError } = rankedIds.length
-      ? await supabase.from('user_profiles').select('id, nickname, real_name, email').in('id', rankedIds)
+      ? await supabase.from('user_profiles').select('id, nickname, real_name').in('id', rankedIds)
       : { data: [] as any[], error: null };
     if (profilesError) throw profilesError;
     const profileById = new Map((profileRows ?? []).map((p: any) => [p.id, p]));
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
     const overall = profiles.map((p: any) => ({
       user_id: p.id,
-      username: p.nickname || p.real_name || p.email?.split('@')[0] || `Fan_${p.id.substring(0, 5)}`,
+      username: p.nickname || p.real_name || `Fan_${p.id.substring(0, 5)}`, // never derived from an email
       total_points: p.points || 0,
       flair: flairByUser.get(p.id) || null
     }));
