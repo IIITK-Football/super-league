@@ -1,9 +1,9 @@
 {
-  "head": "ab75dfb1437e005e87a93c67d7393cbde772c75c",
-  "tree": "23784a4e855c25ff1fb006db12e588f31089a039",
+  "head": "d2e6d95a3c8f2b70d819059acb7b084ef1c3f247",
+  "tree": "d311bef08bae4d475974c85969387c77520e3736",
   "clean": true,
   "dryRun": false,
-  "at": "2026-11-21T11:27:05.690Z",
+  "at": "2026-11-21T11:33:57.506Z",
   "groups": [
     {
       "name": "database",
@@ -14,7 +14,7 @@
           "cwd": ".",
           "cmd": "bash scripts/local-db.sh test",
           "exit": 0,
-          "ms": 4258
+          "ms": 3793
         }
       ]
     },
@@ -27,19 +27,19 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/config",
           "exit": 0,
-          "ms": 1564
+          "ms": 1514
         },
         {
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run src/lib",
           "exit": 0,
-          "ms": 1071
+          "ms": 1114
         },
         {
           "cwd": "backend",
           "cmd": "pnpm exec tsc --noEmit",
           "exit": 0,
-          "ms": 1279
+          "ms": 1277
         }
       ]
     },
@@ -52,7 +52,7 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/tooling",
           "exit": 0,
-          "ms": 55570
+          "ms": 57157
         }
       ]
     },
@@ -65,13 +65,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run tests/auth",
           "exit": 0,
-          "ms": 16379
+          "ms": 16548
         },
         {
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run src/lib/__tests__/authRules.test.js src/lib/__tests__/authApi.test.js src/lib/__tests__/authApi.captcha.test.js src/lib/__tests__/authApi.reauth.test.js src/pages/__tests__ src/components/__tests__",
           "exit": 0,
-          "ms": 4034
+          "ms": 3893
         }
       ]
     },
@@ -84,13 +84,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/divisions",
           "exit": 0,
-          "ms": 9771
+          "ms": 10560
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageDivisions.local.test.jsx",
           "exit": 0,
-          "ms": 2942
+          "ms": 2949
         }
       ]
     },
@@ -103,13 +103,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/rosters",
           "exit": 0,
-          "ms": 7682
+          "ms": 7709
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageRosters.local.test.jsx src/pages/__tests__/TeamBuilder.local.test.jsx",
           "exit": 0,
-          "ms": 5797
+          "ms": 5309
         }
       ]
     },
@@ -122,13 +122,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/audit",
           "exit": 0,
-          "ms": 3187
+          "ms": 2985
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/AuditHistory.local.test.jsx",
           "exit": 0,
-          "ms": 3136
+          "ms": 2976
         }
       ]
     },
@@ -141,13 +141,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/roles",
           "exit": 0,
-          "ms": 8384
+          "ms": 8003
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageRoles.local.test.jsx",
           "exit": 0,
-          "ms": 5012
+          "ms": 4426
         }
       ]
     },
@@ -160,13 +160,13 @@
           "cwd": "api",
           "cmd": "pnpm exec tsc --noEmit",
           "exit": 0,
-          "ms": 1585
+          "ms": 1593
         },
         {
           "cwd": "api",
           "cmd": "pnpm exec vitest run",
           "exit": 0,
-          "ms": 12800
+          "ms": 12489
         }
       ]
     },
@@ -179,13 +179,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/match-operations",
           "exit": 0,
-          "ms": 8046
+          "ms": 7654
         },
         {
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run src/components/admin/__tests__/LiveController.test.jsx",
           "exit": 0,
-          "ms": 1673
+          "ms": 1643
         }
       ]
     },
@@ -198,7 +198,7 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/fantasy",
           "exit": 0,
-          "ms": 3331
+          "ms": 2953
         }
       ]
     },
@@ -211,7 +211,7 @@
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run --passWithNoTests",
           "exit": 0,
-          "ms": 8501
+          "ms": 7382
         }
       ]
     },
@@ -224,13 +224,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/player-accounts",
           "exit": 0,
-          "ms": 9490
+          "ms": 9062
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run --no-file-parallelism src/components/admin/__tests__/ManageRosters.links.local.test.jsx src/pages/__tests__/UserProfile.player.local.test.jsx",
           "exit": 0,
-          "ms": 6799
+          "ms": 6086
         }
       ]
     }
