@@ -2,7 +2,7 @@
 
 ## Branch and baseline
 
-- Preparation branch is `codex/work`. Review the documentation commits on that branch for integration into the next implementation checkout. The release base is `2babc0ff6d29e96f726031ede51a50f16b83e1ad`, the merge of [PR #191](https://github.com/IIITK-Football/super-league/pull/191).
+- Preparation branch is `codex/work`. The preparation commit is `5870f3896d87eeaf8610241e4fc03cbafc03b8e1`. Review the documentation commits on that branch for integration into the next implementation checkout. The release base is `2babc0ff6d29e96f726031ede51a50f16b83e1ad`, the merge of [PR #191](https://github.com/IIITK-Football/super-league/pull/191).
 - The primary checkout was on `develop` at the release base. Its unrelated untracked directories and the Codex checkout's local `AGENTS.md` edit were left in place.
 - SL-026 closed Phase 2. The [compatibility baseline](../contracts/worker-compatibility.md) records 44 explicit Worker operations across 33 paths. Its [clean-tree evidence](../../backlog/evidence/SL-026.json) records 13 passing active groups, including 87 API tests. [Develop CI](https://github.com/IIITK-Football/super-league/actions/runs/44900141436) passed on the Phase 2 feature tip.
 - All 12 Phase 3 workflow statuses remain `not-started`. The dispositions below describe implementation progress. Prior release and staging evidence is cited on the items. The reconciliation made no application, database, environment, or deployment change.
