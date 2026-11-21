@@ -47,6 +47,15 @@ describe('team details', () => {
     expect(await team(w.teams[0])).toEqual({ name: `${tag} Reds United`, short_name: 'RU', team_color: '#123456' });
   });
 
+  it('only exposes the caller’s assignment when resolving the team to edit', async () => {
+    const { data, error } = await who.captain.db
+      .from('captain_assignments')
+      .select('team_entry_id')
+      .in('team_entry_id', w.entries.cur);
+    expect(error).toBeNull();
+    expect(data).toEqual([{ team_entry_id: w.entries.cur[0] }]);
+  });
+
   it('omitted fields keep their value, and invalid ones are refused without changes', async () => {
     expect((await save(who.captain.token, { team_color: '#654321' })).status).toBe(200);
     expect((await team(w.teams[0])).name).toBe(`${tag} Reds United`);
