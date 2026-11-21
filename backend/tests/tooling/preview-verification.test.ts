@@ -27,7 +27,11 @@ describe('verify-preview.sql', () => {
   });
 
   it('reads no account details (no emails or passwords)', () => {
-    expect(code).not.toMatch(/\bemail\b|encrypted_password|raw_user_meta_data/i);
+    const withoutPrivilegeChecks = code.replace(
+      /has_column_privilege\('(?:anon|authenticated)', 'public\.user_profiles', 'email', 'SELECT'\)/g,
+      'false',
+    );
+    expect(withoutPrivilegeChecks).not.toMatch(/\bemail\b|encrypted_password|raw_user_meta_data/i);
   });
 
   it('passes every check on the seeded local database, in a read-only session', () => {
@@ -41,6 +45,8 @@ describe('verify-preview.sql', () => {
     expect(lines[0]).toBe('check_name,passed');
     const rows = lines.slice(1).map((l) => l.split(','));
     expect(rows.length).toBeGreaterThanOrEqual(15);
+    expect(rows).toContainEqual(['profile contact field is private for API roles', 't']);
+    expect(rows).toContainEqual(['profile audit trigger is enabled', 't']);
     expect(rows.filter((x) => x[1] !== 't').map((x) => x[0])).toEqual([]);
   });
 });

@@ -7,15 +7,18 @@ Where each Supabase API key is used and why. The list of files using the **secre
 - **Pages Function** (`frontend/functions/_middleware.js`): reads one newsletter row for share previews. Sends the key as `apikey` only.
 - **Backend** (about 45 route files, `middleware.ts`, the login route): user-level clients that use the caller's session or run public reads.
 
-## Secret key (bypasses RLS): 30 backend route files
-| Group | Files | Why it needs the secret key |
-|---|---|---|
-| Cron sync, protected by `CRON_SECRET` | `wc/sync/{groups,matches,players,single,teams}` | Server-to-server, no user |
-| Cron grading, protected by `CRON_SECRET` | `wc/grade/{awards,champion,finals,groups,quarter-finals,round-of-16,semi-finals}` | Grades every user's predictions |
-| Admin grading | `admin/predictions/{grade,regrade-all}` | Writes other users' rows |
-| Role-checked writes | `captain/team-branding` (identity and assignment verified as the caller through `is_captain_of`, then the team row is written) | Verify the caller, then write with elevated access. **To downscope** once RLS and role policies are redesigned |
-| User-facing routes | `wc/{leaderboard,teams,players,champion-predictors,flair}`, `wc/predictions/{awards,groups,knockouts,knockouts/submit}` | Use elevated access today although most could run as the user under RLS. **Candidates to downscope** |
-| **Unauthenticated today** | `wc/sync/manual`, `wc/sync/brazil` | Use elevated access with **no authentication check** |
+## Secret key (bypasses RLS)
+
+| Routes | Authorization and reason |
+|---|---|
+| `admin/predictions/{grade,regrade-all}` | The caller must be a dictator before a privileged client grades other users' predictions. |
+| `captain/team-branding` | The caller reads their own assignments under RLS. A dictator or a writable captain assignment is required before using the privileged client for the selected team's branding. |
+| `wc/{leaderboard,teams,players}` | Read-only World Cup archive data with existing response contracts. |
+| `wc/predictions/{awards,groups,knockouts,knockouts/submit}` | Frozen archive reads and submission handlers. The Worker requires a valid session for mutations, and the submission deadlines keep writes locked. |
+
+The Worker and the flair handler require an authenticated caller for
+`PATCH /api/wc/flair`. The handler updates the caller under RLS with the
+publishable key. The old World Cup sync and grade routes have been removed.
 
 The public roster, player and statistics routes (`players`, `players/[player_id]`, `leaderboard`) read only public data under RLS with the publishable key (2026-11-18).
 
@@ -42,4 +45,4 @@ The secret key is never used by `middleware.ts`, shared `lib` code, or anything 
    5. Remove the old variables from Vercel, Pages and your local files.
    6. Only then check whether the legacy keys still show recent use in the dashboard and **disable them last**. Check whether your dashboard lets you re-enable them; if not, treat this step as irreversible.
 
-**Checks with the new keys before disabling legacy keys:** public pages load data and live scores update; password and Google sign-in work; a newsletter share preview resolves (Pages Function); one role-checked write (captain branding or an admin match update) and one cron-style route with `CRON_SECRET` succeed (backend secret key); an admin grading call works on staging. The Supabase API logs show no new 401 responses. Any 401 after deploying means a variable is missing: fix it before removing anything.
+**Checks with the new keys before disabling legacy keys:** public pages load data and live scores update; password and Google sign-in work; a newsletter share preview resolves (Pages Function); one role-checked write (captain branding or an admin match update) succeeds and an admin grading call works on staging. The Supabase API logs show no new 401 responses. Any 401 after deploying means a variable is missing: fix it before removing anything.

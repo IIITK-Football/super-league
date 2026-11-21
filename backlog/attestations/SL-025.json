@@ -1,0 +1,11 @@
+{
+  "id": "SL-025",
+  "attestations": [
+    {
+      "checkId": "C7",
+      "by": "oreoruuser",
+      "at": "2026-11-21T10:10:21.978Z",
+      "note": "Deploy 44891775036 passed the clean rebuild and staging migration. All 40 smoke checks passed, and staging flair and nickname persisted on readback."
+    }
+  ]
+}

@@ -57,7 +57,6 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Please sign in again.' }, { status: 401 });
     }
 
-    const adminClient = createClient(supabaseUrl, secret);
     const formData = await request.formData();
     // Team details (name, short name, colour, logo) are the shared team's, changed by a dictator or by the captain of a
     // team entry whose assignment is writable (current or upcoming season, not completed or archived). The database
@@ -73,7 +72,7 @@ export async function POST(request: Request) {
       if (!UUID.test(entryId)) return Response.json({ error: 'Choose a team entry.' }, { status: 400 });
       candidateIds = [entryId];
     } else {
-      const { data: mine, error: mineError } = await adminClient.from('captain_assignments').select('team_entry_id').eq('user_id', user.id);
+      const { data: mine, error: mineError } = await authClient.from('captain_assignments').select('team_entry_id').eq('user_id', user.id);
       if (mineError) throw mineError;
       candidateIds = (mine ?? []).map((a) => a.team_entry_id as string).filter((id) => !entryId || id === entryId);
     }
@@ -89,6 +88,7 @@ export async function POST(request: Request) {
     if (writable.length > 1) {
       return Response.json({ error: 'Choose which of your teams to change.' }, { status: 400 });
     }
+    const adminClient = createClient(supabaseUrl, secret);
     const { data: entryRow, error: entryError } = await adminClient
       .from('team_entries')
       .select('id, team_id, season:seasons!inner(slug, division:divisions!inner(slug)), teams!inner(id, name, short_name, logo_url, team_color)')
