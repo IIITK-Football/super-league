@@ -3,7 +3,7 @@
 -- search_path and trigger-only functions are not callable; user_profiles hides email and allows only own-row updates of
 -- the permitted columns; teams and newsletter are audited.
 begin;
-select plan(17);
+select plan(21);
 
 select is(
   (select count(*)::int from information_schema.role_table_grants
@@ -64,6 +64,49 @@ select is(
 
 select ok(exists (select 1 from pg_trigger where tgrelid = 'public.teams'::regclass and tgname = 'audit_teams'), 'team changes are audited');
 select ok(exists (select 1 from pg_trigger where tgrelid = 'public.newsletter'::regclass and tgname = 'audit_newsletter'), 'newsletter changes are audited');
+
+-- The current schema's sensitive tables use the same enabled AFTER ROW audit trigger.
+select is(
+  (select array_agg(required.name order by required.name)
+     from unnest(array[
+       'captain_assignments', 'divisions', 'match_events', 'matches', 'newsletter',
+       'player_link_keys', 'players', 'roster_memberships', 'scorer_assignments',
+       'season_sections', 'seasons', 'section_types', 'team_entries', 'teams', 'user_profiles', 'user_roles'
+     ]) as required(name)
+    where not exists (
+      select 1 from pg_trigger t
+       where t.tgrelid = to_regclass('public.' || required.name)
+         and t.tgfoid = 'public.audit_row_change()'::regprocedure
+         and t.tgenabled in ('O', 'A')
+         and t.tgtype = 29
+    )),
+  null::text[], 'all sensitive tables record inserts, updates and deletes');
+
+insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
+values ('d2500000-0000-4000-8000-000000000001', 'authenticated', 'authenticated',
+        'sl025.audit@iiitkottayam.ac.in', '', now(), now());
+
+update public.user_profiles set nickname = 'Audit example', email = 'sl025.updated@iiitkottayam.ac.in'
+where id = 'd2500000-0000-4000-8000-000000000001';
+
+delete from public.user_profiles where id = 'd2500000-0000-4000-8000-000000000001';
+
+select is(
+  (select changes ->> 'email' from public.audit_log
+    where table_name = 'user_profiles' and record_id = 'd2500000-0000-4000-8000-000000000001' and action = 'insert'),
+  '[redacted]', 'profile creation redacts email');
+
+select ok(exists (
+  select 1 from public.audit_log
+   where table_name = 'user_profiles' and record_id = 'd2500000-0000-4000-8000-000000000001'
+     and action = 'update' and changes -> 'email' = '{"changed":true}'::jsonb
+     and changes -> 'nickname' ->> 'to' = 'Audit example'
+), 'profile updates record public changes and omit email values');
+
+select is(
+  (select changes ->> 'email' from public.audit_log
+    where table_name = 'user_profiles' and record_id = 'd2500000-0000-4000-8000-000000000001' and action = 'delete'),
+  '[redacted]', 'profile removal redacts email');
 
 select * from finish();
 rollback;

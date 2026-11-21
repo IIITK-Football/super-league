@@ -72,6 +72,24 @@ describe('profile privacy and ownership', () => {
   });
 });
 
+describe('Worker route authorization', () => {
+  it.each(['/admin/predictions/grade', '/admin/predictions/regrade-all'])(
+    '%s requires a dictator grant',
+    async (path) => {
+      const response = await app.request(`http://localhost/api${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${alice.token}` },
+        body: JSON.stringify({ match_id: alice.id }),
+      });
+      expect(response.status).toBe(403);
+    },
+  );
+
+  it.each(['/matches/update', '/wc/sync/manual', '/wc/grade/groups'])('%s stays retired', async (path) => {
+    expect((await app.request(`http://localhost/api${path}`)).status).toBe(404);
+  });
+});
+
 describe('World Cup flair route', () => {
   const patch = (token: string | null, body: unknown) =>
     app.request('http://localhost/api/wc/flair', {
