@@ -56,5 +56,17 @@ FROM (
   UNION ALL SELECT 21, 'every account has the Auth instance and token columns Auth needs to load it',
          NOT EXISTS (SELECT 1 FROM auth.users WHERE instance_id IS NULL OR confirmation_token IS NULL OR recovery_token IS NULL
                      OR email_change_token_new IS NULL OR reauthentication_token IS NULL)
+  UNION ALL SELECT 22, 'profile contact field is private for API roles',
+         NOT has_column_privilege('anon', 'public.user_profiles', 'email', 'SELECT')
+         AND NOT has_column_privilege('authenticated', 'public.user_profiles', 'email', 'SELECT')
+         AND has_column_privilege('anon', 'public.user_profiles', 'nickname', 'SELECT')
+  UNION ALL SELECT 23, 'profile audit trigger is enabled',
+         EXISTS (
+           SELECT 1 FROM pg_trigger
+           WHERE tgrelid = 'public.user_profiles'::regclass
+             AND tgname = 'audit_user_profiles'
+             AND tgfoid = 'public.audit_row_change()'::regprocedure
+             AND tgenabled IN ('O', 'A')
+         )
 ) c
 ORDER BY n;
