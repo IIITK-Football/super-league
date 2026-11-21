@@ -28,17 +28,18 @@ Order:
 
 These slices run on the current Next API, so that Phase 3 ports each final model once.
 
-### Phase 3 — Workers backend migration and the complete storage system
+### Phase 3 — Worker verification and storage cutover
 
-1. Measure and reduce warm latency on the existing Vercel Preview backend and assess the minimum sufficient Worker topology (SL-029).
-2. Establish the Worker runtime and Supabase access (SL-030), then same-origin routing to it (SL-031).
-3. All R2 work after the Worker runtime: inventory (SL-070), storage abstraction (SL-071), Wrangler local emulation (SL-072).
-4. The parity port (SL-032).
-5. Bucket reorganization, custom domain and configuration (SL-073), rolled out local → staging → production one bucket at a time, each production cutover owner-approved and verified before its old path is retired.
-6. Credential rotation (SL-074).
-7. Retirement of the Next backend (SL-034).
+The modular Worker and same-origin Pages route are implemented. The Phase 3 records distinguish deployed behavior, recorded verification, and formal item close-out.
 
-**Dependency:** do not create a Wrangler R2 implementation against the still-running Next/Vercel backend. Phases 4–6 consume the finished storage system and never redo its migration.
+1. Verify the Worker runtime and Supabase access against D-04 and D-05 (SL-030), then close out same-origin routing (SL-031).
+2. Measure the current staging Worker dashboard and optimize where the baseline justifies it (SL-029). The latency work does not gate the runtime start.
+3. Verify route-group parity against the compatibility baseline (SL-032). Public and protected routes can be checked while the full storage migration remains open. HLS parity requires the Worker video binding, local fixtures, and owner-authorized staging bucket preparation.
+4. Inventory object ownership and references (SL-070), complete the storage interface and environment map (SL-071), configure play-style icon hosts (SL-105), then verify local emulation (SL-072). SL-104 expands player self-service independently of icon hosting.
+5. Prepare and populate staging media, then cut over production one bucket at a time (SL-073) after parity, inventory, local emulation and staging verification. Production cutovers and credential rotation (SL-074) require owner approval. Retain objects needed by a prior compatible Worker and Pages release through the rollback window.
+6. Retire the obsolete Next runtime and deployment (SL-034) after parity and an exercised Worker/Pages rollback.
+
+Phases 4–6 consume the verified Worker and storage paths. See the [Phase 3 handoff](../docs/handoffs/2026-11-21-phase-3-next-session.md) for the evidence and the next implementation item.
 
 ### Phase 4 — Division and season product capabilities
 
