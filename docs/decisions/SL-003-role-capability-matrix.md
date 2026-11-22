@@ -38,7 +38,7 @@
 - Change protected identity fields: roll number, email, account link, player ID, and team membership.
 - Edit players on any team other than their assigned one.
 
-Lineup submission selects existing roster members only and implies no roster ownership.
+Lineup submission selects existing roster members only and implies no roster ownership. Under SL-045, successful submission by a verified first-time applicant can create and link their own player record through the registration transaction. Manual links and protected-field corrections remain dictator operations.
 
 ## Matrix
 
@@ -54,7 +54,7 @@ Legend: **R** read, **C** create, **U** update, **D** delete, **P** publish, **o
 | Person/player: own profile fields (where authorized) | R | U own | U own | U own | U own | CRUD |
 | Player FUT/presentation fields (allow-list) | R | — | **U assigned team's existing players** | — | — | CRUD |
 | Roster membership (add/remove) | R | R | R own team; **no add/remove** | R | R | CRUD |
-| Lineup | R after publish | — | C/U assigned team, existing members only, until lock | U/lock assigned matches | — | CRUD |
+| Lineup | R after publish | — | C/U assigned team, existing members only, under SL-053 | R after publish | — | CRUD |
 | Match schedule/teams/phase | R | R | R | R; U schedule fields if assigned | R | CRUD |
 | Match state (status, minute/timer, score, penalties, final result) | R | R | — | **CRUD assigned, incl. corrections** | — | CRUD |
 | Match events (goals, own goals, assists, scorer attribution, cards, undo) | R | R | — | **CRUD assigned, incl. later fixes** | — | CRUD |
@@ -63,7 +63,7 @@ Legend: **R** read, **C** create, **U** update, **D** delete, **P** publish, **o
 | World Cup fantasy | R | CRUD own | CRUD own | CRUD own | CRUD own | R all; data & grading |
 | Newsletter content | R published | R | R | R | **C / U / P** (no delete) | CRUD |
 | Polls, home content, share copy | R | vote | vote | vote | vote | CRUD |
-| Registrations, forms, exports | — | C own | C/R own team | — | — | CRUD, export |
+| Registrations, forms, exports | — | C/R own application | C/R own team request; dictator approves structural changes | — | — | CRUD, export |
 | Media upload | — | own avatar | assigned team logo/portraits | — | newsletter images only | all |
 | Service credentials, system settings | — | — | — | — | — | server-side only |
 

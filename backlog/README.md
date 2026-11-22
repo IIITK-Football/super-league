@@ -27,3 +27,5 @@ pnpm work check [--base <ref>]     what CI runs
 ```
 
 A phase is complete when every item in it is `done` or `legacy-done`. No item in a later phase can become ready before then. See `docs/process/workflow.md` for the full set of gates.
+
+For assignment and integration order, use the [release phases](phases.md). Before starting a user-facing slice, review the entry point, key screen sketch and numbered scenarios with the owner. Contributors can prepare PRs in parallel and attach local evidence. Maintainers handle item status, staging evidence, and release approvals according to the existing workflow.

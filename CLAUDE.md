@@ -15,7 +15,7 @@ The user wants Claude to implement the entire backlog autonomously with broad en
 - Supabase remains the database and authentication system. Do not propose replacing it as part of the Workers migration.
 - The frontend remains React/Vite on Cloudflare Pages. The backend target is one modular Hono Worker on Cloudflare Workers, on the same origin as Pages (D-05, resolved 2026-11-20): no separate gateway Worker, and a domain gets its own Worker only when a measured trigger in `docs/decisions/D-05-worker-topology.md` fires. Use same-origin routing, so the browser needs no CORS policy.
 - Wrangler R2 local emulation and storage redesign come only after the Worker runtime and storage boundary are established. Preserve working media until replacements and a cutover plan are verified.
-- World Cup fantasy is a separate page and domain, frozen to minimum maintenance (D-02): it is reached at `/wc` and through a home section (SL-060), its Fantasy navigation link is removed (SL-043), and its routes are ported behavior-identically with parity tests when the shared Worker migration requires it. No World Cup features, redesign or data-model changes. It remains separate from the shared division experience and is not to be folded into division work. Avoid incidental changes to its page, user-visible behavior, or data model; if an active security requirement requires a narrow World Cup backend change, keep it isolated and verify it separately.
+- World Cup is a legacy archive at /wc (D-02). Keep it separate and retain existing access and data protections. Archive feature bugs do not block active Worker parity or release. A simple More menu link can be considered in the redesign.
 
 ## Role and permission model
 
@@ -31,17 +31,17 @@ Enforce these boundaries in server authorization and Supabase RLS wherever direc
 
 ## Current repository facts
 
-- `frontend/` is a React 18 / Vite application deployed as Cloudflare Pages. It currently has separate `/super-league`, `/wsl`, and `/freshers` routes.
-- `backend/` is a Next.js 16 App Router API with division data, predictions, management, media, and World Cup routes. There is no Hono/Workers project in the repository yet.
+- `frontend/` is a React 18 / Vite application deployed as Cloudflare Pages. Public division and season pages share the slug-based routes.
+- `api/` is the modular Hono Worker. It serves the shared handlers in `backend/` behind the Pages binding and the local Vite proxy. Next runtime retirement follows verification for active flows.
 - The Supabase CLI project is in `backend/supabase/`. Local application development uses database port **54322**. Keep this project self-contained and use explicit local CLI commands.
 - `backend/supabase/migrations/20261106000000_baseline.sql` is the current baseline; older migrations are in `migrations_legacy/`. `20261106180125_harden_roles_and_rpc.sql` and the root `schema.sql` are empty. The local seed is `backend/supabase/seed.sql`.
 - The Phase 0 decision records are in `docs/decisions/` (SL-002 glossary, SL-003 role matrix, SL-004 migration/cutover); local safety is in `docs/local-development.md`.
-- Divisions and seasons are first-class records (SL-020): `divisions`, `seasons` (one current per division), `season_sections`, `team_entries`, `division_flairs` and `season_player_stats`; matches and registrations carry `season_id`. The legacy division strings, their views and the unused polls feature are retired (`20261122000000`). The API names a division by slug and a season by slug or id; the frontend routes are `/<division>` and `/<division>/<season>`. Match event data overlaps between JSON columns and `goals`. Players are reusable identities (the FUT card) with one roster place per season (`roster_memberships`, SL-021); the Freshers member table is retired, goals and assists are read only through `season_player_stats`, and captains edit their roster through `captain_update_roster_player`.
+- Divisions and seasons are first-class records (SL-020): `divisions`, `seasons` (one current per division), `season_sections`, `team_entries`, `division_flairs` and `season_player_stats`; matches and registrations carry `season_id`. The legacy division strings, their views and the unused polls feature are retired (`20261122000000`). The API names a division by slug and a season by slug or id; the frontend routes are `/<division>` and `/<division>/<season>`. Match state uses canonical match events and the derived score cache for played matches (SL-022). Players are reusable identities (the FUT card) with one roster place per season (`roster_memberships`, SL-021); the Freshers member table is retired, goals and assists are read only through `season_player_stats`, and captains edit their roster through `captain_update_roster_player`.
 - Roles are independent grants in `user_roles` (`captain`, `scorer`, `editor`, `dictator`; a normal user holds none, and nothing stores `default` or `admin`), read through `my_roles()`. Captain and scorer powers also need an assignment: `captain_assignments` (one captain per team entry, writable while its season is current or upcoming and not completed or archived) and `scorer_assignments` (a season or one match, optional expiry); only dictators grant roles and assignments, through `assign_captain`, `revoke_captain`, `assign_scorer` and `revoke_scorer`. Team details are shared by every season of a team and a captain with a writable assignment edits them. `team_registrations` is retired (kept whole in `legacy_team_registrations`). Owner decisions 2026-11-19/20: legacy `admin` accounts are never ported or promoted, and the captain rule is the D-03 addendum. `/dictator` is the canonical dashboard URL; `/admin` redirects to it.
-- There are no first-class card events, lineups, or editable bracket mapping yet. A player identity can be linked to one verified Auth account (`players.user_id`, SL-042): only a dictator links or unlinks (a trigger refuses every other path, the server key included), the column is unreadable outside the server, and a linked player edits only their own portrait and preferred foot (`my_player`, `update_my_player`). Auth is the only email source: the contact-email table is gone, unlinked legacy players keep only a private match key (`player_link_keys`), a verified account is linked automatically to the one player waiting for its email, and dictators match (`account_link_matches`) or link by hand. Every new player needs a verified account (`create_player_for_account`) and every new roster place a linked player (`add_player_to_roster`). A player has one play style from the catalog (`attributes.playStyle`), or none.
-- R2 configuration is scattered across API routes, media helpers, frontend, middleware, and docs. There is no Wrangler Worker project or local R2 emulation yet.
+- Canonical events include cards. Lineups and editable bracket mapping are planned. A player identity can be linked to one verified Auth account (`players.user_id`, SL-042): only a dictator links or unlinks (a trigger refuses every other path, the server key included), the column is unreadable outside the server, and a linked player edits only their own portrait and preferred foot (`my_player`, `update_my_player`). Auth is the only email source: the contact-email table is gone, unlinked legacy players keep only a private match key (`player_link_keys`), a verified account is linked automatically to the one player waiting for its email, and dictators match (`account_link_matches`) or link by hand. Every new player needs a verified account (`create_player_for_account`) and every new roster place a linked player (`add_player_to_roster`). A player has one play style from the catalog (`attributes.playStyle`), or none.
+- Wrangler emulates the current write buckets locally. Full media fixtures, video playback verification and later production cutover are tracked separately.
 - `pnpm` is the package manager (each package keeps its own lockfile); environment examples exist for the frontend, backend and Pages Functions.
-- Workflows: `ci.yml` (the required `gate` check), `db-deploy.yml` (the only path to hosted databases), and `og-screenshots.yml` (fixed: green since 2026-11-17; it still uploads to production R2 from any dispatching branch with a broad key, which SL-073 and SL-074 correct; never a required check). The tracked test suite is organised in test groups (`tests/groups.json`). CODEOWNERS is still absent (SL-081).
+- Workflows include the required CI gate, the database deployment workflow, and the main-only screenshot upload. Test groups and CODEOWNERS are tracked. SL-081 verifies review requirements.
 - The user reports the tablet navigation issue and poor visual quality. Reproduce and verify these during the final frontend phase rather than claiming the repo-only review verified them visually.
 
 ## Main product outcomes
@@ -50,34 +50,15 @@ Enforce these boundaries in server authorization and Supabase RLS wherever direc
 2. Account-linked player identity reusable across divisions and seasons, with player profile/FUT data and season participation kept in related records. Players can manage their own profile fields where authorized. Captains cannot alter the player roster; dictators can.
 3. One reliable match-event model for goals, own goals, assists, cards, corrections, and score state. Scorers can change every match-related field and event, including later attribution fixes.
 4. Configurable league-only, knockout-only, or combined formats. Bracket positions map explicitly to matches and remain editable.
-5. A distinct World Cup fantasy page, reached from home content.
+5. A standalone legacy World Cup archive at /wc.
 6. A configurable home page with current-season video presentation, news carousel, share metadata, and later sections.
 7. Grouped tests, local-first contribution instructions, safe migration automation, role-specific dashboards (each first delivered, minimally usable, with the capability it serves), and a complete design system before the frontend redesign is considered done.
 
 ## Required sequence
 
-Follow the backlog in order. The key dependencies are:
+[The tracked release order](backlog/phases.md) and each item's front matter are authoritative. The active Worker baseline comes first, followed by season setup and rules, individual registration, online match operations, matchday extensions, then fan features and media-dependent home and sharing. Redesign follows in Phase 9. Platform cutover, account extensions and the partner feed are separate milestones in Phase 10.
 
-The unfinished work is organised as **end-to-end feature slices** (restructured 2026-11-18; `backlog/phases.md`, and `backlog/superseded.json` for folded items). Each slice delivers, in its own phase:
-- its migration with data-preservation guards;
-- its API;
-- a minimal usable frontend;
-- local and staging verification.
-
-Each slice ports every known caller, then retires the path it replaces.
-
-1. Reliable local Supabase setup, deterministic seed, and test foundation.
-2. Canonical domain slices, end to end, on the current API: divisions/seasons (done), player identity and season rosters, audit history, account-linked players, five roles with scoped assignments, canonical match events and statistics; then the security audit and API contracts.
-3. Hono/Workers runtime, same-origin routing and parity port, plus the complete R2 storage system after the Worker runtime exists: inventory, abstraction, Wrangler local emulation, bucket/domain reorganization rolled out local → staging → production one bucket at a time, and credential rotation. Later phases consume this storage and never redo its migration.
-4. Division/season product capabilities: configuration and navigation, fantasy (World Cup decoupled), rules, registration, exports, sign-in allowlists.
-5. Match operations: phone/offline scorer workspace, lineups, formats and brackets.
-6. Home configuration, sharing, and external schedule/score integration.
-7. (Merged into 3; the phase holds no items.)
-8. CI, repository policy, and contributor documentation.
-9. Frontend consolidation, design system, responsive fixes, and visual redesign of flows that are already usable from earlier phases. The redesign remains last; first usable flows do not wait for it (see "Usable in its own phase").
-10. Separately reviewed production cutover, branded Auth domain, and the final legacy sweep.
-
-The order is enforced: no item in a later phase can become ready while an earlier phase still has unfinished items (`pnpm work` phase gating), and `dependsOn` orders items inside a phase.
+Each slice ships its migration and preservation checks when needed, API, usable screens, and local and staging evidence. Review user flows and key screens before implementation. Contributors can prepare approved PRs on separate branches while earlier verification runs; integration follows the shared Worker baseline and item prerequisites. The existing phase and status gates still apply.
 
 ### Usable in its own phase
 

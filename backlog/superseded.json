@@ -8,7 +8,7 @@
     { "id": "SL-052", "by": ["SL-022"], "date": "2026-11-18", "note": "Cards and the match timeline are part of the canonical match-event slice." },
     { "id": "SL-055", "by": ["SL-022"], "date": "2026-11-18", "note": "Statistics, standings and fantasy reconciliation with idempotent regrading are part of the canonical match-event slice." },
     { "id": "SL-062", "by": ["SL-061"], "date": "2026-11-18", "note": "Match-specific Open Graph content is configured with the share target and copy." },
-    { "id": "SL-094", "by": ["SL-043", "SL-060"], "date": "2026-11-18", "note": "Decoupling World Cup from onboarding, profile and navigation went to SL-043; the home entry to the World Cup page to SL-060." },
+    { "id": "SL-094", "by": ["SL-043"], "date": "2026-11-18", "note": "Decoupling World Cup from onboarding, profile and navigation went to SL-043. The former SL-060 home entry was subsequently dropped under D-02." },
     { "id": "SL-096", "by": ["SL-045", "SL-091"], "date": "2026-11-18", "note": "The player-facing registration flow ships with SL-045; its Phase 9 redesign is part of SL-091." },
     { "id": "SL-100", "by": ["SL-073", "SL-074"], "date": "2026-11-20", "note": "The Playwright and runner failure is fixed (six consecutive green screenshot runs 2026-11-17 to 2026-11-19, commits 537a8c1 to 0f7aedc, runs 44605660572, 44476129582, 44255309344). What remained, uploads allowed from any branch and a key that is not least-privilege, moves to SL-073 (screenshot upload only from main, screenshot bucket first) and SL-074 (per-bucket token). The e2e test group is now pending for SL-099." }
   ]

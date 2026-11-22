@@ -1,8 +1,8 @@
 # Super League Website — Ordered Architectural Backlog
 
-**Purpose:** Record the issues, desired outcomes, dependencies, and completion checks for the full website redesign. This is a planning document, not an instruction to execute every item at once. Items are deliberately ordered so local workflows and domain/security decisions precede a backend migration, Workers precede Wrangler R2 emulation, and the frontend consolidation and visual redesign is last. Each user-facing capability nevertheless ships a minimally usable flow in the existing frontend in its own phase (rule R10).
+**Current order and acceptance.** See [the release order](phases.md) and each open item. Status is managed by pnpm work. The first product release covers season setup and published rules, then player registration and match operations. Approved contributor work can be built in parallel and integrated after the stated prerequisites.
 
-**Status convention:** All items are currently `Not started`. Mark an item complete only after the stated result is implemented and verified. Create small atomic commits for each reviewable feature or tightly related migration.
+The diagnosis below is a historical baseline from 15 November 2026.
 
 ## 1. Repository diagnosis
 
@@ -55,24 +55,7 @@ This is the code-based starting point observed during repository review on 15 No
 - No workflow applies Supabase migrations by branch/environment. The contributor documentation describes Next.js/Vercel and uses generic package-manager choices; it does not teach the requested `pnpm`, local Supabase CLI, Wrangler, grouped tests, or pre-commit workflow.
 - The Playwright/Ubuntu issue is user-reported. The current workflow's runner, Node, Playwright, browser installation, and route set need a reproducible CI diagnosis rather than a blind version change.
 
-## 2. Dependency order
 
-| Phase | Work area | Must precede |
-|---|---|---|
-| 0 | Scope, data safety, product/domain decisions | All schema and service rewrites |
-| 1 | Local-first setup, fixture validation, test/CI foundation | Migration implementation and reliable feature work |
-| 2 | Canonical domain slices, each end to end: divisions/seasons, player identity and rosters, audit history, account linking, scoped roles, match events and statistics, then the security audit and API contracts | Workers migration (which ports each final model once) |
-| 3 | Verify and close out the implemented Hono Worker, routing and parity; measure the staging Worker dashboard; complete the R2 inventory, abstraction, local emulation, staged cutovers and credential rotation | All later feature work, which uses the Worker API and the finished storage |
-| 4 | Division/season product capabilities: configuration and navigation, fantasy (World Cup decoupled), rules, registration, exports, sign-in allowlists | Match operations and home configuration |
-| 5 | Match operations: phone/offline scorer workspace, lineups, formats and brackets | Sharing and external integrations |
-| 6 | Configurable home content, sharing, and external data integrations | Contributor documentation and the redesign |
-| 7 | (merged into Phase 3 on 2026-11-18) | — |
-| 8 | CI, repository policy and contributor documentation | Production cutover |
-| 9 | Frontend consolidation and design-system redesign of flows that already work | User-facing launch |
-| 10 | Production cutover, branded Auth domain, final legacy sweep | Completion |
+## 2. Current release order
 
-**Feature-slice rule (2026-11-18):** each unfinished item is an end-to-end slice. It delivers its migration with data-preservation guards, its API, a minimal usable frontend for the people who need it (rule R10) and local plus staging verification, and it retires the path it replaces once every caller is ported. Folded items are listed in `superseded.json`.
-
-**Phase 3 ordering:** Worker runtime verification (SL-030) can start independently of staging latency work (SL-029). Verify route parity independently of the full storage migration. Production bucket cutovers follow inventory, local emulation, parity, staging verification and owner approval. **Frontend constraint:** do not begin the product redesign or the division UI consolidation until Phases 0–8 are complete. A capability a person uses or configures ships a minimal, working flow in the existing frontend in its own phase, following current patterns (rule R10); Phase 9 consolidates, redesigns and refines those flows rather than creating them.
-
-## 3. Phased backlog
+See [the phase index](phases.md) for the current plan, dependencies and release milestones.

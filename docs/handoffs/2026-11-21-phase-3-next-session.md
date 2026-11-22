@@ -1,5 +1,7 @@
 # Handoff for Phase 3 — Worker runtime verification
 
+The disposition table below records the previous handoff. For current scope, use [the release order](../../backlog/phases.md). Active parity is SL-032, legacy archive fidelity follows D-02, and staging HLS verification is SL-106.
+
 ## Branch and baseline
 
 - Preparation branch is `codex/work`. The preparation commit is `5870f3896d87eeaf8610241e4fc03cbafc03b8e1`. Review the documentation commits on that branch for integration into the next implementation checkout. The release base is `2babc0ff6d29e96f726031ede51a50f16b83e1ad`, the merge of [PR #191](https://github.com/IIITK-Football/super-league/pull/191).

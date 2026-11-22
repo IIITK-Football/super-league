@@ -1,7 +1,5 @@
-# D-02 decision: freeze World Cup and keep it on `/wc`
+# D-02 · Legacy World Cup archive
 
-Resolved by the owner on 2026-11-19.
+The owner confirmed that the finished World Cup fantasy can remain at `/wc` as a standalone archive. Its feature behavior is no longer an acceptance gate for active Worker parity, product releases, or Next retirement. Keep existing data and access protections. The saved-bracket rendering issue may remain open without blocking any release.
 
-Do not schedule further World Cup feature, refactor, redesign, or data-model work. Keep the existing World Cup experience and data intact. Its sole app route is `/wc`; do not add other World Cup routes or a dedicated navigation item. A simple link to `/wc` may be added to the home carousel later as ordinary home content, without changing World Cup itself.
-
-Division fantasy remains independent and shows the selected division's current season. It must not alter World Cup behavior or data.
+Division fantasy remains independent. Remove the World Cup link from Fantasy navigation with SL-043. Home configuration has no dedicated archive entry. A simple link under More can be considered during the frontend redesign.
