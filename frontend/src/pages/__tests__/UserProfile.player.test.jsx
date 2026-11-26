@@ -37,7 +37,7 @@ describe('your player card', () => {
     expect(card().getAttribute('aria-busy')).toBe('true');
     await act(async () => resolve({ data: null, error: null }));
     expect(screen.getByText(/No player is linked to your account/)).toBeTruthy();
-    expect(screen.queryByLabelText('Preferred foot')).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Preferred foot' })).toBeNull();
   });
 
   it('reports a load failure and retries', async () => {
@@ -45,13 +45,13 @@ describe('your player card', () => {
     render(<MyPlayerCard />);
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/offline/));
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await waitFor(() => expect(screen.getByLabelText('Preferred foot')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('radiogroup', { name: 'Preferred foot' })).toBeTruthy());
   });
 
   it('shows the card read-only except portrait and foot, and the seasons', async () => {
     rpc.mockResolvedValueOnce({ data: me, error: null });
     render(<MyPlayerCard />);
-    await waitFor(() => expect(screen.getByLabelText('Preferred foot').value).toBe('Right'));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Right' }).getAttribute('aria-checked')).toBe('true'));
     expect(card().textContent).toMatch(/Play style: Power Shot/);
     expect(within(card()).getByText('70')).toBeTruthy();
     expect(screen.queryByLabelText(/rating|first name|pace|play style/i)).toBeNull();
@@ -65,8 +65,8 @@ describe('your player card', () => {
     rpc.mockImplementation(async (name) => (name === 'my_player' ? { data: me, error: null } : { data: null, error: null }));
     fetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, imageUrl: 'https://media.example/players/p1.png?v2' }) });
     render(<MyPlayerCard />);
-    await waitFor(() => expect(screen.getByLabelText('Preferred foot')).toBeTruthy());
-    fireEvent.change(screen.getByLabelText('Preferred foot'), { target: { value: 'Left' } });
+    await waitFor(() => expect(screen.getByRole('radiogroup', { name: 'Preferred foot' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('radio', { name: 'Left' }));
     expect(card().textContent).toMatch(/Left/);
     fireEvent.change(screen.getByLabelText('Portrait file'), { target: { files: [png()] } });
     await waitFor(() => expect(within(card()).getByAltText('Ada Striker portrait').getAttribute('src')).toBe('blob:local'));

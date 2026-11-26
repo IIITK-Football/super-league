@@ -4,6 +4,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { pick } from '../../test/controls';
 
 const calls = { updates: [], flairs: [] };
 let wcStatus;
@@ -46,7 +47,7 @@ const renderPage = () => render(<MemoryRouter><UserProfile /></MemoryRouter>);
 describe('profile', () => {
   it('saves a changed nickname to the own profile row', async () => {
     renderPage();
-    await screen.findByRole('option', { name: 'Brazil' });
+    await waitFor(() => expect(screen.getByRole('button', { name: /world cup nation/i }).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText('Nickname'), { target: { value: 'Ada' } });
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(setProfile).toHaveBeenCalled());
@@ -56,8 +57,8 @@ describe('profile', () => {
 
   it('saves a chosen World Cup nation through the flair endpoint, not the profile row', async () => {
     renderPage();
-    await screen.findByRole('option', { name: 'Brazil' });
-    fireEvent.change(screen.getByLabelText(/world cup nation/i), { target: { value: 'Brazil' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /world cup nation/i }).disabled).toBe(false));
+    await pick(/world cup nation/i, 'Brazil');
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(calls.flairs.length).toBe(1));
     expect(calls.flairs[0].url).toBe('/api/wc/flair');
@@ -69,7 +70,7 @@ describe('profile', () => {
     wcStatus = 'error';
     renderPage();
     expect(await screen.findByText(/nation list could not be loaded/i)).toBeTruthy();
-    expect(screen.queryByLabelText(/world cup nation/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /world cup nation/i })).toBeNull();
     fireEvent.change(screen.getByLabelText('Nickname'), { target: { value: 'Ada' } });
     expect(screen.getByRole('button', { name: /save changes/i }).disabled).toBe(false);
   });

@@ -5,6 +5,9 @@ import { API_BASE_URL } from '../../lib/api';
 import { FEET } from '../../lib/playerCard';
 import FutCard from './FutCard';
 import { Skeleton } from '../ui/Skeleton';
+import { Field } from '../ui/Field';
+import { SegmentedControl } from '../ui/SegmentedControl';
+import { toast } from '../ui/toastStore';
 
 // "Your player card" on /profile: the player identity a dictator linked to the signed-in account (my_player). The
 // player changes only their portrait and preferred foot (update_my_player); name, rating, stats and play style are
@@ -102,6 +105,7 @@ export default function MyPlayerCard() {
       return;
     }
     setMessage('Your player card is saved.');
+    toast({ title: 'Player card saved', tone: 'success' });
     await load();
   };
 
@@ -112,12 +116,10 @@ export default function MyPlayerCard() {
     <div className="flex flex-wrap items-start gap-4">
       <FutCard details player={preview} portrait={portrait || undefined} />
       <div className="space-y-3">
-        <label className="block text-xs font-semibold text-mut">Preferred foot
-          <select aria-label="Preferred foot" value={foot} onChange={(e) => { setFoot(e.target.value); setMessage(''); }}
-            className="mt-1 min-h-11 w-full rounded-ctl border border-line bg-surf px-3 text-base text-ink">
-            <option value="">Not set</option>{FEET.map((f) => <option key={f} value={f}>{f}</option>)}
-          </select>
-        </label>
+        <Field label="Preferred foot">
+          {(p) => <SegmentedControl aria-labelledby={p['aria-labelledby']} value={foot} onChange={(v) => { setFoot(v); setMessage(''); }}
+            options={[{ value: '', label: 'Not set' }, ...FEET.map((f) => ({ value: f, label: f }))]} />}
+        </Field>
         <label className="glass inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-pill px-6 text-sm font-black uppercase tracking-[0.2em] text-ink focus-within:outline focus-within:outline-2 focus-within:outline-acc">
           <ImagePlus size={13} /> {portrait ? 'Choose another picture' : 'New portrait (500 × 500 PNG)'}
           <input type="file" accept="image/png" className="sr-only" aria-label="Portrait file" onChange={(e) => { choose(e.target.files?.[0]); e.target.value = ''; }} />

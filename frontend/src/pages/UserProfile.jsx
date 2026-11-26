@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
 import { PasswordSettings } from '../components/PasswordSettings';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import { API_BASE_URL } from '../lib/api';
 import { fetchWorldCupTeams, saveWorldCupFlair } from '../lib/authApi';
 import MyPlayerCard from '../components/players/MyPlayerCard';
-import { Button, Field, Notice, Pill, Skeleton } from '../components/ui';
+import { Button, Combobox, Field, Notice, Pill, Select, Skeleton, TextInput, toast } from '../components/ui';
 
 const PILL = 'inline-flex min-h-11 w-full items-center justify-center rounded-pill bg-ink px-6 text-sm font-black uppercase tracking-[0.2em] text-bg transition hover:opacity-85 disabled:pointer-events-none disabled:opacity-40';
 
@@ -43,7 +43,6 @@ export function UserProfile() {
   const [clubs, setClubs] = useState({ status: 'loading', byDivision: {} });
   const [wcTeams, setWcTeams] = useState({ status: 'loading', list: [] });
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
 
   const loadLists = () => {
@@ -78,7 +77,6 @@ export function UserProfile() {
     if (!canSave) return;
     setSaving(true);
     setError(null);
-    setSuccess(false);
     try {
       const { error: updateError } = await supabase.from('user_profiles').update({ nickname: name }).eq('id', user.id);
       if (updateError) throw new Error('Your nickname was not saved. Try again.');
@@ -106,22 +104,22 @@ export function UserProfile() {
     setSavedFlairs(Object.fromEntries(chosen));
     setProfile({ ...profile, id: user.id, email: user.email, nickname: name, wc_team_flair: wcFlair || profile?.wc_team_flair || null });
     setSaving(false);
-    setSuccess(true);
+    toast({ title: 'Profile saved', tone: 'success' });
   };
 
   if (!user) return null;
 
   const clubSelect = (d) => (
-    <Field
-      key={d.id}
-      as="select"
-      label={`${d.name} club`}
-      value={flairs[d.id] || ''}
-      onChange={(e) => setFlairs((current) => ({ ...current, [d.id]: e.target.value }))}
-      disabled={clubs.status !== 'ready'}
-    >
-      <option value="">No club</option>
-      {(clubs.byDivision[d.id] || []).map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+    <Field key={d.id} label={`${d.name} club`}>
+      {(p) => (
+        <Select
+          {...p}
+          value={flairs[d.id] || ''}
+          onChange={(value) => setFlairs((current) => ({ ...current, [d.id]: value }))}
+          disabled={clubs.status !== 'ready'}
+          options={[{ value: '', label: 'No club' }, ...(clubs.byDivision[d.id] || []).map((t) => ({ value: t.name, label: t.name }))]}
+        />
+      )}
     </Field>
   );
 
@@ -145,16 +143,15 @@ export function UserProfile() {
 
       <div className="glass flex flex-col gap-6 rounded-card p-5 sm:p-8">
         {error && <Notice tone="error" role="alert">{error}</Notice>}
-        {success && <Notice tone="success">Profile saved.</Notice>}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
           <Field
             label="Nickname"
             hint="3 to 20 characters. Shown on the prediction table."
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            maxLength={20}
-          />
+            error={name && name.length < 3 ? 'Use at least 3 characters.' : undefined}
+          >
+            {(p) => <TextInput {...p} icon={User} value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={20} />}
+          </Field>
 
           {clubs.status === 'error' && (
             <div className="flex flex-col items-start gap-2">
@@ -170,16 +167,18 @@ export function UserProfile() {
           {wcTeams.status === 'error' ? (
             <Notice tone="error">The nation list could not be loaded, so the World Cup pick cannot change right now.</Notice>
           ) : (
-            <Field
-              as="select"
-              label="World Cup nation (optional)"
-              hint="This pick belongs to the World Cup predictor, not the league."
-              value={wcFlair}
-              onChange={(e) => setWcFlair(e.target.value)}
-              disabled={wcTeams.status !== 'ready'}
-            >
-              <option value="">{wcTeams.status === 'ready' ? 'No pick' : 'Loading nations...'}</option>
-              {wcTeams.list.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+            <Field label="World Cup nation (optional)" hint="This pick belongs to the World Cup predictor, not the league.">
+              {(p) => (
+                <Combobox
+                  {...p}
+                  value={wcFlair}
+                  onChange={setWcFlair}
+                  disabled={wcTeams.status !== 'ready'}
+                  placeholder={wcTeams.status === 'ready' ? 'No pick' : 'Loading nations...'}
+                  searchPlaceholder="Search nations"
+                  options={[{ value: '', label: 'No pick' }, ...wcTeams.list.map((t) => ({ value: t.name, label: t.name }))]}
+                />
+              )}
             </Field>
           )}
 
