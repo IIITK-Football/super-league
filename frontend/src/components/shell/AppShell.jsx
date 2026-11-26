@@ -11,7 +11,7 @@ import { ThemeToggle } from './ThemeToggle';
 // The Super League mark, tinted with the ink colour through a CSS mask.
 function Mark() {
   const mask = { maskImage: 'url(/slklogo3.png)', WebkitMaskImage: 'url(/slklogo3.png)', maskSize: 'contain', WebkitMaskSize: 'contain', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat', maskPosition: 'center', WebkitMaskPosition: 'center' };
-  return <span aria-hidden="true" className="block size-9 bg-ink" style={mask} />;
+  return <span aria-hidden="true" className="block size-10 bg-ink sm:size-11" style={mask} />;
 }
 
 // Links shown in the primary bar. More holds the rest and opens a sheet.

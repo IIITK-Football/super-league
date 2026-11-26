@@ -69,7 +69,7 @@ export function Sheet({ open, onClose, title, children, className }) {
         tabIndex={-1}
         className={cn(
           'absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-card border-t border-line bg-surf motion-safe:animate-sheet-up',
-          'md:inset-y-0 md:bottom-auto md:left-auto md:right-0 md:max-h-none md:w-[420px] md:rounded-none md:border-l md:border-t-0 md:animate-sheet-in',
+          'md:inset-y-0 md:left-auto md:right-0 md:max-h-none md:w-[420px] md:rounded-none md:border-l md:border-t-0 md:animate-sheet-in',
           className,
         )}
       >
