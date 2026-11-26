@@ -192,7 +192,7 @@ async function main() {
     await admin.getByLabel('Rules label').fill('Competition rules');
     await clickWrite(admin.getByRole('button', { name: 'Save sections' }), 'PUT', `/admin/seasons/${two}/sections`);
     await go(visitor, `/${tag}/second`);
-    await visitor.getByLabel('Season', { exact: true }).waitFor();
+    await visitor.getByText('No Fixtures Currently Scheduled', { exact: true }).waitFor();
     await visitor.getByRole('button', { name: 'Open navigation' }).click();
     await visitor.getByRole('button', { name: 'COMPETITION RULES' }).waitFor();
     assert.equal(await visitor.getByRole('button', { name: 'FIXTURES', exact: true }).count(), 0);

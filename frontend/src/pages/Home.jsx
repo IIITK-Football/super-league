@@ -82,7 +82,7 @@ export function Home() {
     // Choosing a season puts it in the address (/wsl/2027), so the page can be shared; the current season is plain /wsl.
     const chooseSeason = (slug) => {
         const current = seasonScope.currentSeason;
-        navigate(!current || slug === current.slug ? `/${division}` : `/${division}/${slug}`);
+        navigate(slug === current?.slug ? `/${division}` : `/${division}/${slug}`);
     };
 
     if (seasonScope.seasonMissing) {

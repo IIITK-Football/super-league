@@ -115,6 +115,13 @@ describe('season choice on the division homepage', () => {
     await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/wsl'));
   });
 
+  it('navigates to the chosen season even when none is current', async () => {
+    state.seasons = [season('2027'), season('2026')];
+    renderAt('/wsl/2027');
+    fireEvent.change(await screen.findByLabelText('Season'), { target: { value: '2026' } });
+    await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/wsl/2026'));
+  });
+
   it('reports an unknown season with a link to the current one, and requests nothing', async () => {
     state.seasons = [season('2026', true)];
     renderAt('/wsl/1999');
