@@ -47,12 +47,12 @@ export function ProtectedRoute({ children }) {
   }
   if (!profile?.nickname) return <Onboarding />;
 
-  return <AppShell>{children}</AppShell>;
+  return children;
 }
 
-// A wrapper for public routes (they get the app shell too)
-function PublicRoute({ children }) {
-  return <AppShell>{children}</AppShell>;
+// The app shell is mounted once for every page that has it, so moving between pages never reloads the header.
+function ShellLayout() {
+  return <AppShell><Outlet /></AppShell>;
 }
 
 // The developer-only page that renders every UI primitive in both themes (not in production builds).
@@ -89,7 +89,7 @@ function WcRoute() {
 }
 
 function LeagueDashboardRoute() {
-  return <PublicRoute><DivisionHomeRoute><Home /></DivisionHomeRoute></PublicRoute>;
+  return <DivisionHomeRoute><Home /></DivisionHomeRoute>;
 }
 
 // Routes live in one data router so useBlocker (for unsaved edits) works anywhere in the tree.
@@ -103,39 +103,43 @@ export const routes = createRoutesFromElements(
 
     {/* Public App Routes */}
     <Route path="/" element={<LeagueLanding />} />
-    <Route path="/:division" element={<LeagueDashboardRoute />} />
-    <Route path="/:division/:season" element={<LeagueDashboardRoute />} />
-    <Route path="/team-builder" element={<AppShell><RoleWorkspace requiredRole="captain" /></AppShell>} />
-    <Route path="/editor" element={<AppShell><RoleWorkspace requiredRole="editor" /></AppShell>} />
-    <Route path="/dictator" element={<AppShell><RoleWorkspace requiredRole="dictator" /></AppShell>} />
     {DevUi && <Route path="/dev/ui" element={<Suspense fallback={null}><DevUi /></Suspense>} />}
-    <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
-    <Route path="/standings/:division" element={<PublicRoute><SectionGate section="standings"><Standings /></SectionGate></PublicRoute>} />
 
-    {/* Division sections: the division is in the address */}
-    <Route path="/:division/matches" element={<DivisionScope><PublicRoute><SectionGate section="fixtures"><Matches /></SectionGate></PublicRoute></DivisionScope>} />
-    <Route path="/:division/teams" element={<DivisionScope><PublicRoute><SectionGate section="teams"><Teams /></SectionGate></PublicRoute></DivisionScope>} />
-    <Route path="/:division/teams/:teamId" element={<DivisionScope><PublicRoute><SectionGate section="teams"><Teams /></SectionGate></PublicRoute></DivisionScope>} />
-    <Route path="/:division/news" element={<DivisionScope><PublicRoute><SectionGate section="news"><Vault /></SectionGate></PublicRoute></DivisionScope>} />
-    <Route path="/:division/rules" element={<DivisionScope><PublicRoute><SectionGate section="rules"><Rules /></SectionGate></PublicRoute></DivisionScope>} />
-    <Route path="/matches" element={<DivisionRedirect to="matches" />} />
-    <Route path="/teams" element={<DivisionRedirect to="teams" />} />
-    <Route path="/vault" element={<DivisionRedirect to="news" />} />
-    <Route path="/rules" element={<DivisionRedirect to="rules" />} />
-    <Route path="/matches/:id" element={<PublicRoute><MatchTimeline /></PublicRoute>} />
+    {/* Every page below shares one app shell. */}
+    <Route element={<ShellLayout />}>
+      <Route path="/:division" element={<LeagueDashboardRoute />} />
+      <Route path="/team-builder" element={<RoleWorkspace requiredRole="captain" />} />
+      <Route path="/editor" element={<RoleWorkspace requiredRole="editor" />} />
+      <Route path="/dictator" element={<RoleWorkspace requiredRole="dictator" />} />
+      <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
+      <Route path="/standings/:division" element={<SectionGate section="standings"><Standings /></SectionGate>} />
 
-    {/* Note the :id syntax! This catches /article/12345 */}
-    <Route path="/article/:id" element={<PublicRoute><SectionGate section="news"><ArticleView /></SectionGate></PublicRoute>} />
+      {/* Division sections: the division is in the address. A season ranks below every named section. */}
+      <Route path="/:division/:season" element={<LeagueDashboardRoute />} />
+      <Route path="/:division/matches" element={<DivisionScope><SectionGate section="fixtures"><Matches /></SectionGate></DivisionScope>} />
+      <Route path="/:division/teams" element={<DivisionScope><SectionGate section="teams"><Teams /></SectionGate></DivisionScope>} />
+      <Route path="/:division/teams/:teamId" element={<DivisionScope><SectionGate section="teams"><Teams /></SectionGate></DivisionScope>} />
+      <Route path="/:division/news" element={<DivisionScope><SectionGate section="news"><Vault /></SectionGate></DivisionScope>} />
+      <Route path="/:division/rules" element={<DivisionScope><SectionGate section="rules"><Rules /></SectionGate></DivisionScope>} />
+      <Route path="/matches" element={<DivisionRedirect to="matches" />} />
+      <Route path="/teams" element={<DivisionRedirect to="teams" />} />
+      <Route path="/vault" element={<DivisionRedirect to="news" />} />
+      <Route path="/rules" element={<DivisionRedirect to="rules" />} />
+      <Route path="/matches/:id" element={<MatchTimeline />} />
 
-    <Route path="/wc" element={<PublicRoute><WcRoute /></PublicRoute>} />
+      {/* Note the :id syntax! This catches /article/12345 */}
+      <Route path="/article/:id" element={<SectionGate section="news"><ArticleView /></SectionGate>} />
 
-    {/* Protected Routes (Require Login/Profile) */}
-    <Route path="/fantasy" element={<ProtectedRoute><SectionGate section="fantasy"><Fantasy /></SectionGate></ProtectedRoute>} />
-    <Route path="/leaderboard" element={<PublicRoute><SectionGate section="stats"><Leaderboard /></SectionGate></PublicRoute>} />
-    <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+      <Route path="/wc" element={<WcRoute />} />
 
-    {/* Catch-all for bad URLs */}
-    <Route path="*" element={<PublicRoute><NotFound /></PublicRoute>} />
+      {/* Protected Routes (Require Login/Profile) */}
+      <Route path="/fantasy" element={<ProtectedRoute><SectionGate section="fantasy"><Fantasy /></SectionGate></ProtectedRoute>} />
+      <Route path="/leaderboard" element={<SectionGate section="stats"><Leaderboard /></SectionGate>} />
+      <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+
+      {/* Catch-all for bad URLs */}
+      <Route path="*" element={<NotFound />} />
+    </Route>
   </Route>,
 );
 const router = createBrowserRouter(routes);

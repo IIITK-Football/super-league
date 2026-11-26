@@ -33,4 +33,10 @@ describe('division routes', () => {
     expect(matched('/article/12')).toBe('/article/:id');
     expect(matched('/matches/42')).toBe('/matches/:id');
   });
+
+  it('mounts one shared shell route for every shell page, so navigating never remounts it', () => {
+    const shell = (path) => matchRoutes(routes, path)[1].route;
+    const paths = ['/super-league', '/wsl/matches', '/standings/wsl', '/leaderboard', '/profile', '/wc', '/nowhere'];
+    for (const path of paths) expect(shell(path)).toBe(shell('/super-league'));
+  });
 });

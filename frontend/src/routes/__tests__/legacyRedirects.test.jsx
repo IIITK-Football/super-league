@@ -23,7 +23,7 @@ describe('legacy dashboard address', () => {
     const app = readFileSync(join(__dirname, '../../App.jsx'), 'utf8');
     expect(app).toMatch(/LEGACY_REDIRECTS\.map/);
     expect(app).not.toMatch(/path="\/admin"/);
-    expect(app).toMatch(/path="\/dictator" element={<AppShell><RoleWorkspace requiredRole="dictator" \/><\/AppShell>}/);
+    expect(app).toMatch(/path="\/dictator" element={<RoleWorkspace requiredRole="dictator" \/>}/);
     const login = readFileSync(join(__dirname, '../../pages/AdminLogin.jsx'), 'utf8');
     expect(login).not.toMatch(/['"]\/admin['"]/);
   });
