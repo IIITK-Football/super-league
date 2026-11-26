@@ -80,9 +80,10 @@ export function NumberField({
       onPointerCancel={stop}
       onClick={click(delta)}
       className={cn(
-        'flex shrink-0 touch-manipulation select-none items-center justify-center rounded-[9px] text-ink transition duration-150',
+        'relative flex shrink-0 touch-manipulation select-none items-center justify-center rounded-[9px] text-ink transition duration-150',
         'hover:bg-ink/10 active:scale-95 active:bg-ink/15 disabled:opacity-30 motion-reduce:active:scale-100',
-        big ? 'size-14' : 'size-9',
+        // The small stepper is 36px; the pseudo-element gives it the 44px touch target the rest of the UI uses.
+        big ? 'size-14' : "size-9 after:absolute after:-inset-1 after:content-['']",
       )}
     >
       <Icon size={big ? 22 : 16} aria-hidden="true" />

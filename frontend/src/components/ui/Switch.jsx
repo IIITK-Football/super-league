@@ -15,6 +15,8 @@ export function Switch({ checked = false, onChange, label, description, disabled
       {...aria}
       className={cn(
         'relative inline-flex h-7 w-12 shrink-0 items-center rounded-pill border p-0.5 transition-colors duration-200',
+        // A 44px touch target around the 28px switch, without changing how it looks.
+        "after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']",
         'outline-none focus-visible:ring-4 focus-visible:ring-ink/15 disabled:cursor-not-allowed disabled:opacity-50',
         checked ? 'justify-end border-ink bg-ink' : 'justify-start border-ink/15 bg-ink/10',
         !label && className,
