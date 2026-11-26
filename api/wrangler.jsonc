@@ -43,6 +43,8 @@
       "name": "super-league-api-staging",
       "workers_dev": false,
       "version_metadata": { "binding": "CF_VERSION_METADATA" },
+      // Smart Placement on trial (D-04): kept only if staging measurements improve (docs/plans/SL-030.md).
+      "placement": { "mode": "smart" },
       "r2_buckets": [
         { "binding": "R2_NEWS", "bucket_name": "sl-staging-news-images" },
         { "binding": "R2_PLAYERS", "bucket_name": "sl-staging-player-images" },
