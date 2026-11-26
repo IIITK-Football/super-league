@@ -2,13 +2,13 @@
 export function SeasonSelect({ seasons, value, onChange }) {
   if (!seasons || seasons.length < 2) return null;
   return (
-    <label className="inline-flex min-h-11 items-center gap-3 rounded-ctl border border-line bg-surf px-3">
-      <span className="text-sm text-mut">Season</span>
+    <label className="glass inline-flex min-h-11 items-center gap-3 rounded-pill px-4">
+      <span className="eyebrow">Season</span>
       <select
         aria-label="Season"
         value={value || ''}
         onChange={(event) => onChange(event.target.value)}
-        className="cursor-pointer bg-transparent font-semibold text-ink outline-none"
+        className="cursor-pointer bg-transparent font-bold uppercase tracking-wider text-ink outline-none"
       >
         {seasons.map((season) => (
           <option key={season.id} value={season.slug}>
