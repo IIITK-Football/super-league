@@ -17,7 +17,7 @@ function FeaturedStory({ article }) {
   return (
     <Link to={`/article/${article.id}`} className="glass lift group grid overflow-hidden rounded-card md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc">
       {imgUrl && (
-        <img src={imgUrl} alt="" className="aspect-[16/10] w-full object-cover grayscale transition duration-500 group-hover:grayscale-0 md:aspect-auto md:h-full" />
+        <img src={imgUrl} alt="" className="aspect-[16/10] w-full object-cover grayscale transition duration-500 group-hover:grayscale-0" />
       )}
       <div className="flex flex-col justify-end gap-4 p-5 sm:p-8">
         {(article.category || date) && (
