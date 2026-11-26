@@ -22,7 +22,7 @@ export function DivisionSwitcher({ divisions, loading, division, current }) {
         {loading ? <Skeleton className="h-4 w-24" /> : (
           <>
             <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-acc" style={accent ? { backgroundColor: accent } : undefined} />
-            <span className="truncate font-display text-lg font-bold leading-none">{current?.name ?? division}</span>
+            <span className="truncate font-display text-lg font-bold leading-none">{current?.name ?? 'Division'}</span>
           </>
         )}
         <ChevronDown size={16} aria-hidden="true" className="shrink-0 text-mut" />

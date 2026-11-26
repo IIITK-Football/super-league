@@ -21,6 +21,14 @@ describe('Button', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('disabled reads inert: muted surface and text, no accent fill', () => {
+    render(<Button disabled>Save</Button>);
+    const classes = screen.getByRole('button', { name: 'Save' }).className;
+    expect(classes).toContain('disabled:bg-raise');
+    expect(classes).toContain('disabled:text-mut');
+    expect(classes).not.toContain('disabled:opacity');
+  });
+
   it('keeps every size at least 44px tall', () => {
     for (const size of ['sm', 'md', 'lg']) expect(buttonClasses('primary', size)).toMatch(/min-h-1[12]/);
   });

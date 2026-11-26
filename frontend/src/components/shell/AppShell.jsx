@@ -7,6 +7,7 @@ import { Sheet } from '../ui/Sheet';
 import { AccountMenu } from './AccountMenu';
 import { DivisionSwitcher } from './DivisionSwitcher';
 import { ThemeToggle } from './ThemeToggle';
+import { TopNavbar } from '../TopNavbar';
 
 // The Super League mark, tinted with the ink colour through a CSS mask.
 function Mark() {
@@ -30,12 +31,22 @@ const MORE_LINKS = [
 ];
 
 // The app frame: a top bar (laptop and tablet) and bottom tabs (phone) around the page. The division in view sets
-// --div, the accent every page may use. The World Cup page keeps only a bar: its tabs render into the bar's portal.
+// --div, the accent every page may use. The World Cup page (frozen) keeps its own legacy navigation.
 export function AppShell({ children }) {
   const location = useLocation();
   const { division } = useLeague();
   const { divisions, loading } = useDivisions();
   const [moreOpen, setMoreOpen] = useState(false);
+
+  // The World Cup page is frozen: it keeps the navigation it always had, menu included.
+  if (location.pathname === '/wc') {
+    return (
+      <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 mx-auto max-w-7xl">
+        <TopNavbar />
+        <main className="animate-in fade-in duration-500">{children}</main>
+      </div>
+    );
+  }
   const current = divisions.find((item) => item.slug === division);
   const accent = current?.primary_color;
   const style = accent ? { '--div': accent } : undefined;
@@ -49,28 +60,22 @@ export function AppShell({ children }) {
         <Link to={home} aria-label="Super League home" className="flex shrink-0 items-center rounded-ctl">
           <Mark />
         </Link>
-        {location.pathname === '/wc' ? (
-          <div id="navbar-portal-target" className="flex min-w-0 items-center" />
-        ) : (
-          <>
-            <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} />
-            <nav aria-label="Main" className="ml-2 hidden items-center gap-1 md:flex">
-              {links.map(({ to, label }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  aria-current={isActive(to) ? 'page' : undefined}
-                  className={`flex min-h-11 items-center rounded-ctl px-3 text-sm font-semibold ${isActive(to) ? 'text-ink' : 'text-mut hover:text-ink'}`}
-                >
-                  {label}
-                </Link>
-              ))}
-              <button type="button" onClick={() => setMoreOpen(true)} aria-haspopup="dialog" className="flex min-h-11 items-center rounded-ctl px-3 text-sm font-semibold text-mut hover:text-ink">
-                More
-              </button>
-            </nav>
-          </>
-        )}
+        <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} />
+        <nav aria-label="Main" className="ml-2 hidden items-center gap-1 md:flex">
+          {links.map(({ to, label }) => (
+            <Link
+              key={to}
+              to={to}
+              aria-current={isActive(to) ? 'page' : undefined}
+              className={`flex min-h-11 items-center rounded-ctl px-3 text-sm font-semibold ${isActive(to) ? 'text-ink' : 'text-mut hover:text-ink'}`}
+            >
+              {label}
+            </Link>
+          ))}
+          <button type="button" onClick={() => setMoreOpen(true)} aria-haspopup="dialog" className="flex min-h-11 items-center rounded-ctl px-3 text-sm font-semibold text-mut hover:text-ink">
+            More
+          </button>
+        </nav>
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <ThemeToggle />
           <AccountMenu />
@@ -82,14 +87,9 @@ export function AppShell({ children }) {
   return (
     <div className="min-h-screen bg-bg" style={style}>
       {bar}
-      {location.pathname === '/wc' ? (
-        children
-      ) : (
-        <main className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 md:pb-12 md:pt-8">{children}</main>
-      )}
+      <main className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 md:pb-12 md:pt-8">{children}</main>
 
-      {location.pathname !== '/wc' && (
-        <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surf pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surf pb-[env(safe-area-inset-bottom)] md:hidden">
           <ul className="mx-auto grid max-w-md grid-cols-4">
             {links.map(({ to, label, icon: Icon }) => {
               const active = isActive(to);
@@ -115,7 +115,6 @@ export function AppShell({ children }) {
             </li>
           </ul>
         </nav>
-      )}
 
       <Sheet open={moreOpen} title="More" onClose={() => setMoreOpen(false)}>
         <ul className="flex flex-col">
