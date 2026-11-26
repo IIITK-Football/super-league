@@ -113,6 +113,7 @@ export const routes = createRoutesFromElements(
       <Route path="/team-builder" element={<RoleWorkspace requiredRole="captain" />} />
       <Route path="/editor" element={<RoleWorkspace requiredRole="editor" />} />
       <Route path="/dictator" element={<RoleWorkspace requiredRole="dictator" />} />
+      <Route path="/dictator/:tool" element={<RoleWorkspace requiredRole="dictator" />} />
       <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
       <Route path="/standings/:division" element={<SectionGate section="standings"><Standings /></SectionGate>} />
 
