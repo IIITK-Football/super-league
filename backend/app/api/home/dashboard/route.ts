@@ -30,6 +30,9 @@ export async function GET(request: Request) {
             // Fantasy leaders: points from graded predictions on this season's matches
             supabase.rpc('season_fantasy_leaderboard', { p_season: seasonId, p_limit: 5 }),
         ]);
+        for (const res of [newsRes, scorersRes, assistsRes, entriesRes, matchesRes, rankedRes]) {
+            if (res.error) throw res.error;
+        }
         const news = newsRes.data;
         const scorers = scorersRes.data;
         const assists = assistsRes.data;
@@ -136,17 +139,21 @@ export async function GET(request: Request) {
                 awayScorers: awayGoals
             };
         }
-        // Round 3: the leaders' nicknames and their flair for this division.
+        // Fantasy leaders' nicknames and each user's flair for this division (both depend on the leaderboard)
         const rankedIds = (ranked ?? []).map((r: any) => r.user_id);
-        const [{ data: names }, { data: flairs }] = rankedIds.length
-            ? await Promise.all([
-                supabase.from('user_profiles').select('id, nickname').in('id', rankedIds),
-                supabase.from('division_flairs').select('user_id, team_name').eq('division_id', scope.division.id).in('user_id', rankedIds),
-            ])
-            : [{ data: [] as { id: string; nickname: string | null }[] }, { data: [] as { user_id: string; team_name: string }[] }];
-        const nicknameById = new Map((names ?? []).map((n: any) => [n.id, n.nickname]));
+        const [namesRes, flairsRes] = await Promise.all([
+            rankedIds.length
+                ? supabase.from('user_profiles').select('id, nickname').in('id', rankedIds)
+                : Promise.resolve({ data: [], error: null }),
+            rankedIds.length
+                ? supabase.from('division_flairs').select('user_id, team_name').eq('division_id', scope.division.id).in('user_id', rankedIds)
+                : Promise.resolve({ data: [], error: null }),
+        ]);
+        if (namesRes.error) throw namesRes.error;
+        if (flairsRes.error) throw flairsRes.error;
+        const nicknameById = new Map((namesRes.data ?? []).map((n: any) => [n.id, n.nickname]));
         const fantasyUsers = (ranked ?? []).map((r: any) => ({ id: r.user_id, nickname: nicknameById.get(r.user_id), points: r.points }));
-        const flairByUser = new Map((flairs ?? []).map((f: any) => [f.user_id, f.team_name]));
+        const flairByUser = new Map((flairsRes.data ?? []).map((f: any) => [f.user_id, f.team_name]));
 
         const fantasyTop = fantasyUsers?.map((user: any) => ({
             id: user.id,
