@@ -1,0 +1,60 @@
+{
+  "head": "967d533bd716b3526166ed0eb3a9d947df16ace2",
+  "tree": "b9074b5563841a5a7baae69508973c3635de83f0",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-26T12:11:19.261Z",
+  "groups": [
+    {
+      "name": "api-services",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "api",
+          "cmd": "pnpm exec tsc --noEmit",
+          "exit": 0,
+          "ms": 1614
+        },
+        {
+          "cwd": "api",
+          "cmd": "pnpm exec vitest run",
+          "exit": 0,
+          "ms": 21253
+        }
+      ]
+    },
+    {
+      "name": "config",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run tests/config",
+          "exit": 0,
+          "ms": 2068
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run src/lib",
+          "exit": 0,
+          "ms": 1336
+        },
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec tsc --noEmit",
+          "exit": 0,
+          "ms": 1235
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "api-services",
+    "config"
+  ],
+  "commandChecks": {},
+  "id": "SL-030",
+  "base": "f6bc8cffafb19c8e39fef7c5d4c9eb98d9766cce"
+}
