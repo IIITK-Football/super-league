@@ -1,7 +1,7 @@
 import { Navigate, Outlet, Route, RouterProvider, createBrowserRouter, createRoutesFromElements, useLocation, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LeagueProvider } from './context/LeagueContext';
-import { ConfirmProvider } from './components/ui';
+import { ConfirmProvider, Toaster } from './components/ui';
 import { AppShell } from './components/shell/AppShell';
 import { Loader } from './components/Loader';
 import { Login } from './pages/Login';
@@ -57,6 +57,7 @@ function ShellLayout() {
 
 // The developer-only page that renders every UI primitive in both themes (not in production builds).
 const DevUi = import.meta.env.DEV ? lazy(() => import('./pages/DevUi')) : null;
+const UiGallery = import.meta.env.DEV ? lazy(() => import('./pages/UiGallery')) : null;
 
 // A division in the address (/<division>/matches and so on) sets the division the page reads. It renders nothing for
 // the one render before the division is set, so a page never fetches another division's data.
@@ -104,6 +105,7 @@ export const routes = createRoutesFromElements(
     {/* Public App Routes */}
     <Route path="/" element={<LeagueLanding />} />
     {DevUi && <Route path="/dev/ui" element={<Suspense fallback={null}><DevUi /></Suspense>} />}
+    {UiGallery && <Route path="/ui-gallery" element={<Suspense fallback={null}><UiGallery /></Suspense>} />}
 
     {/* Every page below shares one app shell. */}
     <Route element={<ShellLayout />}>
@@ -150,6 +152,7 @@ function App() {
       <LeagueProvider>
         <ConfirmProvider>
           <RouterProvider router={router} />
+          <Toaster />
         </ConfirmProvider>
       </LeagueProvider>
     </AuthProvider>
