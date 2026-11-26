@@ -125,10 +125,13 @@ async function removeFixtures() {
 }
 
 const type = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
-const statusText = async (re) => waitFor(() => expect(screen.getByRole('status').textContent).toMatch(re), { timeout: 15000 });
+// The open sheet repeats the page's notices, so look at every status region.
+const statusText = async (re) => waitFor(() => expect(screen.getAllByRole('status').map((n) => n.textContent).join(' ')).toMatch(re), { timeout: 15000 });
 const option = (name) => waitFor(() => expect(screen.getByRole('option', { name })).toBeTruthy(), { timeout: 15000 });
 
 // The new player's account comes first: searched by email and chosen in the form.
+// The creator lives in the "Add player" sheet, so open it first. The team header button comes before the empty-state one.
+const openAddPlayer = () => fireEvent.click(screen.getAllByRole('button', { name: 'Add player' })[0]);
 async function chooseNewAccount(email) {
   type('New player email search', email);
   const list = await screen.findByRole('list', { name: 'New player matches' }, { timeout: 15000 });
@@ -183,7 +186,8 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
 
     // Create a player on Alpha's roster for Ada's verified account.
     const adaAccount = await verifiedAccount('ada');
-    const form = screen.getByRole('form', { name: 'New player' });
+    openAddPlayer();
+    const form = await screen.findByRole('form', { name: 'New player' }, { timeout: 15000 });
     await chooseNewAccount(adaAccount.email);
     type('New first name', `${tag}Ada`);
     type('New last name', 'Striker');
@@ -207,7 +211,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(must(await admin.from('roster_memberships').select('jersey_number').eq('id', ada.roster_memberships[0].id).single()).jersey_number).toBe(10);
 
     // Add last season's player: the same identity now has a roster place in two seasons.
-    fireEvent.click(screen.getByRole('button', { name: 'Add player' }));
+    openAddPlayer();
     type('Search players', `${tag}Vera`); // searched as you type, through search_players
     const list = await screen.findByRole('list', { name: 'Matching players' }, { timeout: 15000 });
     expect(within(list).getByText(/Latest: .*· #/)).toBeTruthy(); // the earlier season's roster place tells them apart
@@ -249,6 +253,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     // Give Delta a player who never plays, then delete them for good (delete_unplayed_player).
     type('Team', delta.team_entries[0].id);
     await screen.findByText(/no players on this roster yet/i, {}, { timeout: 15000 });
+    openAddPlayer();
     await chooseNewAccount((await verifiedAccount('temp')).email);
     type('New first name', `${tag}Temp`);
     type('New last name', 'Trialist');
@@ -259,7 +264,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Temp Trialist$/ }));
     fireEvent.click(screen.getByRole('button', { name: /delete player/i }));
     await statusText(/Temp Trialist deleted/);
-    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/Delete .*Temp Trialist for good/));
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringMatching(/Delete .*Temp Trialist for good/) }));
     expect(must(await admin.from('players').select('id').eq('id', temp.id))).toEqual([]);
     expect(must(await admin.from('roster_memberships').select('id').eq('player_id', temp.id))).toEqual([]);
   }, 120000);
@@ -270,6 +275,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     await openTeam('Alpha');
     // No account is offered to a normal user, and the creator itself refuses them.
     const spare = await verifiedAccount('refused');
+    openAddPlayer();
     type('New player email search', spare.email);
     await screen.findByText(/No verified account matches/, {}, { timeout: 15000 });
     expect(screen.queryByLabelText('New first name')).toBeNull();
