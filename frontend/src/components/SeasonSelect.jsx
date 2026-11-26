@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
 // Season picker for a division page. Shown only when the division has more than one available season.
 export function SeasonSelect({ seasons, value, onChange }) {
   if (!seasons || seasons.length < 2) return null;

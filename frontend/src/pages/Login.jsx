@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

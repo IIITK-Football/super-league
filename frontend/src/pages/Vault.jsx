@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
