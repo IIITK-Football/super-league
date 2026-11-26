@@ -35,12 +35,12 @@ export function EventTimeline({ events, state, match, playerName, busyId, onEdit
             const who = ev.player_id ? playerName(ev.player_id) : isGoal ? 'Unknown scorer' : 'Unknown player';
             return (
               <li key={ev.id} data-testid="match-event" className={cn('flex items-center gap-3 px-3 py-2.5', !home && 'flex-row-reverse text-right')}>
-                <span className="w-12 shrink-0 text-center font-display text-lg tabular-nums text-ink">{recordedMinute(ev)}′</span>
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink/[0.06] text-ink"><KindIcon kind={ev.kind} /></span>
+                <span className="w-11 shrink-0 text-center font-display text-lg tabular-nums text-ink">{recordedMinute(ev)}′</span>
+                <span className="hidden size-9 shrink-0 items-center justify-center rounded-full bg-ink/[0.06] text-ink sm:flex"><KindIcon kind={ev.kind} /></span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-black uppercase tracking-tight text-ink">{who}</div>
-                  <div className="eyebrow truncate">
-                    {KIND_LABEL[ev.kind]}{ev.assist_player_id ? ` · Assist ${playerName(ev.assist_player_id)}` : ''}
+                  <div className="break-words text-sm font-black uppercase leading-tight tracking-tight text-ink">{who}</div>
+                  <div className={cn('eyebrow mt-1 flex flex-wrap items-center gap-x-1.5', !home && 'justify-end')}>
+                    <span className="sm:hidden"><KindIcon kind={ev.kind} size={12} /></span>{KIND_LABEL[ev.kind]}{ev.assist_player_id ? ` · Assist ${playerName(ev.assist_player_id)}` : ''}
                   </div>
                 </div>
                 <div className={cn('flex shrink-0 items-center', !home && 'flex-row-reverse')}>

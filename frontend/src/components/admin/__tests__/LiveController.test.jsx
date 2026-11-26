@@ -68,7 +68,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 async function openMatch() {
   renderLive();
-  fireEvent.click(await screen.findByText(/Alpha vs Beta/));
+  fireEvent.click(await screen.findByRole('button', { name: /^Alpha vs Beta/ }));
   await screen.findByText(/Match events \(/);
 }
 
@@ -89,7 +89,7 @@ describe('LiveController on match events', () => {
     cleanup();
     db.eventsError = 'permission denied';
     renderLive();
-    fireEvent.click(await screen.findByText(/Alpha vs Beta/));
+    fireEvent.click(await screen.findByRole('button', { name: /^Alpha vs Beta/ }));
     expect(await screen.findByText(/Events could not be loaded \(permission denied\)/)).toBeTruthy();
     db.eventsError = null;
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
@@ -261,7 +261,7 @@ describe('LiveController on match events', () => {
       fireEvent.click(within(warning).getByRole('button', { name: /Stop at 90/ }));
       await waitFor(() => expect(db.requests).toHaveLength(1));
       expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'update_time', minute: "90'", timer_start_time: null, timer_calibration: 90 });
-      await waitFor(() => expect(screen.queryByText(/left running/)).toBeNull());
+      await waitFor(() => expect(screen.queryByText(/The clock was left running/)).toBeNull());
     } finally { delete match.timer_start_time; delete match.timer_calibration; }
   });
 

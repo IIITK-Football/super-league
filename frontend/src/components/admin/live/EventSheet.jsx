@@ -1,5 +1,5 @@
 import { Button, Combobox, Crest, Field, NumberField, SegmentedControl, Sheet } from '../../ui';
-import { KIND_LABEL, KindIcon } from './EventTimeline';
+import { KIND_LABEL } from './EventTimeline';
 import { MAX_MINUTE } from './clock';
 
 const isCard = (kind) => kind === 'yellow' || kind === 'red';
@@ -18,7 +18,7 @@ export function EventSheet({ open, onClose, form, setForm, match, crest, players
   const squad = players.filter((p) => (p.team_id || p.teams?.id) === form.team_id).map(playerOption);
   const side = (id, name, label) => ({ value: id, label, icon: <Crest size="sm" name={name} src={crest(id)?.logo_url} color={crest(id)?.team_color} /> });
   const kinds = (editing ? ['goal', 'own_goal'] : ['goal', 'own_goal', 'yellow', 'red'])
-    .map((k) => ({ value: k, label: KIND_LABEL[k].replace(' card', ''), icon: <KindIcon kind={k} size={16} /> }));
+    .map((k) => ({ value: k, label: KIND_LABEL[k].replace(' card', '') }));
   const title = editing ? 'Correct goal' : `Add ${KIND_LABEL[form.kind].toLowerCase()}`;
   const ready = form.team_id && (!card || form.player_id);
 
@@ -27,6 +27,7 @@ export function EventSheet({ open, onClose, form, setForm, match, crest, players
       <form onSubmit={onSubmit} className="space-y-5 pb-[env(safe-area-inset-bottom)]">
         <SegmentedControl
           aria-label="Event"
+          className="[&_button]:min-w-0 [&_button]:whitespace-nowrap [&_button]:px-1"
           options={kinds}
           value={form.kind}
           onChange={(kind) => setForm((f) => ({ ...f, kind, assist_id: kind === 'goal' ? f.assist_id : '' }))}
@@ -38,7 +39,7 @@ export function EventSheet({ open, onClose, form, setForm, match, crest, players
               options={[side(match.home_team_id, match.home_team_name, `${match.home_team_name} (Home)`), side(match.away_team_id, match.away_team_name, `${match.away_team_name} (Away)`)]}
               value={form.team_id || undefined}
               onChange={(team_id) => setForm((f) => ({ ...f, team_id, player_id: '', assist_id: '' }))}
-              className="[&_button]:min-h-12 [&_button_span:last-child]:truncate"
+              className="[&_button]:min-h-12 [&_button]:min-w-0 [&_button]:px-2 [&_button_span:last-child]:truncate"
             />
           )}
         </Field>

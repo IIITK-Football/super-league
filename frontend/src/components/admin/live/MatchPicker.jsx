@@ -1,7 +1,7 @@
-import { Combobox, Crest, EmptyState, Field, Scoreline } from '../../ui';
+import { Combobox, Crest, EmptyState, Field } from '../../ui';
 import { cn } from '../../../utils/cn';
 import { formatKickoff } from '../adminFormat';
-import { clockMinute, inFirstHalf, minuteLabel } from './clock';
+import { RUNAWAY_MINUTE, clockMinute, inFirstHalf, minuteLabel } from './clock';
 
 const NEXT_FIXTURES = 6;
 const vs = (m) => `${m.home_team_name} vs ${m.away_team_name}`;
@@ -20,6 +20,7 @@ function rowMeta(m) {
   if (m.status === 'live') {
     if (m.minute === 'HT') return 'Half time';
     const minute = clockMinute(m);
+    if (m.timer_start_time && minute > RUNAWAY_MINUTE) return 'Live · clock left running';
     return `Live${minute !== null ? ` · ${minuteLabel(minute, inFirstHalf(m))}′` : ''}`;
   }
   return [formatKickoff(m.date), m.venue].filter(Boolean).join(' · ') || 'No kick-off time';
@@ -32,16 +33,18 @@ function MatchRow({ match, crest, current, onPick, children }) {
       <button
         type="button"
         aria-pressed={current}
+        aria-label={`${vs(match)}, ${rowMeta(match)}`}
         onClick={() => onPick(match)}
-        className="flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-1.5 rounded-ctl text-left outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+        className="flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-2 rounded-ctl py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
       >
         <span className={cn('eyebrow flex items-center gap-2', live && 'text-live')}>{live && <LiveDot />}{rowMeta(match)}</span>
-        <span className="flex min-w-0 items-center gap-2">
-          <Crest size="sm" name={match.home_team_name} src={crest(match.home_team_id)?.logo_url} color={crest(match.home_team_id)?.team_color} />
-          <span className="min-w-0 flex-1 truncate text-sm font-black uppercase tracking-tight text-ink">{vs(match)}</span>
-          {match.status !== 'scheduled' && <Scoreline home={match.home_score} away={match.away_score} size="sm" />}
-          <Crest size="sm" name={match.away_team_name} src={crest(match.away_team_id)?.logo_url} color={crest(match.away_team_id)?.team_color} />
-        </span>
+        {[['home', match.home_team_id, match.home_team_name, match.home_score], ['away', match.away_team_id, match.away_team_name, match.away_score]].map(([side, id, name, score]) => (
+          <span key={side} className="flex min-w-0 items-center gap-2.5">
+            <Crest size="sm" name={name} src={crest(id)?.logo_url} color={crest(id)?.team_color} />
+            <span className="min-w-0 flex-1 truncate text-sm font-black uppercase tracking-tight text-ink">{name}</span>
+            {match.status !== 'scheduled' && <span className="font-display text-lg tabular-nums text-ink">{score ?? '-'}</span>}
+          </span>
+        ))}
       </button>
       {children}
     </li>

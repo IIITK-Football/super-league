@@ -327,7 +327,7 @@ export default function LiveController() {
         ) : (
           <div className="space-y-6">
             <div className="flex items-center justify-between gap-3">
-              <Button variant="quiet" size="sm" onClick={() => setSelectedMatch(null)} className="-ml-2 px-2 lg:hidden"><ChevronLeft size={18} aria-hidden="true" />All matches</Button>
+              <Button variant="quiet" size="sm" onClick={() => setSelectedMatch(null)} className="-ml-2 shrink-0 whitespace-nowrap px-2 lg:hidden"><ChevronLeft size={18} aria-hidden="true" />All matches</Button>
               <p className="eyebrow min-w-0 truncate lg:ml-0">{[selectedMatch.division_name, selectedMatch.season_name, selectedMatch.venue].filter(Boolean).join(' · ')}</p>
             </div>
 
@@ -370,7 +370,7 @@ export default function LiveController() {
             ) : (
               <Card className="space-y-4">
                 <div className="flex items-end justify-between gap-3">
-                  <h3 className="eyebrow">Match clock</h3>
+                  <h3 className="eyebrow whitespace-nowrap">Match clock</h3>
                   <span className={cn('chrome font-display text-5xl font-black leading-none tabular-nums', runaway && 'text-live')}>
                     {stopped ? selectedMatch.minute : `${minuteLabel(currentMinute, firstHalf)}′`}
                   </span>
