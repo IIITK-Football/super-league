@@ -13,12 +13,15 @@ const STATUS = {
 // Team objects come as { name, logo_url }; some API shapes wrap them in an array.
 const team = (value) => (Array.isArray(value) ? value[0] : value) ?? {};
 
+// Pills on the featured block take the block's ink so they read on it (the tone colours would not).
+const FEATURED_PILL = 'bg-blkink/15 text-blkink';
+
 function Side({ name, logo, home, featured }) {
   return (
     <div className={cn('flex min-w-0 flex-1 flex-col items-center gap-2 text-center sm:flex-row sm:gap-3',
       home ? 'sm:flex-row-reverse sm:text-right' : 'sm:text-left')}>
       <Crest name={name} src={logo} size="md" />
-      <span className={cn('line-clamp-2 min-w-0 break-words font-semibold leading-tight sm:text-base', featured ? 'text-base text-blkink sm:text-xl' : 'text-sm text-ink')}>{name}</span>
+      <span className={cn('line-clamp-2 min-w-0 break-words font-semibold leading-tight sm:text-base', featured ? 'text-base text-blkink sm:text-2xl' : 'text-sm text-ink')}>{name}</span>
     </div>
   );
 }
@@ -31,6 +34,7 @@ export function MatchStrip({ match, className, featured = false }) {
   const away = team(match.away);
   const live = isLive(match);
   const status = STATUS[match.status] ?? { label: match.status || 'Unknown', tone: 'neutral' };
+  const statusLabel = live && match.minute != null ? `Live ${match.minute}'` : status.label;
   const when = match.date ? new Date(match.date) : null;
   const detail = [when && !isUpcoming(match) && when.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
     match.venue].filter(Boolean).join(' · ');
@@ -45,14 +49,14 @@ export function MatchStrip({ match, className, featured = false }) {
         <Side name={home.name || 'To be confirmed'} logo={home.logo_url} home featured={featured} />
         <div className="shrink-0 text-center">
           {isUpcoming(match)
-            ? <span className={cn('font-display font-bold tabular-nums leading-none', featured ? 'text-5xl sm:text-7xl' : 'text-3xl text-ink')}>{timeLabel(when) || '–'}</span>
+            ? <span className={cn('font-display font-bold tabular-nums leading-none', featured ? 'text-6xl text-blkink sm:text-8xl' : 'text-3xl text-ink')}>{timeLabel(when) || '–'}</span>
             : <Scoreline home={match.home_score ?? null} away={match.away_score ?? null} live={live} size={featured ? 'lg' : 'md'} className={featured ? 'text-blkink' : undefined} />}
         </div>
         <Side name={away.name || 'To be confirmed'} logo={away.logo_url} featured={featured} />
       </div>
       <div className={cn('mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm', featured ? 'text-blkink' : 'text-mut')}>
-        <Pill tone={status.tone}>{status.label}</Pill>
-        {detail && <span>{detail}</span>}
+        <Pill tone={status.tone} className={featured ? FEATURED_PILL : undefined}>{statusLabel}</Pill>
+        {detail && <span className={featured ? 'text-blkink/80' : undefined}>{detail}</span>}
       </div>
     </Link>
   );
