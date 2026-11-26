@@ -24,6 +24,8 @@ beforeEach(() => {
   rpc.mockReset();
   globalThis.fetch = vi.fn();
   URL.createObjectURL = vi.fn(() => 'blob:local');
+  // Pictures are measured before they are shown: a 500 x 500 image loads at once.
+  vi.stubGlobal('Image', class { set src(v) { this._src = v; setTimeout(() => { this.naturalWidth = 500; this.naturalHeight = 500; this.onload?.(); }, 0); } });
 });
 afterEach(() => cleanup());
 
@@ -67,7 +69,7 @@ describe('your player card', () => {
     fireEvent.change(screen.getByLabelText('Preferred foot'), { target: { value: 'Left' } });
     expect(card().textContent).toMatch(/Left/);
     fireEvent.change(screen.getByLabelText('Portrait file'), { target: { files: [png()] } });
-    expect(within(card()).getByAltText('Ada Striker portrait').getAttribute('src')).toBe('blob:local');
+    await waitFor(() => expect(within(card()).getByAltText('Ada Striker portrait').getAttribute('src')).toBe('blob:local'));
     fireEvent.click(screen.getByRole('button', { name: /save card/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/saved/));
     const [url, init] = fetch.mock.calls[0];
@@ -84,6 +86,7 @@ describe('your player card', () => {
     render(<MyPlayerCard />);
     await waitFor(() => expect(screen.getByLabelText('Portrait file')).toBeTruthy());
     fireEvent.change(screen.getByLabelText('Portrait file'), { target: { files: [png()] } });
+    await waitFor(() => expect(within(card()).getByAltText('Ada Striker portrait').getAttribute('src')).toBe('blob:local'));
     fireEvent.click(screen.getByRole('button', { name: /save card/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/did not upload: Choose a 500 x 500 PNG image\. Nothing was changed/));
     expect(rpc).not.toHaveBeenCalledWith('update_my_player', expect.anything());

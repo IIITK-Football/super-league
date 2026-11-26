@@ -23,6 +23,16 @@ async function uploadOwnPortrait(file) {
   return result.imageUrl;
 }
 
+// The card promises a 500 x 500 PNG, so the picture itself is measured, not only its type.
+function pictureSize(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 export default function MyPlayerCard() {
   const [state, setState] = useState({ status: 'loading', player: null, error: '' });
   const [foot, setFoot] = useState('');
@@ -60,9 +70,14 @@ export default function MyPlayerCard() {
   if (foot) bio.preferredFoot = foot; else delete bio.preferredFoot;
   const preview = { ...player, image_url: removePortrait ? null : player.image_url, attributes: { ...(player.attributes || {}), bio } };
 
-  const choose = (file) => {
+  const choose = async (file) => {
     if (!file) return;
     if (file.type && file.type !== 'image/png') { setError('Choose a PNG image (500 × 500).'); return; }
+    const size = await pictureSize(file);
+    if (size?.w !== 500 || size?.h !== 500) {
+      setError(`Choose a 500 × 500 PNG. This picture is ${size ? `${size.w} × ${size.h}` : 'not a readable image'}.`);
+      return;
+    }
     setError(''); setMessage(''); setRemovePortrait(false);
     setPortrait({ file, url: URL.createObjectURL(file), status: 'local' });
   };
@@ -102,7 +117,7 @@ export default function MyPlayerCard() {
             <option value="">Not set</option>{FEET.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
         </label>
-        <label className="flex cursor-pointer items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/5">
+        <label className="flex cursor-pointer items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/5 focus-within:ring-2 focus-within:ring-white/70">
           <ImagePlus size={13} /> {portrait ? 'Choose another picture' : 'New portrait (500 × 500 PNG)'}
           <input type="file" accept="image/png" className="sr-only" aria-label="Portrait file" onChange={(e) => { choose(e.target.files?.[0]); e.target.value = ''; }} />
         </label>
