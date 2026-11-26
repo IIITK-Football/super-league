@@ -14,10 +14,10 @@ const players = [
   { id: 'p3', first_name: 'Cy', last_name: 'Keeper', team_id: 't2' },
 ];
 
-const finished = { ...match, id: 'm2', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Gamma', away_team_name: 'Delta', home_score: 2, away_score: 2, status: 'completed', minute: 'FT' };
+const finished = { ...match, id: 'm2', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Gamma', away_team_name: 'Delta', home_score: 2, away_score: 2, status: 'completed', minute: 'FT', date: new Date().toISOString() };
 vi.mock('../../../hooks/useApi', () => ({
   useApi: (endpoint) => ({
-    data: endpoint.startsWith('/players') ? { data: players } : endpoint.includes('status=completed') ? { data: [finished] } : { data: [match] },
+    data: endpoint.startsWith('/players') ? { data: players } : endpoint.includes('status=completed') ? { data: [finished, { ...finished, id: 'm3', home_team_name: 'Old', away_team_name: 'Gone', date: new Date(Date.now() - 30 * 86400000).toISOString() }] } : { data: [match] },
     refetch: vi.fn(), loading: false,
   }),
 }));
@@ -72,7 +72,7 @@ describe('LiveController on match events', () => {
   it('shows the empty state and an error with retry', async () => {
     db.events = [];
     await openMatch();
-    expect(screen.getByText('No events recorded yet.')).toBeTruthy();
+    expect(screen.getByText('No events recorded yet')).toBeTruthy();
     cleanup();
     db.eventsError = 'permission denied';
     renderLive();
@@ -104,7 +104,7 @@ describe('LiveController on match events', () => {
   it('attributes the goal with the version the scorer saw, as one edit_event request', async () => {
     await openMatch();
     fireEvent.click(screen.getByRole('button', { name: 'Attribute' }));
-    expect(screen.getByText('Correct Goal')).toBeTruthy();
+    expect(screen.getByText('Correct goal')).toBeTruthy();
     expect(screen.getByDisplayValue('Alpha (Home)')).toBeTruthy(); // the goal's team is preselected
     fireEvent.change(screen.getByLabelText('Goalscorer'), { target: { value: 'p1' } });
     fireEvent.change(screen.getByLabelText('Minute'), { target: { value: '22' } });
@@ -155,11 +155,11 @@ describe('LiveController on match events', () => {
 
   it('adds a card with a player, as one add_event request', async () => {
     await openMatch();
-    fireEvent.click(screen.getByRole('button', { name: 'Add Card' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add card' }));
     fireEvent.change(screen.getByLabelText('Card team'), { target: { value: 't2' } });
     fireEvent.change(screen.getByLabelText('Carded player'), { target: { value: 'p3' } });
     fireEvent.change(screen.getByLabelText('Card minute'), { target: { value: '55' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Card' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm card' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
     expect(db.requests[0]).toMatchObject({ action: 'add_event', event: { kind: 'yellow', team_id: 't2', player_id: 'p3', minute: '55' } });
   });
@@ -173,7 +173,7 @@ describe('LiveController on match events', () => {
     await waitFor(() => expect(db.requests).toHaveLength(2));
     const started = Date.now();
     vi.spyOn(Date, 'now').mockReturnValue(started + 12 * 60000);
-    fireEvent.click(screen.getByRole('button', { name: 'Half Time' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Half time' }));
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Half time' }));
     await waitFor(() => expect(db.requests).toHaveLength(3));
     expect(db.requests[2]).toMatchObject({ action: 'update_time', minute: 'HT', timer_start_time: null, timer_calibration: 42 });
@@ -242,5 +242,13 @@ describe('LiveController on match events', () => {
     await openMatch();
     fireEvent.click(screen.getByRole('button', { name: 'Goal for Beta' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/not assigned to score/);
+  });
+});
+
+describe('LiveController finished matches', () => {
+  it('lists only matches that kicked off in the last 7 days', async () => {
+    renderLive();
+    expect(await screen.findByRole('button', { name: 'Correct Gamma vs Delta' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Correct Old vs Gone' })).toBeNull();
   });
 });

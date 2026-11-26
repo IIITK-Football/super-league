@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { API_BASE_URL } from '../../lib/api';
-import { Activity, Trophy, CheckCircle, CheckCircle2, X, Trash2 } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { DivisionSwitch } from './DivisionSwitch';
 import { useAuth } from '../../context/AuthContext';
-import { Button, ConfirmDialog, Field, useConfirm } from '../ui';
+import { Button, Card, ConfirmDialog, EmptyState, Field, Notice, Pill, Scoreline, Table, useConfirm } from '../ui';
+import { formatKickoff } from './adminFormat';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export default function LiveController() {
   const { hasRole } = useAuth();
@@ -16,9 +19,12 @@ export default function LiveController() {
   const { data: playersResp } = useApi(`/players?division=${division}`); // the selected division's current season roster 
   
   const matches = resp?.data || [];
-  // shortcut: the latest 10 finished matches of the season, not the last 7 days (the admin list has no match date), upgrade when it returns one.
+  // Finished matches kicked off in the last 7 days, latest first. Older results stay in Fixtures.
   const finishedAll = doneResp?.data || [];
-  const finished = finishedAll.slice(-10).reverse();
+  const weekAgo = Date.now() - WEEK_MS;
+  const finished = finishedAll
+    .filter((m) => m.date && new Date(m.date).getTime() >= weekAgo)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
   const [reopenTarget, setReopenTarget] = useState(null);
   const allPlayers = playersResp?.data || [];
 
@@ -158,7 +164,7 @@ export default function LiveController() {
     try {
       const r = await callLive(payload);
       if (r.ok) {
-        setNotice({ type: 'ok', text: r.message });
+        setNotice({ type: 'success', text: r.message });
         setCandidates(null);
         setShowGoalForm(false);
         setShowCardForm(false);
@@ -180,7 +186,7 @@ export default function LiveController() {
     setLoading(true);
     try {
       const r = await callLive({ action, ...extraData });
-      if (r.ok) { setNotice({ type: 'ok', text: r.message }); refetch(); refetchDone(); return true; }
+      if (r.ok) { setNotice({ type: 'success', text: r.message }); refetch(); refetchDone(); return true; }
       setNotice({ type: 'error', text: r.message || 'The action failed.' });
       return false;
     } catch (err) { setNotice({ type: 'error', text: 'Action failed. Check your connection.' }); return false; }
@@ -222,7 +228,7 @@ export default function LiveController() {
     const last = Math.max(0, ...(data || []).map((e) => Number(e.minute) || 0));
     const r = await callLive({ action: 'update_time', minute: `${last}'` });
     if (!r.ok) throw new Error(r.message || 'The match was not reopened.');
-    setNotice({ type: 'ok', text: 'Match reopened. It is live again.' });
+    setNotice({ type: 'success', text: 'Match reopened. It is live again.' });
     refetch();
     refetchDone();
   };
@@ -285,288 +291,300 @@ export default function LiveController() {
     return player ? `${player.first_name} ${player.last_name}` : 'Unknown Player';
   };
 
-  return (
-    <div className="p-6 space-y-8">
-      
-      <div className="flex justify-center mb-4">
-        <DivisionSwitch value={division} onChange={handleDivisionSwitch} />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {matches.length > 0 ? matches.map(m => (
-          <button 
-            key={m.id}
-            onClick={() => { setSelectedMatch(m); setShowGoalForm(false); }}
-            className={`p-4 rounded-xl border transition-all ${selectedMatch?.id === m.id ? 'border-white bg-white/10' : 'border-white/10 bg-black/40 hover:bg-white/5'}`}
-          >
-            <div className="flex justify-between text-xs uppercase font-black text-zinc-500 mb-2">
-              <span>{m.division_name} {m.season_name}</span>
-              <span className={m.status === 'live' ? 'text-red-500 animate-pulse' : ''}>{m.status}</span>
-            </div>
-            <div className="font-bold text-lg">{m.home_team_name} vs {m.away_team_name}</div>
-          </button>
-        )) : (
-          <div className="col-span-1 md:col-span-2 text-center py-12 border border-white/5 rounded-2xl bg-black/20">
-            <span className="text-zinc-500 font-bold uppercase tracking-widest text-sm">
-              {hasRole('dictator') ? 'No active or scheduled matches found' : 'No matches assigned to you in this division'}
-            </span>
+  const scoreboardTeam = (side) => {
+    const isHome = side === 'home';
+    const name = isHome ? selectedMatch.home_team_name : selectedMatch.away_team_name;
+    const score = isHome ? selectedMatch.home_score : selectedMatch.away_score;
+    const teamId = isHome ? selectedMatch.home_team_id : selectedMatch.away_team_id;
+    return (
+      <div className="min-w-0 text-center">
+        <div className="truncate text-sm font-semibold">{name}</div>
+        <div className="font-display text-6xl font-bold leading-none tabular-nums sm:text-7xl" aria-label={`${isHome ? 'Home' : 'Away'} score`}>{score}</div>
+        {!finishedMatch && (
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <Button size="lg" variant="secondary" disabled={busyId !== ''} onClick={() => quickGoal(teamId)} aria-label={`Goal for ${name}`} className="w-full">Goal</Button>
+            <Button size="sm" variant="quiet" disabled={busyId !== ''} onClick={() => scoreStep(side, -1)} aria-label={`Minus one ${side}`}>Undo</Button>
           </div>
         )}
       </div>
+    );
+  };
 
-      <section aria-labelledby="finished-heading" className="space-y-3">
-        <h3 id="finished-heading" className="text-sm font-black uppercase tracking-widest text-zinc-400">Finished matches</h3>
-        {finished.length > 0 ? finished.map(m => (
-          <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 p-3">
-            <span className="font-bold">{m.home_team_name} {m.home_score} to {m.away_score} {m.away_team_name}</span>
-            <div className="flex gap-1">
-              <button type="button" aria-label={`Correct ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => { setSelectedMatch(m); setShowGoalForm(false); }} className="min-h-11 px-3 text-xs font-black uppercase tracking-widest text-zinc-300 hover:text-white">Correct</button>
-              <button type="button" aria-label={`Reopen ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => { setSelectedMatch(m); setReopenTarget(m); }} className="min-h-11 px-3 text-xs font-black uppercase tracking-widest text-zinc-300 hover:text-white">Reopen</button>
-            </div>
-          </div>
-        )) : <p className="text-sm text-zinc-500">No finished matches yet.</p>}
-        {finishedAll.length > finished.length && <p className="text-xs text-zinc-500">Showing the latest {finished.length} of {finishedAll.length} finished matches.</p>}
-      </section>
+  return (
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+      <div className="space-y-8">
+        <DivisionSwitch value={division} onChange={handleDivisionSwitch} />
 
-      {selectedMatch && (
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 animate-in fade-in slide-in-from-bottom-4">
-          <h3 className="text-center text-sm font-black uppercase tracking-widest text-zinc-500 mb-6">Control Center</h3>
-          
-          <div className="mb-8 grid grid-cols-[1fr_auto_1fr] items-start gap-3 rounded-card bg-blk p-5 text-blkink">
-            <div className="min-w-0 text-center">
-              <div className="truncate text-sm font-semibold">{selectedMatch.home_team_name}</div>
-              <div className="font-display text-7xl font-bold leading-none tabular-nums sm:text-8xl" aria-label="Home score">{selectedMatch.home_score}</div>
-              {!finishedMatch && (
-                <div className="mt-4 flex flex-col items-center gap-2">
-                <Button size="lg" variant="secondary" disabled={busyId !== ''} onClick={() => quickGoal(selectedMatch.home_team_id)} aria-label={`Goal for ${selectedMatch.home_team_name}`} className="w-full">Goal</Button>
-                <Button size="sm" variant="quiet" disabled={busyId !== ''} onClick={() => scoreStep('home', -1)} aria-label="Minus one home">Undo</Button>
-              </div>
-              )}
-            </div>
-            <div className="pt-3 font-display text-2xl font-bold">{finishedMatch ? 'FT' : 'v'}</div>
-            <div className="min-w-0 text-center">
-              <div className="truncate text-sm font-semibold">{selectedMatch.away_team_name}</div>
-              <div className="font-display text-7xl font-bold leading-none tabular-nums sm:text-8xl" aria-label="Away score">{selectedMatch.away_score}</div>
-              {!finishedMatch && (
-                <div className="mt-4 flex flex-col items-center gap-2">
-                <Button size="lg" variant="secondary" disabled={busyId !== ''} onClick={() => quickGoal(selectedMatch.away_team_id)} aria-label={`Goal for ${selectedMatch.away_team_name}`} className="w-full">Goal</Button>
-                <Button size="sm" variant="quiet" disabled={busyId !== ''} onClick={() => scoreStep('away', -1)} aria-label="Minus one away">Undo</Button>
-              </div>
-              )}
-            </div>
-          </div>
-
-          {finishedMatch ? (
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/50 p-4">
-              <p className="text-sm text-zinc-300">Finished. Correct the events below, or reopen the match to keep scoring.</p>
-              <button type="button" onClick={() => setReopenTarget(selectedMatch)} className="min-h-11 rounded-lg border border-white/20 px-4 text-xs font-black uppercase tracking-widest hover:bg-white/10">Reopen match</button>
-            </div>
-          ) : (
-          <div className="bg-black/50 p-6 rounded-2xl border border-white/10 mb-8 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-white/5 pb-4">
-              <h4 className="font-black uppercase tracking-widest text-sm text-zinc-400">Match Clock</h4>
-              <div className="flex items-center gap-3">
-                <span className={`text-4xl font-black tabular-nums ${timerRunning ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-                  {displayTime || `${liveMinute}'`}
-                </span>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {!timerRunning ? (
-                <button type="button" disabled={clockBusy} onClick={() => saveClock({ minute: `${calibration}'`, timer_start_time: new Date().toISOString(), timer_calibration: calibration })} className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors disabled:opacity-40">
-                  ▶ Start
-                </button>
-              ) : (
-                <button type="button" disabled={clockBusy} onClick={() => {
-                  // Pause stores the minutes played and stops the clock.
-                  const startTime = new Date(selectedMatch.timer_start_time).getTime();
-                  const newCalib = Math.floor((Date.now() - startTime) / 60000) + (selectedMatch.timer_calibration || 0);
-                  saveClock({ minute: `${newCalib}'`, timer_start_time: null, timer_calibration: newCalib });
-                }} className="bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30 font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors disabled:opacity-40">
-                  ⏸ Pause
-                </button>
-              )}
-              <button type="button" disabled={clockBusy} onClick={askHalfTime} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border disabled:opacity-40 ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
-                Half Time
-              </button>
-              <div className="flex border border-white/10 rounded-xl overflow-hidden bg-black/60">
-                <input
-                  type="number"
-                  aria-label="Clock minute"
-                  value={calibration}
-                  onChange={e => setCalibration(parseInt(e.target.value) || 0)}
-                  className="w-full bg-transparent text-white text-center font-bold outline-none"
-                  placeholder="Calib"
-                />
-                <button type="button" disabled={clockBusy} onClick={() => saveClock(timerRunning ? { timer_calibration: calibration } : { minute: `${calibration}'`, timer_calibration: calibration })} className="bg-white/20 px-4 hover:bg-white/30 text-xs font-bold uppercase tracking-widest transition-colors disabled:opacity-40">Set</button>
-              </div>
-            </div>
-          </div>
-          )}
-
-          <ConfirmDialog
-            open={Boolean(voidTarget)}
-            onOpenChange={(open) => { if (!open) setVoidTarget(null); }}
-            title="Remove this event?"
-            description={voidTarget ? `${voidTarget.minute ?? '?'}' ${eventLabel(voidTarget)}. The event is kept in the history with your reason.` : ''}
-            confirmLabel="Remove event"
-            tone="danger"
-            onConfirm={confirmVoid}
-          >
-            <Field label="Reason" value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="For example, wrong player" />
-          </ConfirmDialog>
-
-          {notice.text && <p role={notice.type === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-lg border p-3 text-sm ${notice.type === 'error' ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>{notice.text}</p>}
-          {unattributedCount > 0 && <p role="note" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">{unattributedCount} goal{unattributedCount === 1 ? '' : 's'} unattributed: choose Attribute on the goal to add its scorer. They count toward the score and toward no player.</p>}
-          {candidates && <div role="group" aria-label="Choose the goal to correct" className="mb-4 space-y-2 rounded-xl border border-white/10 bg-black/50 p-4">
-            <p className="text-xs font-black uppercase tracking-widest text-zinc-400">Which goal should be removed?</p>
-            {candidates.map((c) => <div key={c.id} className="flex items-center justify-between rounded-lg bg-white/5 p-3 text-sm">
-              <span>{c.minute ?? '?'}' · {eventLabel(c)}</span>
-              <button type="button" onClick={() => voidEvent(c)} className="text-xs font-black uppercase tracking-widest text-red-400">Void this goal</button>
-            </div>)}
-            <button type="button" onClick={() => setCandidates(null)} className="text-xs text-zinc-500 underline">Cancel</button>
-          </div>}
-
-          {showCardForm && <form onSubmit={submitCard} className="bg-black/50 border border-white/10 rounded-xl p-6 mb-6 space-y-4">
-            <div className="flex justify-between items-center"><h4 className="font-black uppercase tracking-widest text-sm">Add Card</h4><button type="button" onClick={() => setShowCardForm(false)} className="text-zinc-500 hover:text-white"><X size={18}/></button></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <select aria-label="Card colour" value={cardForm.kind} onChange={e => setCardForm({ ...cardForm, kind: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white"><option value="yellow" className="bg-zinc-900">Yellow card</option><option value="red" className="bg-zinc-900">Red card</option></select>
-              <input type="text" aria-label="Card minute" placeholder="Minute" value={cardForm.minute} onChange={e => setCardForm({ ...cardForm, minute: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white" />
-              <select aria-label="Card team" required value={cardForm.team_id} onChange={e => setCardForm({ ...cardForm, team_id: e.target.value, player_id: '' })} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white"><option value="" className="bg-zinc-900">Select team...</option><option value={selectedMatch.home_team_id} className="bg-zinc-900">{selectedMatch.home_team_name} (Home)</option><option value={selectedMatch.away_team_id} className="bg-zinc-900">{selectedMatch.away_team_name} (Away)</option></select>
-              <select aria-label="Carded player" required disabled={!cardForm.team_id} value={cardForm.player_id} onChange={e => setCardForm({ ...cardForm, player_id: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white"><option value="" className="bg-zinc-900">Select player...</option>{allPlayers.filter(p => (p.team_id || p.teams?.id) === cardForm.team_id).map(p => <option key={p.id} value={p.id} className="bg-zinc-900">{p.first_name} {p.last_name}</option>)}</select>
-            </div>
-            <button type="submit" disabled={busyId !== ''} className="w-full bg-white text-black font-black uppercase tracking-widest py-3 rounded-lg disabled:opacity-40">{busyId !== '' ? 'Saving...' : 'Confirm Card'}</button>
-          </form>}
-
-          {showGoalForm ? (
-            <form onSubmit={submitGoal} className="bg-black/50 border border-white/10 rounded-xl p-6 mb-6 space-y-4">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="font-black uppercase tracking-widest text-sm">{goalForm.editId ? 'Correct Goal' : 'Register Goal'}</h4>
-                <button type="button" onClick={() => setShowGoalForm(false)} className="text-zinc-500 hover:text-white"><X size={18}/></button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-[10px] font-bold uppercase tracking-widest mb-2 ${goalForm.is_own_goal ? 'text-red-400' : 'text-zinc-500'}`}>
-                    {goalForm.is_own_goal ? "Select Offending Team (Own Goal)" : "Select Scoring Team"}
-                  </label>
-                  <select required value={goalForm.team_id} onChange={e => setGoalForm({...goalForm, team_id: e.target.value, player_id: '', assist_id: ''})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white">
-                    <option value="" disabled className="bg-zinc-900 text-white">Select Team...</option>
-                    <option value={selectedMatch.home_team_id} className="bg-zinc-900 text-white">{selectedMatch.home_team_name} (Home)</option>
-                    <option value={selectedMatch.away_team_id} className="bg-zinc-900 text-white">{selectedMatch.away_team_name} (Away)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Minute</label>
-                  <input type="text" placeholder="e.g. 45" aria-label="Minute" value={goalForm.minute} onChange={e => setGoalForm({...goalForm, minute: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Goal Type</label>
-                  <select value={goalForm.is_own_goal ? 'own_goal' : 'regular'} onChange={e => { const isOwn = e.target.value === 'own_goal'; setGoalForm(prev => ({ ...prev, is_own_goal: isOwn, assist_id: isOwn ? '' : prev.assist_id })); }} className={`w-full bg-white/5 border rounded-lg p-3 outline-none text-sm font-bold ${goalForm.is_own_goal ? 'border-red-500/50 text-red-400' : 'border-white/10 text-white'}`}>
-                    <option value="regular" className="bg-zinc-900 text-white">⚽ Regular Goal</option>
-                    <option value="own_goal" className="bg-zinc-900 text-red-400">🔴 Own Goal</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={`block text-[10px] font-bold uppercase tracking-widest mb-2 ${goalForm.is_own_goal ? 'text-red-400' : 'text-zinc-500'}`}>
-                    {goalForm.is_own_goal ? "Player Who Scored Own Goal" : "Goalscorer"}
-                  </label>
-                  <select aria-label="Goalscorer" disabled={!goalForm.team_id} value={goalForm.player_id} onChange={e => setGoalForm({...goalForm, player_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white disabled:opacity-50">
-                    <option value="" className="bg-zinc-900 text-white">Scorer not known yet</option>
-                    {teamPlayers.map(p => <option key={p.id} value={p.id} className="bg-zinc-900 text-white">{p.first_name} {p.last_name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Assist (Optional)</label>
-                  <select disabled={!goalForm.team_id || goalForm.is_own_goal} value={goalForm.assist_id} onChange={e => setGoalForm({...goalForm, assist_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white disabled:opacity-50">
-                    <option value="" className="bg-zinc-900 text-white">{goalForm.is_own_goal ? "No Assists on Own Goals" : "No Assist (Solo)"}</option>
-                    {teamPlayers.filter(p => p.id !== goalForm.player_id).map(p => <option key={p.id} value={p.id} className="bg-zinc-900 text-white">{p.first_name} {p.last_name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <button type="submit" disabled={busyId !== ''} className="w-full bg-white text-black font-black uppercase tracking-widest py-3 rounded-lg hover:bg-zinc-200 transition-colors mt-2">
-                {busyId !== '' ? "Saving..." : goalForm.editId ? "Save correction" : "Confirm Goal"}
-              </button>
-            </form>
-          ) : !finishedMatch && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <button onClick={() => { setCardForm({ id: crypto.randomUUID(), kind: 'yellow', team_id: '', player_id: '', minute: '' }); setShowGoalForm(false); setShowCardForm(true); }} className="flex items-center justify-center gap-3 bg-yellow-500/10 text-yellow-300 border border-yellow-500/30 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-yellow-500/20 transition-colors">
-                Add Card
-              </button>
-              <button onClick={() => openGoalForm()} className="flex items-center justify-center gap-3 bg-white text-black py-4 rounded-xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-colors">
-                <Trophy size={18} /> Add Goal
-              </button>
-              <button type="button" disabled={loading} onClick={() => setWhistle({ home: '', away: '', koTie: false })}
-                className="flex items-center justify-center gap-3 min-h-11 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-600/30 transition-colors"
-              >
-                <CheckCircle2 size={18} /> Final whistle
-              </button>
+        <section aria-labelledby="live-heading" className="space-y-3">
+          <h2 id="live-heading" className="font-display text-2xl font-bold text-ink">Live and scheduled</h2>
+          {matches.length > 0 ? (
+            <ul className="space-y-2">
+              {matches.map((m) => {
+                const current = selectedMatch?.id === m.id;
+                return (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      aria-pressed={current}
+                      onClick={() => { setSelectedMatch(m); setShowGoalForm(false); }}
+                      className={`min-h-11 w-full rounded-card border bg-surf p-3 text-left transition-colors duration-200 ease-out ${current ? 'border-acc' : 'border-line hover:border-mut'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-ink">{m.home_team_name} vs {m.away_team_name}</span>
+                        <Pill tone={m.status === 'live' ? 'live' : 'neutral'}>{m.status}</Pill>
                       </div>
+                      <p className="mt-1 text-sm text-mut">{[formatKickoff(m.date), m.venue].filter(Boolean).join(' · ') || 'No kickoff time'}</p>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <EmptyState title={hasRole('dictator') ? 'No live or scheduled matches' : 'No matches assigned to you'}>
+              {hasRole('dictator') ? 'Schedule matches in Fixtures, then they appear here.' : 'Ask a dictator to assign you to a match or season.'}
+            </EmptyState>
           )}
+        </section>
 
-          <ConfirmDialog
-            open={reopenTarget !== null}
-            onOpenChange={(open) => { if (!open) setReopenTarget(null); }}
-            title="Reopen this match?"
-            description={`${selectedMatch.home_team_name} vs ${selectedMatch.away_team_name} goes back to live at its last recorded minute. Scores and events are kept.`}
-            confirmLabel="Reopen match"
-            onConfirm={reopenMatch}
-          />
-          <ConfirmDialog
-            open={whistle !== null}
-            onOpenChange={(open) => { if (!open) setWhistle(null); }}
-            title="End this match?"
-            description={`Final score ${selectedMatch.home_score} to ${selectedMatch.away_score}. The scores are locked for grading.`}
-            confirmLabel="End match"
-            tone="danger"
-            onConfirm={endMatch}
-          >
-            {tied && seasonFormat === 'league_knockout' && (
-              <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-white">
-                <input type="checkbox" className="h-5 w-5 accent-white" checked={whistle?.koTie ?? false} onChange={(e) => setWhistle((w) => ({ ...w, koTie: e.target.checked }))} />
-                This is a knockout tie
-              </label>
+        <section aria-labelledby="finished-heading" className="space-y-3">
+          <h2 id="finished-heading" className="font-display text-2xl font-bold text-ink">Finished matches</h2>
+          <p className="text-sm text-mut">Kicked off in the last 7 days.</p>
+          {finished.length > 0 ? (
+            <ul className="space-y-2">
+              {finished.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-surf p-3">
+                  <span className="flex min-w-0 items-center gap-3">
+                    <Scoreline home={m.home_score} away={m.away_score} size="sm" />
+                    <span className="truncate text-sm text-ink">{m.home_team_name} vs {m.away_team_name}</span>
+                  </span>
+                  <span className="flex gap-1">
+                    <Button size="sm" variant="quiet" aria-label={`Correct ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => { setSelectedMatch(m); setShowGoalForm(false); }}>Correct</Button>
+                    <Button size="sm" variant="quiet" aria-label={`Reopen ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => { setSelectedMatch(m); setReopenTarget(m); }}>Reopen</Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-mut">No matches finished in the last 7 days.</p>
+          )}
+        </section>
+      </div>
+
+      <div className="min-w-0">
+        {!selectedMatch ? (
+          <EmptyState title="Pick a match">Choose a live or scheduled match to start the clock and record events.</EmptyState>
+        ) : (
+          <div className="space-y-8">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-display text-2xl font-bold text-ink">{selectedMatch.home_team_name} vs {selectedMatch.away_team_name}</h2>
+                <p className="text-sm text-mut">{[selectedMatch.division_name, selectedMatch.season_name, formatKickoff(selectedMatch.date), selectedMatch.venue].filter(Boolean).join(' · ')}</p>
+              </div>
+              <Pill tone={finishedMatch ? 'neutral' : selectedMatch.status === 'live' ? 'live' : 'acc'}>{finishedMatch ? 'Finished' : selectedMatch.status}</Pill>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3 rounded-card bg-blk p-5 text-blkink">
+              {scoreboardTeam('home')}
+              <div className="pt-3 font-display text-2xl font-bold">{finishedMatch ? 'FT' : 'v'}</div>
+              {scoreboardTeam('away')}
+            </div>
+
+            {finishedMatch ? (
+              <Card className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-mut">Finished. Correct the events below, or reopen the match to keep scoring.</p>
+                <Button variant="secondary" onClick={() => setReopenTarget(selectedMatch)}>Reopen match</Button>
+              </Card>
+            ) : (
+              <Card className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="font-display text-xl font-bold text-ink">Match clock</h3>
+                  <span className={`font-display text-4xl font-bold tabular-nums text-ink ${timerRunning ? 'motion-safe:animate-pulse text-live' : ''}`}>
+                    {displayTime || `${liveMinute}'`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:items-end">
+                  {!timerRunning ? (
+                    <Button disabled={clockBusy} onClick={() => saveClock({ minute: `${calibration}'`, timer_start_time: new Date().toISOString(), timer_calibration: calibration })}>Start</Button>
+                  ) : (
+                    <Button variant="secondary" disabled={clockBusy} onClick={() => {
+                      // Pause stores the minutes played and stops the clock.
+                      const startTime = new Date(selectedMatch.timer_start_time).getTime();
+                      const newCalib = Math.floor((Date.now() - startTime) / 60000) + (selectedMatch.timer_calibration || 0);
+                      saveClock({ minute: `${newCalib}'`, timer_start_time: null, timer_calibration: newCalib });
+                    }}>Pause</Button>
+                  )}
+                  <Button variant={displayTime === 'HT' ? 'primary' : 'secondary'} disabled={clockBusy} onClick={askHalfTime}>Half time</Button>
+                  <div className="flex items-end gap-2">
+                    <Field type="number" label="Clock minute" value={calibration} onChange={e => setCalibration(parseInt(e.target.value) || 0)} className="min-w-0 flex-1" />
+                    <Button variant="secondary" disabled={clockBusy} onClick={() => saveClock(timerRunning ? { timer_calibration: calibration } : { minute: `${calibration}'`, timer_calibration: calibration })}>Set</Button>
+                  </div>
+                </div>
+              </Card>
             )}
-            {penaltiesAsked && (
-              <div className="grid grid-cols-2 gap-3">
-                <Field type="number" min="0" label="Home penalties" value={whistle?.home ?? ''} onChange={(e) => setWhistle((w) => ({ ...w, home: e.target.value }))} />
-                <Field type="number" min="0" label="Away penalties" value={whistle?.away ?? ''} onChange={(e) => setWhistle((w) => ({ ...w, away: e.target.value }))} />
+
+            <ConfirmDialog
+              open={Boolean(voidTarget)}
+              onOpenChange={(open) => { if (!open) setVoidTarget(null); }}
+              title="Remove this event?"
+              description={voidTarget ? `${voidTarget.minute ?? '?'}' ${eventLabel(voidTarget)}. The event is kept in the history with your reason.` : ''}
+              confirmLabel="Remove event"
+              tone="danger"
+              onConfirm={confirmVoid}
+            >
+              <Field label="Reason" value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="For example, wrong player" />
+            </ConfirmDialog>
+
+            {notice.text && <Notice tone={notice.type === 'error' ? 'error' : 'success'} role={notice.type === 'error' ? 'alert' : 'status'}>{notice.text}</Notice>}
+            {unattributedCount > 0 && <Notice tone="warning" role="note">{unattributedCount} goal{unattributedCount === 1 ? '' : 's'} unattributed: choose Attribute on the goal to add its scorer. They count toward the score and toward no player.</Notice>}
+
+            {candidates && (
+              <Card as="div" role="group" aria-label="Choose the goal to correct" className="space-y-3">
+                <p className="text-sm font-semibold text-ink">Which goal should be removed?</p>
+                {candidates.map((c) => (
+                  <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-ctl border border-line p-3 text-sm">
+                    <span>{c.minute ?? '?'}' · {eventLabel(c)}</span>
+                    <Button variant="danger" size="sm" onClick={() => voidEvent(c)}>Void this goal</Button>
+                  </div>
+                ))}
+                <Button variant="quiet" size="sm" onClick={() => setCandidates(null)}>Cancel</Button>
+              </Card>
+            )}
+
+            {showCardForm && (
+              <Card as="form" onSubmit={submitCard} className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-display text-xl font-bold text-ink">Add card</h3>
+                  <Button variant="quiet" size="sm" aria-label="Close card form" onClick={() => setShowCardForm(false)} className="px-2"><X size={18} aria-hidden="true" /></Button>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field as="select" label="Card colour" value={cardForm.kind} onChange={e => setCardForm({ ...cardForm, kind: e.target.value })}>
+                    <option value="yellow">Yellow card</option>
+                    <option value="red">Red card</option>
+                  </Field>
+                  <Field label="Card minute" placeholder="Minute" value={cardForm.minute} onChange={e => setCardForm({ ...cardForm, minute: e.target.value })} />
+                  <Field as="select" label="Card team" required value={cardForm.team_id} onChange={e => setCardForm({ ...cardForm, team_id: e.target.value, player_id: '' })}>
+                    <option value="">Select team...</option>
+                    <option value={selectedMatch.home_team_id}>{selectedMatch.home_team_name} (Home)</option>
+                    <option value={selectedMatch.away_team_id}>{selectedMatch.away_team_name} (Away)</option>
+                  </Field>
+                  <Field as="select" label="Carded player" required disabled={!cardForm.team_id} value={cardForm.player_id} onChange={e => setCardForm({ ...cardForm, player_id: e.target.value })}>
+                    <option value="">Select player...</option>
+                    {allPlayers.filter(p => (p.team_id || p.teams?.id) === cardForm.team_id).map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                  </Field>
+                </div>
+                <Button type="submit" disabled={busyId !== ''} className="w-full sm:w-auto">{busyId !== '' ? 'Saving...' : 'Confirm card'}</Button>
+              </Card>
+            )}
+
+            {showGoalForm ? (
+              <Card as="form" onSubmit={submitGoal} className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-display text-xl font-bold text-ink">{goalForm.editId ? 'Correct goal' : 'Register goal'}</h3>
+                  <Button variant="quiet" size="sm" aria-label="Close goal form" onClick={() => setShowGoalForm(false)} className="px-2"><X size={18} aria-hidden="true" /></Button>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field as="select" label={goalForm.is_own_goal ? 'Offending team (own goal)' : 'Scoring team'} required value={goalForm.team_id} onChange={e => setGoalForm({...goalForm, team_id: e.target.value, player_id: '', assist_id: ''})}>
+                    <option value="" disabled>Select team...</option>
+                    <option value={selectedMatch.home_team_id}>{selectedMatch.home_team_name} (Home)</option>
+                    <option value={selectedMatch.away_team_id}>{selectedMatch.away_team_name} (Away)</option>
+                  </Field>
+                  <Field label="Minute" placeholder="e.g. 45" value={goalForm.minute} onChange={e => setGoalForm({...goalForm, minute: e.target.value})} />
+                  <Field as="select" label="Goal type" value={goalForm.is_own_goal ? 'own_goal' : 'regular'} onChange={e => { const isOwn = e.target.value === 'own_goal'; setGoalForm(prev => ({ ...prev, is_own_goal: isOwn, assist_id: isOwn ? '' : prev.assist_id })); }}>
+                    <option value="regular">Regular goal</option>
+                    <option value="own_goal">Own goal</option>
+                  </Field>
+                  <Field as="select" label={goalForm.is_own_goal ? 'Player who scored own goal' : 'Goalscorer'} disabled={!goalForm.team_id} value={goalForm.player_id} onChange={e => setGoalForm({...goalForm, player_id: e.target.value})}>
+                    <option value="">Scorer not known yet</option>
+                    {teamPlayers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                  </Field>
+                  <Field as="select" label="Assist (optional)" disabled={!goalForm.team_id || goalForm.is_own_goal} value={goalForm.assist_id} onChange={e => setGoalForm({...goalForm, assist_id: e.target.value})}>
+                    <option value="">{goalForm.is_own_goal ? 'No assists on own goals' : 'No assist (solo)'}</option>
+                    {teamPlayers.filter(p => p.id !== goalForm.player_id).map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                  </Field>
+                </div>
+                <Button type="submit" disabled={busyId !== ''} className="w-full sm:w-auto">
+                  {busyId !== '' ? 'Saving...' : goalForm.editId ? 'Save correction' : 'Confirm goal'}
+                </Button>
+              </Card>
+            ) : !finishedMatch && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Button variant="secondary" size="lg" onClick={() => { setCardForm({ id: crypto.randomUUID(), kind: 'yellow', team_id: '', player_id: '', minute: '' }); setShowGoalForm(false); setShowCardForm(true); }}>Add card</Button>
+                <Button size="lg" onClick={() => openGoalForm()}>Add goal</Button>
+                <Button variant="secondary" size="lg" disabled={loading} onClick={() => setWhistle({ home: '', away: '', koTie: false })}>Final whistle</Button>
               </div>
             )}
-          </ConfirmDialog>
 
-          <div className="bg-black/50 p-6 rounded-2xl border border-white/10 mt-8 space-y-4 shadow-xl">
-             <h4 className="font-black uppercase tracking-widest text-sm text-zinc-400 mb-2">Match events ({events.length})</h4>
-             {eventsState.status === 'loading' && events.length === 0 && <p className="text-xs text-zinc-500">Loading events...</p>}
-             {eventsState.status === 'error' && <p role="alert" className="text-sm text-red-300">Events could not be loaded ({eventsState.error}). <button type="button" onClick={fetchMatchEvents} className="underline">Try again</button></p>}
-             <div className="space-y-3">
-               {events.length > 0 ? events.map(ev => (
-                 <div key={ev.id} className="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10" data-testid="match-event">
-                   <div>
-                     <div className="text-sm font-bold text-white flex items-center gap-2">
-                       <span className="text-zinc-500 w-8">{ev.minute ?? '?'}'</span>
-                       {eventLabel(ev)}
-                       {ev.kind === 'own_goal' && <span className="text-[10px] bg-red-500/20 text-red-500 px-2 py-0.5 rounded-sm uppercase tracking-widest">Own Goal</span>}
-                       {(ev.kind === 'yellow' || ev.kind === 'red') && <span className={`text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest ${ev.kind === 'red' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-400/20 text-yellow-300'}`}>{ev.kind} card</span>}
-                     </div>
-                     {ev.assist_player_id && <div className="text-[11px] text-zinc-500 mt-1 ml-10">Assist: {getPlayerName(ev.assist_player_id)}</div>}
-                   </div>
-                   <div className="flex items-center gap-3 ml-4">
-                     {busyId === ev.id ? <span className="text-xs text-zinc-500">Saving...</span> : <>
-                       {(ev.kind === 'goal' || ev.kind === 'own_goal') && <button type="button" onClick={() => openGoalForm(ev)} className="min-h-11 px-2 text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-white">{ev.player_id ? 'Edit' : 'Attribute'}</button>}
-                       <button type="button" onClick={() => voidEvent(ev)} className="flex h-11 w-11 items-center justify-center text-zinc-600 hover:text-red-500 transition-colors" title="Void" aria-label="Void event"><Trash2 size={16} /></button>
-                     </>}
-                   </div>
-                 </div>
-               )) : eventsState.status === 'ready' && (
-                 <div className="text-center py-6 text-zinc-600 text-xs font-bold uppercase tracking-widest border border-dashed border-white/10 rounded-xl">
-                   No events recorded yet.
-                 </div>
-               )}
-             </div>
+            <ConfirmDialog
+              open={reopenTarget !== null}
+              onOpenChange={(open) => { if (!open) setReopenTarget(null); }}
+              title="Reopen this match?"
+              description={`${selectedMatch.home_team_name} vs ${selectedMatch.away_team_name} goes back to live at its last recorded minute. Scores and events are kept.`}
+              confirmLabel="Reopen match"
+              onConfirm={reopenMatch}
+            />
+            <ConfirmDialog
+              open={whistle !== null}
+              onOpenChange={(open) => { if (!open) setWhistle(null); }}
+              title="End this match?"
+              description={`Final score ${selectedMatch.home_score} to ${selectedMatch.away_score}. The scores are locked for grading.`}
+              confirmLabel="End match"
+              tone="danger"
+              onConfirm={endMatch}
+            >
+              {tied && seasonFormat === 'league_knockout' && (
+                <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold text-ink">
+                  <input type="checkbox" className="size-5 accent-acc" checked={whistle?.koTie ?? false} onChange={(e) => setWhistle((w) => ({ ...w, koTie: e.target.checked }))} />
+                  This is a knockout tie
+                </label>
+              )}
+              {penaltiesAsked && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field type="number" min="0" label="Home penalties" value={whistle?.home ?? ''} onChange={(e) => setWhistle((w) => ({ ...w, home: e.target.value }))} />
+                  <Field type="number" min="0" label="Away penalties" value={whistle?.away ?? ''} onChange={(e) => setWhistle((w) => ({ ...w, away: e.target.value }))} />
+                </div>
+              )}
+            </ConfirmDialog>
+
+            <section aria-labelledby="events-heading" className="space-y-3">
+              <h3 id="events-heading" className="font-display text-xl font-bold text-ink">Match events ({events.length})</h3>
+              {eventsState.status === 'loading' && events.length === 0 && <p className="text-sm text-mut">Loading events...</p>}
+              {eventsState.status === 'error' && <Notice tone="error" role="alert">Events could not be loaded ({eventsState.error}). <Button variant="quiet" size="sm" onClick={fetchMatchEvents}>Try again</Button></Notice>}
+              {events.length > 0 ? (
+                <Table caption="Match events">
+                  <thead>
+                    <tr><th scope="col">Minute</th><th scope="col">Event</th><th scope="col"><span className="sr-only">Actions</span></th></tr>
+                  </thead>
+                  <tbody>
+                    {events.map(ev => (
+                      <tr key={ev.id} data-testid="match-event">
+                        <td className="font-display text-lg tabular-nums text-mut">{ev.minute ?? '?'}'</td>
+                        <td>
+                          <div className="flex flex-wrap items-center gap-2 font-semibold">
+                            {eventLabel(ev)}
+                            {ev.kind === 'own_goal' && <Pill tone="live">Own goal</Pill>}
+                            {(ev.kind === 'yellow' || ev.kind === 'red') && <Pill tone={ev.kind === 'red' ? 'live' : 'acc'}>{ev.kind} card</Pill>}
+                          </div>
+                          {ev.assist_player_id && <div className="text-sm text-mut">Assist: {getPlayerName(ev.assist_player_id)}</div>}
+                        </td>
+                        <td>
+                          <div className="flex justify-end gap-1">
+                            {busyId === ev.id ? <span className="px-2 text-sm text-mut">Saving...</span> : <>
+                              {(ev.kind === 'goal' || ev.kind === 'own_goal') && <Button variant="quiet" size="sm" onClick={() => openGoalForm(ev)}>{ev.player_id ? 'Edit' : 'Attribute'}</Button>}
+                              <Button variant="quiet" size="sm" onClick={() => voidEvent(ev)} aria-label="Void event" className="px-2 text-mut hover:text-live"><Trash2 size={16} aria-hidden="true" /></Button>
+                            </>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              ) : eventsState.status === 'ready' && (
+                <EmptyState title="No events recorded yet">Goals and cards you add appear here, and can be corrected.</EmptyState>
+              )}
+            </section>
           </div>
-
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
