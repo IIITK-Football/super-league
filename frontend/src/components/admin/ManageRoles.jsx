@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Search, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
+import { useConfirm } from '../ui';
 
 // Roles are independent grants: no role implies another and a normal user holds none. A captain or scorer grant only
 // acts together with an assignment (a team entry, or a season or match), which the dictator makes under Teams & Rosters
@@ -26,6 +27,7 @@ export default function ManageRoles({ currentUserId }) { // eslint-disable-line 
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [assignments, setAssignments] = useState({ captain: {}, scorer: {} });
+  const confirm = useConfirm();
   const search = useLatestSearch(
     (text) => supabase.rpc('account_directory', { p_query: text || null, p_limit: PAGE_LIMIT }),
     query,
@@ -45,6 +47,16 @@ export default function ManageRoles({ currentUserId }) { // eslint-disable-line 
     if (account.user_id === currentUserId && role === 'dictator' && !on) {
       setError('You cannot remove your own dictator access here.');
       return;
+    }
+    // A dictator manages everything, so granting or removing it names the person and asks first.
+    if (role === 'dictator') {
+      const ok = await confirm({
+        title: on ? 'Make this account a dictator?' : 'Remove dictator access?',
+        description: on ? `${account.label} can manage every division, season, team, player, match and role.` : `${account.label} loses dictator access and every setting it can change.`,
+        confirmLabel: on ? 'Make dictator' : 'Remove dictator',
+        tone: on ? 'default' : 'danger',
+      });
+      if (!ok) return;
     }
     setError('');
     setMessage('');

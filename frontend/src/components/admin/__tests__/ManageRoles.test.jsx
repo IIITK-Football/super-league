@@ -25,6 +25,8 @@ vi.mock('../../../lib/supabase', () => ({
   },
 }));
 const { default: ManageRoles } = await import('../ManageRoles');
+const { ConfirmProvider } = await import('../../ui');
+const renderRoles = () => render(<ConfirmProvider><ManageRoles currentUserId="me" /></ConfirmProvider>);
 
 beforeEach(() => {
   db.accounts = [
@@ -41,7 +43,7 @@ const rows = () => within(screen.getByRole('list', { name: 'Accounts' })).getAll
 
 describe('ManageRoles', () => {
   it('lists accounts by their directory label, with one checkbox per independent role', async () => {
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(screen.getByText('3 accounts')).toBeTruthy();
     const boxes = (label) => ['Captain', 'Scorer', 'Editor', 'Dictator'].map((r) => screen.getByLabelText(`${r} for ${label}`).checked);
@@ -51,7 +53,7 @@ describe('ManageRoles', () => {
   });
 
   it('searches every word after typing pauses, and shows a clear no-match message', async () => {
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(screen.getByLabelText('Search accounts'), { target: { value: 'ada ada.l' } });
     await waitFor(() => expect(rows()).toHaveLength(1));
@@ -61,7 +63,7 @@ describe('ManageRoles', () => {
   });
 
   it('shows only the newest answer when an earlier search answers late', async () => {
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     db.slow = 'boss';
     fireEvent.change(screen.getByLabelText('Search accounts'), { target: { value: 'boss' } });
@@ -75,7 +77,7 @@ describe('ManageRoles', () => {
 
   it('reports a failed search and can retry', async () => {
     db.fail = { message: 'permission denied' };
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     expect(await screen.findByText(/accounts could not be loaded/i)).toBeTruthy();
     db.fail = null;
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
@@ -83,7 +85,7 @@ describe('ManageRoles', () => {
   });
 
   it('grants and removes one role at a time, confirms by the account label, and keeps the dictator from removing their own', async () => {
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.click(screen.getByLabelText('Editor for Ada Lane (ada@iiitkottayam.ac.in)'));
     expect(await screen.findByText('Granted editor for Ada Lane (ada@iiitkottayam.ac.in).')).toBeTruthy();
@@ -100,7 +102,7 @@ describe('ManageRoles', () => {
 
   it('shows the database message when a grant is refused, and does not change the box', async () => {
     db.writeError = { message: 'new row violates row-level security policy for table "user_roles"' };
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.click(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)'));
     expect(await screen.findByText(/row-level security/)).toBeTruthy();
@@ -109,10 +111,26 @@ describe('ManageRoles', () => {
 
   it('says when a captain or scorer grant has no assignment, and not when it has one', async () => {
     db.assignments.captain_assignments = [{ user_id: 'u2' }];
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(screen.queryByText(/Captain role without an assignment/)).toBeNull();
     fireEvent.click(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)'));
     expect(await screen.findByText(/Scorer role without an assignment/)).toBeTruthy();
+  });
+
+  it('asks before making someone a dictator, naming them, and writes only on confirm', async () => {
+    renderRoles();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.click(screen.getByLabelText('Dictator for Ada Lane (ada@iiitkottayam.ac.in)'));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/Ada Lane \(ada@iiitkottayam\.ac\.in\)/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(db.writes).toEqual([]);
+    expect(screen.getByLabelText('Dictator for Ada Lane (ada@iiitkottayam.ac.in)').checked).toBe(false);
+    fireEvent.click(screen.getByLabelText('Dictator for Ada Lane (ada@iiitkottayam.ac.in)'));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Make dictator' }));
+    expect(await screen.findByText('Granted dictator for Ada Lane (ada@iiitkottayam.ac.in).')).toBeTruthy();
+    expect(db.writes).toEqual([{ user_id: 'u1', role: 'dictator' }]);
   });
 });
