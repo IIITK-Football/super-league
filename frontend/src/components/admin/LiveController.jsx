@@ -5,10 +5,11 @@ import { Activity, Trophy, CheckCircle, CheckCircle2, X, Trash2 } from 'lucide-r
 import { supabase } from '../../lib/supabase';
 import { DivisionSwitch } from './DivisionSwitch';
 import { useAuth } from '../../context/AuthContext';
-import { ConfirmDialog, Field } from '../ui';
+import { ConfirmDialog, Field, useConfirm } from '../ui';
 
 export default function LiveController() {
   const { hasRole } = useAuth();
+  const confirm = useConfirm();
   const [division, setDivision] = useState('super-league');
   const { data: resp, refetch } = useApi(`/admin/matches?status=live,scheduled&division=${division}`);
   const { data: playersResp } = useApi(`/players?division=${division}`); // the selected division's current season roster 
@@ -105,6 +106,13 @@ export default function LiveController() {
     return () => clearInterval(interval);
   }, [timerRunning, selectedMatch]);
 
+  // Half time keeps the minutes played (as Pause does) so the second half resumes from them.
+  const saveHalfTime = () => {
+    const startTime = selectedMatch.timer_start_time ? new Date(selectedMatch.timer_start_time).getTime() : null;
+    const newCalib = timerRunning && startTime ? Math.floor((Date.now() - startTime) / 60000) + (selectedMatch.timer_calibration || 0) : calibration;
+    saveClock({ minute: 'HT', timer_start_time: null, timer_calibration: newCalib });
+  };
+
   // 4. Saves the clock. The screen changes only when the server has stored the change; a refusal is shown inline.
   const [clockBusy, setClockBusy] = useState(false);
   const saveClock = async (fields) => {
@@ -162,15 +170,49 @@ export default function LiveController() {
     } finally { setBusyId(''); }
   };
 
-  // Clock and status actions (half time, final whistle) keep their confirmations.
+  // Status actions (final whistle) report success so the caller can follow the server.
   const handleAction = async (action, extraData = {}) => {
     setLoading(true);
     try {
       const r = await callLive({ action, ...extraData });
-      if (r.ok) { setNotice({ type: 'ok', text: r.message }); refetch(); }
-      else setNotice({ type: 'error', text: r.message || 'The action failed.' });
-    } catch (err) { setNotice({ type: 'error', text: 'Action failed. Check your connection.' }); }
+      if (r.ok) { setNotice({ type: 'ok', text: r.message }); refetch(); return true; }
+      setNotice({ type: 'error', text: r.message || 'The action failed.' });
+      return false;
+    } catch (err) { setNotice({ type: 'error', text: 'Action failed. Check your connection.' }); return false; }
     finally { setLoading(false); }
+  };
+
+  // The season's format decides whether a tie goes to penalties: knockout seasons always, combined seasons when asked.
+  const [seasonFormat, setSeasonFormat] = useState('league');
+  useEffect(() => {
+    if (!selectedMatch?.season_id) return undefined;
+    let current = true;
+    supabase.from('seasons').select('format').eq('id', selectedMatch.season_id).maybeSingle()
+      .then(({ data }) => { if (current && data) setSeasonFormat(data.format); });
+    return () => { current = false; };
+  }, [selectedMatch?.season_id]);
+  const [whistle, setWhistle] = useState(null); // open final-whistle form: { home, away, koTie }
+  const tied = selectedMatch?.home_score === selectedMatch?.away_score;
+  const penaltiesAsked = tied && (seasonFormat === 'knockout' || (seasonFormat === 'league_knockout' && whistle?.koTie));
+
+  const endMatch = async () => {
+    let penalties = {};
+    if (penaltiesAsked) {
+      const home = whistle.home.trim();
+      const away = whistle.away.trim();
+      if (!home || !away) throw new Error('Enter both penalty scores.');
+      if (!/^\d+$/.test(home) || !/^\d+$/.test(away)) throw new Error('Penalty scores are whole numbers.');
+      penalties = { home_penalties: Number(home), away_penalties: Number(away) };
+    }
+    const ok = await handleAction('close_match', penalties);
+    if (!ok) throw new Error('The match was not ended. The scores are unchanged.');
+    setTimerRunning(false);
+    setSelectedMatch((prev) => ({ ...prev, timer_start_time: null }));
+  };
+
+  const askHalfTime = async () => {
+    const ok = await confirm({ title: 'Start half time?', description: 'The clock stops at this minute. The second half starts from it.', confirmLabel: 'Half time' });
+    if (ok) saveHalfTime();
   };
 
   const submitGoal = (e) => {
@@ -300,12 +342,7 @@ export default function LiveController() {
                   ⏸ Pause
                 </button>
               )}
-              <button type="button" disabled={clockBusy} onClick={() => {
-                  // Half time keeps the minutes played (as Pause does) so the second half resumes from them.
-                  const startTime = selectedMatch.timer_start_time ? new Date(selectedMatch.timer_start_time).getTime() : null;
-                  const newCalib = timerRunning && startTime ? Math.floor((Date.now() - startTime) / 60000) + (selectedMatch.timer_calibration || 0) : calibration;
-                  saveClock({ minute: 'HT', timer_start_time: null, timer_calibration: newCalib });
-              }} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border disabled:opacity-40 ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
+              <button type="button" disabled={clockBusy} onClick={askHalfTime} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border disabled:opacity-40 ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
                 Half Time
               </button>
               <div className="flex border border-white/10 rounded-xl overflow-hidden bg-black/60">
@@ -413,30 +450,36 @@ export default function LiveController() {
               <button onClick={() => openGoalForm()} className="flex items-center justify-center gap-3 bg-white text-black py-4 rounded-xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-colors">
                 <Trophy size={18} /> Add Goal
               </button>
-             <button 
-                disabled={loading} 
-                onClick={() => {
-                  let hp = undefined;
-                  let ap = undefined;
-                  if (selectedMatch.home_score === selectedMatch.away_score) {
-                    const hpStr = prompt(`Match is tied! Enter ${selectedMatch.home_team_name} (Home) Penalty Score (leave blank if not applicable):`);
-                    const apStr = prompt(`Enter ${selectedMatch.away_team_name} (Away) Penalty Score (leave blank if not applicable):`);
-                    if (hpStr && apStr) {
-                      hp = parseInt(hpStr);
-                      ap = parseInt(apStr);
-                    }
-                  }
-                  if(confirm("End match and lock scores?")) { 
-                    setTimerRunning(false); 
-                    handleAction('close_match', { home_penalties: hp, away_penalties: ap }); 
-                  } 
-                }} 
+              <button type="button" disabled={loading} onClick={() => setWhistle({ home: '', away: '', koTie: false })}
                 className="flex items-center justify-center gap-3 min-h-11 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-600/30 transition-colors"
               >
-                <CheckCircle2 size={18} /> Final Whistle
+                <CheckCircle2 size={18} /> Final whistle
               </button>
                       </div>
           )}
+
+          <ConfirmDialog
+            open={whistle !== null}
+            onOpenChange={(open) => { if (!open) setWhistle(null); }}
+            title="End this match?"
+            description={`Final score ${selectedMatch.home_score} to ${selectedMatch.away_score}. The scores are locked for grading.`}
+            confirmLabel="End match"
+            tone="danger"
+            onConfirm={endMatch}
+          >
+            {tied && seasonFormat === 'league_knockout' && (
+              <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-white">
+                <input type="checkbox" className="h-5 w-5 accent-white" checked={whistle?.koTie ?? false} onChange={(e) => setWhistle((w) => ({ ...w, koTie: e.target.checked }))} />
+                This is a knockout tie
+              </label>
+            )}
+            {penaltiesAsked && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field type="number" min="0" label="Home penalties" value={whistle?.home ?? ''} onChange={(e) => setWhistle((w) => ({ ...w, home: e.target.value }))} />
+                <Field type="number" min="0" label="Away penalties" value={whistle?.away ?? ''} onChange={(e) => setWhistle((w) => ({ ...w, away: e.target.value }))} />
+              </div>
+            )}
+          </ConfirmDialog>
 
           <div className="bg-black/50 p-6 rounded-2xl border border-white/10 mt-8 space-y-4 shadow-xl">
              <h4 className="font-black uppercase tracking-widest text-sm text-zinc-400 mb-2">Match events ({events.length})</h4>

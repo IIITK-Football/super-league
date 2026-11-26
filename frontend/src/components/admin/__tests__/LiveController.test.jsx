@@ -6,8 +6,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = { events: [], eventsError: null, requests: [], responses: [], selects: 0 };
-const match = { id: 'm1', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Alpha', away_team_name: 'Beta', home_score: 1, away_score: 0, status: 'live', minute: "20'", division_name: 'D', season_name: 'S' };
+const db = { events: [], eventsError: null, requests: [], responses: [], selects: 0, format: 'league' };
+const match = { id: 'm1', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Alpha', away_team_name: 'Beta', home_score: 1, away_score: 0, status: 'live', minute: "20'", division_name: 'D', season_name: 'S', season_id: 's1' };
 const players = [
   { id: 'p1', first_name: 'Ada', last_name: 'Striker', team_id: 't1' },
   { id: 'p2', first_name: 'Bea', last_name: 'Winger', team_id: 't1' },
@@ -23,17 +23,21 @@ vi.mock('../../../lib/api', () => ({ API_BASE_URL: 'http://api.test' }));
 vi.mock('../../../lib/supabase', () => ({
   supabase: {
     auth: { getSession: async () => ({ data: { session: { access_token: 'tok' } } }) },
-    from: () => {
+    from: (table) => {
+      if (table === 'seasons') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { format: db.format }, error: null }) }) }) };
       const b = { select: () => b, eq: () => b, is: () => b, order: () => b, then: (res, rej) => Promise.resolve().then(() => { db.selects += 1; return db.eventsError ? { data: null, error: { message: db.eventsError } } : { data: db.events.map((e) => ({ ...e })), error: null }; }).then(res, rej) };
       return b;
     },
   },
 }));
+const { ConfirmProvider } = await import('../../ui');
 const { default: LiveController } = await import('../LiveController');
+const renderLive = () => render(<ConfirmProvider><LiveController /></ConfirmProvider>);
 
 const goal = (over) => ({ id: 'e1', team_id: 't1', kind: 'goal', player_id: null, assist_player_id: null, minute: 20, added_minute: null, version: 1, ...over });
 
 beforeEach(() => {
+  match.home_score = 1; match.away_score = 0; db.format = 'league';
   db.events = [goal({})]; db.eventsError = null; db.requests = []; db.responses = []; db.selects = 0;
   vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
     db.requests.push(JSON.parse(init.body));
@@ -46,7 +50,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 async function openMatch() {
-  render(<LiveController />);
+  renderLive();
   fireEvent.click(await screen.findByText(/Alpha vs Beta/));
   await screen.findByText(/Match events \(/);
 }
@@ -66,7 +70,7 @@ describe('LiveController on match events', () => {
     expect(screen.getByText('No events recorded yet.')).toBeTruthy();
     cleanup();
     db.eventsError = 'permission denied';
-    render(<LiveController />);
+    renderLive();
     fireEvent.click(await screen.findByText(/Alpha vs Beta/));
     expect(await screen.findByText(/Events could not be loaded \(permission denied\)/)).toBeTruthy();
     db.eventsError = null;
@@ -157,6 +161,7 @@ describe('LiveController on match events', () => {
     const started = Date.now();
     vi.spyOn(Date, 'now').mockReturnValue(started + 12 * 60000);
     fireEvent.click(screen.getByRole('button', { name: 'Half Time' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Half time' }));
     await waitFor(() => expect(db.requests).toHaveLength(3));
     expect(db.requests[2]).toMatchObject({ action: 'update_time', minute: 'HT', timer_start_time: null, timer_calibration: 42 });
     Date.now.mockRestore();
@@ -180,6 +185,32 @@ describe('LiveController on match events', () => {
     expect(await screen.findByRole('button', { name: /pause/i })).toBeTruthy();
     expect(db.requests[0]).toMatchObject({ action: 'update_time', minute: "20'", timer_calibration: 20 });
     expect(db.requests[0].timer_start_time).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('takes a tied knockout to penalties: both scores are required, and only then is the match closed', async () => {
+    match.away_score = 1; db.format = 'knockout';
+    await openMatch();
+    fireEvent.click(screen.getByRole('button', { name: 'Final whistle' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(within(dialog).getByLabelText('Home penalties'), { target: { value: '4' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End match' }));
+    expect(await within(dialog).findByText('Enter both penalty scores.')).toBeTruthy();
+    expect(db.requests).toHaveLength(0);
+    fireEvent.change(within(dialog).getByLabelText('Away penalties'), { target: { value: '3' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End match' }));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    expect(db.requests[0]).toMatchObject({ action: 'close_match', home_penalties: 4, away_penalties: 3 });
+  });
+
+  it('asks for no penalties in a league match, even a draw', async () => {
+    match.away_score = 1;
+    await openMatch();
+    fireEvent.click(screen.getByRole('button', { name: 'Final whistle' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).queryByLabelText('Home penalties')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End match' }));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'close_match' });
   });
 
   it('shows a server refusal inline', async () => {
