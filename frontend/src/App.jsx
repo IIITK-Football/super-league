@@ -93,7 +93,7 @@ function LeagueDashboardRoute() {
 }
 
 // Routes live in one data router so useBlocker (for unsaved edits) works anywhere in the tree.
-const routes = createRoutesFromElements(
+export const routes = createRoutesFromElements(
   <Route element={<><GlobalAuthRedirect /><Outlet /></>}>
     {/* Admin Routes (No Standard Navbar) */}
     <Route path="/login" element={<Login />} />
