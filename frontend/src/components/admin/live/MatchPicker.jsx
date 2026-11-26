@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react';
 import { Combobox, Crest, EmptyState, Field } from '../../ui';
 import { cn } from '../../../utils/cn';
 import { formatKickoff } from '../adminFormat';
@@ -37,7 +38,7 @@ function MatchRow({ match, crest, current, onPick, children }) {
         onClick={() => onPick(match)}
         className="flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-2 rounded-ctl py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
       >
-        <span className={cn('eyebrow flex items-center gap-2', live && 'text-live')}>{live && <LiveDot />}{rowMeta(match)}</span>
+        <span className={cn('eyebrow flex items-center gap-2', live && 'text-live')}>{live && <LiveDot />}{rowMeta(match)}<ChevronRight size={15} aria-hidden="true" className="ml-auto shrink-0 text-mut" /></span>
         {[['home', match.home_team_id, match.home_team_name, match.home_score], ['away', match.away_team_id, match.away_team_name, match.away_score]].map(([side, id, name, score]) => (
           <span key={side} className="flex min-w-0 items-center gap-2.5">
             <Crest size="sm" name={name} src={crest(id)?.logo_url} color={crest(id)?.team_color} />
