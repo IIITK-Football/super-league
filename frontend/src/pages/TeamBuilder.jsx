@@ -707,7 +707,7 @@ export function TeamBuilder() {
         {captainPicker}
         {teamCard}
         {readOnly && <Notice tone="warning">Past season: captains can view it but not change it.</Notice>}
-        <form onSubmit={handleSubmit} className="space-y-6 pb-2">
+        <form onSubmit={handleSubmit} className="space-y-6 pb-2" noValidate>
             <fieldset disabled={readOnly || saving} className="space-y-6">
                 <section aria-label="Squad" className="space-y-3">
                     <h2 className="font-display text-xl font-bold">Squad</h2>

@@ -234,3 +234,74 @@ describe('TeamBuilder on season rosters', () => {
     expect(screen.getByLabelText('Short name')).toBeTruthy();
   });
 });
+
+describe('TeamBuilder checks before and after saving', () => {
+  it('blocks a save with no position and names the player, without calling the database', async () => {
+    renderBuilder();
+    await screen.findByRole('button', { name: /01 Ada Striker/ });
+    fireEvent.change(screen.getByLabelText('Position'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
+    expect(await screen.findByText('Choose a position for Ada Striker before saving.')).toBeTruthy();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('keeps earlier players saved and says how many saved before a failure', async () => {
+    renderBuilder();
+    await screen.findByRole('button', { name: /01 Ada Striker/ });
+    fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: /02 Bea Keeper/ }));
+    fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '2' } });
+    rpc.mockImplementationOnce(async () => ({ data: null, error: null }));
+    rpc.mockImplementationOnce(async () => ({ data: null, error: { message: 'permission denied' } }));
+    fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
+    expect(await screen.findByText('Saved 1 of 2, failed at Bea Keeper: permission denied')).toBeTruthy();
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it('says how many changes are unsaved next to the save button', async () => {
+    renderBuilder();
+    await screen.findByRole('button', { name: /01 Ada Striker/ });
+    expect(screen.getByText('No unsaved changes')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '10' } });
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
+  });
+
+  it('refuses a blank team name before saving the team details', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    renderBuilder();
+    await screen.findByRole('button', { name: /01 Ada Striker/ });
+    fireEvent.click(screen.getByRole('button', { name: /edit team details/i }));
+    fireEvent.change(await screen.findByLabelText('Team name'), { target: { value: ' ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save team details' }));
+    expect(await screen.findByText('Enter a team name of 2 to 60 characters.')).toBeTruthy();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('asks before Escape discards unsaved team details', async () => {
+    renderBuilder();
+    await screen.findByRole('button', { name: /01 Ada Striker/ });
+    fireEvent.click(screen.getByRole('button', { name: /edit team details/i }));
+    fireEvent.change(await screen.findByLabelText('Team name'), { target: { value: 'Alpha Two' } });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(await screen.findByText('Discard team details?')).toBeTruthy();
+    expect(screen.getByLabelText('Team name').value).toBe('Alpha Two');
+  });
+
+  it('rejects a logo that is not a PNG before it is kept', async () => {
+    renderBuilder();
+    await screen.findByRole('button', { name: /01 Ada Striker/ });
+    fireEvent.click(screen.getByRole('button', { name: /edit team details/i }));
+    const input = await screen.findByLabelText('Team logo');
+    fireEvent.change(input, { target: { files: [new File(['x'], 'logo.jpg', { type: 'image/jpeg' })] } });
+    expect(await screen.findByText('Club logo must be a PNG file.')).toBeTruthy();
+  });
+
+  it('starts the team colour unset for a captain who has not chosen one', async () => {
+    db.tables.captain_assignments = [{ ...db.tables.captain_assignments[1], user_id: 'c1' }]; // Beta only: no logo, no colour
+    renderBuilder();
+    await screen.findByText(/Set up Beta/);
+    expect(screen.getByText('Not set. Pick a colour.')).toBeTruthy();
+  });
+});
