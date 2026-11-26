@@ -3,13 +3,18 @@ import { Link, useParams } from 'react-router-dom';
 import { useLeague, scopeQuery } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { StandingsTable } from '../components/standings/StandingsTable';
-import { SeasonBracket } from '../components/bracket/SeasonBracket';
+import { SeasonBracket, bracketRounds } from '../components/bracket/SeasonBracket';
+import { MatchList } from '../components/match/MatchList';
 import { EmptyState, ErrorState, Skeleton } from '../components/ui';
 
 // Knockout bracket components used by the admin schedule preview. Both now read the season's knockout rounds.
 // shortcut: the admin preview (components/admin/ScheduleMatches.jsx) still imports these names, to be switched to SeasonBracket.
 export const WomensBracket = ({ matches = [] }) => <SeasonBracket matches={matches} />;
 export const FreshersBracket = WomensBracket;
+
+// Formats whose season is played as knockout matches. Without stage data they are listed as played, by date.
+const KNOCKOUT_FORMATS = ['knockout', 'league_knockout'];
+const byDateAscending = (a, b) => (new Date(a.date || 0) - new Date(b.date || 0));
 
 // The division's league table and, when the season has knockout matches, its bracket. The division and season come
 // from the address and the division's selected season.
@@ -75,6 +80,12 @@ export function Standings() {
         <StandingsTable rows={standings} />
       )}
       <SeasonBracket matches={bracketMatches} />
+      {bracketRounds(bracketMatches).length === 0 && KNOCKOUT_FORMATS.includes(seasonScope.season?.format) && bracketMatches.length > 0 && (
+        <section aria-labelledby="knockout-heading" className="space-y-4">
+          <h2 id="knockout-heading" className="font-display text-2xl font-bold text-ink">Knockout matches</h2>
+          <MatchList matches={[...bracketMatches].sort(byDateAscending)} />
+        </section>
+      )}
     </div>
   );
 }
