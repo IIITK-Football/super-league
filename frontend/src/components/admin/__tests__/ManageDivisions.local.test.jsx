@@ -24,6 +24,7 @@ vi.mock('../../../lib/supabase', () => ({
 }));
 
 import ManageDivisions from '../ManageDivisions';
+import { readToasts } from '../../ui/toastStore';
 // Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
 vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
 globalThis.confirmAnswer = vi.fn(async () => true);
@@ -73,7 +74,7 @@ async function removeSyntheticDivisions() {
 }
 
 const type = (scope, label, value) => fireEvent.change(scope.getByLabelText(label), { target: { value } });
-const statusText = async (re) => waitFor(() => expect(screen.getByRole('status').textContent).toMatch(re), { timeout: 15000 });
+const statusText = async (re) => waitFor(() => expect(readToasts().map((t) => t.title).join('\n')).toMatch(re), { timeout: 15000 });
 
 describe.skipIf(!TARGET)('ManageDivisions through the local Worker and Data API', () => {
   let dictator;
