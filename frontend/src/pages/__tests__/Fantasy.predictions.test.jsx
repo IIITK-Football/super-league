@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 // Group: frontend-components. League predictions (Season 1): upcoming matches only, a fresh form per match, stale
 // responses ignored, and a failed history load shown as an error rather than an empty list.
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { pick, setNumber } from '../../test/controls';
 
 const future = new Date(Date.now() + 86400000 * 3).toISOString();
 const schedule = [
@@ -60,36 +61,37 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-const matchSelect = () => screen.getByLabelText('Match');
 
 describe('league predictions', () => {
-  it('lists only matches that have not kicked off', () => {
+  it('lists only matches that have not kicked off', async () => {
     render(<MemoryRouter><Fantasy /></MemoryRouter>);
-    const options = within(matchSelect()).getAllByRole('option').map((o) => o.textContent);
-    expect(options).toEqual(['Choose a match', 'Alpha vs Beta', 'Gamma vs Delta']);
+    fireEvent.click(screen.getByRole('button', { name: /Match/ }));
+    const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    expect(options).toEqual(['Alpha vs Beta', 'Gamma vs Delta']);
   });
 
   it('clears the score and the locked state when another match is chosen', async () => {
     fx.prediction.m1 = () => Response.json({ success: true, has_predicted: false });
     render(<MemoryRouter><Fantasy /></MemoryRouter>);
-    fireEvent.change(matchSelect(), { target: { value: 'm1' } });
-    fireEvent.change(await screen.findByLabelText('Home score'), { target: { value: '2' } });
-    fireEvent.change(matchSelect(), { target: { value: 'm2' } });
-    await waitFor(() => expect(screen.getByLabelText('Home score').value).toBe(''));
+    await pick(/Match/, 'Alpha vs Beta');
+    await screen.findByRole('spinbutton', { name: 'Home score' });
+    setNumber('Home score', 2);
+    await pick(/Match/, 'Gamma vs Delta');
+    await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Home score' }).value).toBe(''));
   });
 
   it('ignores a late answer for the match that is no longer chosen', async () => {
     let releaseM1;
     fx.prediction.m1 = () => new Promise((resolve) => { releaseM1 = () => resolve(Response.json({ success: true, has_predicted: true })); });
     render(<MemoryRouter><Fantasy /></MemoryRouter>);
-    fireEvent.change(matchSelect(), { target: { value: 'm1' } });
+    await pick(/Match/, 'Alpha vs Beta');
     await waitFor(() => expect(releaseM1).toBeDefined());
-    fireEvent.change(matchSelect(), { target: { value: 'm2' } });
-    expect(await screen.findByLabelText('Home score')).toBeTruthy();
+    await pick(/Match/, 'Gamma vs Delta');
+    expect(await screen.findByRole('spinbutton', { name: 'Home score' })).toBeTruthy();
     releaseM1();
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByText(/prediction locked/i)).toBeNull();
-    expect(screen.getByLabelText('Home score')).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Home score' })).toBeTruthy();
   });
 
   it('shows an error, not the empty copy, when the history cannot load', async () => {

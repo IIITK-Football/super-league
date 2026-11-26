@@ -8,7 +8,7 @@ import { API_BASE_URL } from '../lib/api';
 import { Login } from './Login';
 import { Onboarding } from './Onboarding';
 import { supabase } from '../lib/supabase';
-import { Button, EmptyState, ErrorState, Field, Notice, Pill, Skeleton, Tabs } from '../components/ui';
+import { Button, Combobox, EmptyState, ErrorState, Field, NumberField, Notice, Pill, Select, Skeleton, Tabs, toast } from '../components/ui';
 
 const PILL = 'inline-flex min-h-11 w-full items-center justify-center rounded-pill bg-ink px-6 text-sm font-black uppercase tracking-[0.2em] text-bg transition hover:opacity-85 disabled:pointer-events-none disabled:opacity-40';
 
@@ -195,6 +195,7 @@ export function Fantasy() {
             const result = await res.json().catch(() => ({}));
             if (!res.ok || !result.success) throw new Error(result.message || 'Your prediction was not saved. Try again.');
             setSubmitted(true);
+            toast({ title: 'Prediction saved', description: 'Points come once the match is graded.', tone: 'success' });
             refetchLb();
         } catch (err) {
             console.error('Submission Error:', err);
@@ -234,8 +235,12 @@ export function Fantasy() {
         return (
             <div className="flex flex-col gap-6">
                 <div className="grid grid-cols-2 gap-4">
-                    <Field label="Home score" type="number" min="0" max="20" inputMode="numeric" value={homeScore} onChange={(e) => setHomeScore(e.target.value)} required />
-                    <Field label="Away score" type="number" min="0" max="20" inputMode="numeric" value={awayScore} onChange={(e) => setAwayScore(e.target.value)} required />
+                    <Field label="Home score">
+                        {(p) => <NumberField {...p} size="lg" min={0} max={20} placeholder="0" value={homeScore === '' ? null : Number(homeScore)} onChange={(n) => setHomeScore(String(n))} />}
+                    </Field>
+                    <Field label="Away score">
+                        {(p) => <NumberField {...p} size="lg" min={0} max={20} placeholder="0" value={awayScore === '' ? null : Number(awayScore)} onChange={(n) => setAwayScore(String(n))} />}
+                    </Field>
                 </div>
                 <p className="text-sm text-mut">{selectedMatch.homeTeam} against {selectedMatch.awayTeam}</p>
                 {goalRows.map(({ rows, team, label, teamId }) => rows.length > 0 && (
@@ -243,14 +248,13 @@ export function Fantasy() {
                         <h3 className="font-semibold text-ink">{label} goals ({rows.length})</h3>
                         {rows.map((row, i) => (
                             <div key={`${team}-${i}`} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <Field as="select" label={`${label} goal ${i + 1} scorer`} value={row.scorer} onChange={(e) => handleUpdateRow(team, i, 'scorer', e.target.value)} required>
-                                    <option value="" disabled>Choose a scorer</option>
-                                    {teamPlayers(teamId).map((p) => <option key={p.id} value={p.id}>{playerName(p)}{p.position ? ` (${p.position})` : ''}</option>)}
+                                <Field label={`${label} goal ${i + 1} scorer`}>
+                                    {(p) => <Combobox {...p} value={row.scorer} onChange={(v) => handleUpdateRow(team, i, 'scorer', v)} placeholder="Choose a scorer" searchPlaceholder="Search players"
+                                        options={teamPlayers(teamId).map((pl) => ({ value: pl.id, label: playerName(pl), description: pl.position }))} />}
                                 </Field>
-                                <Field as="select" label={`${label} goal ${i + 1} assist`} value={row.assist} onChange={(e) => handleUpdateRow(team, i, 'assist', e.target.value)} required>
-                                    <option value="" disabled>Choose an assist</option>
-                                    <option value="Unassisted">Unassisted</option>
-                                    {teamPlayers(teamId).filter((p) => p.id !== row.scorer).map((p) => <option key={`a-${p.id}`} value={p.id}>{playerName(p)}{p.position ? ` (${p.position})` : ''}</option>)}
+                                <Field label={`${label} goal ${i + 1} assist`}>
+                                    {(p) => <Combobox {...p} value={row.assist} onChange={(v) => handleUpdateRow(team, i, 'assist', v)} placeholder="Choose an assist" searchPlaceholder="Search players"
+                                        options={[{ value: 'Unassisted', label: 'Unassisted' }, ...teamPlayers(teamId).filter((pl) => pl.id !== row.scorer).map((pl) => ({ value: pl.id, label: playerName(pl), description: pl.position }))]} />}
                                 </Field>
                             </div>
                         ))}
@@ -389,9 +393,9 @@ export function Fantasy() {
                         {scheduleLoading ? <Skeleton className="h-11 w-full" /> : upcomingMatches.length === 0 ? (
                             <EmptyState title="No upcoming matches">Matches appear here once they are scheduled.</EmptyState>
                         ) : (
-                            <Field as="select" label="Match" value={selectedMatchId} onChange={(e) => selectMatch(e.target.value)} required>
-                                <option value="" disabled>Choose a match</option>
-                                {upcomingMatches.map((m) => <option key={m.id} value={m.id}>{m.homeTeam} vs {m.awayTeam}</option>)}
+                            <Field label="Match">
+                                {(p) => <Select {...p} value={selectedMatchId} onChange={selectMatch} placeholder="Choose a match"
+                                    options={upcomingMatches.map((m) => ({ value: m.id, label: `${m.homeTeam} vs ${m.awayTeam}` }))} />}
                             </Field>
                         )}
                         {matchPanel()}
