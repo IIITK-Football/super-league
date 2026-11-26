@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Crest, EmptyState, ErrorState, Pill, Scoreline, Skeleton, buttonClasses } from './ui';
-import { isLive, isUpcoming, timeLabel } from './match/matchState';
+import { EmptyState, ErrorState, Skeleton, buttonClasses } from './ui';
+import { HeroMatch } from './match/HeroMatch';
 
 // Events in match order: by minute, then by added time (45+2 comes before 46).
 export function sortEvents(events) {
   return [...events].sort((a, b) => ((a.minute ?? 0) - (b.minute ?? 0)) || ((a.added_minute ?? 0) - (b.added_minute ?? 0)));
 }
 
-const minuteLabel = (event) => `${event.minute ?? '?'}${event.added_minute ? `+${event.added_minute}` : ''}'`;
+const minuteText = (event) => `${event.minute ?? '?'}${event.added_minute ? `+${event.added_minute}` : ''}`;
+const minuteLabel = (event) => `${minuteText(event)}'`;
 
 // The score after each goal. A card changes nothing. An own goal scores for the other side.
 function withRunningScore(events, homeTeamId) {
@@ -22,6 +23,11 @@ function withRunningScore(events, homeTeamId) {
     else away += 1;
     return { ...event, runningHome: home, runningAway: away };
   });
+}
+
+// True when the event counts for the home side. A goal is for the side that scored it, except an own goal.
+function isHomeSide(event, match) {
+  return event.isCard ? event.team_id === match.home_team_id : (event.team_id === match.home_team_id) !== event.is_own_goal;
 }
 
 export default function MatchTimeline() {
@@ -128,77 +134,68 @@ export default function MatchTimeline() {
   const { match, events } = state;
   const homeName = match.home?.name || 'To be confirmed';
   const awayName = match.away?.name || 'To be confirmed';
-  const kickoff = match.date ? new Date(match.date) : null;
   const awarded = match.result_kind && match.result_kind !== 'played';
+  const date = match.date ? new Date(match.date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : null;
+  // The scorers under each side of the header. An own goal is listed under the side it helps.
+  const scorer = (event) => ({ name: event.playerName, minute: minuteText(event), isOwnGoal: event.is_own_goal });
+  const goals = events.filter((e) => !e.isCard);
+  const detail = {
+    homeScorers: goals.filter((e) => isHomeSide(e, match)).map(scorer),
+    awayScorers: goals.filter((e) => !isHomeSide(e, match)).map(scorer),
+  };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-12 pb-12">
       {backLink}
 
-      <section aria-label="Scoreboard" className="rounded-card border border-line bg-surf p-5 sm:p-8">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-mut">
-          <Pill tone={isLive(match) ? 'live' : 'neutral'}>{isLive(match) ? 'Live' : match.status === 'forfeited' ? 'Forfeit' : isUpcoming(match) ? 'Upcoming' : 'Full time'}</Pill>
-          {awarded && <Pill tone="neutral" title={match.result_reason || ''}>{match.result_kind} awarded</Pill>}
+      <div className="space-y-4">
+        <HeroMatch match={match} detail={detail} />
+        <p className="eyebrow flex flex-wrap gap-x-4 gap-y-1">
+          {date && <span>{date}</span>}
           {match.venue && <span>{match.venue}</span>}
-          {kickoff && <span>{kickoff.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}{isUpcoming(match) ? ` · ${timeLabel(kickoff)}` : ''}</span>}
-        </div>
+          {awarded && <span title={match.result_reason || ''}>{match.result_kind} awarded{match.result_reason ? `: ${match.result_reason}` : ''}</span>}
+        </p>
+      </div>
 
-        <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-6">
-          <div className="flex min-w-0 flex-col items-center gap-2 text-center">
-            <Crest name={homeName} src={match.home?.logo_url} size="lg" />
-            <span className="line-clamp-2 break-words font-semibold text-ink">{homeName}</span>
-          </div>
-          <div className="text-center">
-            {isUpcoming(match)
-              ? <span className="font-display text-5xl font-bold tabular-nums text-ink">{timeLabel(kickoff) || '-'}</span>
-              : <Scoreline home={match.home_score ?? null} away={match.away_score ?? null} live={isLive(match)} size="lg" />}
-          </div>
-          <div className="flex min-w-0 flex-col items-center gap-2 text-center">
-            <Crest name={awayName} src={match.away?.logo_url} size="lg" />
-            <span className="line-clamp-2 break-words font-semibold text-ink">{awayName}</span>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="events-heading" className="space-y-3">
-        <h2 id="events-heading" className="font-display text-2xl font-bold text-ink">Events</h2>
+      <section aria-labelledby="events-heading" className="space-y-5">
+        <h2 id="events-heading" className="font-display text-3xl text-ink sm:text-4xl">Timeline</h2>
         {events.length === 0 ? (
           <EmptyState title={awarded ? `Result awarded: ${match.result_reason || match.result_kind}` : 'No events yet'}>
             {awarded ? null : 'Goals and cards appear here as they are recorded.'}
           </EmptyState>
         ) : (
-          <ol className="divide-y divide-line rounded-card border border-line bg-surf">
+          <ol className="glass divide-y divide-line/70 overflow-hidden rounded-card">
             {events.map((event) => {
-              const isHome = event.team_id === match.home_team_id;
-              const teamName = isHome ? homeName : awayName;
-              if (event.isCard) {
-                return (
-                  <li key={event.id} className="flex items-center gap-3 px-4 py-3 sm:px-5" data-testid="timeline-card">
-                    <span aria-hidden="true" className={`h-5 w-3.5 shrink-0 rounded-sm ${event.kind === 'red' ? 'bg-live' : 'bg-acc2'}`} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold text-ink">{event.kind === 'red' ? 'Red card' : 'Yellow card'}: {event.playerName}</span>
-                      <span className="block text-sm text-mut">{teamName}</span>
-                    </span>
-                    <span className="font-display text-lg font-bold tabular-nums text-mut">{minuteLabel(event)}</span>
-                  </li>
-                );
-              }
+              const home = isHomeSide(event, match);
+              const teamName = event.team_id === match.home_team_id ? homeName : awayName;
+              const card = event.isCard;
+              const body = (
+                <span className={`flex min-w-0 flex-col gap-0.5 ${home ? 'sm:items-end sm:text-right' : ''}`}>
+                  <span className={`flex max-w-full items-center gap-2 font-black uppercase tracking-tight text-ink ${home ? 'sm:flex-row-reverse' : ''}`}>
+                    {card && <span aria-hidden="true" className={`h-4 w-3 shrink-0 rounded-sm ${event.kind === 'red' ? 'bg-live' : 'bg-ink/70'}`} />}
+                    <span className="truncate">{event.playerName}</span>
+                  </span>
+                  <span className="eyebrow">
+                    {card ? (event.kind === 'red' ? 'Red card' : 'Yellow card') : event.is_own_goal ? 'Own goal' : 'Goal'}
+                  </span>
+                  <span className="text-sm text-mut">
+                    {teamName}{event.playerPosition ? ` · ${event.playerPosition}` : ''}{event.playerNumber !== '-' ? ` #${event.playerNumber}` : ''}
+                    {event.assistName ? ` · Assist: ${event.assistName}` : ''}
+                  </span>
+                </span>
+              );
               return (
-                <li key={event.id} className="flex items-center gap-4 px-4 py-3 sm:px-5">
-                  <span className="w-14 shrink-0 font-display text-2xl font-bold tabular-nums text-ink">{minuteLabel(event)}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-2 font-semibold text-ink">
-                      {event.playerName}
-                      {event.is_own_goal && <Pill tone="live">Own goal</Pill>}
-                    </span>
-                    <span className="block text-sm text-mut">
-                      {teamName}{event.playerPosition ? ` · ${event.playerPosition}` : ''}{event.playerNumber !== '-' ? ` #${event.playerNumber}` : ''}
-                      {event.assistName ? ` · Assist: ${event.assistName}` : ''}
-                    </span>
+                <li
+                  key={event.id}
+                  className="flex items-center gap-4 px-4 py-4 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:gap-6 sm:px-6"
+                  data-testid={card ? 'timeline-card' : undefined}
+                >
+                  <span className={home ? 'flex min-w-0 flex-1 sm:flex-none' : 'hidden sm:block'}>{home && body}</span>
+                  <span className="order-first flex w-16 shrink-0 flex-col items-center gap-1 text-center sm:order-none sm:w-auto">
+                    <span className="font-display text-3xl leading-none tabular-nums text-ink">{minuteLabel(event)}</span>
+                    {!card && <span className="font-display text-sm tabular-nums text-mut">{event.runningHome}–{event.runningAway}</span>}
                   </span>
-                  <span className="shrink-0 font-display text-xl font-bold tabular-nums text-ink">
-                    {event.runningHome}–{event.runningAway}
-                  </span>
+                  <span className={home ? 'hidden sm:block' : 'flex min-w-0 flex-1 sm:flex-none'}>{!home && body}</span>
                 </li>
               );
             })}
