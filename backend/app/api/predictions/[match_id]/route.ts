@@ -1,6 +1,7 @@
 import { publicClient, requestClient } from '@/lib/supabase/clients';
 import { ScopeError } from '@/lib/scope';
 import { handleError } from '../../../../lib/errorHandler'; 
+import { MATCH_STATUS } from '@/lib/matchStatus';
 
 // The caller's client (D-04): publishable key plus their token, so RLS decides.
 async function getSupabaseClient(request: Request) {
@@ -71,6 +72,19 @@ export async function POST(
       throw { status: 401, message: 'Unauthorized: You must be logged in to predict.' };
     }
 
+    // 2. The scores are whole numbers, and the match is still open: scheduled, and before kickoff
+    const isScore = (v: unknown) => Number.isInteger(v) && (v as number) >= 0;
+    if (!isScore(body.predicted_home_score) || !isScore(body.predicted_away_score)) {
+      throw { status: 400, message: 'Scores must be whole numbers, zero or more.' };
+    }
+    const { data: match, error: matchError } = await supabase
+      .from('matches').select('status, date').eq('id', match_id).maybeSingle();
+    if (matchError) throw matchError;
+    if (!match) throw { status: 404, message: 'Match not found.' };
+    if (match.status !== MATCH_STATUS.scheduled || new Date(match.date).getTime() <= Date.now()) {
+      throw { status: 400, message: 'Predictions are closed for this match.' };
+    }
+
     // 2. MAGIC FIX: Check if they already predicted this match!
     const [, { data: existingPrediction, error: existingError }] = await Promise.all([
       checkFantasySection(match_id),
@@ -82,7 +96,7 @@ export async function POST(
       throw { status: 400, message: "Nice try! You have already predicted this match." };
     }
 
-    // 3. Insert the Prediction into the database
+    // 4. Insert the Prediction into the database
     const { data, error } = await supabase
       .from('predictions')
       .insert([{
