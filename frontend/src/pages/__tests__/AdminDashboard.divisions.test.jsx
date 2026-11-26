@@ -27,7 +27,7 @@ describe('AdminDashboard divisions tab', () => {
   it('is offered to a dictator and opens the divisions panel', async () => {
     state.roles = ['dictator'];
     render(<AdminDashboard />);
-    fireEvent.click(await screen.findByRole('button', { name: /divisions & seasons/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /divisions and seasons/i }));
     expect(await screen.findByText('divisions panel')).toBeTruthy();
   });
 
@@ -36,7 +36,7 @@ describe('AdminDashboard divisions tab', () => {
     render(<AdminDashboard />);
     expect(await screen.findByText(/403 forbidden/i)).toBeTruthy();
     expect(screen.queryByText('live panel')).toBeNull();
-    expect(screen.queryByRole('button', { name: /divisions & seasons/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /divisions and seasons/i })).toBeNull();
     expect(screen.queryByText('divisions panel')).toBeNull();
   });
 

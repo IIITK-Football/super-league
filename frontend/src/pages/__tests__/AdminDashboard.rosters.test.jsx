@@ -32,8 +32,8 @@ describe('AdminDashboard by role', () => {
     state.roles = ['dictator'];
     render(<AdminDashboard />);
     await screen.findByText('live panel');
-    for (const tab of ['live matches', 'fixtures', 'captains', 'scorers', 'access control', 'grade fantasy', 'newsletter', 'divisions & seasons', 'teams & rosters', 'audit history']) expect(tabNames()).toContain(tab);
-    fireEvent.click(screen.getByRole('button', { name: /teams & rosters/i }));
+    for (const tab of ['live matches', 'fixtures', 'captains', 'scorers', 'access control', 'grade fantasy', 'news', 'divisions and seasons', 'teams and rosters', 'audit history']) expect(tabNames()).toContain(tab);
+    fireEvent.click(screen.getByRole('button', { name: /teams and rosters/i }));
     expect(await screen.findByText('rosters panel')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^scorers$/i }));
     expect(await screen.findByText('scorers panel')).toBeTruthy();
