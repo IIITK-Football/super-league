@@ -1,10 +1,12 @@
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { ArrowLeft, ArrowRight, Menu, Pause, Play } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useDivisions } from '../hooks/useDivisions';
+import { Pause, Play, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../lib/api';
-import './LeagueLanding.css';
+import { supabase } from '../lib/supabase';
+import { cn } from '../utils/cn';
+import { Crest, EmptyState, ErrorState, Skeleton, buttonClasses } from '../components/ui';
 
 const STREAM_BASE_URL = 'https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev';
 const STREAM_POSTERS = {
@@ -19,45 +21,124 @@ const STREAM_POSTERS = {
     freshers3: `${STREAM_BASE_URL}/loading-freshers3.avif`,
 };
 
+// The hero clips, three per media set. Only the media is keyed here; the division list comes from data.
 const STREAMS = {
     'super-league': ['superLeague1', 'superLeague2', 'superLeague3'],
     wsl: ['wsl1', 'wsl2', 'wsl3'],
     freshers: ['freshers1', 'freshers2', 'freshers3'],
 };
+const CLIP_SETS = Object.values(STREAMS);
 
-const tournaments = [
-    {
-        id: 'super-league',
-        eyebrow: 'IIIT Kottayam',
-        title: 'Super League',
-        detail: "Men's division",
-        accent: '#d9ff4a',
-    },
-    {
-        id: 'wsl',
-        eyebrow: 'IIIT Kottayam',
-        title: 'WSL',
-        detail: "Women's division",
-        accent: '#ff8a65',
-    },
-    {
-        id: 'freshers',
-        eyebrow: 'New season',
-        title: 'Freshers',
-        detail: 'Tournament 2026',
-        accent: '#7dd3fc',
-    },
-];
-
-const CLIP_COUNT = tournaments.length * 3;
+const CLIP_COUNT = CLIP_SETS.length * 3;
 const masterUrlFor = (name) => `${API_BASE_URL}/media/${name}/master.m3u8`;
 
-// Carousel order: Super League 1, WSL 1, Freshers 1, then the second set, etc.
+// Carousel order: first clip of each set, then the second clips, etc.
 function streamNameAt(index) {
     const safeIndex = ((index % CLIP_COUNT) + CLIP_COUNT) % CLIP_COUNT;
-    return STREAMS[tournaments[safeIndex % tournaments.length].id][
-        Math.floor(safeIndex / tournaments.length)
-    ];
+    return CLIP_SETS[safeIndex % CLIP_SETS.length][Math.floor(safeIndex / CLIP_SETS.length)];
+}
+
+const MARK_MASK = {
+    maskImage: 'url(/slklogo3.png)', WebkitMaskImage: 'url(/slklogo3.png)', maskSize: 'contain', WebkitMaskSize: 'contain',
+    maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat', maskPosition: 'center', WebkitMaskPosition: 'center',
+};
+
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+function usePrefersMotion() {
+    const [motion, setMotion] = useState(() => !window.matchMedia?.(REDUCED_MOTION).matches);
+    useEffect(() => {
+        const query = window.matchMedia?.(REDUCED_MOTION);
+        if (!query) return undefined;
+        const update = () => setMotion(!query.matches);
+        query.addEventListener('change', update);
+        return () => query.removeEventListener('change', update);
+    }, []);
+    return motion;
+}
+
+// Divisions from data, each with its current season and its live or next match (when there is one).
+async function loadDivisionCards() {
+    const { data: divisions, error } = await supabase.from('divisions')
+        .select('id, slug, name, primary_color, logo_url, archived_at')
+        .order('sort_order', { ascending: true }).order('name', { ascending: true });
+    if (error) throw error;
+    const visible = (divisions || []).filter((d) => !d.archived_at);
+    if (visible.length === 0) return [];
+
+    const { data: seasons, error: seasonsError } = await supabase.from('seasons')
+        .select('id, division_id, name').in('division_id', visible.map((d) => d.id)).eq('is_current', true);
+    if (seasonsError) throw seasonsError;
+    const seasonIds = (seasons || []).map((s) => s.id);
+
+    let matches = [];
+    if (seasonIds.length) {
+        const { data, error: matchError } = await supabase.from('matches')
+            .select('id, season_id, status, date, home_score, away_score, home:teams!home_team_id(name), away:teams!away_team_id(name)')
+            .in('season_id', seasonIds).in('status', ['live', 'scheduled']).order('date', { ascending: true });
+        if (matchError) throw matchError;
+        matches = data || [];
+    }
+
+    return visible.map((division) => {
+        const season = (seasons || []).find((s) => s.division_id === division.id) || null;
+        const own = matches.filter((m) => season && m.season_id === season.id);
+        const live = own.find((m) => m.status === 'live') || null;
+        const next = own.find((m) => m.status === 'scheduled') || null;
+        return { division, season, live, next };
+    });
+}
+
+function useDivisionCards() {
+    const [state, setState] = useState({ status: 'loading', cards: [] });
+    const [attempt, setAttempt] = useState(0);
+    useEffect(() => {
+        let cancelled = false;
+        loadDivisionCards().then(
+            (cards) => { if (!cancelled) setState({ status: 'ready', cards }); },
+            () => { if (!cancelled) setState({ status: 'error', cards: [] }); },
+        );
+        return () => { cancelled = true; };
+    }, [attempt]);
+    return { ...state, retry: () => { setState({ status: 'loading', cards: [] }); setAttempt((n) => n + 1); } };
+}
+
+function MatchLine({ match, label, featured }) {
+    const home = match.home?.name;
+    const away = match.away?.name;
+    if (!home || !away) return null;
+    const live = match.status === 'live';
+    const when = match.date ? new Date(match.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+    return (
+        <span className={cn('block text-sm', featured ? 'text-blkink' : 'text-ink')}>
+            <span className="font-semibold">{label}: </span>
+            {home} {live ? <span className="font-display font-bold tabular-nums">{match.home_score ?? 0} - {match.away_score ?? 0}</span> : 'vs'} {away}
+            {!live && when ? `, ${when}` : ''}
+        </span>
+    );
+}
+
+function DivisionCard({ card, featured }) {
+    const { division, season, live, next } = card;
+    const match = live || next;
+    const sub = featured ? 'text-blkink/80' : 'text-mut';
+    return (
+        <Link
+            to={`/${division.slug}`}
+            style={!featured && division.primary_color ? { borderLeftColor: division.primary_color } : undefined}
+            className={cn(
+                'flex min-h-24 items-center gap-4 rounded-card border border-l-4 p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc sm:p-5',
+                featured ? 'border-blk bg-blk text-blkink' : 'border-line bg-surf text-ink hover:border-mut',
+            )}
+        >
+            <Crest name={division.name} src={division.logo_url} color={division.primary_color} size="lg" />
+            <span className="min-w-0 flex-1 space-y-1">
+                <span className="block font-display text-2xl font-bold leading-none">{division.name}</span>
+                {season && <span className={cn('block text-sm', sub)}>{season.name}</span>}
+                {match && <MatchLine match={match} label={live ? 'Live now' : 'Next'} featured={featured} />}
+            </span>
+            <ArrowRight aria-hidden="true" size={20} className="shrink-0" />
+        </Link>
+    );
 }
 
 function levelBitrate(level) {
@@ -159,9 +240,10 @@ export function LeagueLanding() {
     const [activeSlot, setActiveSlot] = useState(0);
     const [slotStreamNames, setSlotStreamNames] = useState([null, null]);
     const [readyStreamNames, setReadyStreamNames] = useState([null, null]);
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [failedVideoSrc, setFailedVideoSrc] = useState('');
+    const motion = usePrefersMotion();
+    const { status, cards, retry } = useDivisionCards();
 
     // Keep exactly two persistent video/HLS slots: visible playback and next-clip scout.
     const videoRefs = useRef([null, null]);
@@ -187,13 +269,7 @@ export function LeagueLanding() {
     const tryPlayRef = useRef(null);
     const tryStartScoutRef = useRef(null);
 
-    const touchStart = useRef(null);
-    const navigate = useNavigate();
-
-    const activeTournamentIndex = carouselIndex % tournaments.length;
-    const mediaIndex = Math.floor(carouselIndex / tournaments.length);
-    const activeTournament = tournaments[activeTournamentIndex];
-    const streamName = STREAMS[activeTournament.id][mediaIndex];
+    const streamName = streamNameAt(carouselIndex);
     const videoSrc = masterUrlFor(streamName);
     const posterSrc = STREAM_POSTERS[streamName];
     const nextStreamName = streamNameAt(carouselIndex + 1);
@@ -272,7 +348,6 @@ export function LeagueLanding() {
         const active = activeSlotRef.current;
         const scout = 1 - active;
         const activeVideo = videoRefs.current[active];
-        const activeHls = hlsRefs.current[active];
         const scoutHls = hlsRefs.current[scout];
 
         if (!activeVideo || !scoutHls) return;
@@ -399,7 +474,6 @@ export function LeagueLanding() {
                     manifestReadyRef.current[slot] = true;
                     const assignedName = assignedStreamsRef.current[slot];
                     const isActive = slot === activeSlotRef.current;
-                    const highestIndex = highestBitrateLevelIndex(hls.levels);
 
                     console.info('[LeagueLanding] Manifest parsed', {
                         role: isActive ? 'active' : 'scout',
@@ -553,12 +627,13 @@ export function LeagueLanding() {
             initialV0StartedRef.current = false;
             networkEstimateRef.current = DEFAULT_BANDWIDTH_ESTIMATE;
             videos.forEach((video) => {
+                if (!video) return;
                 video.pause();
                 video.removeAttribute('src');
                 video.load();
             });
         };
-    }, []);
+    }, [motion]);
 
     // The visible slot owns the current clip. The other slot owns the next clip.
     // We reload only when a slot's assigned stream changes; promotion preserves buffered data.
@@ -611,7 +686,7 @@ export function LeagueLanding() {
         // MANIFEST_PARSED event will start it using the current shared estimate.
         tryPlayRef.current?.(activeSlot);
         tryStartScoutRef.current?.();
-    }, [activeSlot, carouselIndex, nextStreamName, streamName, videoSrc]);
+    }, [activeSlot, carouselIndex, nextStreamName, streamName, videoSrc, motion]);
 
     // Only the active video plays. The other element remains hidden but keeps its HLS buffer.
     useEffect(() => {
@@ -625,8 +700,6 @@ export function LeagueLanding() {
         });
     }, [activeSlot, carouselIndex, isPaused, videoFailed, slotStreamNames, readyStreamNames]);
 
-    const openTournament = () => navigate(`/${activeTournament.id}`);
-
     const advanceWhenClipEnds = (slot) => {
         const currentName = currentStreamRef.current;
         if (
@@ -639,185 +712,94 @@ export function LeagueLanding() {
         }
     };
 
-    useEffect(() => {
-        const handleKeyDown = (event) => {
-            if (event.key === 'ArrowLeft') goTo(carouselIndexRef.current - 1);
-            if (event.key === 'ArrowRight') goTo(carouselIndexRef.current + 1);
-            if (event.key === 'Enter') {
-                navigate(`/${tournaments[carouselIndexRef.current % tournaments.length].id}`);
-            }
-        };
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [navigate]);
+
+    const featuredIndex = Math.max(0, cards.findIndex((card) => card.live));
+    const activeFrameReady = motion
+        && slotStreamNames[activeSlot] === streamName
+        && assignedStreamsRef.current[activeSlot] === streamName
+        && expectedUrlsRef.current[activeSlot] === videoSrc
+        && readyStreamNames[activeSlot] === streamName
+        && !videoFailed;
 
     return (
-        <main
-            className="league-landing"
-            style={{ '--active-accent': activeTournament.accent }}
-            onTouchStart={(event) => { touchStart.current = event.touches[0].clientX; }}
-            onTouchEnd={(event) => {
-                if (touchStart.current === null) return;
-                const distance = event.changedTouches[0].clientX - touchStart.current;
-                if (Math.abs(distance) > 45) {
-                    goTo(carouselIndexRef.current + (distance < 0 ? 1 : -1));
-                }
-                touchStart.current = null;
-            }}
-        >
-            <div className="landing-noise" aria-hidden="true" />
-            <header className="landing-header">
-                <button className="landing-wordmark" onClick={() => goTo(0)} aria-label="Go to Super League">
-                    <span>SUPER</span>
-                    <span>LEAGUE</span>
-                </button>
-                <button
-                    className="landing-menu"
-                    onClick={() => setIsMenuOpen((isOpen) => !isOpen)}
-                    aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
-                    aria-expanded={isMenuOpen}
-                >
-                    <Menu size={26} strokeWidth={1.5} />
-                </button>
+        <main className="relative isolate min-h-svh overflow-hidden bg-bg text-ink">
+            {/* Decorative background: the clip when motion is allowed, otherwise the still. The scrim keeps text readable. */}
+            <div aria-hidden="true" className="absolute inset-0 -z-10 overflow-hidden">
+                {motion && [0, 1].map((slot) => (
+                    <video
+                        key={`video-slot-${slot}`}
+                        ref={(element) => { videoRefs.current[slot] = element; }}
+                        className="absolute inset-0 size-full object-cover"
+                        autoPlay={false}
+                        muted
+                        playsInline
+                        preload="auto"
+                        style={{
+                            // display:none keeps the standby player's frame from painting over the active clip.
+                            display: slot === activeSlot ? 'block' : 'none',
+                            opacity: slot === activeSlot && activeFrameReady ? 1 : 0,
+                            visibility: slot === activeSlot && activeFrameReady ? 'visible' : 'hidden',
+                            pointerEvents: 'none',
+                        }}
+                        onEnded={() => advanceWhenClipEnds(slot)}
+                    />
+                ))}
+                {!activeFrameReady && <img src={posterSrc} alt="" className="absolute inset-0 size-full object-cover" />}
+                <span className="absolute inset-0 bg-bg/80 sm:bg-bg/75" />
+            </div>
+
+            <header className="relative z-10 flex h-16 items-center justify-end px-4 sm:px-6">
+                <Link to="/login" className={buttonClasses('secondary', 'sm')}>Sign in</Link>
             </header>
 
-            <div className="landing-stage">
-                <div className="landing-copy" key={activeTournament.id}>
-                    <p className="landing-kicker">{activeTournament.eyebrow}</p>
-                    <button className="landing-title" onClick={openTournament} aria-label={`Open ${activeTournament.title}`}>
-                        {activeTournament.title}
-                    </button>
-                    <p className="landing-detail">{activeTournament.detail}</p>
-                </div>
+            <div className="relative z-10 mx-auto flex max-w-5xl flex-col px-4 pb-20 pt-6 sm:px-6 sm:pt-16">
+                <h1 className="sr-only">Super League</h1>
+                <span role="img" aria-label="Super League" className="block size-20 bg-ink sm:size-28" style={MARK_MASK} />
+                <p className="mt-6 max-w-[40ch] text-lg text-ink sm:text-xl">
+                    Football for IIIT Kottayam. Choose a division to see its fixtures, table and news.
+                </p>
 
-                <div className="landing-card-wrap">
-                    <div className="landing-card">
-                        {[0, 1].map((slot) => {
-                            // The video element has no native poster. The only poster drawn on
-                            // the card is posterSrc for the slide currently named by the text.
-                            const slotStreamName = slotStreamNames[slot];
-                            const sourceMatchesText = slot === activeSlot
-                                && slotStreamName === streamName
-                                && assignedStreamsRef.current[slot] === streamName
-                                && expectedUrlsRef.current[slot] === videoSrc;
-                            const frameReadyForText = sourceMatchesText
-                                && readyStreamNames[slot] === streamName
-                                && !videoFailed;
-
-                            return (
-                                <video
-                                    key={`video-slot-${slot}`}
-                                    ref={(element) => { videoRefs.current[slot] = element; }}
-                                    className="landing-card-image"
-                                    autoPlay={false}
-                                    muted
-                                    playsInline
-                                    preload="auto"
-                                    aria-hidden={slot !== activeSlot || !frameReadyForText}
-                                    style={{
-                                        // display:none prevents the standby player's native poster/frame
-                                        // from ever painting over the active stream. HLS.js can still
-                                        // load and buffer media for this attached video element.
-                                        display: slot === activeSlot ? 'block' : 'none',
-                                        opacity: frameReadyForText ? 1 : 0,
-                                        visibility: frameReadyForText ? 'visible' : 'hidden',
-                                        pointerEvents: 'none',
-                                        position: 'absolute',
-                                        inset: 0,
-                                    }}
-                                    onEnded={() => advanceWhenClipEnds(slot)}
-                                />
-                            );
-                        })}
-
-                        {!(slotStreamNames[activeSlot] === streamName
-                            && assignedStreamsRef.current[activeSlot] === streamName
-                            && expectedUrlsRef.current[activeSlot] === videoSrc
-                            && readyStreamNames[activeSlot] === streamName
-                            && !videoFailed) && (
-                            <img
-                                src={posterSrc}
-                                alt={`${activeTournament.title} video preview`}
-                                className="landing-card-image"
-                                style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    objectFit: 'cover',
-                                    pointerEvents: 'none',
-                                }}
-                            />
-                        )}
-
-                        <span className="landing-card-shade" />
-                        <span className="landing-card-mark">SL / 26</span>
-                        <button type="button" className="landing-enter-button" onClick={openTournament}>
-                            <span>Enter {activeTournament.title === 'Freshers' ? "Fresher's Tournament" : activeTournament.title}</span>
-                        </button>
-                        <span className="landing-redirect-note">Opens the {activeTournament.title} page</span>
-                    </div>
-
-                    <button
-                        type="button"
-                        className="landing-arrow landing-arrow-left"
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onTouchStart={(event) => event.stopPropagation()}
-                        onTouchEnd={(event) => event.stopPropagation()}
-                        onClick={(event) => { event.stopPropagation(); goTo(carouselIndexRef.current - 1); }}
-                        aria-label="Previous carousel video"
-                    >
-                        <ArrowLeft size={20} strokeWidth={1.5} />
-                    </button>
-                    <button
-                        type="button"
-                        className="landing-arrow landing-arrow-right"
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onTouchStart={(event) => event.stopPropagation()}
-                        onTouchEnd={(event) => event.stopPropagation()}
-                        onClick={(event) => { event.stopPropagation(); goTo(carouselIndexRef.current + 1); }}
-                        aria-label="Next carousel video"
-                    >
-                        <ArrowRight size={20} strokeWidth={1.5} />
-                    </button>
-                </div>
+                <section aria-labelledby="divisions-heading" className="mt-10 space-y-4">
+                    <h2 id="divisions-heading" className="font-display text-2xl font-bold text-ink">Divisions</h2>
+                    {status === 'loading' && (
+                        <ul aria-busy="true" aria-label="Loading divisions" className="grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
+                            {[0, 1, 2].map((i) => <li key={i}><Skeleton className="h-24 rounded-card" /></li>)}
+                        </ul>
+                    )}
+                    {status === 'error' && (
+                        <ErrorState message="The divisions could not load. Check your connection and try again." onRetry={retry} />
+                    )}
+                    {status === 'ready' && cards.length === 0 && (
+                        <EmptyState title="No divisions yet">
+                            Checked the division list. Divisions appear here once they are set up.
+                        </EmptyState>
+                    )}
+                    {status === 'ready' && cards.length > 0 && (
+                        <ul className="grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
+                            {cards.map((card, index) => (
+                                <li key={card.division.id}>
+                                    <DivisionCard card={card} featured={index === featuredIndex} />
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
             </div>
 
-            <footer className="landing-footer">
-                <div className="landing-progress" aria-label="Tournament selection">
-                    {tournaments.map((tournament, index) => (
-                        <button
-                            key={tournament.id}
-                            className={`landing-progress-dot ${index === activeTournamentIndex ? 'is-active' : ''}`}
-                            onClick={() => goTo(index + mediaIndex * tournaments.length)}
-                            aria-label={`Show ${tournament.title}`}
-                        />
-                    ))}
-                </div>
-                <button
-                    type="button"
-                    className="landing-play-pause"
-                    onClick={() => setIsPaused((paused) => !paused)}
-                    aria-label={isPaused ? 'Play carousel video' : 'Pause carousel video'}
-                    title={isPaused ? 'Play' : 'Pause'}
-                >
-                    {isPaused ? <Play size={15} fill="currentColor" /> : <Pause size={15} fill="currentColor" />}
-                    <span>{isPaused ? 'Play' : 'Pause'}</span>
-                </button>
-            </footer>
-
-            <div className={`landing-menu-panel ${isMenuOpen ? 'is-open' : ''}`}>
-                <button onClick={() => navigate('/login')}>Sign in / Join</button>
-                {divisionsLoading && <p role="status">Loading divisions…</p>}
-                {divisionsError && <p role="alert">Divisions could not be loaded.</p>}
-                {divisions.map((division) => (
-                    <button key={division.id} onClick={() => navigate(`/${division.slug}`)}>
-                        {division.name}
+            {motion && (
+                <div className="absolute bottom-4 right-4 z-10 sm:bottom-6 sm:right-6">
+                    <button
+                        type="button"
+                        onClick={() => setIsPaused((paused) => !paused)}
+                        aria-label={isPaused ? 'Play background video' : 'Pause background video'}
+                        className={buttonClasses('secondary', 'sm')}
+                    >
+                        {isPaused ? <Play size={15} fill="currentColor" aria-hidden="true" /> : <Pause size={15} fill="currentColor" aria-hidden="true" />}
+                        {isPaused ? 'Play' : 'Pause'}
                     </button>
-                ))}
-            </div>
+                </div>
+            )}
         </main>
     );
 }
-
