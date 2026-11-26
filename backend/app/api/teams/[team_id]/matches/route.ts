@@ -2,6 +2,8 @@ import { publicClient } from '@/lib/supabase/clients';
 import { scopeFromUrl } from '@/lib/scope';
 import { handleError } from '../../../../../lib/errorHandler';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ team_id: string }> }
@@ -9,6 +11,8 @@ export async function GET(
   const supabase = publicClient();
   try {
     const { team_id } = await params;
+    // The id is placed inside a PostgREST filter string, so it must be a UUID before it gets there.
+    if (!UUID.test(team_id)) throw { status: 400, message: 'team_id must be a UUID.' };
 
     const searchParams = new URL(request.url).searchParams;
     let query = supabase
