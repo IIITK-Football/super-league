@@ -26,6 +26,7 @@ vi.mock('../../../lib/supabase', () => ({
 }));
 const { default: ManageRoles } = await import('../ManageRoles');
 const { ConfirmProvider } = await import('../../ui');
+const { readToasts } = await import('../../ui/toastStore');
 const renderRoles = () => render(<ConfirmProvider><ManageRoles currentUserId="me" /></ConfirmProvider>);
 
 beforeEach(() => {
@@ -46,7 +47,7 @@ describe('ManageRoles', () => {
     renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(screen.getByText('3 accounts')).toBeTruthy();
-    const boxes = (label) => ['Captain', 'Editor', 'Dictator'].map((r) => screen.getByLabelText(`${r} for ${label}`).checked);
+    const boxes = (label) => ['Captain', 'Editor', 'Dictator'].map((r) => screen.getByLabelText(`${r} for ${label}`).getAttribute('aria-checked') === 'true');
     expect(boxes('Ada Lane (ada.l@iiitkottayam.ac.in)')).toEqual([true, true, false]); // several grants at once
     expect(boxes('Ada Lane (ada@iiitkottayam.ac.in)')).toEqual([false, false, false]); // a normal user holds none
     expect(document.body.textContent).not.toMatch(/\bu1\b|\bu2\b/);
@@ -88,13 +89,13 @@ describe('ManageRoles', () => {
     renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.click(screen.getByLabelText('Editor for Ada Lane (ada@iiitkottayam.ac.in)'));
-    expect(await screen.findByText('Granted editor for Ada Lane (ada@iiitkottayam.ac.in).')).toBeTruthy();
+    await waitFor(() => expect(readToasts().at(-1)?.title).toBe('Granted editor for Ada Lane (ada@iiitkottayam.ac.in).'));
     expect(db.writes).toEqual([{ user_id: 'u1', role: 'editor' }]);
-    expect(screen.getByLabelText('Editor for Ada Lane (ada@iiitkottayam.ac.in)').checked).toBe(true);
+    expect(screen.getByLabelText('Editor for Ada Lane (ada@iiitkottayam.ac.in)').getAttribute('aria-checked')).toBe('true');
     fireEvent.click(screen.getByLabelText('Editor for Ada Lane (ada.l@iiitkottayam.ac.in)'));
-    expect(await screen.findByText('Removed editor for Ada Lane (ada.l@iiitkottayam.ac.in).')).toBeTruthy();
+    await waitFor(() => expect(readToasts().at(-1)?.title).toBe('Removed editor for Ada Lane (ada.l@iiitkottayam.ac.in).'));
     expect(db.removed).toEqual([{ user_id: 'u2', role: 'editor' }]);
-    expect(screen.getByLabelText('Captain for Ada Lane (ada.l@iiitkottayam.ac.in)').checked).toBe(true); // other grants untouched
+    expect(screen.getByLabelText('Captain for Ada Lane (ada.l@iiitkottayam.ac.in)').getAttribute('aria-checked')).toBe('true'); // other grants untouched
     fireEvent.click(screen.getByLabelText('Dictator for boss@iiitkottayam.ac.in'));
     expect(await screen.findByText(/cannot remove your own dictator access/i)).toBeTruthy();
     expect(db.removed).toHaveLength(1);
@@ -129,10 +130,10 @@ describe('ManageRoles', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(db.writes).toEqual([]);
-    expect(screen.getByLabelText('Dictator for Ada Lane (ada@iiitkottayam.ac.in)').checked).toBe(false);
+    expect(screen.getByLabelText('Dictator for Ada Lane (ada@iiitkottayam.ac.in)').getAttribute('aria-checked')).toBe('false');
     fireEvent.click(screen.getByLabelText('Dictator for Ada Lane (ada@iiitkottayam.ac.in)'));
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Make dictator' }));
-    expect(await screen.findByText('Granted dictator for Ada Lane (ada@iiitkottayam.ac.in).')).toBeTruthy();
+    await waitFor(() => expect(readToasts().at(-1)?.title).toBe('Granted dictator for Ada Lane (ada@iiitkottayam.ac.in).'));
     expect(db.writes).toEqual([{ user_id: 'u1', role: 'dictator' }]);
   });
 });

@@ -35,6 +35,11 @@ vi.mock('../../../lib/supabase', () => ({
 import ManageRoles from '../ManageRoles';
 import ManageCaptains from '../ManageCaptains';
 import ManageScorers from '../ManageScorers';
+import { optionsOf, pick, trigger } from './listbox';
+import { readToasts } from '../../ui/toastStore';
+
+const toasted = (pattern) => waitFor(() => expect(readToasts().at(-1)?.description ?? readToasts().at(-1)?.title).toMatch(pattern), { timeout: 15000 });
+const enabled = (label) => waitFor(() => expect(trigger(label).disabled).toBe(false), { timeout: 15000 });
 // Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
 vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
 globalThis.confirmAnswer = vi.fn(async () => true);
@@ -88,14 +93,13 @@ async function seed() {
   return { division, season, teams: teams.map((t) => t.id), entries, match };
 }
 const grantsOf = async (id) => ((await admin.from('user_roles').select('role').eq('user_id', id)).data ?? []).map((r) => r.role).sort();
-const pick = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
 describe.skipIf(!TARGET)(`roles and assignments through the real Data API (${TARGET ?? 'skipped'})`, () => {
   let dictator; let normal; let captain; let scorer; let world;
 
   async function dictatorFinds(account, labelFragment) {
     fireEvent.change(screen.getByLabelText(/Find (captain for .+|scorer)/), { target: { value: labelFragment } });
-    await waitFor(() => expect(within(screen.getByLabelText(account)).getAllByRole('option').length).toBeGreaterThan(1), { timeout: 15000 });
+    await waitFor(() => expect(trigger(account).textContent).toMatch(/Choose from the search results/), { timeout: 15000 });
   }
 
   beforeAll(async () => {
@@ -127,10 +131,10 @@ describe.skipIf(!TARGET)(`roles and assignments through the real Data API (${TAR
     fireEvent.change(screen.getByLabelText('Search accounts'), { target: { value: `${tag}-ui-default` } });
     const first = await screen.findAllByLabelText(new RegExp(`^Editor for .*${tag}-ui-default@`), {}, { timeout: 15000 });
     fireEvent.click(first[0]);
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Granted editor/), { timeout: 15000 });
+    await toasted(/Granted editor/);
     expect(await grantsOf(normal.id)).toEqual(['editor']);
     fireEvent.click(screen.getAllByLabelText(new RegExp(`^Editor for .*${tag}-ui-default@`))[0]);
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Removed editor/), { timeout: 15000 });
+    await toasted(/Removed editor/);
     expect(await grantsOf(normal.id)).toEqual([]);
     expect(label).toBeTruthy();
   }, 60000);
@@ -138,32 +142,32 @@ describe.skipIf(!TARGET)(`roles and assignments through the real Data API (${TAR
   it('a dictator assigns a captain, changes the captain, and revokes; the grant follows the last assignment', async () => {
     holder.client = dictator.client;
     render(<ManageCaptains />);
-    await waitFor(() => expect(screen.getByRole('option', { name: `${tag} Division` })).toBeTruthy(), { timeout: 15000 });
-    pick('Division', world.division);
-    await waitFor(() => expect(screen.getByRole('option', { name: `${tag} 2026 (current)` })).toBeTruthy(), { timeout: 15000 });
-    pick('Season', world.season);
-    await waitFor(() => expect(screen.getByRole('option', { name: `${tag} Reds` })).toBeTruthy(), { timeout: 15000 });
-    pick('Team', world.teams[0]);
+    await enabled('Division');
+    await pick('Division', `${tag} Division`);
+    await enabled('Season');
+    await pick('Season', `${tag} 2026 (current)`);
+    await enabled('Team');
+    await pick('Team', `${tag} Reds`);
     const teamName = `${tag} Reds`;
     await waitFor(() => expect(screen.getByLabelText(`Find captain for ${teamName}`)).toBeTruthy(), { timeout: 15000 });
     await dictatorFinds(`New captain for ${teamName}`, `${tag}-ui-default`);
-    pick(`New captain for ${teamName}`, normal.id);
+    await pick(`New captain for ${teamName}`, new RegExp(`${tag}-ui-default@`));
     fireEvent.click(screen.getByRole('button', { name: /assign captain/i }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/is now the captain/), { timeout: 15000 });
+    await toasted(/is now the captain/);
     const entry = world.entries.find((e) => e.team_id === world.teams[0]).id;
     expect((await admin.from('captain_assignments').select('user_id').eq('team_entry_id', entry)).data).toEqual([{ user_id: normal.id }]);
     expect(await grantsOf(normal.id)).toEqual(['captain']);
     // Change the captain: the one assignment moves, and the previous captain loses only the captain grant.
     await waitFor(() => expect(screen.getByLabelText(`Find captain for ${teamName}`)).toBeTruthy(), { timeout: 15000 }); // the section reloads after each save
     await dictatorFinds(`New captain for ${teamName}`, `${tag}-ui-default`);
-    pick(`New captain for ${teamName}`, scorer.id);
+    await pick(`New captain for ${teamName}`, new RegExp(`${tag}-ui-default2@`));
     fireEvent.click(screen.getByRole('button', { name: /change captain/i }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/is now the captain/), { timeout: 15000 });
+    await toasted(/is now the captain/);
     expect((await admin.from('captain_assignments').select('user_id').eq('team_entry_id', entry)).data).toEqual([{ user_id: scorer.id }]);
     expect(await grantsOf(normal.id)).toEqual([]);
     globalThis.confirmAnswer = vi.fn(async () => true);
     fireEvent.click(await screen.findByRole('button', { name: /revoke captain/i }, { timeout: 15000 }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/no longer the captain/), { timeout: 15000 });
+    await toasted(/no longer the captain/);
     expect((await admin.from('captain_assignments').select('id').eq('team_entry_id', entry)).data).toEqual([]);
     expect(await grantsOf(scorer.id)).toEqual([]);
   }, 90000);
@@ -171,16 +175,16 @@ describe.skipIf(!TARGET)(`roles and assignments through the real Data API (${TAR
   it('a dictator assigns a scorer to one match and revokes it', async () => {
     holder.client = dictator.client;
     render(<ManageScorers />);
-    await waitFor(() => expect(screen.getByRole('option', { name: `${tag} Division` })).toBeTruthy(), { timeout: 15000 });
     await dictatorFinds('Scorer', `${tag}-ui-default`);
-    pick('Scorer', scorer.id);
-    pick('Division', world.division);
-    await waitFor(() => expect(screen.getByRole('option', { name: `${tag} 2026 (current)` })).toBeTruthy(), { timeout: 15000 });
-    pick('Season', world.season);
-    await waitFor(() => expect(screen.getByRole('option', { name: new RegExp(`${tag} Reds vs ${tag} Blues`) })).toBeTruthy(), { timeout: 15000 });
-    pick('Match', world.match);
+    await pick('Scorer', new RegExp(`${tag}-ui-default2@`));
+    await pick('Division', `${tag} Division`);
+    await enabled('Season');
+    await pick('Season', `${tag} 2026 (current)`);
+    await enabled('Match');
+    await waitFor(async () => expect((await optionsOf('Match')).join()).toMatch(`${tag} Reds vs ${tag} Blues`), { timeout: 15000 });
+    await pick('Match', new RegExp(`${tag} Reds vs ${tag} Blues`));
     fireEvent.click(screen.getByRole('button', { name: /assign scorer/i }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/can now score that match/), { timeout: 15000 });
+    await toasted(/can now score that match/);
     expect((await admin.from('scorer_assignments').select('match_id, season_id').eq('user_id', scorer.id)).data).toEqual([{ match_id: world.match, season_id: null }]);
     expect(await grantsOf(scorer.id)).toEqual(['scorer']);
     // The assigned scorer can now update that match through the Data API (and no other data).
@@ -189,7 +193,7 @@ describe.skipIf(!TARGET)(`roles and assignments through the real Data API (${TAR
     globalThis.confirmAnswer = vi.fn(async () => true);
     const row = (await screen.findAllByRole('listitem', {}, { timeout: 15000 })).find((li) => li.textContent.includes(`${tag}-ui-default2`));
     fireEvent.click(within(row).getByRole('button', { name: /revoke/i }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/no longer scores/), { timeout: 15000 });
+    await toasted(/no longer scores/);
     expect(await grantsOf(scorer.id)).toEqual([]);
     const after = await scorer.client.from('matches').update({ minute: '6' }).eq('id', world.match).select('id');
     expect(after.data ?? []).toHaveLength(0);
