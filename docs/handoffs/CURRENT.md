@@ -7,33 +7,31 @@ handoff steps.
 ## Status
 
 - **Updated:** 2026-11-26 by Claude.
-- **Phase 3 complete:** SL-030 (`91d8cc9`), SL-031 (`e6cfab3`) and SL-032 (`e68f080`) are done.
-- **Release readiness:** the strict rules pass against `main` (168 files) and every test group passes locally.
-- **Release PR:** not opened. Opening a PR into `main` needs the owner's explicit go-ahead; the owner merges it.
-
-## Done (all pushed to `develop`)
-
-- `fdb78b3`: client factories (`backend/lib/supabase/clients.ts`) with timeouts, an idempotent-read retry, round counting and `Server-Timing`. Every served handler builds its clients through them.
-- `99a22d6`: captain and dictator team details go through `team_details_for_edit` and `captain_update_team_details` (migration `20261205000000`) as the caller. The audit actor is tested, and the route no longer uses the secret key.
-- `5991490`: World Cup team list and saved-bracket read use the publishable key, with parity tests. Closed submissions no longer write. Four archive reads are owner-approved exceptions.
-- `a92f094`: `create_awarded_match` (migration `20261205000001`) creates and awards a match in one transaction, with a rollback test.
-- `05f6a28`: an expired token now answers 401, where it used to answer 500. Database refusals map to 403, 400, 404 or 409, and a 500 gives a fixed message. Worker tests cover tokens, refusals, the actor and rollback.
-- `d622763`, `0b06082`: `pnpm --dir api verify:local` passes 11 of 11 checks through real `wrangler dev`; evidence is in `docs/walkthroughs/evidence/SL-030-local-worker.json`. Bundle and config key scans added.
-- `fe99954`: `/api/health` reports the commit and Worker version.
-- `e60da4b`: `node scripts/staging-worker-probe.mjs` gathers read-only staging evidence: release, scoped read and timings.
-- `882a3eb`: every active GET route stays within 3 rounds (`api/test/route-rounds.test.ts`). Standings, the fantasy leaderboard and the dictator match list were fixed.
-- First staging smoke at `fe99954`: health showed environment `staging`, the commit and the version. Timings: standings wall median 9.9 s against a Worker total of about 0.9 s; dashboard wall 1.8 s against a Worker total of 1.1 s; Data API rounds about 250 ms each.
+- **Phase 3 complete:** SL-030, SL-031 and SL-032 are done. The release PR is #193 (`develop` → `main`), awaiting the owner's merge, the production backup and the approval of `Database Production`.
+- **Active:** Phase 4. SL-040 has its plan ([docs/plans/SL-040.md](../plans/SL-040.md)) but has not been started.
+- **Owner decisions (2026-11-26):**
+  - no standing release PR (one per phase);
+  - SL-032 recorded its rollback pair without a new rollback.
 
 ## Exact next step
 
-1. **Release PR, on the owner's go-ahead:** `develop` → `main`, merged with a merge commit by the owner. Production migrations then wait for a fresh verified backup (Actions → Database backup) and the owner's approval of `Database Production`. This release adds four migrations beyond `main`: `20261205000000` (captain team details), `20261205000001` (awarded match), `20261205000002` (grading in the database) and `20261205000003` (newsletter bylines). All are additive except the byline scrub, which rewrites email bylines only. `main` already carries the migrations through `20261204000000`.
-2. **Optional, owner:** restore staging's seeded fantasy points with `~/sl-owner-sql/1-…DRYRUN.sql`, then `2-…sql`, after confirming the address shows `yecozsiccsfwphlmxozt`. Two early SL-032 runs regraded them.
-3. **Next phase (4):** SL-040, division and season configuration, then SL-044.
+1. `pnpm work start SL-040`.
+2. Implement the plan in order:
+   - the migration `20261206000000_division_season_lifecycle.sql`;
+   - the Worker routes under `backend/app/api/admin/{divisions,seasons}`;
+   - section gating in `resolveScope`;
+   - the public routes, navbar and section gate;
+   - the `ManageDivisions.jsx` rework;
+   - tests, then the walkthrough `scripts/ui-walkthrough/divisions.mjs` locally and on staging.
+3. Commit each step separately. Rebuild the local database with `bash scripts/local-db.sh reset --yes` after adding the migration (the guard blocks `migration up`).
+4. Then SL-044 (the versioned rules page).
 
-**Found in the final full run and fixed (`fix(api): never publish an editor's email…`):**
-- Article bylines stored the publisher's email. The route now uses the display name.
-- Migration `20261205000003` scrubs existing email bylines with the audit trigger paused, and adds a check constraint.
-- Staging's append-only audit history keeps the synthetic `sl-check-…` addresses from the earlier parity runs. They are test accounts, not people.
+**Reminders:**
+- Run `pnpm exec tsc --noEmit` in `backend/` before pushing.
+- The strict rules must pass against `main`: every changed file needs a changed test in a group that covers it.
+- Parity tooling: `node scripts/parity/verify-parity.mjs --target local|staging` and `node scripts/ui-walkthrough/parity.mjs --target local|staging`.
+
+**Optional, owner:** restore staging's seeded fantasy points with `~/sl-owner-sql/` (dry run first).
 
 ## In flight
 
