@@ -16,7 +16,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createReport, localProblems, png, serverApi, start, stop, waitFor } from './lib.mjs';
+import { cleanupFixtures, createFixtures, createReport, localProblems, png, serverApi, start, stop, waitFor } from './lib.mjs';
 import { loadEnvText, STAGING_REF, verifyTarget } from '../staging-checks.mjs';
 import { accessHeaders, verifySite } from '../staging-media-check.mjs';
 
@@ -101,36 +101,7 @@ async function main() {
   try {
     // ---- Fixtures ------------------------------------------------------------------------------------------------
     log(`fixtures (${tag})`);
-    const [season] = await db.select('seasons', 'select=id,division_id,divisions!inner(slug)&divisions.slug=eq.super-league&is_current=eq.true');
-    if (!season) throw new Error('no current Super League season on the target');
-    const who = {};
-    for (const [label, roles] of [['dictator', ['dictator']], ['editor', ['editor']], ['captain', ['captain']], ['scorer', ['scorer']], ['loose', ['scorer']], ['normal', []], ['player', []], ['away', []]]) {
-      who[label] = await db.account(`sl-check-${tag}-${label}@iiitkottayam.ac.in`);
-      made.users.push(who[label].id);
-      await db.call('/rest/v1/user_profiles', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ id: who[label].id, email: who[label].email, nickname: `${label}-${tag}`.slice(0, 20) }) });
-      for (const role of roles) await db.insert('user_roles', [{ user_id: who[label].id, role }]);
-    }
-    const teams = await db.insert('teams', [
-      { name: `${tag} Home`, short_name: 'PHM', team_color: '#000000', logo_url: 'data:image/png;base64,AA==' },
-      { name: `${tag} Away`, short_name: 'PAW', team_color: '#ffffff', logo_url: 'data:image/png;base64,AA==' },
-    ]);
-    made.teams.push(...teams.map((t) => t.id));
-    const [home, away] = teams;
-    const entries = await db.insert('team_entries', [{ team_id: home.id, season_id: season.id }, { team_id: away.id, season_id: season.id }]);
-    made.entries.push(...entries.map((e) => e.id));
-    const homeEntry = entries.find((e) => e.team_id === home.id);
-    const awayEntry = entries.find((e) => e.team_id === away.id);
-    await db.insert('captain_assignments', [{ team_entry_id: homeEntry.id, user_id: who.captain.id }]);
-    const asDictator = db.as(who.dictator.token);
-    const linked = await asDictator('/rest/v1/rpc/create_player_for_account', { method: 'POST', body: JSON.stringify({ p_user: who.player.id, p_team_entry_id: homeEntry.id, p_first_name: tag, p_last_name: 'Linked', p_jersey_number: 7, p_position: null, p_overall_rating: null, p_attributes: null, p_image_url: null }) });
-    const awayPlayer = await asDictator('/rest/v1/rpc/create_player_for_account', { method: 'POST', body: JSON.stringify({ p_user: who.away.id, p_team_entry_id: awayEntry.id, p_first_name: tag, p_last_name: 'Away', p_jersey_number: 9, p_position: null, p_overall_rating: null, p_attributes: null, p_image_url: null }) });
-    if (linked.status >= 300 || awayPlayer.status >= 300) throw new Error(`could not create the fixture players (${linked.status}/${awayPlayer.status}): ${JSON.stringify(linked.data).slice(0, 200)}`);
-    made.players.push(linked.data, awayPlayer.data);
-    const [homePlace] = await db.select('roster_memberships', `select=id,position,jersey_number&player_id=eq.${linked.data}`);
-    const [awayPlace] = await db.select('roster_memberships', `select=id&player_id=eq.${awayPlayer.data}`);
-    const [match] = await db.insert('matches', [{ home_team_id: home.id, away_team_id: away.id, season_id: season.id, status: 'scheduled', date: new Date(Date.now() + 2 * 86400000).toISOString() }]);
-    made.matches.push(match.id);
-    await db.insert('scorer_assignments', [{ user_id: who.scorer.id, match_id: match.id }]);
+    const { season, who, home, away, homeEntry, awayEntry, linked, awayPlayer, homePlace, awayPlace, match } = await createFixtures(db, tag, made);
 
     // ---- G1 Division and season public data -------------------------------------------------------------------------
     log('G1');
@@ -361,18 +332,7 @@ async function main() {
     process.exitCode = summary.passed ? 0 : 1;
   } finally {
     log('cleanup');
-    for (const id of made.matches) await db.remove('matches', `id=eq.${id}`);
-    for (const id of made.news) await db.remove('newsletter', `id=eq.${id}`);
-    for (const id of made.players) {
-      await db.remove('roster_memberships', `player_id=eq.${id}`);
-      await db.remove('players', `id=eq.${id}`);
-    }
-    for (const id of made.entries) await db.remove('team_entries', `id=eq.${id}`);
-    for (const id of made.teams) await db.remove('teams', `id=eq.${id}`);
-    for (const id of made.users) {
-      await db.remove('division_flairs', `user_id=eq.${id}`);
-      await db.deleteUser(id);
-    }
+    await cleanupFixtures(db, made);
     await target.close();
   }
 }
