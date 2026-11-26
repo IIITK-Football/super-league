@@ -486,7 +486,7 @@ export default function ManageRosters() {
   return <div className="space-y-8">
     {!sheetOpen && notices}
 
-    <div className="glass grid gap-4 rounded-card p-5 md:grid-cols-3">
+    <div className="glass grid gap-4 rounded-card p-5 md:grid-cols-2 lg:grid-cols-3">
       <Field label="Division">{(p) => <Select {...p} aria-label="Division" value={divisionId} onChange={chooseDivision} disabled={loading.divisions}
         placeholder={loading.divisions ? 'Loading divisions...' : divisions.length ? 'Choose a division' : 'No divisions yet'}
         options={divisions.map((d) => ({ value: d.id, label: d.name }))} />}</Field>

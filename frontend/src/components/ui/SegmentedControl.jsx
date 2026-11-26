@@ -54,7 +54,7 @@ export function SegmentedControl({ options, value, onChange, disabled, className
             >
               {checked && <motion.span layoutId={thumbId} transition={SPRING} aria-hidden="true" className="absolute inset-0 rounded-[9px] bg-ink shadow-[0_6px_18px_-8px_rgb(0_0_0/0.7)]" />}
               {option.icon && <span aria-hidden="true" className="relative flex">{option.icon}</span>}
-              <span className="relative truncate">{option.label}</span>
+              <span className="relative whitespace-nowrap">{option.label}</span>
             </button>
           );
         })}
