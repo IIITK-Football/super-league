@@ -182,3 +182,16 @@ describe('NumberField', () => {
     }
   });
 });
+
+describe('Combobox inside a Sheet', () => {
+  it('Escape closes only the open list, not the sheet', async () => {
+    const onClose = vi.fn();
+    const { Sheet } = await import('../Sheet');
+    render(<Sheet open title="Add goal" onClose={onClose}><Controlled as={Combobox} /></Sheet>);
+    fireEvent.click(screen.getByRole('button', { name: /Team/ }));
+    const search = await screen.findByRole('combobox');
+    fireEvent.keyDown(search, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});

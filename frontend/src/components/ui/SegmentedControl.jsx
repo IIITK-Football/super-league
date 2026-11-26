@@ -47,14 +47,14 @@ export function SegmentedControl({ options, value, onChange, disabled, className
                 }
               }}
               className={cn(
-                'relative flex min-h-10 flex-1 items-center justify-center gap-2 rounded-[9px] px-3 text-sm font-bold transition-colors duration-200',
+                'relative flex min-h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-[9px] px-3 text-sm font-bold transition-colors duration-200',
                 'outline-none focus-visible:ring-2 focus-visible:ring-ink/40 disabled:opacity-40',
                 checked ? 'text-bg' : 'text-mut hover:text-ink',
               )}
             >
               {checked && <motion.span layoutId={thumbId} transition={SPRING} aria-hidden="true" className="absolute inset-0 rounded-[9px] bg-ink shadow-[0_6px_18px_-8px_rgb(0_0_0/0.7)]" />}
               {option.icon && <span aria-hidden="true" className="relative flex">{option.icon}</span>}
-              <span className="relative">{option.label}</span>
+              <span className="relative truncate">{option.label}</span>
             </button>
           );
         })}

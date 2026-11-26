@@ -538,7 +538,8 @@
         "scripts/rehearse-match-events.mjs",
         "frontend/src/components/admin/LiveController.jsx",
         "frontend/src/components/MatchTimeline.jsx",
-        "frontend/src/components/admin/__tests__/LiveController*.test.jsx"
+        "frontend/src/components/admin/__tests__/LiveController*.test.jsx",
+        "frontend/src/components/admin/live/**"
       ],
       "run": [
         {
@@ -559,7 +560,8 @@
             "exec",
             "vitest",
             "run",
-            "src/components/admin/__tests__/LiveController.test.jsx"
+            "src/components/admin/__tests__/LiveController.test.jsx",
+            "src/components/admin/live"
           ]
         }
       ],

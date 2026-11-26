@@ -23,6 +23,7 @@ export function Sheet({ open, onClose, title, children, className }) {
 
     const onKey = (event) => {
       if (event.key === 'Escape') {
+        if (event.defaultPrevented) return; // an open popover inside the sheet took this Escape
         event.stopPropagation();
         closeRef.current?.();
         return;
