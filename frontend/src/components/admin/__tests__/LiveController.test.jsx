@@ -141,6 +141,24 @@ describe('LiveController on match events', () => {
     expect(db.requests[0]).toMatchObject({ action: 'add_event', event: { kind: 'yellow', team_id: 't2', player_id: 'p3', minute: '55' } });
   });
 
+  it('half time keeps the minutes played, as Pause does, and the second half resumes from them', async () => {
+    await openMatch();
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: /set/i }));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    await waitFor(() => expect(db.requests).toHaveLength(2));
+    const started = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(started + 12 * 60000);
+    fireEvent.click(screen.getByRole('button', { name: 'Half Time' }));
+    await waitFor(() => expect(db.requests).toHaveLength(3));
+    expect(db.requests[2]).toMatchObject({ action: 'update_time', minute: 'HT', timer_start_time: null, timer_calibration: 42 });
+    Date.now.mockRestore();
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    await waitFor(() => expect(db.requests).toHaveLength(4));
+    expect(db.requests[3]).toMatchObject({ action: 'update_time', minute: "42'", timer_calibration: 42 });
+  });
+
   it('shows a server refusal inline', async () => {
     db.responses = [{ status: 403, body: { success: false, message: 'Forbidden: you are not assigned to score this match.' } }];
     await openMatch();

@@ -309,10 +309,14 @@ export default function LiveController() {
                   ⏸ Pause
                 </button>
               )}
-              <button type="button" onClick={() => { 
-                  setTimerRunning(false); 
-                  syncTimeToDb('HT', null, calibration); 
-                  setSelectedMatch(prev => ({ ...prev, timer_start_time: null }));
+              <button type="button" onClick={() => {
+                  // Keep the minutes played (as Pause does) so the second half resumes from them.
+                  const startTime = selectedMatch.timer_start_time ? new Date(selectedMatch.timer_start_time).getTime() : null;
+                  const newCalib = timerRunning && startTime ? Math.floor((Date.now() - startTime) / 60000) + calibration : calibration;
+                  setTimerRunning(false);
+                  setCalibration(newCalib);
+                  syncTimeToDb('HT', null, newCalib);
+                  setSelectedMatch(prev => ({ ...prev, timer_start_time: null, timer_calibration: newCalib }));
               }} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
                 Half Time
               </button>
