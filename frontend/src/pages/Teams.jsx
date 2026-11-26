@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
-import { Card, Crest, EmptyState, ErrorState, Skeleton, Tabs } from '../components/ui';
+import { Crest, EmptyState, ErrorState, Skeleton, Spotlight, Tabs } from '../components/ui';
 import { MatchList } from '../components/match/MatchList';
 import PlayerProfile from '../components/PlayerProfile';
 
@@ -45,22 +45,22 @@ function SquadList({ players }) {
     return <EmptyState title="No players yet">Players appear here once they are added to this club&apos;s squad.</EmptyState>;
   }
   return (
-    <div className="grid gap-8 md:grid-cols-2">
+    <div className="grid gap-10 lg:grid-cols-2">
       {groups.map((group) => (
-        <section key={group.key} aria-label={group.label} className="space-y-2">
-          <h3 className="font-display text-xl font-bold text-ink">{group.label}</h3>
-          <ul className="divide-y divide-line rounded-card border border-line bg-surf">
+        <section key={group.key} aria-label={group.label} className="space-y-3">
+          <h3 className="eyebrow">{group.label}</h3>
+          <ul className="glass divide-y divide-line/70 overflow-hidden rounded-card">
             {group.players.map((player) => (
               <li key={player.id}>
                 <Link
                   to={`?player=${player.id}`}
-                  className="flex min-h-11 items-center gap-3 px-4 py-2.5 hover:bg-raise"
+                  className="flex min-h-16 items-center gap-4 px-4 py-3 transition-colors hover:bg-ink/[0.04] sm:px-5"
                 >
-                  <span className="size-10 shrink-0 overflow-hidden rounded-full bg-raise">
+                  <span className="w-9 shrink-0 text-right font-display text-3xl leading-none tabular-nums text-mut">{player.jersey_number ?? '-'}</span>
+                  <span className="size-11 shrink-0 overflow-hidden rounded-full bg-raise">
                     {player.image_url && <img src={player.image_url} alt="" className="size-full object-cover" />}
                   </span>
-                  <span className="min-w-0 flex-1 truncate font-semibold text-ink">{player.name}</span>
-                  {player.jersey_number != null && <span className="font-display text-lg font-bold tabular-nums text-mut">{player.jersey_number}</span>}
+                  <span className="min-w-0 flex-1 truncate font-black uppercase tracking-tight text-ink">{player.name}</span>
                 </Link>
               </li>
             ))}
@@ -84,11 +84,16 @@ function ClubPage({ team, teams, allPlayers, tab, setParams }) {
   const players = useMemo(() => allPlayers.filter((p) => p.team_id === team.id), [allPlayers, team.id]);
 
   return (
-    <div className="space-y-6 pb-12">
-      <header className="flex flex-wrap items-center gap-4">
-        <Crest name={team.name} src={team.logo_url} color={team.team_color} size="lg" />
-        <h1 className="min-w-0 flex-1 font-display text-4xl font-bold text-ink sm:text-5xl">{team.name}</h1>
-        <Link to={`/${seasonScope.division}/teams`} className="inline-flex min-h-11 items-center text-sm font-semibold text-mut hover:text-ink">All clubs</Link>
+    <div className="space-y-10 pb-12">
+      <header className="flex flex-wrap items-end justify-between gap-6">
+        <div className="flex min-w-0 items-center gap-5 sm:gap-8">
+          <Crest name={team.name} src={team.logo_url} color={team.team_color} size="lg" className="size-24 sm:size-32" />
+          <div className="min-w-0 space-y-2">
+            <p className="eyebrow">{[seasonScope.divisionRecord?.name, seasonScope.season && `${seasonScope.season.name} season`].filter(Boolean).join(' · ')}</p>
+            <h1 className="break-words font-display text-4xl text-ink sm:text-6xl">{team.name}</h1>
+          </div>
+        </div>
+        <Link to={`/${seasonScope.division}/teams`} className="eyebrow inline-flex min-h-11 items-center hover:text-ink">All clubs</Link>
       </header>
 
       <Tabs
@@ -99,7 +104,7 @@ function ClubPage({ team, teams, allPlayers, tab, setParams }) {
       />
 
       {tab === 'squad' ? <SquadList players={players} />
-        : matchesApi.loading ? <Skeleton className="h-28 w-full" />
+        : matchesApi.loading ? <Skeleton className="h-36 w-full rounded-card" />
           : matchesApi.error ? <ErrorState message={matchesApi.error.message} onRetry={matchesApi.retry} />
             : matches.length === 0 ? <EmptyState title={`No matches for ${team.name} yet`}>Fixtures appear here once they are scheduled.</EmptyState>
               : <MatchList matches={matches} headingLevel={3} />}
@@ -129,25 +134,25 @@ export function Teams() {
   }
 
   const header = (
-    <header className="space-y-1">
-      <h1 className="font-display text-4xl font-bold text-ink sm:text-5xl">Clubs</h1>
-      <p className="text-mut">{[seasonScope.divisionRecord?.name, seasonScope.season?.name].filter(Boolean).join(' · ') || ' '}</p>
+    <header className="space-y-2">
+      <p className="eyebrow">{[seasonScope.divisionRecord?.name, seasonScope.season && `${seasonScope.season.name} season`].filter(Boolean).join(' · ') || ' '}</p>
+      <h1 className="font-display text-4xl text-ink sm:text-6xl">Clubs</h1>
     </header>
   );
 
   if (teamsApi.loading) {
     return (
-      <div aria-busy="true" aria-label="Loading clubs" className="space-y-6 pb-12">
+      <div aria-busy="true" aria-label="Loading clubs" className="space-y-10 pb-12">
         {header}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+          {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-56 w-full rounded-card" />)}
         </div>
       </div>
     );
   }
 
   if (teamsApi.error) {
-    return <div className="space-y-6 pb-12">{header}<ErrorState message={teamsApi.error.message} onRetry={teamsApi.retry} /></div>;
+    return <div className="space-y-10 pb-12">{header}<ErrorState message={teamsApi.error.message} onRetry={teamsApi.retry} /></div>;
   }
 
   if (clubId) {
@@ -163,27 +168,27 @@ export function Teams() {
   }
 
   if (teams.length === 0) {
-    return <div className="space-y-6 pb-12">{header}<EmptyState title="No clubs in this season yet">Clubs appear here once teams are entered.</EmptyState></div>;
+    return <div className="space-y-10 pb-12">{header}<EmptyState title="No clubs in this season yet">Clubs appear here once teams are entered.</EmptyState></div>;
   }
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-10 pb-12">
       {header}
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {teams.map((team) => {
           const playerCount = allPlayers.filter((p) => p.team_id === team.id).length;
           return (
             <li key={team.id}>
-              <Link to={`/${seasonScope.division}/teams/${team.id}`} className="block h-full">
-                <Card
-                  className="flex h-full flex-col items-center gap-3 border-t-4 text-center transition-colors hover:border-mut"
-                  style={team.team_color ? { borderTopColor: team.team_color } : undefined}
-                >
-                  <Crest name={team.name} src={team.logo_url} color={team.team_color} size="lg" />
-                  <span className="font-display text-2xl font-bold text-ink">{team.name}</span>
-                  {playersApi.data && <span className="text-sm text-mut">{playerCount} {playerCount === 1 ? 'player' : 'players'}</span>}
-                </Card>
-              </Link>
+              <Spotlight
+                as={Link}
+                to={`/${seasonScope.division}/teams/${team.id}`}
+                className="glass lift flex h-full flex-col items-center gap-4 rounded-card p-6 text-center"
+                style={team.team_color ? { boxShadow: `inset 0 3px 0 ${team.team_color}` } : undefined}
+              >
+                <Crest name={team.name} src={team.logo_url} color={team.team_color} size="lg" className="size-24" />
+                <span className="font-display text-2xl leading-none text-ink">{team.name}</span>
+                {playersApi.data && <span className="eyebrow">{playerCount} {playerCount === 1 ? 'player' : 'players'}</span>}
+              </Spotlight>
             </li>
           );
         })}
