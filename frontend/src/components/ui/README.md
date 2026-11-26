@@ -63,5 +63,5 @@ Reference implementations: `pages/Home.jsx`, `pages/LeagueLanding.jsx`, `compone
   is a glass pill. 44px targets.
 - Spacing: sections `space-y-14`, inside a section `space-y-4`. Laptop content uses the width (grids), nothing floats in
   empty space; phones stack.
-- Banned: neon colours, gradients on text, italics except the wordmark, pills that state the obvious ("Upcoming" on a
+- Banned: neon colours, coloured text gradients (only the white-to-grey `.chrome` on display headings and big numbers), italics except the wordmark, pills that state the obvious ("Upcoming" on a
   future fixture), em dashes, filler copy.
