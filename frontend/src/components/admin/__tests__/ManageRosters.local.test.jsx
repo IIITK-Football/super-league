@@ -37,6 +37,9 @@ vi.mock('../../../lib/supabase', () => ({
 }));
 
 import ManageRosters from '../ManageRosters';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 function connection() {
   if (TARGET === 'local') {
@@ -167,7 +170,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
 
   it('a dictator manages the season\'s teams and roster, every write persisted', async () => {
     holder.client = dictator.client;
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    globalThis.confirmAnswer = vi.fn(async () => true);
     render(<ManageRosters />);
     await openTeam('Alpha');
     await screen.findByText(/no players on this roster yet/i, {}, { timeout: 15000 });
@@ -233,7 +236,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
 
   it('a dictator creates a team in the season and deletes a player who never played', async () => {
     holder.client = dictator.client;
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirm = globalThis.confirmAnswer = vi.fn(async () => true);
     render(<ManageRosters />);
     await openTeam('Alpha');
 

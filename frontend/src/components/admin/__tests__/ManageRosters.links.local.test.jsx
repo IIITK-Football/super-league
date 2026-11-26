@@ -32,6 +32,9 @@ vi.mock('../../../lib/supabase', () => ({ supabase: { from: (...a) => holder.cli
 import PlayerAccountLink from '../PlayerAccountLink';
 import AccountMatches from '../AccountMatches';
 import ManualLink from '../ManualLink';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 function connection() {
   if (TARGET === 'local') {
@@ -145,7 +148,7 @@ describe.skipIf(!TARGET)(`account links through the real Data API (${TARGET ?? '
 
     const status = (await dictator.client.rpc('player_link_status', { p_player_ids: [target.player] })).data[0];
     expect(status).toMatchObject({ linked: true, email: account.email });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    globalThis.confirmAnswer = vi.fn(async () => true);
     render(<PlayerAccountLink player={{ id: target.player, first_name: target.name, last_name: '' }} status={status} />);
     fireEvent.click(screen.getByRole('button', { name: /unlink/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/no longer linked/), { timeout: 10000 });
@@ -161,7 +164,7 @@ describe.skipIf(!TARGET)(`account links through the real Data API (${TARGET ?? '
     const before = (await dictator.client.rpc('account_link_matches')).data.filter((m) => m.status === 'ready');
     const seedKeys = before.filter((m) => m.player_id !== legacy).map((m) => ({ player: m.player_id, email: m.email }));
     try {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      globalThis.confirmAnswer = vi.fn(async () => true);
       render(<AccountMatches />);
       const button = await screen.findByRole('button', { name: new RegExp(`Link all ${before.length} ready match`) }, { timeout: 10000 });
       expect(within(screen.getByRole('table', { name: 'Account matches' })).getByText(ready.email.toLowerCase())).toBeTruthy();

@@ -11,6 +11,7 @@ import PlayerAccountLink from './PlayerAccountLink';
 import AccountMatches from './AccountMatches';
 import ManualLink from './ManualLink';
 import AccountPicker from './AccountPicker';
+import { useConfirm } from '../ui';
 
 // Dictator flow for season teams and rosters: division -> season -> team entry, then that team's players.
 // A player is one reusable identity (the FUT card: name, portrait, rating, attributes); a roster place puts the
@@ -112,6 +113,7 @@ function previewPlayer(value, imageUrl) {
 }
 
 export default function ManageRosters() {
+  const confirm = useConfirm();
   const [divisions, setDivisions] = useState([]);
   const [divisionId, setDivisionId] = useState('');
   const [seasons, setSeasons] = useState([]);
@@ -411,7 +413,7 @@ export default function ManageRosters() {
   };
 
   const removeFromRoster = async () => {
-    if (!window.confirm('Remove this player from the team\'s roster for this season? The player is kept.')) return;
+    if (!(await confirm({ title: 'Remove from this season\'s roster?', description: 'The player is kept and can be added again.', confirmLabel: 'Remove from roster', tone: 'danger' }))) return;
     setBusy(`remove-${place.id}`);
     const { data, error: err } = await supabase.from('roster_memberships').delete().eq('id', place.id).select('id');
     setBusy('');
@@ -421,7 +423,7 @@ export default function ManageRosters() {
 
   const deletePlayer = async () => {
     const name = place.player ? `${place.player.first_name} ${place.player.last_name}` : 'this player';
-    if (!window.confirm(`Delete ${name} for good? This only works for a player with no other season and no match history.`)) return;
+    if (!(await confirm({ title: `Delete ${name} for good?`, description: 'This only works for a player with no other season and no match history.', confirmLabel: 'Delete player', tone: 'danger' }))) return;
     setBusy(`delete-${place.id}`);
     // One step in the database: the roster place and the player go together, or nothing changes.
     const { error: err } = await supabase.rpc('delete_unplayed_player', { p_player_id: place.player_id });

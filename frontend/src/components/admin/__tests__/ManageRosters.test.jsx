@@ -152,8 +152,11 @@ vi.mock('../../../lib/supabase', () => ({
 }));
 
 import ManageRosters, { describeError, validatePlayer, blankPlayer } from '../ManageRosters';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
-beforeEach(() => { seed(); rpc.mockClear(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
+beforeEach(() => { seed(); rpc.mockClear(); globalThis.confirmAnswer = vi.fn(async () => true); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 const READS = new Set(['search_players', 'player_link_status', 'verified_accounts_for_linking', 'account_link_matches']);

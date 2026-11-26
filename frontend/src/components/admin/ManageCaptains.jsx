@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, Save, Trash2, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
+import { useConfirm } from '../ui';
 
 // Captains. The dictator chooses division -> season -> team (as in Teams & Rosters) and sees only that team entry's
 // captain for that season: labelled by the dictator-only account directory (verified email, name as context; never an
@@ -14,6 +15,7 @@ const inputClass = 'w-full rounded-lg border border-white/10 bg-black/50 px-3 py
 const labelClass = 'text-[10px] font-black uppercase tracking-widest text-zinc-500';
 
 export default function ManageCaptains() {
+  const confirm = useConfirm();
   const [divisions, setDivisions] = useState([]);
   const [divisionId, setDivisionId] = useState('');
   const [seasons, setSeasons] = useState([]);
@@ -111,7 +113,7 @@ export default function ManageCaptains() {
 
   const revokeCaptain = async () => {
     if (!current) return;
-    if (!window.confirm(`Revoke ${captainLabel} as captain of ${team?.name}? The team, its season entry and its roster are kept.`)) return;
+    if (!(await confirm({ title: `Revoke ${captainLabel}?`, description: `They stop being captain of ${team?.name}. The team, its season entry and its roster are kept.`, confirmLabel: 'Revoke captain', tone: 'danger' }))) return;
     setBusy('revoke'); setError(''); setMessage('');
     const { error: err } = await supabase.rpc('revoke_captain', { p_entry: entryId });
     setBusy('');

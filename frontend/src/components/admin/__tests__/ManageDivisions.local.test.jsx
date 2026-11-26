@@ -24,6 +24,9 @@ vi.mock('../../../lib/supabase', () => ({
 }));
 
 import ManageDivisions from '../ManageDivisions';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 function connection() {
   const r = spawnSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { encoding: 'utf8', cwd: join(ROOT, 'backend') });
@@ -167,7 +170,6 @@ describe.skipIf(!TARGET)('ManageDivisions through the local Worker and Data API'
     expect((await admin.from('divisions').select('archived_at').eq('id', division.data.id).single()).data.archived_at).toBeTruthy();
 
     // The division has a season, so deleting it is refused and explained; the data stays.
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     // The screen reports success before it has reloaded; the buttons stay disabled until then.
     const remove = () => within(screen.getByDisplayValue('SL Check Inter').closest('li')).getByRole('button', { name: /delete sl check inter/i });
     await waitFor(() => expect(remove().disabled).toBe(false), { timeout: 15000 });

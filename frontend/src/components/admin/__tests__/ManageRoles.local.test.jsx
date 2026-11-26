@@ -35,6 +35,9 @@ vi.mock('../../../lib/supabase', () => ({
 import ManageRoles from '../ManageRoles';
 import ManageCaptains from '../ManageCaptains';
 import ManageScorers from '../ManageScorers';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 function connection() {
   if (TARGET === 'local') {
@@ -158,7 +161,7 @@ describe.skipIf(!TARGET)(`roles and assignments through the real Data API (${TAR
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/is now the captain/), { timeout: 15000 });
     expect((await admin.from('captain_assignments').select('user_id').eq('team_entry_id', entry)).data).toEqual([{ user_id: scorer.id }]);
     expect(await grantsOf(normal.id)).toEqual([]);
-    window.confirm = () => true;
+    globalThis.confirmAnswer = vi.fn(async () => true);
     fireEvent.click(await screen.findByRole('button', { name: /revoke captain/i }, { timeout: 15000 }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/no longer the captain/), { timeout: 15000 });
     expect((await admin.from('captain_assignments').select('id').eq('team_entry_id', entry)).data).toEqual([]);
@@ -183,7 +186,7 @@ describe.skipIf(!TARGET)(`roles and assignments through the real Data API (${TAR
     // The assigned scorer can now update that match through the Data API (and no other data).
     const own = await scorer.client.from('matches').update({ minute: '5' }).eq('id', world.match).select('id');
     expect(own.data).toHaveLength(1);
-    window.confirm = () => true;
+    globalThis.confirmAnswer = vi.fn(async () => true);
     const row = (await screen.findAllByRole('listitem', {}, { timeout: 15000 })).find((li) => li.textContent.includes(`${tag}-ui-default2`));
     fireEvent.click(within(row).getByRole('button', { name: /revoke/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/no longer scores/), { timeout: 15000 });

@@ -6,6 +6,9 @@
 // so every account is offered. Accounts are found by every word and labelled by the account directory.
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 const db = {};
 function seed() {
@@ -86,7 +89,7 @@ const { default: ManageCaptains } = await import('../ManageCaptains');
 
 beforeEach(() => {
   seed();
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  globalThis.confirmAnswer = vi.fn(async () => true);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 

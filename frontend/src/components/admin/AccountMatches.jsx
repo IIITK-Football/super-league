@@ -3,6 +3,7 @@ import { Link2, Loader2, RefreshCw, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ghostButton, primaryButton } from './adminStyles';
 import { linkErrorMessage } from './PlayerAccountLink';
+import { useConfirm } from '../ui';
 
 // Account matching, for a dictator: legacy players without an account are matched to verified accounts by exact email
 // (never by name). The preview is live (account_link_matches); "Link all ready matches" sends exactly the ready pairs
@@ -18,6 +19,7 @@ export const MATCH_STATUS = {
 const ORDER = ['ready', 'duplicate', 'conflict', 'waiting_verification', 'no_account'];
 
 export default function AccountMatches({ onChanged }) {
+  const confirm = useConfirm();
   const [state, setState] = useState({ status: 'loading', rows: [], error: '' });
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -35,7 +37,7 @@ export default function AccountMatches({ onChanged }) {
   const ready = state.rows.filter((r) => r.status === 'ready');
 
   const applyAll = async () => {
-    if (!window.confirm(`Link ${ready.length} player${ready.length === 1 ? '' : 's'} to their verified accounts?`)) return;
+    if (!(await confirm({ title: `Link ${ready.length} player${ready.length === 1 ? '' : 's'}?`, description: 'Each player is linked to their verified account.', confirmLabel: 'Link players' }))) return;
     setBusy('apply'); setError(''); setMessage('');
     const { data, error: err } = await supabase.rpc('apply_account_link_matches', { p_expected: ready.map(({ player_id, user_id }) => ({ player_id, user_id })) });
     setBusy('');
@@ -46,7 +48,7 @@ export default function AccountMatches({ onChanged }) {
     onChanged?.();
   };
   const dismiss = async (row) => {
-    if (!window.confirm(`Dismiss the waiting email of ${row.player_name}? The player stays as is, without an account; you can still link them by hand.`)) return;
+    if (!(await confirm({ title: 'Dismiss the waiting email?', description: `${row.player_name} stays as is, without an account. You can still link them by hand.`, confirmLabel: 'Dismiss', tone: 'danger' }))) return;
     setBusy(`dismiss-${row.player_id}`); setError(''); setMessage('');
     const { error: err } = await supabase.rpc('dismiss_player_link_key', { p_player: row.player_id });
     setBusy('');

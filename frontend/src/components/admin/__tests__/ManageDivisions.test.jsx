@@ -101,6 +101,9 @@ vi.mock('../../../lib/supabase', () => ({ supabase: { from: (t) => from(t) } }))
 vi.mock('../../../hooks/useApi', () => ({ fetchApi: (...args) => worker(...args) }));
 
 import ManageDivisions, { describeError, parseSettings, validateDivision, validateSeason } from '../ManageDivisions';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 const type = (label, value, scope = screen) => fireEvent.change(scope.getByLabelText(label), { target: { value } });
 const writes = (table, op) => db.calls.filter((c) => c.table === table && c.op === op);
@@ -116,7 +119,7 @@ async function addDivision(name = 'Inter', slug = 'inter') {
 beforeEach(() => {
   seed();
   worker.mockClear();
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  globalThis.confirmAnswer = vi.fn(async () => true);
 });
 afterEach(() => {
   cleanup();

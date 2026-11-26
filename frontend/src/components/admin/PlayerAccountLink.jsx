@@ -3,6 +3,7 @@ import { Link2Off, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import AccountPicker from './AccountPicker';
 import { ghostButton, labelClass } from './adminStyles';
+import { useConfirm } from '../ui';
 
 // The account of one player identity, for a dictator (Teams & Rosters). A linked player's email is their account's
 // verified Auth email, shown read-only; an unlinked player has none. The dictator finds a verified account by its email
@@ -21,6 +22,7 @@ export const linkErrorMessage = (error) => {
 };
 
 export default function PlayerAccountLink({ player, status, statusError, onChanged }) {
+  const confirm = useConfirm();
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -37,7 +39,7 @@ export default function PlayerAccountLink({ player, status, statusError, onChang
     done(err, `${name} is linked to ${account.email}.`);
   };
   const unlink = async () => {
-    if (!window.confirm(`Unlink ${name} from ${status?.email}? The card, roster places and history are kept; the player will have no email.`)) return;
+    if (!(await confirm({ title: `Unlink ${name}?`, description: `${status?.email} is removed from this player. The card, roster places and history are kept; the player will have no email.`, confirmLabel: 'Unlink', tone: 'danger' }))) return;
     setBusy('unlink');
     const { error: err } = await supabase.rpc('unlink_player_account', { p_player: player.id });
     setBusy('');

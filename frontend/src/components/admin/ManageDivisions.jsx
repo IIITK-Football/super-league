@@ -3,6 +3,7 @@ import { Archive, Check, Layers, Loader2, Plus, RotateCcw, Save, ScrollText, Sta
 import { supabase } from '../../lib/supabase';
 import { fetchApi } from '../../hooks/useApi';
 import ManageRules from './ManageRules';
+import { useConfirm } from '../ui';
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -56,6 +57,7 @@ const primaryButton = 'flex items-center gap-2 rounded-lg bg-[#d9ff4a] px-3 py-2
 const badge = (text, tone = 'zinc') => <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${tone === 'lime' ? 'border-[#d9ff4a]/40 text-[#d9ff4a]' : tone === 'red' ? 'border-red-500/30 text-red-300' : 'border-white/15 text-zinc-400'}`}>{text}</span>;
 
 export default function ManageDivisions() {
+  const confirm = useConfirm();
   const [divisions, setDivisions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
@@ -199,8 +201,8 @@ export default function ManageDivisions() {
     }, `Division "${name.trim()}" saved.`);
   };
 
-  const deleteDivision = (division) => {
-    if (!window.confirm(`Delete the division "${division.name}"? This only works while it has no seasons.`)) return;
+  const deleteDivision = async (division) => {
+    if (!(await confirm(`Delete the division "${division.name}"? This only works while it has no seasons.`))) return;
     return write(`division-${division.id}`, `/admin/divisions/${division.id}`, 'DELETE', undefined,
       `Division "${division.name}" deleted.`, () => {
         if (selectedDivision?.id === division.id) {
