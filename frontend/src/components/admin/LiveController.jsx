@@ -5,6 +5,7 @@ import { Activity, Trophy, CheckCircle, CheckCircle2, X, Trash2 } from 'lucide-r
 import { supabase } from '../../lib/supabase';
 import { DivisionSwitch } from './DivisionSwitch';
 import { useAuth } from '../../context/AuthContext';
+import { ConfirmDialog, Field } from '../ui';
 
 export default function LiveController() {
   const { hasRole } = useAuth();
@@ -193,10 +194,15 @@ export default function LiveController() {
     setShowGoalForm(true);
   };
 
-  const voidEvent = (event) => {
-    const reason = prompt('Why is this event being removed? (a reason is required)');
-    if (!reason || !reason.trim()) return;
-    runEvent({ action: 'void_event', event_id: event.id, version: event.version, reason: reason.trim() }, event.id);
+  // Removing an event is voiding it: the event stays with who and why. The reason is required, in the dialog.
+  const [voidTarget, setVoidTarget] = useState(null);
+  const [voidReason, setVoidReason] = useState('');
+  const voidEvent = (event) => { setVoidReason(''); setVoidTarget(event); };
+  const confirmVoid = async () => {
+    const reason = voidReason.trim();
+    if (!reason) throw new Error('Give a reason to remove this event.');
+    const r = await runEvent({ action: 'void_event', event_id: voidTarget.id, version: voidTarget.version, reason }, voidTarget.id);
+    if (!r?.ok) throw new Error(r?.message || 'The event was not removed.');
   };
 
   const scoreStep = (side, delta) => runEvent({ action: 'score_step', side, delta, id: crypto.randomUUID() }, `${side}${delta}`);
@@ -315,6 +321,18 @@ export default function LiveController() {
               </div>
             </div>
           </div>
+
+          <ConfirmDialog
+            open={Boolean(voidTarget)}
+            onOpenChange={(open) => { if (!open) setVoidTarget(null); }}
+            title="Remove this event?"
+            description={voidTarget ? `${voidTarget.minute ?? '?'}' ${eventLabel(voidTarget)}. The event is kept in the history with your reason.` : ''}
+            confirmLabel="Remove event"
+            tone="danger"
+            onConfirm={confirmVoid}
+          >
+            <Field label="Reason" value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="For example, wrong player" />
+          </ConfirmDialog>
 
           {notice.text && <p role={notice.type === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-lg border p-3 text-sm ${notice.type === 'error' ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>{notice.text}</p>}
           {unattributedCount > 0 && <p role="note" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">{unattributedCount} goal{unattributedCount === 1 ? '' : 's'} unattributed: choose Attribute on the goal to add its scorer. They count toward the score and toward no player.</p>}

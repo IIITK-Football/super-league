@@ -40,8 +40,8 @@ beforeEach(() => {
     const next = db.responses.shift() ?? { status: 200, body: { success: true, message: 'Done.', match: { home_score: 2, away_score: 0 } } };
     return { ok: next.status < 400, status: next.status, json: async () => next.body };
   }));
-  vi.spyOn(window, 'prompt').mockReturnValue('wrong player');
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  vi.spyOn(window, 'prompt').mockImplementation(() => { throw new Error('window.prompt must not be used'); });
+  vi.spyOn(window, 'confirm').mockImplementation(() => { throw new Error('window.confirm must not be used'); });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -108,12 +108,15 @@ describe('LiveController on match events', () => {
     await waitFor(() => expect(db.selects).toBeGreaterThan(loadsBefore));
   });
 
-  it('voids an event with a required reason, and sends nothing when no reason is given', async () => {
+  it('voids an event only after a reason is given in a confirm dialog', async () => {
     await openMatch();
-    window.prompt.mockReturnValueOnce('');
     fireEvent.click(screen.getByLabelText('Void event'));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove event' }));
+    expect(await within(dialog).findByText('Give a reason to remove this event.')).toBeTruthy();
     expect(db.requests).toHaveLength(0);
-    fireEvent.click(screen.getByLabelText('Void event'));
+    fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'wrong player' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove event' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
     expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'void_event', event_id: 'e1', version: 1, reason: 'wrong player' });
   });
@@ -126,6 +129,9 @@ describe('LiveController on match events', () => {
     const chooser = await screen.findByRole('group', { name: 'Choose the goal to correct' });
     expect(within(chooser).getByText(/Ada Striker/)).toBeTruthy();
     fireEvent.click(within(chooser).getByRole('button', { name: 'Void this goal' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'wrong player' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove event' }));
     await waitFor(() => expect(db.requests).toHaveLength(2));
     expect(db.requests[1]).toMatchObject({ action: 'void_event', event_id: 'e1', version: 3, reason: 'wrong player' });
   });
