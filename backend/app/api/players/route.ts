@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const teamId = searchParams.get('team_id');
-    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }, { section: 'teams' });
 
     let query = supabase
       .from('roster_memberships')

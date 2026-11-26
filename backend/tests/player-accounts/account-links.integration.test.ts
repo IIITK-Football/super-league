@@ -52,8 +52,8 @@ beforeAll(async () => {
   const c = clients(keys);
   admin = c.admin;
   for (const [label, role] of [['dictator', 'dictator'], ['captain', 'captain'], ['editor', 'editor'], ['fan', 'default']]) as[label] = await signIn(label, role, c);
-  made.division = must(await admin.from('divisions').insert({ slug: tag, name: `${tag} Division` }).select('id').single()).data!.id;
-  made.season = must(await admin.from('seasons').insert({ division_id: made.division, slug: `${tag}-a`, name: `${tag} A`, is_current: true }).select('id').single()).data!.id;
+  made.division = must(await admin.from('divisions').insert({ visibility: 'public', slug: tag, name: `${tag} Division` }).select('id').single()).data!.id;
+  made.season = must(await admin.from('seasons').insert({ visibility: 'public', division_id: made.division, slug: `${tag}-a`, name: `${tag} A`, is_current: true }).select('id').single()).data!.id;
   made.team = must(await admin.from('teams').insert({ name: `${tag} One`, short_name: 'ONE' }).select('id').single()).data!.id;
   made.entry = must(await admin.from('team_entries').insert({ team_id: made.team, season_id: made.season }).select('id').single()).data!.id;
   // Accounts first, then the legacy keys (as for people who signed up before the conversion): nothing links on its own.
@@ -182,7 +182,7 @@ describe('account-first players and linked-only rosters', () => {
 
   it('only linked players gain a roster place', async () => {
     const team2 = must(await admin.from('teams').insert({ name: `${tag} Two`, short_name: 'TWO' }).select('id').single()).data!.id;
-    const nextSeason = must(await admin.from('seasons').insert({ division_id: made.division, slug: `${tag}-b`, name: `${tag} B`, is_current: false }).select('id').single()).data!.id;
+    const nextSeason = must(await admin.from('seasons').insert({ visibility: 'public', division_id: made.division, slug: `${tag}-b`, name: `${tag} B`, is_current: false }).select('id').single()).data!.id;
     const entry2 = must(await admin.from('team_entries').insert({ team_id: team2, season_id: nextSeason }).select('id').single()).data!.id;
     try {
       const refused = await as.dictator.db.rpc('add_player_to_roster', { p_player: made.legacy[2], p_team_entry_id: entry2 });

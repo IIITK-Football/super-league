@@ -69,10 +69,10 @@ beforeAll(async () => {
   for (const role of ['dictator', 'captain', 'editor', 'default']) as[role] = await signIn(role, c);
 
   // The test's own division: season A is its current season (captains edit only current-season rosters).
-  made.division = must(await admin.from('divisions').insert({ slug: tag, name: `${tag} Division` }).select('id').single()).data!.id;
+  made.division = must(await admin.from('divisions').insert({ visibility: 'public', slug: tag, name: `${tag} Division` }).select('id').single()).data!.id;
   made.seasons = must(await admin.from('seasons').insert([
-    { division_id: made.division, slug: `${tag}-a`, name: `${tag} A`, is_current: true },
-    { division_id: made.division, slug: `${tag}-b`, name: `${tag} B`, is_current: false },
+    { visibility: 'public', division_id: made.division, slug: `${tag}-a`, name: `${tag} A`, is_current: true },
+    { visibility: 'public', division_id: made.division, slug: `${tag}-b`, name: `${tag} B`, is_current: false },
   ]).select('id')).data!.map((s) => s.id);
   made.teams = must(await admin.from('teams').insert([{ name: `${tag} One`, short_name: 'ONE' }, { name: `${tag} Two`, short_name: 'TWO' }]).select('id')).data!.map((t) => t.id);
   made.entries = must(await admin.from('team_entries').insert([

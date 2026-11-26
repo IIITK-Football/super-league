@@ -16,11 +16,11 @@ SELECT is((SELECT count(*)::int FROM public.user_roles WHERE role NOT IN ('capta
 SELECT hasnt_function('public', 'is_role_manager', 'the dictator-only role manager helper is replaced');
 
 -- Fixtures: two divisions, a current and a completed and a planned season, teams, entries, matches, accounts ----------
-INSERT INTO public.divisions (id, slug, name) VALUES ('d0100000-0000-4000-8000-000000000001', 'ra-a', 'Roles A');
-INSERT INTO public.seasons (id, division_id, slug, name, status, is_current) VALUES
-  ('d0500000-0000-4000-8000-000000000001', 'd0100000-0000-4000-8000-000000000001', 'cur', 'Current', 'active', true),
-  ('d0500000-0000-4000-8000-000000000002', 'd0100000-0000-4000-8000-000000000001', 'old', 'Old', 'completed', false),
-  ('d0500000-0000-4000-8000-000000000003', 'd0100000-0000-4000-8000-000000000001', 'nxt', 'Next', 'planned', false);
+INSERT INTO public.divisions (id, slug, name, visibility) VALUES ('d0100000-0000-4000-8000-000000000001', 'ra-a', 'Roles A', 'public');
+INSERT INTO public.seasons (id, division_id, slug, name, status, is_current, visibility) VALUES
+  ('d0500000-0000-4000-8000-000000000001', 'd0100000-0000-4000-8000-000000000001', 'cur', 'Current', 'active', true, 'public'),
+  ('d0500000-0000-4000-8000-000000000002', 'd0100000-0000-4000-8000-000000000001', 'old', 'Old', 'completed', false, 'public'),
+  ('d0500000-0000-4000-8000-000000000003', 'd0100000-0000-4000-8000-000000000001', 'nxt', 'Next', 'planned', false, 'public');
 INSERT INTO public.teams (id, name) VALUES
   ('d0700000-0000-4000-8000-000000000001', 'Roles Reds'), ('d0700000-0000-4000-8000-000000000002', 'Roles Blues');
 INSERT INTO public.team_entries (id, team_id, season_id) VALUES

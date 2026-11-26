@@ -46,9 +46,9 @@ async function page(browser, who) {
 }
 const shot = (p, n) => p.screenshot({ path: `${shots}/${n}.png` });
 
-const division = must(await admin.from('divisions').insert({ slug: tag, name: `UIW ${tag}` }).select('id').single()).id;
+const division = must(await admin.from('divisions').insert({ visibility: 'public', slug: tag, name: `UIW ${tag}` }).select('id').single()).id;
 made.divisions.push(division);
-const season = must(await admin.from('seasons').insert({ division_id: division, slug: '2026', name: `UIW ${tag} 2026`, is_current: true }).select('id').single()).id;
+const season = must(await admin.from('seasons').insert({ visibility: 'public', division_id: division, slug: '2026', name: `UIW ${tag} 2026`, is_current: true }).select('id').single()).id;
 const teams = must(await admin.from('teams').insert([{ name: `${tag} Reds`, logo_url: 'data:image/png;base64,AA==', team_color: '#112233' }, { name: `${tag} Blues` }]).select('id'));
 made.teams.push(...teams.map((t) => t.id));
 const entries = must(await admin.from('team_entries').insert(teams.map((t) => ({ team_id: t.id, season_id: season }))).select('id, team_id'));

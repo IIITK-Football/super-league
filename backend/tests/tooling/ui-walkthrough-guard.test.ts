@@ -22,3 +22,21 @@ describe('ui walkthrough script', () => {
     for (const step of ['Captains', 'Scorers', 'Access control', 'Live Matches only', 'Captain edits team name', 'normal user']) expect(script).toContain(step);
   });
 });
+
+describe('division lifecycle walkthrough', () => {
+  const lifecycle = readFileSync(join(__dirname, '../../../scripts/ui-walkthrough/divisions.mjs'), 'utf8');
+
+  it('guards both targets before starting the site or making fixtures', () => {
+    expect(lifecycle).toMatch(/verifyTarget\(env\), \.\.\.verifySite\(site\)/);
+    expect(lifecycle).toMatch(/localProblems\(keys,/);
+    expect(lifecycle).toMatch(/const \{ db, site, access, storageKey, keys \} = supabase\(\)/);
+    expect(lifecycle).toMatch(/finally \{[\s\S]*db.remove\('seasons'[\s\S]*db.deleteUser/);
+  });
+
+  it('reports the served commit and uses named scenario evidence', () => {
+    expect(lifecycle).toMatch(/servedCommit: version.commit, steps/);
+    for (const scenario of ['create, publish, reorder', 'hide, archive and restore', 'configure sections', 'validate and audit']) {
+      expect(lifecycle).toContain(scenario);
+    }
+  });
+});

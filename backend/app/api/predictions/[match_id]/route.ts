@@ -1,9 +1,18 @@
-import { requestClient } from '@/lib/supabase/clients';
+import { publicClient, requestClient } from '@/lib/supabase/clients';
+import { ScopeError } from '@/lib/scope';
 import { handleError } from '../../../../lib/errorHandler'; 
 
 // The caller's client (D-04): publishable key plus their token, so RLS decides.
 async function getSupabaseClient(request: Request) {
   return requestClient(request);
+}
+
+async function checkFantasySection(matchId: string) {
+  const { data, error } = await publicClient().from('matches')
+    .select('season:seasons!inner(section_flags)').eq('id', matchId).maybeSingle();
+  if (error) throw error;
+  const season = data?.season as unknown as { section_flags?: Record<string, boolean> } | undefined;
+  if (!season?.section_flags?.fantasy) throw new ScopeError(404, 'This section is not available for this season');
 }
 
 // ==========================================
@@ -22,6 +31,7 @@ export async function GET(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw { status: 401, message: "Unauthorized" };
 
+    await checkFantasySection(match_id);
     const { data, error } = await supabase
       .from('predictions')
       .select('*')
@@ -62,12 +72,11 @@ export async function POST(
     }
 
     // 2. MAGIC FIX: Check if they already predicted this match!
-    const { data: existingPrediction } = await supabase
-      .from('predictions')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('match_id', match_id)
-      .maybeSingle();
+    const [, { data: existingPrediction, error: existingError }] = await Promise.all([
+      checkFantasySection(match_id),
+      supabase.from('predictions').select('id').eq('user_id', user.id).eq('match_id', match_id).maybeSingle(),
+    ]);
+    if (existingError) throw existingError;
 
     if (existingPrediction) {
       throw { status: 400, message: "Nice try! You have already predicted this match." };

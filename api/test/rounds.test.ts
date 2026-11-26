@@ -45,7 +45,7 @@ describe('sequential Data API rounds (D-04)', () => {
 
   it('serves the home dashboard in at most three rounds and reports them in Server-Timing', async () => {
     stubDataApi({
-      seasons: [{ ...SEASON, division: DIVISION }],
+      seasons: [{ ...SEASON, division: DIVISION, section_flags: { overview: true } }],
       team_entries: [{ team: { id: 't1', name: 'Alpha', logo_url: null } }, { team: { id: 't2', name: 'Beta', logo_url: null } }],
       matches: [{ id: 'm1', home_team_id: 't1', away_team_id: 't2', home_score: 2, away_score: 1, status: 'completed', date: '2026-01-01', minute: null, home: { name: 'Alpha' }, away: { name: 'Beta' }, match_events: [] }],
       season_fantasy_leaderboard: [{ user_id: 'u1', points: 7 }],

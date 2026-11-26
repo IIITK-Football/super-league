@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const supabase = publicClient();
     try {
         // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
-        const scope = await scopeFromUrl(supabase, request);
+        const scope = await scopeFromUrl(supabase, request, { section: 'overview' });
         const seasonId = scope.season.id;
 
         // D-04: at most three sequential Data API rounds. Round 1 resolved the scope; round 2 reads everything that

@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
     // The division whose flair is shown (?division=<slug>; default Super League).
     const { searchParams } = new URL(request.url);
-    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }, { section: 'fantasy' });
 
     // 1. The season's top 100 users by fantasy points (graded predictions on this season's matches)
     const { data: ranked, error } = await supabase.rpc('season_fantasy_leaderboard', { p_season: scope.season.id, p_limit: 100 });

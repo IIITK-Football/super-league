@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const supabase = requestClient(request);
 
     // The selected division's season (?division=<slug>&season=<slug or id>; default its current season)
-    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }, { section: 'fixtures' });
 
     // Fetch upcoming/live matches from the matches table directly
     // (includes team IDs needed for player filtering)

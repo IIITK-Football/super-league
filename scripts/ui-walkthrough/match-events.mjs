@@ -50,8 +50,8 @@ async function page(browser, who) {
 const shot = (p, n) => p.screenshot({ path: `${shots}/${n}.png` });
 const matchRow = async (id) => must(await admin.from('matches').select('home_score, away_score, status').eq('id', id).single());
 
-const division = must(await admin.from('divisions').insert({ slug: tag, name: `MEV ${tag}` }).select('id').single()).id;
-const season = must(await admin.from('seasons').insert({ division_id: division, slug: '2026', name: `MEV ${tag} 2026`, is_current: true }).select('id').single()).id;
+const division = must(await admin.from('divisions').insert({ visibility: 'public', slug: tag, name: `MEV ${tag}` }).select('id').single()).id;
+const season = must(await admin.from('seasons').insert({ visibility: 'public', division_id: division, slug: '2026', name: `MEV ${tag} 2026`, is_current: true }).select('id').single()).id;
 const teams = must(await admin.from('teams').insert([{ name: `${tag} Reds` }, { name: `${tag} Blues` }]).select('id'));
 made.teams.push(...teams.map((t) => t.id));
 const entries = must(await admin.from('team_entries').insert(teams.map((t) => ({ team_id: t.id, season_id: season }))).select('id, team_id'));

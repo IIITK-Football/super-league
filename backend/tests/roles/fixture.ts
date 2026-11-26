@@ -44,10 +44,10 @@ const must = (r: { data: any; error: { message: string } | null }): any => {
 
 /** A division with a current, a completed and an upcoming season, two teams entered in each, and two matches in the current one. */
 export async function world(f: Roles, tag: string) {
-  const division = must(await f.admin.from('divisions').insert({ slug: `${tag}`, name: `Roles ${tag}` }).select('id').single()).id as string;
+  const division = must(await f.admin.from('divisions').insert({ visibility: 'public', slug: `${tag}`, name: `Roles ${tag}` }).select('id').single()).id as string;
   f.made.divisions.push(division);
   const season = async (slug: string, status: string, current: boolean) =>
-    must(await f.admin.from('seasons').insert({ division_id: division, slug, name: slug, status, is_current: current }).select('id').single()).id as string;
+    must(await f.admin.from('seasons').insert({ visibility: 'public', division_id: division, slug, name: slug, status, is_current: current }).select('id').single()).id as string;
   const cur = await season('cur', 'active', true);
   const old = await season('old', 'completed', false);
   const next = await season('next', 'planned', false);

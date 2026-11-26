@@ -1,52 +1,36 @@
 // @vitest-environment jsdom
-// Group: divisions. The real dictator flow: the ManageDivisions component, driven like a person would, talks to a
-// REAL Supabase Data API through a real supabase-js client signed in as a dictator, and every write is checked in
-// the database. A normal user using the same screen is refused and nothing is written.
-//
-// Targets (skipped unless one is chosen):
-//   SL_LOCAL_SUPABASE=1     this repository's local stack only (127.0.0.1:54321); run by the divisions test group
-//   SL_UI_TARGET=staging    the staging project only, with the same guards and synthetic sl-check- records as
-//                           scripts/staging-checks.mjs (reads backend/.env.staging.local; refuses any other project)
-// Sessions come from admin-generated one-time links (no password sign-in, no CAPTCHA, no email sent).
+// Group: divisions. The actual dashboard component sends requests through the Worker router to local Supabase.
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-// @ts-ignore plain ESM
-import { loadEnvText, verifyTarget } from '../../../../../scripts/staging-checks.mjs';
+import { createApp } from '../../../../../api/src/app';
 
 const ROOT = resolve(__dirname, '../../../../..');
-const TARGET = process.env.SL_UI_TARGET === 'staging' ? 'staging' : process.env.SL_LOCAL_SUPABASE === '1' ? 'local' : null;
+const TARGET = process.env.SL_LOCAL_SUPABASE === '1';
 const DOMAIN = 'iiitkottayam.ac.in';
 const tag = `sl-check-${randomBytes(4).toString('hex')}`;
 
 const holder = vi.hoisted(() => ({ client: null }));
+vi.mock('../../../lib/api', () => ({ API_BASE_URL: '/api' }));
+
 vi.mock('../../../lib/supabase', () => ({
   supabase: {
     from: (...a) => holder.client.from(...a),
-    rpc: (...a) => holder.client.rpc(...a),
+    auth: { getSession: () => holder.client.auth.getSession() },
   },
 }));
 
 import ManageDivisions from '../ManageDivisions';
 
 function connection() {
-  if (TARGET === 'local') {
-    const r = spawnSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { encoding: 'utf8', cwd: join(ROOT, 'backend') });
-    if (r.status !== 0) throw new Error('Local Supabase is not running. Start it with: pnpm db:start');
-    const out = JSON.parse(r.stdout.slice(r.stdout.indexOf('{')));
-    if (out.API_URL !== 'http://127.0.0.1:54321') throw new Error('Refusing to run: the API is not the local stack on 127.0.0.1:54321');
-    return { url: out.API_URL, publishable: out.PUBLISHABLE_KEY, secret: out.SECRET_KEY };
-  }
-  const file = join(ROOT, 'backend/.env.staging.local');
-  if (!existsSync(file)) throw new Error('backend/.env.staging.local is missing (see docs/release.md)');
-  const env = loadEnvText(readFileSync(file, 'utf8'));
-  const problems = verifyTarget(env);
-  if (problems.length) throw new Error(`refusing to run: ${problems.join('; ')}`);
-  return { url: env.SUPABASE_URL, publishable: env.SUPABASE_PUBLISHABLE_KEY, secret: env.SUPABASE_SECRET_KEY };
+  const r = spawnSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { encoding: 'utf8', cwd: join(ROOT, 'backend') });
+  if (r.status !== 0) throw new Error('Local Supabase is not running.');
+  const out = JSON.parse(r.stdout.slice(r.stdout.indexOf('{')));
+  if (out.API_URL !== 'http://127.0.0.1:54321') throw new Error('Expected local Supabase API on port 54321');
+  return { url: out.API_URL, publishable: out.PUBLISHABLE_KEY, secret: out.SECRET_KEY };
 }
 
 const opts = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
@@ -88,23 +72,39 @@ async function removeSyntheticDivisions() {
 const type = (scope, label, value) => fireEvent.change(scope.getByLabelText(label), { target: { value } });
 const statusText = async (re) => waitFor(() => expect(screen.getByRole('status').textContent).toMatch(re), { timeout: 15000 });
 
-describe.skipIf(!TARGET)(`ManageDivisions through the real Data API (${TARGET ?? 'skipped'})`, () => {
+describe.skipIf(!TARGET)('ManageDivisions through the local Worker and Data API', () => {
   let dictator;
   let normal;
+  let app;
+  const nativeFetch = globalThis.fetch;
 
   beforeAll(async () => {
     conn = connection();
     admin = createClient(conn.url, conn.secret, opts);
+    vi.stubEnv('SUPABASE_URL', conn.url);
+    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', conn.publishable);
+    vi.stubEnv('SL_ENVIRONMENT', 'local');
+    app = createApp();
     dictator = await signedInAs('dictator');
     normal = await signedInAs('default');
   }, 60000);
 
+  function useAccount(account) {
+    holder.client = account.client;
+    vi.stubGlobal('fetch', (input, init) => {
+      const url = typeof input === 'string' ? new URL(input, 'http://localhost') : null;
+      return url?.pathname.startsWith('/api/') ? app.request(url, init) : nativeFetch(input, init);
+    });
+  }
+
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   afterAll(async () => {
+    vi.unstubAllEnvs();
     if (!admin) return;
     await removeSyntheticDivisions();
     for (const id of users) await admin.auth.admin.deleteUser(id);
@@ -113,7 +113,7 @@ describe.skipIf(!TARGET)(`ManageDivisions through the real Data API (${TARGET ??
   }, 60000);
 
   it('a dictator creates a division, a current season and configures a section, all persisted', async () => {
-    holder.client = dictator.client;
+    useAccount(dictator);
     render(<ManageDivisions />);
     await waitFor(() => expect(screen.queryByText(/loading divisions/i)).toBeNull(), { timeout: 15000 });
 
@@ -123,7 +123,7 @@ describe.skipIf(!TARGET)(`ManageDivisions through the real Data API (${TARGET ??
     fireEvent.click(within(divisionForm).getByRole('button', { name: /add division/i }));
     await statusText(/created/);
     const division = await admin.from('divisions').select('id, name, visibility, created_by').eq('slug', tag).single();
-    expect(division.data).toMatchObject({ name: 'SL Check Inter', visibility: 'public', created_by: dictator.id });
+    expect(division.data).toMatchObject({ name: 'SL Check Inter', visibility: 'hidden', created_by: dictator.id });
 
     const row = (await screen.findByDisplayValue('SL Check Inter', {}, { timeout: 15000 })).closest('li');
     fireEvent.click(within(row).getByRole('button', { name: /^seasons$/i }));
@@ -141,7 +141,10 @@ describe.skipIf(!TARGET)(`ManageDivisions through the real Data API (${TARGET ??
     const sections = await admin.from('season_sections').select('section_key').eq('season_id', season.data.id);
     expect(sections.data).toHaveLength(types.data.length);
 
-    fireEvent.click(await screen.findByRole('button', { name: /make current/i }, { timeout: 15000 }));
+    const seasonList = await screen.findByRole('list', { name: 'Seasons' }, { timeout: 15000 });
+    fireEvent.click(within(seasonList).getByRole('button', { name: 'Publish' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Make current' }).disabled).toBe(false), { timeout: 15000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Make current' }));
     await statusText(/is now the current season/);
     expect((await admin.from('seasons').select('is_current').eq('id', season.data.id).single()).data.is_current).toBe(true);
 
@@ -150,8 +153,8 @@ describe.skipIf(!TARGET)(`ManageDivisions through the real Data API (${TARGET ??
     const fantasy = within(list).getByLabelText('Fantasy enabled');
     fireEvent.click(fantasy);
     type(within(list), 'Fantasy settings', '{"note": "off for this season"}');
-    fireEvent.click(within(fantasy.closest('li')).getByRole('button', { name: /save/i }));
-    await statusText(/Fantasy saved/);
+    fireEvent.click(screen.getByRole('button', { name: 'Save sections' }));
+    await statusText(/Sections saved/);
     const saved = await admin.from('season_sections').select('enabled, settings').eq('season_id', season.data.id).eq('section_key', 'fantasy').single();
     expect(saved.data).toEqual({ enabled: false, settings: { note: 'off for this season' } });
 
@@ -168,7 +171,7 @@ describe.skipIf(!TARGET)(`ManageDivisions through the real Data API (${TARGET ??
   }, 90000);
 
   it('a normal user using the same screen is refused and nothing is written', async () => {
-    holder.client = normal.client;
+    useAccount(normal);
     render(<ManageDivisions />);
     await waitFor(() => expect(screen.queryByText(/loading divisions/i)).toBeNull(), { timeout: 15000 });
     const form = screen.getByRole('form', { name: 'New division' });

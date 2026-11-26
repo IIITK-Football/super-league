@@ -137,7 +137,7 @@ describe('captain team branding refusals', () => {
 
   it('refuses a captain whose assignment is in a completed season, changing nothing', async () => {
     const captain = await tokenFor('captain');
-    const { data: past } = await admin.from('seasons').insert({ division_id: (await admin.from('seasons').select('division_id').eq('id', current.freshers).single()).data!.division_id, slug: `past-${Date.now()}`, name: 'Past', is_current: false, status: 'completed' }).select('id').single();
+    const { data: past } = await admin.from('seasons').insert({ division_id: (await admin.from('seasons').select('division_id').eq('id', current.freshers).single()).data!.division_id, slug: `past-${Date.now()}`, name: 'Past', visibility: 'public', is_current: false, status: 'completed' }).select('id').single();
     made.seasons.push(past!.id);
     const teamId = await registeredTeam(captain.id, past!.id);
     expect((await brand(captain.token)).status).toBe(409);

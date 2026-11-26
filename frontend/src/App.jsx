@@ -28,6 +28,7 @@ import { TeamBuilder } from './pages/TeamBuilder';
 import { RoleWorkspace } from './pages/RoleWorkspace';
 import { LEGACY_REDIRECTS, LegacyRedirect } from './routes/legacyRedirects';
 import { DivisionHomeRoute } from './pages/DivisionHomeRoute';
+import { SectionGate } from './pages/SectionGate';
 import MatchTimeline from './components/MatchTimeline';
 
 import { useEffect } from 'react';
@@ -72,8 +73,8 @@ function WcRoute() {
   return <Fantasy />;
 }
 
-function LeagueDashboardRoute({ division }) {
-  return <DivisionHomeRoute division={division}><PublicRoute><Home /></PublicRoute></DivisionHomeRoute>;
+function LeagueDashboardRoute() {
+  return <PublicRoute><DivisionHomeRoute><Home /></DivisionHomeRoute></PublicRoute>;
 }
 
 function AuthenticatedRoute({ children }) {
@@ -99,33 +100,29 @@ function App() {
 
             {/* Public App Routes */}
             <Route path="/" element={<LeagueLanding />} />
-            <Route path="/super-league" element={<LeagueDashboardRoute division="super-league" />} />
-            <Route path="/super-league/:season" element={<LeagueDashboardRoute division="super-league" />} />
-            <Route path="/wsl" element={<LeagueDashboardRoute division="wsl" />} />
-            <Route path="/wsl/:season" element={<LeagueDashboardRoute division="wsl" />} />
-            <Route path="/freshers" element={<LeagueDashboardRoute division="freshers" />} />
-            <Route path="/freshers/:season" element={<LeagueDashboardRoute division="freshers" />} />
+            <Route path="/:division" element={<LeagueDashboardRoute />} />
+            <Route path="/:division/:season" element={<LeagueDashboardRoute />} />
             <Route path="/team-builder" element={<RoleWorkspace requiredRole="captain" />} />
             <Route path="/editor" element={<RoleWorkspace requiredRole="editor" />} />
             <Route path="/dictator" element={<RoleWorkspace requiredRole="dictator" />} />
             <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
-            <Route path="/standings/:division" element={<PublicRoute><Standings /></PublicRoute>} />
-            <Route path="/teams" element={<PublicRoute><Teams /></PublicRoute>} />
+            <Route path="/standings/:division" element={<PublicRoute><SectionGate section="standings"><Standings /></SectionGate></PublicRoute>} />
+            <Route path="/teams" element={<PublicRoute><SectionGate section="teams"><Teams /></SectionGate></PublicRoute>} />
             
             {/* Navigation Sections */}
-            <Route path="/matches" element={<PublicRoute><Matches /></PublicRoute>} />
+            <Route path="/matches" element={<PublicRoute><SectionGate section="fixtures"><Matches /></SectionGate></PublicRoute>} />
             <Route path="/matches/:id" element={<PublicRoute><MatchTimeline /></PublicRoute>} />
-            <Route path="/vault" element={<PublicRoute><Vault /></PublicRoute>} />
-            <Route path="/rules" element={<PublicRoute><Rules /></PublicRoute>} />
+            <Route path="/vault" element={<PublicRoute><SectionGate section="news"><Vault /></SectionGate></PublicRoute>} />
+            <Route path="/rules" element={<PublicRoute><SectionGate section="rules"><Rules /></SectionGate></PublicRoute>} />
             
             {/* Note the :id syntax! This catches /article/12345 */}
-            <Route path="/article/:id" element={<PublicRoute><ArticleView /></PublicRoute>} />
+            <Route path="/article/:id" element={<PublicRoute><SectionGate section="news"><ArticleView /></SectionGate></PublicRoute>} />
 
             <Route path="/wc" element={<PublicRoute><WcRoute /></PublicRoute>} />
             
             {/* Protected Routes (Require Login/Profile) */}
-            <Route path="/fantasy" element={<ProtectedRoute><Fantasy /></ProtectedRoute>} />
-            <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+            <Route path="/fantasy" element={<ProtectedRoute><SectionGate section="fantasy"><Fantasy /></SectionGate></ProtectedRoute>} />
+            <Route path="/leaderboard" element={<ProtectedRoute><SectionGate section="stats"><Leaderboard /></SectionGate></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
             
             {/* Catch-all for bad URLs */}

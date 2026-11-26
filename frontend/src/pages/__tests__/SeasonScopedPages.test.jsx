@@ -12,6 +12,7 @@ vi.mock('../../lib/supabase', () => ({
       const b = {
         select: () => b,
         eq: () => b,
+        is: () => b,
         maybeSingle: async () => ({ data: table === 'divisions' ? { id: 'd-wsl', slug: 'wsl', name: 'WSL' } : null, error: null }),
         then: (resolve) => resolve(table === 'seasons'
           ? { data: [

@@ -36,8 +36,8 @@ INSERT INTO public.player_link_keys (player_id, email) VALUES
   ('d2900000-0000-4000-8000-000000000005', 'em.later@iiitkottayam.ac.in'),
   ('d2900000-0000-4000-8000-000000000007', 'em.linked@iiitkottayam.ac.in'),
   ('d2900000-0000-4000-8000-000000000008', 'em.nobody@iiitkottayam.ac.in');
-INSERT INTO public.divisions (id, slug, name) VALUES ('d2a00000-0000-4000-8000-000000000001', 'em-div', 'EM Division');
-INSERT INTO public.seasons (id, division_id, slug, name, is_current) VALUES ('d2b00000-0000-4000-8000-000000000001', 'd2a00000-0000-4000-8000-000000000001', 'em-1', 'EM 1', true);
+INSERT INTO public.divisions (id, slug, name, visibility) VALUES ('d2a00000-0000-4000-8000-000000000001', 'em-div', 'EM Division', 'public');
+INSERT INTO public.seasons (id, division_id, slug, name, is_current, visibility) VALUES ('d2b00000-0000-4000-8000-000000000001', 'd2a00000-0000-4000-8000-000000000001', 'em-1', 'EM 1', true, 'public');
 INSERT INTO public.teams (id, name) VALUES ('d2c00000-0000-4000-8000-000000000001', 'EM Team');
 INSERT INTO public.team_entries (id, team_id, season_id) VALUES ('d2d00000-0000-4000-8000-000000000001', 'd2c00000-0000-4000-8000-000000000001', 'd2b00000-0000-4000-8000-000000000001');
 

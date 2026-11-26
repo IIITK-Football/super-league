@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
-// Group: frontend-components. The dictator's divisions, seasons and sections flow against an in-memory Data API
-// fake: loading, empty, success and error states, validation before any write, and the exact writes it sends.
-// The real UI -> Data API -> database path is covered by ManageDivisions.local.test.jsx (divisions group).
+// Group: frontend-components. Read fixtures and a Worker mutation mock keep the UI contract explicit.
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -69,15 +67,38 @@ function from(table) {
   return b;
 }
 
-const rpc = vi.fn(async (name, args) => {
-  db.calls.push({ rpc: name, args });
-  if (db.fail[`rpc.${name}`]) return { data: null, error: db.fail[`rpc.${name}`] };
-  const season = db.tables.seasons.find((s) => s.id === args.p_season);
-  db.tables.seasons.filter((s) => s.division_id === season.division_id).forEach((s) => { s.is_current = s.id === season.id; });
-  return { data: null, error: null };
+const worker = vi.fn(async (path, { method, body }) => {
+  const payload = body ? JSON.parse(body) : undefined;
+  const [, , table, id, action] = path.split('/');
+  if (method === 'POST' && !id) {
+    const row = { id: `id-${nextId++}`, visibility: 'hidden', archived_at: null, is_current: false, ...payload };
+    db.tables[table].push(row);
+    if (table === 'seasons') db.tables.season_sections.push(...db.tables.section_types.map((t) => ({
+      season_id: row.id, section_key: t.key, enabled: t.default_enabled, nav_visible: t.default_enabled, sort_order: t.default_sort_order,
+    })));
+  } else if (action === 'current') {
+    if (db.fail.current) throw db.fail.current;
+    const season = db.tables.seasons.find((row) => row.id === id);
+    db.tables.seasons.filter((row) => row.division_id === season.division_id).forEach((row) => { row.is_current = row.id === id; });
+  } else if (action === 'sections') {
+    db.tables.season_sections = db.tables.season_sections.filter((row) => row.season_id !== id);
+    db.tables.season_sections.push(...payload.sections.map((row, index) => ({ ...row, season_id: id, sort_order: index })));
+  } else if (method === 'PATCH') {
+    const row = db.tables[table].find((row) => row.id === id);
+    Object.assign(row, payload);
+    if ('archived' in payload) {
+      row.archived_at = payload.archived ? new Date().toISOString() : null;
+      row.visibility = 'hidden';
+    }
+  } else if (method === 'DELETE') {
+    if (db.fail.delete) throw db.fail.delete;
+    db.tables[table] = db.tables[table].filter((row) => row.id !== id);
+  }
+  return { success: true };
 });
 
-vi.mock('../../../lib/supabase', () => ({ supabase: { from: (t) => from(t), rpc: (...a) => rpc(...a) } }));
+vi.mock('../../../lib/supabase', () => ({ supabase: { from: (t) => from(t) } }));
+vi.mock('../../../hooks/useApi', () => ({ fetchApi: (...args) => worker(...args) }));
 
 import ManageDivisions, { describeError, parseSettings, validateDivision, validateSeason } from '../ManageDivisions';
 
@@ -94,7 +115,7 @@ async function addDivision(name = 'Inter', slug = 'inter') {
 
 beforeEach(() => {
   seed();
-  rpc.mockClear();
+  worker.mockClear();
   vi.spyOn(window, 'confirm').mockReturnValue(true);
 });
 afterEach(() => {
@@ -129,7 +150,7 @@ describe('divisions', () => {
     type(/^slug/i, 'Inter Division', within(form));
     fireEvent.click(within(form).getByRole('button', { name: /add division/i }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/lowercase letters/);
-    expect(writes('divisions', 'insert')).toHaveLength(0);
+    expect(worker).not.toHaveBeenCalled();
   });
 
   it('creates a division and lists it', async () => {
@@ -137,13 +158,17 @@ describe('divisions', () => {
     await screen.findByText(/no divisions yet/i);
     await addDivision();
     expect(screen.getByRole('status').textContent).toMatch(/Division "Inter" created/);
-    expect(writes('divisions', 'insert')[0].payload).toMatchObject({ slug: 'inter', name: 'Inter', visibility: 'public', short_name: null });
+    expect(worker).toHaveBeenCalledWith('/admin/divisions', {
+      method: 'POST', body: JSON.stringify({ slug: 'inter', name: 'Inter', short_name: null, primary_color: null }),
+    });
+    expect(writes('divisions', 'insert')).toHaveLength(0);
+    expect(await screen.findByText('Hidden')).toBeTruthy();
     const list = await screen.findByRole('list', { name: 'Divisions' });
     expect(within(list).getByDisplayValue('Inter')).toBeTruthy();
   });
 
   it('reports a refused write in words a dictator understands', async () => {
-    db.fail['divisions.insert'] = { code: '42501', message: 'new row violates row-level security policy' };
+    worker.mockRejectedValueOnce({ status: 403 });
     render(<ManageDivisions />);
     await screen.findByText(/no divisions yet/i);
     const form = screen.getByRole('form', { name: 'New division' });
@@ -158,7 +183,7 @@ describe('divisions', () => {
     await screen.findByText(/no divisions yet/i);
     await addDivision();
     fireEvent.click(await screen.findByRole('button', { name: /archive/i }));
-    await screen.findByText(/archived\. it is hidden/i);
+    await screen.findByText(/archived\./i);
     expect(db.tables.divisions[0].archived_at).toBeTruthy();
     expect(await screen.findByText('Archived')).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: /restore/i }));
@@ -170,7 +195,7 @@ describe('divisions', () => {
     render(<ManageDivisions />);
     await screen.findByText(/no divisions yet/i);
     await addDivision();
-    db.fail['divisions.delete'] = { code: '23503', message: 'violates foreign key constraint' };
+    db.fail.delete = { status: 409, message: 'This division has seasons. Archive it instead.' };
     fireEvent.click(screen.getByRole('button', { name: /delete inter/i }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/archive it instead/i);
   });
@@ -192,10 +217,9 @@ describe('seasons and sections', () => {
     type(/season slug/i, '2026', within(form));
     fireEvent.click(within(form).getByRole('button', { name: /add season/i }));
     expect((await screen.findByRole('status')).textContent).toMatch(/created with the default sections/);
-    const sectionInsert = writes('season_sections', 'insert')[0];
-    expect(sectionInsert.payload).toHaveLength(3);
-    expect(sectionInsert.opts).toEqual({ defaultToNull: false });
-    expect(sectionInsert.payload.find((s) => s.section_key === 'bracket')).toMatchObject({ enabled: false, nav_visible: false });
+    expect(worker.mock.calls.at(-1)[0]).toBe('/admin/seasons');
+    expect(db.tables.season_sections).toHaveLength(3);
+    expect(writes('season_sections', 'insert')).toHaveLength(0);
   });
 
   it('rejects an end date before the start date', async () => {
@@ -206,7 +230,7 @@ describe('seasons and sections', () => {
     type(/ends/i, '2026-08-01', within(form));
     fireEvent.click(within(form).getByRole('button', { name: /add season/i }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/end date/);
-    expect(writes('seasons', 'insert')).toHaveLength(0);
+    expect(worker.mock.calls.map(([path]) => path)).toEqual(['/admin/divisions']);
   });
 
   it('makes a season current through the one-step function', async () => {
@@ -214,9 +238,11 @@ describe('seasons and sections', () => {
     type(/season name/i, '2026', within(form));
     type(/season slug/i, '2026', within(form));
     fireEvent.click(within(form).getByRole('button', { name: /add season/i }));
+    const seasonList = await screen.findByRole('list', { name: 'Seasons' });
+    fireEvent.click(within(seasonList).getByRole('button', { name: 'Publish' }));
     fireEvent.click(await screen.findByRole('button', { name: /make current/i }));
     await screen.findByText(/is now the current season of Inter/);
-    expect(rpc).toHaveBeenCalledWith('set_current_season', { p_season: db.tables.seasons[0].id });
+    expect(worker).toHaveBeenCalledWith(`/admin/seasons/${db.tables.seasons[0].id}/current`, { method: 'POST' });
     expect(await screen.findByText('Current')).toBeTruthy();
   });
 
@@ -225,7 +251,9 @@ describe('seasons and sections', () => {
     type(/season name/i, '2026', within(form));
     type(/season slug/i, '2026', within(form));
     fireEvent.click(within(form).getByRole('button', { name: /add season/i }));
-    db.fail['rpc.set_current_season'] = { code: '42501', message: 'Only a dictator can change the current season' };
+    db.fail.current = { status: 403 };
+    const seasonList = await screen.findByRole('list', { name: 'Seasons' });
+    fireEvent.click(within(seasonList).getByRole('button', { name: 'Publish' }));
     fireEvent.click(await screen.findByRole('button', { name: /make current/i }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/only a dictator/i);
   });
@@ -239,17 +267,18 @@ describe('seasons and sections', () => {
     const sections = await screen.findByRole('list', { name: 'Sections' });
     fireEvent.click(within(sections).getByLabelText('Fantasy enabled'));
     type('Fantasy settings', '[1, 2]', within(sections));
-    const fantasyRow = within(sections).getByLabelText('Fantasy enabled').closest('li');
-    fireEvent.click(within(fantasyRow).getByRole('button', { name: /save/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save sections' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/JSON object/);
     expect(writes('season_sections', 'upsert')).toHaveLength(0);
 
     type('Fantasy settings', '{"note": "off this season"}', within(sections));
-    fireEvent.click(within(fantasyRow).getByRole('button', { name: /save/i }));
-    expect((await screen.findByRole('status')).textContent).toMatch(/Fantasy saved/);
-    const upsert = writes('season_sections', 'upsert')[0];
-    expect(upsert.payload).toMatchObject({ section_key: 'fantasy', enabled: false, settings: { note: 'off this season' } });
-    expect(upsert.opts).toEqual({ onConflict: 'season_id,section_key' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save sections' }));
+    expect((await screen.findByRole('status')).textContent).toMatch(/Sections saved/);
+    const [path, init] = worker.mock.calls.at(-1);
+    expect(path).toMatch(/seasons\/.+\/sections/);
+    expect(JSON.parse(init.body).sections.find((row) => row.section_key === 'fantasy')).toMatchObject({
+      enabled: false, settings: { note: 'off this season' },
+    });
   });
 });
 

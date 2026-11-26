@@ -43,7 +43,7 @@ beforeAll(async () => {
 
   wsl = (await admin.from('divisions').select('id').eq('slug', 'wsl').single()).data!;
   const { data: seasons } = must(await admin.from('seasons').insert([
-    { division_id: wsl.id, slug: `${tag}-2027`, name: '2027', status: 'planned' },
+    { division_id: wsl.id, slug: `${tag}-2027`, name: '2027', status: 'planned', visibility: 'public' },
     { division_id: wsl.id, slug: `${tag}-hidden`, name: 'Hidden', visibility: 'hidden' },
   ], { defaultToNull: false }).select('id, slug'));
   made.seasons = seasons!.map((s) => s.id);

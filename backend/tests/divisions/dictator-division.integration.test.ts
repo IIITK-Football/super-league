@@ -57,7 +57,7 @@ describe('a dictator configures a new division as data', () => {
   it('creates the division, two coexisting seasons and their sections', async () => {
     const division = await as('dictator')
       .from('divisions')
-      .insert({ slug, name: 'Inter', short_name: 'Inter', primary_color: '#112233', sort_order: 4 })
+      .insert({ slug, name: 'Inter', short_name: 'Inter', primary_color: '#112233', visibility: 'public', sort_order: 4 })
       .select('id, slug, name, visibility, archived_at')
       .single();
     expect(division.error).toBeNull();
@@ -67,8 +67,8 @@ describe('a dictator configures a new division as data', () => {
     const seasons = await as('dictator')
       .from('seasons')
       .insert([
-        { division_id: divisionId, slug: '2026', name: '2026', status: 'active', is_current: true, format: 'league_knockout' },
-        { division_id: divisionId, slug: '2027', name: '2027', status: 'planned' },
+        { division_id: divisionId, slug: '2026', name: '2026', status: 'active', visibility: 'public', is_current: true, format: 'league_knockout' },
+        { division_id: divisionId, slug: '2027', name: '2027', status: 'planned', visibility: 'public' },
         // A multi-row insert sends missing keys as NULL unless told to use the column defaults.
       ], { defaultToNull: false })
       .select('id, slug, is_current');
@@ -101,7 +101,7 @@ describe('a dictator configures a new division as data', () => {
   it('keeps a second current season out (one current season per division)', async () => {
     const r = await as('dictator')
       .from('seasons')
-      .insert({ division_id: divisionId, slug: 'dup', name: 'Dup', is_current: true });
+      .insert({ division_id: divisionId, slug: 'dup', name: 'Dup', visibility: 'public', is_current: true });
     expect(r.error?.code).toBe('23505');
   });
 

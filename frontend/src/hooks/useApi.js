@@ -71,7 +71,10 @@ export const fetchApi = async (endpoint, options = {}) => {
   });
   
   if (!response.ok) {
-    throw new Error(`API Request Failed: ${response.status}`);
+    const failure = await response.json().catch(() => null);
+    const error = new Error(failure?.message || `API Request Failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   
   return response.json();

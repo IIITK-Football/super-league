@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Group: frontend-components. The division homepage's season choice: the dropdown appears only when a division has
 // more than one available season, defaults to the current one, follows and updates the address (/wsl/2027), reports
-// an unknown season, and falls back to the API's current season if the seasons cannot be loaded.
+// an unknown season, and reports a configuration load failure.
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,11 +15,12 @@ vi.mock('../../lib/supabase', () => ({
       const b = {
         select: () => b,
         eq: () => b,
+        is: () => b,
         order: () => b,
         maybeSingle: async () => ({ data: table === 'divisions' ? { id: 'd-wsl', slug: 'wsl', name: 'WSL' } : null, error: null }),
         then: (resolve) => resolve(table === 'seasons'
           ? { data: state.seasonsError ? null : state.seasons, error: state.seasonsError }
-          : { data: [], error: null }),
+          : { data: [{ key: 'overview', label: 'Overview', default_enabled: true, default_sort_order: 1 }], error: null }),
       };
       return b;
     },
@@ -49,8 +50,8 @@ function renderAt(path) {
     <LeagueProvider>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
-          <Route path="/wsl" element={<DivisionHomeRoute division="wsl"><Home /><Where /></DivisionHomeRoute>} />
-          <Route path="/wsl/:season" element={<DivisionHomeRoute division="wsl"><Home /><Where /></DivisionHomeRoute>} />
+          <Route path="/:division" element={<DivisionHomeRoute><Home /><Where /></DivisionHomeRoute>} />
+          <Route path="/:division/:season" element={<DivisionHomeRoute><Home /><Where /></DivisionHomeRoute>} />
         </Routes>
       </MemoryRouter>
     </LeagueProvider>,
@@ -123,12 +124,10 @@ describe('season choice on the division homepage', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('falls back to the current season through the API when the seasons cannot be loaded', async () => {
+  it('shows an error when the season configuration cannot be loaded', async () => {
     state.seasonsError = { message: 'network down' };
     renderAt('/wsl');
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(lastQuery().get('division')).toBe('wsl');
-    expect(lastQuery().has('season')).toBe(false);
-    expect(screen.queryByLabelText('Season')).toBeNull();
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

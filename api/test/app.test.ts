@@ -2,8 +2,6 @@
 // (127.0.0.1:54321): the mounted routes answer with the same handlers as Next, writes need a valid session before any
 // handler runs (PATCH included), unknown and retired routes are 404, and route params reach the handlers.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { configProblem, createApp } from '../src/app';
 import { routes } from '../src/routes';
 import { localKeys } from '../../backend/tests/auth/local-supabase';
@@ -98,10 +96,11 @@ describe('api worker', () => {
     expect((await call('/standings', { method: 'OPTIONS' })).status).toBe(405);
   });
 
-  it('every mounted route points at an existing handler module', () => {
-    for (const [path] of routes) {
-      const dir = path.replace('/*', '/[...path]').replace(/:([a-z_]+)/g, '[$1]');
-      expect(existsSync(join(__dirname, '../../backend/app/api', dir, 'route.ts')), path).toBe(true);
+  it('loads an HTTP method for every mounted route', async () => {
+    for (const [path, load] of routes) {
+      const handlers = await load();
+      const methods = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
+      expect(methods.some((method) => typeof handlers[method] === 'function'), path).toBe(true);
     }
   });
 });

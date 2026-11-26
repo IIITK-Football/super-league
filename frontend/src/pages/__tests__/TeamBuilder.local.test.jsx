@@ -88,12 +88,12 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
   beforeAll(async () => {
     conn = connection();
     admin = createClient(conn.url, conn.secret, opts);
-    made.division = must(await admin.from('divisions').insert({ slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
-    made.season = must(await admin.from('seasons').insert({ division_id: made.division, slug: '2026', name: `${tag} 2026`, is_current: true }).select('id').single()).id; // captains edit current-season rosters only
+    made.division = must(await admin.from('divisions').insert({ visibility: 'public', slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
+    made.season = must(await admin.from('seasons').insert({ visibility: 'public', division_id: made.division, slug: '2026', name: `${tag} 2026`, is_current: true }).select('id').single()).id; // captains edit current-season rosters only
     // The other team plays the current season of a second division, so one player can be on both rosters (one
     // shared card, one roster place per season).
-    made.division2 = must(await admin.from('divisions').insert({ slug: `${tag}-b`, name: `SL Check ${tag} B` }).select('id').single()).id;
-    made.season2 = must(await admin.from('seasons').insert({ division_id: made.division2, slug: '2026', name: `${tag} B 2026`, is_current: true }).select('id').single()).id;
+    made.division2 = must(await admin.from('divisions').insert({ visibility: 'public', slug: `${tag}-b`, name: `SL Check ${tag} B` }).select('id').single()).id;
+    made.season2 = must(await admin.from('seasons').insert({ visibility: 'public', division_id: made.division2, slug: '2026', name: `${tag} B 2026`, is_current: true }).select('id').single()).id;
     for (const [name, season] of [['Own', made.season], ['Other', made.season2]]) {
       // Branded, so the builder goes straight to the roster.
       const team = must(await admin.from('teams').insert({ name: `${tag} ${name}`, logo_url: 'https://example.invalid/logo.png', team_color: '#112233' }).select('id').single()).id;

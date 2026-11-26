@@ -85,8 +85,8 @@ INSERT INTO public.seasons (id, division_id, slug, name) VALUES
   ('f2000000-0000-4000-8000-000000000003', (SELECT id FROM public.divisions WHERE slug = 'super-league'), '2027', '2027');
 SELECT is((SELECT count(*) FROM public.seasons s JOIN public.divisions d ON d.id = s.division_id WHERE d.slug = 'super-league')::int, 2,
   'two seasons coexist in one division');
-SELECT throws_ok($$INSERT INTO public.seasons (division_id, slug, name, is_current)
-                   VALUES ((SELECT id FROM public.divisions WHERE slug = 'super-league'), 'dup', 'Dup', true)$$,
+SELECT throws_ok($$INSERT INTO public.seasons (division_id, slug, name, is_current, visibility)
+                   VALUES ((SELECT id FROM public.divisions WHERE slug = 'super-league'), 'dup', 'Dup', true, 'public')$$,
   '23505', NULL, 'at most one season per division is current');
 SELECT throws_ok($$DELETE FROM public.seasons WHERE slug = '2026' AND division_id = (SELECT id FROM public.divisions WHERE slug = 'wsl')$$,
   '23503', NULL, 'a season that has matches cannot be deleted');

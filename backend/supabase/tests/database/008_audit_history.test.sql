@@ -56,7 +56,7 @@ SELECT ok((SELECT p.prosecdef FROM pg_proc p WHERE p.oid = 'public.audit_row_cha
 SELECT ok(NOT has_function_privilege('authenticated', 'public.audit_row_change()', 'EXECUTE'), 'the recorder cannot be called directly');
 
 -- A dictator's configuration change through the Data API ------------------------------------------------------
-SELECT is(pg_temp.as_user(1, $q$INSERT INTO public.divisions (slug, name) VALUES ('audit-check', 'Audit Check')$q$), 1, 'a dictator creates a division');
+SELECT is(pg_temp.as_user(1, $q$INSERT INTO public.divisions (slug, name, visibility) VALUES ('audit-check', 'Audit Check', 'public')$q$), 1, 'a dictator creates a division');
 SELECT results_eq(
   $$SELECT actor_id, actor_role, action, changes ->> 'slug', changes ->> 'name' FROM pg_temp.last('divisions')$$,
   $$VALUES ('a8000000-0000-4000-8000-000000000001'::uuid, 'authenticated'::text, 'insert'::text, 'audit-check'::text, 'Audit Check'::text)$$,

@@ -85,8 +85,8 @@ describe.skipIf(!TARGET)(`your player card through the real Data API (${TARGET ?
     unlinked = await signedInAs('nobody', 'captain');
     // The player is created as the app creates players: for the person's verified account, by a dictator.
     const must = (r) => { if (r.error) throw r.error; return r.data; };
-    made.division = must(await admin.from('divisions').insert({ slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
-    made.season = must(await admin.from('seasons').insert({ division_id: made.division, slug: '2026', name: `${tag} 2026`, is_current: true }).select('id').single()).id;
+    made.division = must(await admin.from('divisions').insert({ visibility: 'public', slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
+    made.season = must(await admin.from('seasons').insert({ visibility: 'public', division_id: made.division, slug: '2026', name: `${tag} 2026`, is_current: true }).select('id').single()).id;
     made.team = must(await admin.from('teams').insert({ name: `${tag} Self FC` }).select('id').single()).id;
     made.entry = must(await admin.from('team_entries').insert({ team_id: made.team, season_id: made.season }).select('id').single()).id;
     playerId = must(await dictator.client.rpc('create_player_for_account', {

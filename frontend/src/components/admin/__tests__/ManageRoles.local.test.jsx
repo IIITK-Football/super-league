@@ -77,8 +77,8 @@ async function signedInAs(role, label = role) {
 
 async function seed() {
   const must = (r) => { if (r.error) throw new Error(`setup failed: ${JSON.stringify(r.error)}`); return r.data; };
-  const division = must(await admin.from('divisions').insert({ slug: tag, name: `${tag} Division` }).select('id').single()).id;
-  const season = must(await admin.from('seasons').insert({ division_id: division, slug: '2026', name: `${tag} 2026`, is_current: true }).select('id').single()).id;
+  const division = must(await admin.from('divisions').insert({ visibility: 'public', slug: tag, name: `${tag} Division` }).select('id').single()).id;
+  const season = must(await admin.from('seasons').insert({ visibility: 'public', division_id: division, slug: '2026', name: `${tag} 2026`, is_current: true }).select('id').single()).id;
   const teams = must(await admin.from('teams').insert([{ name: `${tag} Reds` }, { name: `${tag} Blues` }]).select('id'));
   const entries = must(await admin.from('team_entries').insert(teams.map((t) => ({ team_id: t.id, season_id: season }))).select('id, team_id'));
   const match = must(await admin.from('matches').insert({ home_team_id: teams[0].id, away_team_id: teams[1].id, season_id: season, status: 'scheduled', date: new Date(Date.now() + 86400000).toISOString() }).select('id').single()).id;

@@ -6,7 +6,7 @@ import { cn } from '../utils/cn';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export function TopNavbar() {
-    const { division, fantasySection, setFantasySection } = useLeague();
+    const { division, seasonScope, fantasySection, setFantasySection } = useLeague();
     const { user } = useAuth();
     const [menuOpen, setMenuOpen] = useState(false);
     
@@ -16,16 +16,21 @@ export function TopNavbar() {
     const currentPath = location.pathname;
     const isFantasyRoute = currentPath === '/fantasy' || currentPath === '/wc';
 
+    const sectionPaths = {
+        overview: seasonScope.season ? `/${division}/${seasonScope.season.slug}` : `/${division}`,
+        fixtures: '/matches',
+        standings: `/standings/${division}`,
+        teams: '/teams',
+        stats: '/leaderboard',
+        fantasy: '/fantasy',
+        news: '/vault',
+        rules: '/rules',
+    };
     const views = [
         { path: '/', label: 'Home' },
-        { path: '/wc', id: 'fifa', label: 'Fantasy' }, 
-        { path: '/matches', label: 'Matches' },
-        { path: `/standings/${division}`, label: division === 'wsl' || division === 'freshers' ? 'Road to Final' : 'Standings' },
-        { path: '/teams', label: 'Clubs' },
-        { path: '/leaderboard', label: 'Statistics' },
-        { path: '/vault', label: 'Newsletter' },
-        { path: '/legends', label: 'Legends' },
-        { path: '/rules', label: 'Rules' }
+        ...seasonScope.sections.filter(({ key, enabled, navVisible }) => enabled && navVisible && sectionPaths[key])
+            .map(({ key, label }) => ({ path: sectionPaths[key], label, section: key })),
+        { path: '/wc', id: 'fifa', label: 'World Cup' },
     ];
 
     const handleNav = (v) => {
@@ -33,7 +38,9 @@ export function TopNavbar() {
             setFantasySection('fifa');
             navigate('/wc');
         } else {
-            navigate(v.path);
+            const query = new URLSearchParams({ division });
+            if (seasonScope.season) query.set('season', seasonScope.season.slug);
+            navigate(v.section && v.section !== 'overview' ? `${v.path}?${query}` : v.path);
         }
         setMenuOpen(false);
     };
@@ -48,23 +55,12 @@ export function TopNavbar() {
                             to="/"
                             className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity"
                         >
-                            {division === 'wsl' ? (
-                                <>
-                                    <img src="/slk-womens.png" alt="WSL" className="w-14 h-14 sm:w-20 sm:h-20 object-contain relative -ml-2" />
-                                    <span className="text-lg sm:text-2xl font-black italic tracking-tighter text-white">
-                                        WSL
-                                    </span>
-                                </>
-                            ) : division === 'freshers' ? (
-                                <span className="text-2xl sm:text-3xl font-black tracking-tighter text-white leading-none">
-                                    FRESHERS
-                                </span>
-                            ) : (
-                                <span className="text-lg sm:text-xl font-black italic tracking-tighter text-white leading-none flex flex-col justify-center">
-                                    <span>SUPER</span>
-                                    <span>LEAGUE</span>
-                                </span>
+                            {seasonScope.divisionRecord?.logo_url && (
+                                <img src={seasonScope.divisionRecord.logo_url} alt="" className="h-12 w-12 object-contain" />
                             )}
+                            <span className="text-lg font-black italic tracking-tighter text-white sm:text-2xl">
+                                {seasonScope.divisionRecord?.short_name || seasonScope.divisionRecord?.name || 'Super League'}
+                            </span>
                         </Link>
                     )}
                     <div id="navbar-portal-target" className="flex items-center"></div>
@@ -122,6 +118,8 @@ export function TopNavbar() {
                         </button>
                     )}
                     <button
+                        aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
+                        aria-expanded={menuOpen}
                         onClick={() => setMenuOpen(!menuOpen)}
                         className="p-2 text-white hover:bg-white/10 rounded-full transition-colors relative z-50"
                     >
@@ -134,11 +132,12 @@ export function TopNavbar() {
             <div className={cn(
                 "fixed inset-0 z-40 bg-black/90 backdrop-blur-xl transition-opacity duration-300 flex flex-col pt-24 pb-8 px-6",
                 menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-            )}>
-                <div className="flex flex-col items-center justify-center flex-1 gap-6 sm:gap-8">
-                    {views.filter((view) => division !== 'freshers' || view.id !== 'fifa').map((v, i) => (
+            )} aria-hidden={!menuOpen}>
+                <div className="flex flex-col items-center gap-6 overflow-y-auto py-4 sm:gap-8">
+                    {views.map((v) => (
                         <button
-                            key={i}
+                            key={v.path}
+                            tabIndex={menuOpen ? 0 : -1}
                             onClick={() => handleNav(v)}
                             className={cn(
                                 "text-2xl sm:text-4xl font-bold tracking-widest transition-all duration-300 hover:scale-110",

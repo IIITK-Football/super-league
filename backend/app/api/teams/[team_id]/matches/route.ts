@@ -1,29 +1,37 @@
 import { publicClient } from '@/lib/supabase/clients';
+import { scopeFromUrl } from '@/lib/scope';
 import { handleError } from '../../../../../lib/errorHandler';
 
 export const revalidate = 60;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ team_id: string }> }
 ) {
   const supabase = publicClient();
   try {
     const { team_id } = await params;
 
-    const { data, error } = await supabase
+    const searchParams = new URL(request.url).searchParams;
+    let query = supabase
       .from('matches')
       .select(`
         id, date, venue, status, home_score, away_score,
+        season:seasons!inner(section_flags),
         home_team:teams!matches_home_team_id_fkey ( id, name, logo_url ),
         away_team:teams!matches_away_team_id_fkey ( id, name, logo_url )
       `)
       .or(`home_team_id.eq.${team_id},away_team_id.eq.${team_id}`)
       .order('date', { ascending: false });
 
+    if (searchParams.has('division') || searchParams.has('season')) {
+      const scope = await scopeFromUrl(supabase, request, { section: 'teams' });
+      query = query.eq('season_id', scope.season.id);
+    }
+    const { data, error } = await query;
     if (error) throw error;
 
-    const matches = (data || []).map((m: any) => ({
+    const matches = (data || []).filter((m: any) => m.season?.section_flags?.teams).map((m: any) => ({
       id: m.id,
       date: m.date,
       venue: m.venue,

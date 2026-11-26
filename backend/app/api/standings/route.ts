@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const supabase = publicClient();
   try {
     // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
-    const scope = await scopeFromUrl(supabase, request);
+    const scope = await scopeFromUrl(supabase, request, { section: 'standings' });
 
     // The season's teams and all its matches, read together (D-04: at most three sequential rounds).
     const [entriesRes, matchesRes] = await Promise.all([

@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const supabase = requestClient(request);
 
-    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }, { section: 'stats' });
 
     // Every season reads season_player_stats, the single source of season statistics (it also counts goals that
     // Freshers seasons recorded only in the match JSON), so every viewer sees the same numbers.

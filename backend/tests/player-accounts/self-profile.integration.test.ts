@@ -65,8 +65,8 @@ beforeAll(async () => {
   const c = clients(keys);
   admin = c.admin;
   for (const [label, role] of [['dictator', 'dictator'], ['player', 'default'], ['other', 'default'], ['nobody', 'captain']]) as[label] = await signIn(label, role, c);
-  made.division = must(await admin.from('divisions').insert({ slug: tag, name: `${tag} Division` }).select('id').single()).data!.id;
-  made.season = must(await admin.from('seasons').insert({ division_id: made.division, slug: `${tag}-a`, name: `${tag} A`, is_current: true }).select('id').single()).data!.id;
+  made.division = must(await admin.from('divisions').insert({ visibility: 'public', slug: tag, name: `${tag} Division` }).select('id').single()).data!.id;
+  made.season = must(await admin.from('seasons').insert({ visibility: 'public', division_id: made.division, slug: `${tag}-a`, name: `${tag} A`, is_current: true }).select('id').single()).data!.id;
   made.teams = must(await admin.from('teams').insert([{ name: `${tag} One`, short_name: 'ONE' }, { name: `${tag} Two`, short_name: 'TWO' }]).select('id')).data!.map((t) => t.id);
   const entries = must(await admin.from('team_entries').insert(made.teams.map((team_id) => ({ team_id, season_id: made.season }))).select('id')).data!.map((e) => e.id);
   made.entry = entries[0];

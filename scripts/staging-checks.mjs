@@ -253,7 +253,7 @@ export async function runChecks({ env, fetchImpl = fetch, log = console.log }) {
     const division = await asUser(managerToken)('/rest/v1/divisions', { method: 'POST', prefer: 'return=representation', body: { slug: tag, name: 'SL Check Division', visibility: 'hidden' } });
     const divisionId = division.data?.[0]?.id;
     const seasons = divisionId
-      ? await asUser(managerToken)('/rest/v1/seasons?select=id,slug', { method: 'POST', prefer: 'return=representation', body: [{ division_id: divisionId, slug: '2026', name: '2026', is_current: true }, { division_id: divisionId, slug: '2027', name: '2027', is_current: false }] }) // PostgREST requires every row of a bulk insert to have the same keys
+      ? await asUser(managerToken)('/rest/v1/seasons?select=id,slug', { method: 'POST', prefer: 'return=representation', body: [{ division_id: divisionId, slug: '2026', name: '2026', visibility: 'public', is_current: true }, { division_id: divisionId, slug: '2027', name: '2027', visibility: 'public', is_current: false }] }) // PostgREST requires every row of a bulk insert to have the same keys
       : division;
     const seasonsCreated = divisionId && seasons.ok && (seasons.data ?? []).length === 2;
     record('A new hidden division with two coexisting seasons is created through the Data API, with no schema change', seasonsCreated ? 'PASS' : 'FAIL', seasonsCreated ? 'created' : message(seasons));

@@ -38,6 +38,7 @@ function getInitialDivision() {
 // Current season first, then the most recent.
 const orderSeasons = (list) => [...list].sort((a, b) =>
   Number(b.is_current) - Number(a.is_current)
+  || a.sort_order - b.sort_order
   || String(b.starts_on ?? '').localeCompare(String(a.starts_on ?? ''))
   || String(b.slug).localeCompare(String(a.slug)));
 
@@ -56,23 +57,30 @@ export function LeagueProvider({ children }) {
   }, []);
 
   // Seasons of the selected division that the viewer may see (row level security hides hidden/archived ones).
-  const [seasonState, setSeasonState] = useState({ division: null, divisionRecord: null, seasons: [], loading: true, error: '' });
+  const [seasonState, setSeasonState] = useState({ division: null, divisionRecord: null, seasons: [], sectionTypes: [], loading: true, error: '' });
   const [seasonChoice, setSeasonChoice] = useState(() => ({ [division]: readStorage(`${SEASON_STORAGE_PREFIX}${division}`) }));
 
   useEffect(() => {
     let cancelled = false;
     setSeasonState((s) => ({ ...s, loading: true, error: '' }));
     (async () => {
-      const { data: record, error: divisionError } = await supabase.from('divisions').select('id, slug, name').eq('slug', division).maybeSingle();
+      const [{ data: record, error: divisionError }, types] = await Promise.all([
+        supabase.from('divisions').select('id, slug, name, short_name, logo_url, primary_color')
+          .eq('slug', division).eq('visibility', 'public').is('archived_at', null).maybeSingle(),
+        supabase.from('section_types').select('key, label, default_enabled, default_sort_order'),
+      ]);
       let seasons = [];
-      let error = divisionError?.message || '';
+      let error = divisionError?.message || types.error?.message || '';
       if (record) {
         const { data, error: seasonsError } = await supabase.from('seasons')
-          .select('id, slug, name, is_current, starts_on, ends_on, format, rules_md').eq('division_id', record.id);
+          .select('id, slug, name, is_current, starts_on, ends_on, format, rules_md, sort_order, season_sections(section_key, label, enabled, nav_visible, sort_order)')
+          .eq('division_id', record.id).eq('visibility', 'public').is('archived_at', null);
         seasons = orderSeasons(data || []);
         error = seasonsError?.message || error;
       }
-      if (!cancelled) setSeasonState({ division, divisionRecord: record || null, seasons, loading: false, error });
+      if (!cancelled) setSeasonState({
+        division, divisionRecord: record || null, seasons, sectionTypes: types.data || [], loading: false, error,
+      });
     })();
     return () => { cancelled = true; };
   }, [division]);
@@ -88,9 +96,23 @@ export function LeagueProvider({ children }) {
   const ready = seasonState.division === division && !seasonState.loading;
   const seasons = ready ? seasonState.seasons : [];
   const requestedSeasonSlug = seasonChoice[division] ?? readStorage(`${SEASON_STORAGE_PREFIX}${division}`) ?? null;
-  const currentSeason = seasons.find((s) => s.is_current) || seasons[0] || null;
+  const currentSeason = seasons.find((s) => s.is_current) || null;
   const chosen = requestedSeasonSlug ? seasons.find((s) => s.slug === requestedSeasonSlug) : null;
-  const season = chosen || currentSeason;
+  const season = requestedSeasonSlug ? chosen || null : currentSeason;
+  const sections = useMemo(() => {
+    if (!season) return [];
+    const overrides = new Map((season.season_sections || []).map((row) => [row.section_key, row]));
+    return seasonState.sectionTypes.map((type) => {
+      const row = overrides.get(type.key);
+      return {
+        key: type.key,
+        label: row?.label ?? type.label,
+        enabled: row?.enabled ?? type.default_enabled,
+        navVisible: row?.nav_visible ?? type.default_enabled,
+        order: row?.sort_order ?? type.default_sort_order,
+      };
+    }).sort((a, b) => a.order - b.order || a.key.localeCompare(b.key));
+  }, [season, seasonState.sectionTypes]);
 
   const seasonScope = useMemo(() => ({
     ready,
@@ -99,11 +121,12 @@ export function LeagueProvider({ children }) {
     seasons,
     season,
     currentSeason,
+    sections,
     requestedSeasonSlug,
     // A season named (by URL or a stored choice) that is not among the visible seasons.
     seasonMissing: ready && Boolean(requestedSeasonSlug) && !chosen,
     error: ready ? seasonState.error : '',
-  }), [ready, division, seasonState, seasons, season, currentSeason, requestedSeasonSlug, chosen]);
+  }), [ready, division, seasonState, seasons, season, currentSeason, sections, requestedSeasonSlug, chosen]);
 
   // ADDED 'matchTimeline' and 'player-profile' to your tracker comment!
   const [view, setViewInternal] = useState(() => {

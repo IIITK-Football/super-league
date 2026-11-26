@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
     if (!all) {
       // The teams entered in ?division=<slug>&season=<slug or id> (default: the current season).
-      const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+      const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }, { section: 'teams' });
       query = query.in('id', await seasonTeamIds(supabase, scope.season.id));
     }
 

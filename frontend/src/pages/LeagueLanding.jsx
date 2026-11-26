@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { ArrowLeft, ArrowRight, Menu, Pause, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useDivisions } from '../hooks/useDivisions';
 import { API_BASE_URL } from '../lib/api';
 import './LeagueLanding.css';
 
@@ -153,6 +154,7 @@ function warmPosters() {
 }
 
 export function LeagueLanding() {
+    const { divisions, loading: divisionsLoading, error: divisionsError } = useDivisions({ publicOnly: true });
     const [carouselIndex, setCarouselIndex] = useState(0);
     const [activeSlot, setActiveSlot] = useState(0);
     const [slotStreamNames, setSlotStreamNames] = useState([null, null]);
@@ -806,9 +808,11 @@ export function LeagueLanding() {
 
             <div className={`landing-menu-panel ${isMenuOpen ? 'is-open' : ''}`}>
                 <button onClick={() => navigate('/login')}>Sign in / Join</button>
-                {tournaments.map((tournament) => (
-                    <button key={tournament.id} onClick={() => navigate(`/${tournament.id}`)}>
-                        {tournament.title}
+                {divisionsLoading && <p role="status">Loading divisions…</p>}
+                {divisionsError && <p role="alert">Divisions could not be loaded.</p>}
+                {divisions.map((division) => (
+                    <button key={division.id} onClick={() => navigate(`/${division.slug}`)}>
+                        {division.name}
                     </button>
                 ))}
             </div>

@@ -93,9 +93,9 @@ async function verifiedAccount(label) {
 }
 
 async function fixtures(dictatorClient) {
-  made.division = must(await admin.from('divisions').insert({ slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
+  made.division = must(await admin.from('divisions').insert({ visibility: 'public', slug: tag, name: `SL Check ${tag}` }).select('id').single()).id;
   for (const [key, slug, current] of [['now', '2026', true], ['old', '2025', false]]) {
-    made.seasons[key] = must(await admin.from('seasons').insert({ division_id: made.division, slug, name: `${tag} ${slug}`, is_current: current, sort_order: current ? 2 : 1 }).select('id').single()).id;
+    made.seasons[key] = must(await admin.from('seasons').insert({ visibility: 'public', division_id: made.division, slug, name: `${tag} ${slug}`, is_current: current, sort_order: current ? 2 : 1 }).select('id').single()).id;
   }
   for (const name of ['Alpha', 'Beta', 'Gamma']) made.teams[name] = must(await admin.from('teams').insert({ name: `${tag} ${name}` }).select('id').single()).id;
   for (const [team, season] of [['Alpha', 'now'], ['Beta', 'now'], ['Gamma', 'old']]) {

@@ -18,20 +18,28 @@ export default function MatchTimeline() {
       const raw = sessionStorage.getItem('selectedMatch');
       // Default to returning to teams if something goes wrong
       if (!raw && !id) { navigate('/matches', { replace: true }); return; }
-      const baseMatch = raw ? JSON.parse(raw) : { id };
+      const matchId = id || JSON.parse(raw).id;
 
       try {
-        const { data: match } = await supabase
+        const { data: match, error: matchError } = await supabase
           .from('matches')
-          .select('id, season_id, status, date, home_score, away_score, minute, result_kind, result_reason, home_team_id, away_team_id, home:teams!home_team_id(name), away:teams!away_team_id(name)')
-          .eq('id', baseMatch.id)
+          .select('id, season_id, status, date, home_score, away_score, minute, result_kind, result_reason, home_team_id, away_team_id, home:teams!home_team_id(name), away:teams!away_team_id(name), season:seasons!inner(section_flags, division:divisions!inner(id))')
+          .eq('id', matchId)
+          .eq('season.visibility', 'public').is('season.archived_at', null)
+          .eq('season.division.visibility', 'public').is('season.division.archived_at', null)
           .single();
+
+        if (matchError?.code !== 'PGRST116' && matchError) throw matchError;
+        if (!match?.season?.section_flags?.fixtures) {
+          setError('This section is not available for this season.');
+          return;
+        }
 
         // Goals, own goals and cards of the match; a voided event is a correction and is never shown.
         const { data: rawGoals, error: eventsError } = await supabase
           .from('match_events')
           .select('id, team_id, kind, player_id, assist_player_id, minute, added_minute')
-          .eq('match_id', baseMatch.id)
+          .eq('match_id', matchId)
           .is('voided_at', null);
         if (eventsError) throw eventsError;
 

@@ -25,6 +25,7 @@ export class ScopeError extends Error {
 export async function resolveScope(
   supabase: SupabaseClient,
   params: { division?: string | null; season?: string | null },
+  options: { section?: string } = {},
 ): Promise<Scope> {
   const divisionSlug = (params.division || DEFAULT_DIVISION).trim();
   if (!SLUG.test(divisionSlug)) throw new ScopeError(400, 'division must be a division slug, for example super-league');
@@ -35,28 +36,38 @@ export async function resolveScope(
   // under RLS, so the inner join finds nothing for them. Only a miss pays a second read, to name what is missing.
   let query = supabase
     .from('seasons')
-    .select('id, slug, name, is_current, format, division:divisions!inner(id, slug, name)')
+    .select('id, slug, name, is_current, format, division:divisions!inner(id, slug, name)'
+      + (options.section ? ', section_flags' : ''))
     .eq('division.slug', divisionSlug);
+  if (options.section) query = query.eq('visibility', 'public').is('archived_at', null)
+    .eq('division.visibility', 'public').is('division.archived_at', null);
   if (!seasonKey) query = query.eq('is_current', true);
   else if (UUID.test(seasonKey)) query = query.eq('id', seasonKey);
   else query = query.eq('slug', seasonKey);
   const { data: row, error: seasonError } = await query.maybeSingle();
   if (seasonError) throw seasonError;
   if (!row) {
-    const { data: division, error: divisionError } = await supabase
-      .from('divisions').select('name').eq('slug', divisionSlug).maybeSingle();
+    let divisionQuery = supabase.from('divisions').select('name').eq('slug', divisionSlug);
+    if (options.section) divisionQuery = divisionQuery.eq('visibility', 'public').is('archived_at', null);
+    const { data: division, error: divisionError } = await divisionQuery.maybeSingle();
     if (divisionError) throw divisionError;
     if (!division) throw new ScopeError(404, `Division "${divisionSlug}" not found`);
     throw new ScopeError(404, seasonKey ? `Season "${seasonKey}" not found in ${division.name}` : `${division.name} has no current season`);
   }
-  const { division: joined, ...season } = row as unknown as Scope['season'] & { division: Scope['division'] | Scope['division'][] };
+  const { division: joined, section_flags, ...season } = row as unknown as Scope['season'] & {
+    division: Scope['division'] | Scope['division'][];
+    section_flags?: Record<string, boolean>;
+  };
+  if (options.section && section_flags?.[options.section] !== true) {
+    throw new ScopeError(404, 'This section is not available for this season');
+  }
   const division = Array.isArray(joined) ? joined[0] : joined;
   return { division, season };
 }
 
-export function scopeFromUrl(supabase: SupabaseClient, request: Request): Promise<Scope> {
+export function scopeFromUrl(supabase: SupabaseClient, request: Request, options?: { section?: string }): Promise<Scope> {
   const { searchParams } = new URL(request.url);
-  return resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+  return resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }, options);
 }
 
 // Team ids entered in a season.

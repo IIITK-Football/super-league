@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Archive, Check, Layers, Loader2, Plus, RotateCcw, Save, Star, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-
-// Dictator flow for divisions, seasons and season sections. Writes go straight to the Data API with the signed-in
-// user's session, so row level security decides (only a dictator may write); this screen only reports the answer.
+import { fetchApi } from '../../hooks/useApi';
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -14,13 +12,13 @@ export const SEASON_FORMATS = [
   { value: 'league_knockout', label: 'League + knockout' },
 ];
 
-const blankDivision = () => ({ slug: '', name: '', short_name: '', visibility: 'public', primary_color: '' });
-const blankSeason = () => ({ slug: '', name: '', starts_on: '', ends_on: '', status: 'planned', format: 'league' });
+const blankDivision = () => ({ slug: '', name: '', short_name: '', primary_color: '' });
+const blankSeason = () => ({ slug: '', name: '', starts_on: '', ends_on: '', format: 'league' });
 
 export function validateDivision(d) {
   if (!d.name.trim()) return 'Enter a division name.';
   if (!SLUG.test(d.slug)) return 'The slug may use lowercase letters, numbers and single hyphens (for example "inter").';
-  if (d.primary_color && !HEX.test(d.primary_color)) return 'The colour must look like #1a2b3c.';
+  if ([d.primary_color, d.secondary_color].some((value) => value && !HEX.test(value))) return 'The colour must look like #1a2b3c.';
   return '';
 }
 
@@ -44,7 +42,7 @@ export function parseSettings(text) {
 
 export function describeError(error) {
   if (!error) return '';
-  if (error.code === '42501') return 'Only a dictator can change divisions, seasons and sections.';
+  if (error.code === '42501' || error.status === 403) return 'Only a dictator can change divisions, seasons and sections.';
   if (error.code === '23505') return 'That slug is already used here. Choose another one.';
   if (error.code === '23503') return 'This record already has data, so it cannot be deleted. Archive it instead.';
   return error.message || 'Something went wrong. Try again.';
@@ -63,13 +61,17 @@ export default function ManageDivisions() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [newDivision, setNewDivision] = useState(blankDivision);
-  const [selectedDivision, setSelectedDivision] = useState(null);
+  const [selectedDivisionId, setSelectedDivisionId] = useState(null);
   const [seasons, setSeasons] = useState([]);
   const [seasonsLoading, setSeasonsLoading] = useState(false);
   const [newSeason, setNewSeason] = useState(blankSeason);
-  const [selectedSeason, setSelectedSeason] = useState(null);
+  const [selectedSeasonId, setSelectedSeasonId] = useState(null);
   const [sections, setSections] = useState([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
+  const seasonLoad = useRef(0);
+  const sectionLoad = useRef(0);
+  const selectedDivision = divisions.find(({ id }) => id === selectedDivisionId);
+  const selectedSeason = seasons.find(({ id }) => id === selectedSeasonId);
 
   const report = (err, success) => {
     if (err) { setMessage(''); setError(describeError(err)); return false; }
@@ -80,7 +82,7 @@ export default function ManageDivisions() {
     setLoading(true);
     const { data, error: loadError } = await supabase
       .from('divisions')
-      .select('id, slug, name, short_name, visibility, archived_at, primary_color, sort_order')
+      .select('id, slug, name, short_name, visibility, archived_at, logo_url, primary_color, secondary_color, sort_order')
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
     if (loadError) setError(describeError(loadError));
@@ -89,31 +91,41 @@ export default function ManageDivisions() {
   };
 
   const loadSeasons = async (divisionId) => {
+    const request = ++seasonLoad.current;
     setSeasonsLoading(true);
     const { data, error: loadError } = await supabase
       .from('seasons')
-      .select('id, slug, name, starts_on, ends_on, status, format, is_current, archived_at, sort_order')
+      .select('id, slug, name, starts_on, ends_on, status, format, is_current, visibility, archived_at, sort_order')
       .eq('division_id', divisionId)
       .order('sort_order', { ascending: true })
       .order('slug', { ascending: false });
+    if (request !== seasonLoad.current) return;
     if (loadError) setError(describeError(loadError));
     setSeasons(data || []);
     setSeasonsLoading(false);
   };
 
   const loadSections = async (seasonId) => {
+    const request = ++sectionLoad.current;
     setSectionsLoading(true);
     const [types, rows] = await Promise.all([
       supabase.from('section_types').select('key, label, description, default_enabled, default_sort_order').order('default_sort_order', { ascending: true }),
-      supabase.from('season_sections').select('section_key, enabled, nav_visible, sort_order, settings').eq('season_id', seasonId),
+      supabase.from('season_sections').select('section_key, label, enabled, nav_visible, sort_order, settings').eq('season_id', seasonId),
     ]);
-    if (types.error || rows.error) setError(describeError(types.error || rows.error));
+    if (request !== sectionLoad.current) return;
+    if (types.error || rows.error) {
+      setError(describeError(types.error || rows.error));
+      setSections([]);
+      setSectionsLoading(false);
+      return;
+    }
     const byKey = new Map((rows.data || []).map((r) => [r.section_key, r]));
     setSections((types.data || []).map((t) => {
       const row = byKey.get(t.key);
       return {
         key: t.key,
         label: t.label,
+        customLabel: row?.label || '',
         description: t.description,
         saved: Boolean(row),
         enabled: row ? row.enabled : t.default_enabled,
@@ -121,15 +133,16 @@ export default function ManageDivisions() {
         sort_order: row ? row.sort_order : t.default_sort_order,
         settingsText: row && Object.keys(row.settings || {}).length ? JSON.stringify(row.settings) : '',
       };
-    }));
+    }).sort((a, b) => a.sort_order - b.sort_order || a.key.localeCompare(b.key)));
     setSectionsLoading(false);
   };
 
   useEffect(() => { loadDivisions(); }, []);
 
   const chooseDivision = (division) => {
-    setSelectedDivision(division);
-    setSelectedSeason(null);
+    setSelectedDivisionId(division.id);
+    setSelectedSeasonId(null);
+    sectionLoad.current += 1;
     setSeasons([]);
     setSections([]);
     setNewSeason(blankSeason());
@@ -137,155 +150,141 @@ export default function ManageDivisions() {
   };
 
   const chooseSeason = (season) => {
-    setSelectedSeason(season);
+    setSelectedSeasonId(season.id);
     setSections([]);
     loadSections(season.id);
   };
 
-  // Divisions -------------------------------------------------------------------------------------------------
+  const write = async (action, path, method, body, success, reload) => {
+    setBusy(action);
+    try {
+      await fetchApi(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+      report(null, success);
+      await reload?.();
+    } catch (failure) {
+      report(failure);
+    } finally {
+      setBusy('');
+    }
+  };
 
-  const createDivision = async (event) => {
+  const createDivision = (event) => {
     event.preventDefault();
     const invalid = validateDivision(newDivision);
-    if (invalid) { setMessage(''); setError(invalid); return; }
-    setBusy('create-division');
-    const { error: err } = await supabase.from('divisions').insert({
-      slug: newDivision.slug,
-      name: newDivision.name.trim(),
-      short_name: newDivision.short_name.trim() || null,
-      visibility: newDivision.visibility,
-      primary_color: newDivision.primary_color || null,
-      sort_order: divisions.length + 1,
-    });
-    setBusy('');
-    if (report(err, `Division "${newDivision.name.trim()}" created.`)) {
+    if (invalid) return report(new Error(invalid));
+    const { slug, name, short_name, primary_color } = newDivision;
+    return write('create-division', '/admin/divisions', 'POST', {
+      slug, name: name.trim(), short_name: short_name.trim() || null, primary_color: primary_color || null,
+    }, `Division "${name.trim()}" created.`, () => {
       setNewDivision(blankDivision());
-      loadDivisions();
-    }
+      return loadDivisions();
+    });
   };
 
   const changeDivision = (id, field, value) => setDivisions((list) => list.map((d) => (d.id === id ? { ...d, [field]: value } : d)));
+  const patchDivision = (division, body, message) => write(
+    `division-${division.id}`, `/admin/divisions/${division.id}`, 'PATCH', body, message, loadDivisions,
+  );
 
-  const saveDivision = async (division) => {
-    const invalid = validateDivision({ ...division, short_name: division.short_name || '', primary_color: division.primary_color || '' });
-    if (invalid) { setMessage(''); setError(invalid); return; }
-    setBusy(`division-${division.id}`);
-    const { data, error: err } = await supabase.from('divisions')
-      .update({ name: division.name.trim(), visibility: division.visibility })
-      .eq('id', division.id).select('id');
-    setBusy('');
-    if (!err && !data?.length) { report({ code: '42501' }); return; }
-    if (report(err, `Division "${division.name.trim()}" saved.`)) loadDivisions();
+  const saveDivision = (division) => {
+    const invalid = validateDivision(division);
+    if (invalid) return report(new Error(invalid));
+    const { name, short_name, logo_url, primary_color, secondary_color } = division;
+    return patchDivision(division, {
+      name: name.trim(), short_name: short_name?.trim() || null, logo_url: logo_url?.trim() || null,
+      primary_color: primary_color || null, secondary_color: secondary_color || null,
+    }, `Division "${name.trim()}" saved.`);
   };
 
-  const setDivisionArchived = async (division, archived) => {
-    setBusy(`division-${division.id}`);
-    const { data, error: err } = await supabase.from('divisions')
-      .update({ archived_at: archived ? new Date().toISOString() : null })
-      .eq('id', division.id).select('id');
-    setBusy('');
-    if (!err && !data?.length) { report({ code: '42501' }); return; }
-    if (report(err, archived ? `Division "${division.name}" archived. It is hidden from visitors and can be restored.` : `Division "${division.name}" restored.`)) loadDivisions();
-  };
-
-  const deleteDivision = async (division) => {
+  const deleteDivision = (division) => {
     if (!window.confirm(`Delete the division "${division.name}"? This only works while it has no seasons.`)) return;
-    setBusy(`division-${division.id}`);
-    const { data, error: err } = await supabase.from('divisions').delete().eq('id', division.id).select('id');
-    setBusy('');
-    if (!err && !data?.length) { report({ code: '42501' }); return; }
-    if (report(err, `Division "${division.name}" deleted.`)) {
-      if (selectedDivision?.id === division.id) { setSelectedDivision(null); setSeasons([]); setSelectedSeason(null); }
-      loadDivisions();
-    }
+    return write(`division-${division.id}`, `/admin/divisions/${division.id}`, 'DELETE', undefined,
+      `Division "${division.name}" deleted.`, () => {
+        if (selectedDivision?.id === division.id) {
+          setSelectedDivisionId(null);
+          setSeasons([]);
+          setSelectedSeasonId(null);
+        }
+        return loadDivisions();
+      });
   };
 
-  // Seasons ---------------------------------------------------------------------------------------------------
+  const reloadSeasons = () => loadSeasons(selectedDivision.id);
 
-  const createSeason = async (event) => {
+  const createSeason = (event) => {
     event.preventDefault();
     const invalid = validateSeason(newSeason);
-    if (invalid) { setMessage(''); setError(invalid); return; }
-    setBusy('create-season');
-    const { data, error: err } = await supabase.from('seasons').insert({
-      division_id: selectedDivision.id,
-      slug: newSeason.slug,
-      name: newSeason.name.trim(),
-      starts_on: newSeason.starts_on || null,
-      ends_on: newSeason.ends_on || null,
-      status: newSeason.status,
-      format: newSeason.format,
-      sort_order: seasons.length + 1,
-    }).select('id').single();
-    if (err) { setBusy(''); report(err); return; }
-    // Every new season starts with the default sections, which the dictator then adjusts.
-    const { data: types, error: typesError } = await supabase.from('section_types').select('key, default_enabled, default_sort_order');
-    const { error: sectionsError } = typesError ? { error: typesError } : await supabase.from('season_sections').insert(
-      (types || []).map((t) => ({ season_id: data.id, section_key: t.key, enabled: t.default_enabled, nav_visible: t.default_enabled, sort_order: t.default_sort_order, settings: {} })),
-      { defaultToNull: false },
-    );
-    setBusy('');
-    if (sectionsError) {
-      setMessage('');
-      setError(`Season created, but its default sections were not saved: ${describeError(sectionsError)} Open the season to configure them.`);
-    } else {
-      report(null, `Season "${newSeason.name.trim()}" created with the default sections.`);
-    }
-    setNewSeason(blankSeason());
-    loadSeasons(selectedDivision.id);
+    if (invalid) return report(new Error(invalid));
+    const { slug, name, starts_on, ends_on, format } = newSeason;
+    return write('create-season', '/admin/seasons', 'POST', {
+      division_id: selectedDivision.id, slug, name: name.trim(), starts_on: starts_on || null, ends_on: ends_on || null, format,
+    }, `Season "${name.trim()}" created with the default sections.`, () => {
+      setNewSeason(blankSeason());
+      return reloadSeasons();
+    });
   };
 
   const changeSeason = (id, field, value) => setSeasons((list) => list.map((s) => (s.id === id ? { ...s, [field]: value } : s)));
+  const patchSeason = (season, body, message) => write(
+    `season-${season.id}`, `/admin/seasons/${season.id}`, 'PATCH', body, message, reloadSeasons,
+  );
 
-  const saveSeason = async (season) => {
-    const invalid = validateSeason({ ...season, starts_on: season.starts_on || '', ends_on: season.ends_on || '' });
-    if (invalid) { setMessage(''); setError(invalid); return; }
-    setBusy(`season-${season.id}`);
-    const { data, error: err } = await supabase.from('seasons')
-      .update({ name: season.name.trim(), status: season.status, format: season.format, starts_on: season.starts_on || null, ends_on: season.ends_on || null })
-      .eq('id', season.id).select('id');
-    if (!err && data?.length) await supabase.rpc('refresh_captain_grants'); // a completed season is read-only: lapse captain grants with no writable assignment left
-    setBusy('');
-    if (!err && !data?.length) { report({ code: '42501' }); return; }
-    if (report(err, `Season "${season.name.trim()}" saved.`)) loadSeasons(selectedDivision.id);
+  const saveSeason = (season) => {
+    const invalid = validateSeason(season);
+    if (invalid) return report(new Error(invalid));
+    return patchSeason(season, {
+      name: season.name.trim(), status: season.status, format: season.format,
+      starts_on: season.starts_on || null, ends_on: season.ends_on || null,
+    }, `Season "${season.name.trim()}" saved.`);
   };
 
-  const makeCurrent = async (season) => {
-    setBusy(`season-${season.id}`);
-    const { error: err } = await supabase.rpc('set_current_season', { p_season: season.id });
-    setBusy('');
-    if (report(err, `"${season.name}" is now the current season of ${selectedDivision.name}.`)) loadSeasons(selectedDivision.id);
+  const makeCurrent = (season) => write(`season-${season.id}`, `/admin/seasons/${season.id}/current`, 'POST', undefined,
+    `"${season.name}" is now the current season of ${selectedDivision.name}.`, reloadSeasons);
+
+  const move = (items, index, offset) => {
+    const ordered = [...items];
+    [ordered[index], ordered[index + offset]] = [ordered[index + offset], ordered[index]];
+    return ordered;
   };
 
-  const setSeasonArchived = async (season, archived) => {
-    setBusy(`season-${season.id}`);
-    const { data, error: err } = await supabase.from('seasons')
-      .update({ archived_at: archived ? new Date().toISOString() : null })
-      .eq('id', season.id).select('id');
-    if (!err && data?.length && archived) await supabase.rpc('refresh_captain_grants'); // an archived season is read-only: lapse captain grants with no writable assignment left
-    setBusy('');
-    if (!err && !data?.length) { report({ code: '42501' }); return; }
-    if (report(err, archived ? `Season "${season.name}" archived.` : `Season "${season.name}" restored.`)) loadSeasons(selectedDivision.id);
+  const reorder = (type, items, index, offset) => {
+    const ids = move(items, index, offset).map(({ id }) => id);
+    const body = type === 'seasons' ? { ids, division_id: selectedDivision.id } : { ids };
+    return write('reorder', `/admin/${type}/order`, 'PUT', body, 'Order saved.',
+      type === 'seasons' ? reloadSeasons : loadDivisions);
   };
 
-  // Sections --------------------------------------------------------------------------------------------------
+  const orderButtons = (name, index, length, onMove) => (
+    <>
+      <button type="button" aria-label={`Move ${name} up`} className={ghostButton} disabled={!!busy || index === 0} onClick={() => onMove(-1)}>↑</button>
+      <button type="button" aria-label={`Move ${name} down`} className={ghostButton} disabled={!!busy || index === length - 1} onClick={() => onMove(1)}>↓</button>
+    </>
+  );
 
+  const lifecycleButtons = (record, patch) => {
+    if (record.archived_at) {
+      return <button type="button" disabled={!!busy} onClick={() => patch(record, { archived: false }, `"${record.name}" restored.`)} className={ghostButton}><RotateCcw size={13} /> Restore</button>;
+    }
+    const next = record.visibility === 'public' ? 'hidden' : 'public';
+    return <>
+      <button type="button" disabled={!!busy} onClick={() => patch(record, { visibility: next }, `"${record.name}" is now ${next}.`)} className={ghostButton}>{next === 'public' ? 'Publish' : 'Hide'}</button>
+      <button type="button" disabled={!!busy} onClick={() => patch(record, { archived: true }, `"${record.name}" archived.`)} className={ghostButton}><Archive size={13} /> Archive</button>
+    </>;
+  };
+
+  const stateBadge = (row) => row.archived_at ? badge('Archived', 'red') : badge(row.visibility === 'public' ? 'Public' : 'Hidden');
   const changeSection = (key, field, value) => setSections((list) => list.map((s) => (s.key === key ? { ...s, [field]: value } : s)));
 
-  const saveSection = async (section) => {
-    const settings = parseSettings(section.settingsText);
-    if (settings.error) { setMessage(''); setError(`${section.label}: ${settings.error}`); return; }
-    setBusy(`section-${section.key}`);
-    const { error: err } = await supabase.from('season_sections').upsert({
-      season_id: selectedSeason.id,
-      section_key: section.key,
-      enabled: section.enabled,
-      nav_visible: section.nav_visible,
-      sort_order: Number(section.sort_order) || 0,
-      settings: settings.value,
-    }, { onConflict: 'season_id,section_key' });
-    setBusy('');
-    if (report(err, `${section.label} saved for ${selectedSeason.name}.`)) loadSections(selectedSeason.id);
+  const saveSections = () => {
+    const rows = [];
+    for (const section of sections) {
+      const settings = parseSettings(section.settingsText);
+      if (settings.error) return report(new Error(`${section.label}: ${settings.error}`));
+      rows.push({ section_key: section.key, label: section.customLabel.trim() || null,
+        enabled: section.enabled, nav_visible: section.nav_visible, settings: settings.value });
+    }
+    return write('save-sections', `/admin/seasons/${selectedSeason.id}/sections`, 'PUT', { sections: rows },
+      `Sections saved for ${selectedSeason.name}.`, () => loadSections(selectedSeason.id));
   };
 
   // Render ----------------------------------------------------------------------------------------------------
@@ -303,26 +302,23 @@ export default function ManageDivisions() {
       <label className={labelClass}>Division name<input value={newDivision.name} onChange={(e) => setNewDivision({ ...newDivision, name: e.target.value })} placeholder="Inter" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
       <label className={labelClass}>Slug<input value={newDivision.slug} onChange={(e) => setNewDivision({ ...newDivision, slug: e.target.value.trim().toLowerCase() })} placeholder="inter" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
       <label className={labelClass}>Short name<input value={newDivision.short_name} onChange={(e) => setNewDivision({ ...newDivision, short_name: e.target.value })} placeholder="Optional" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
-      <label className={labelClass}>Visibility<select value={newDivision.visibility} onChange={(e) => setNewDivision({ ...newDivision, visibility: e.target.value })} className={`${inputClass} mt-1 normal-case tracking-normal`}><option value="public">Public</option><option value="hidden">Hidden</option></select></label>
       <label className={labelClass}>Colour<input value={newDivision.primary_color} onChange={(e) => setNewDivision({ ...newDivision, primary_color: e.target.value })} placeholder="#d9ff4a" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
-      <button type="submit" disabled={busy === 'create-division'} className={primaryButton}>{busy === 'create-division' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add division</button>
+      <button type="submit" disabled={!!busy} className={primaryButton}>{busy === 'create-division' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add division</button>
     </form>
 
     {loading && !divisions.length ? <p className="text-zinc-500">Loading divisions...</p> : !divisions.length
       ? <p className="text-zinc-500">No divisions yet. Add the first one above.</p>
-      : <ul aria-label="Divisions" className="space-y-3">{divisions.map((d) => <li key={d.id} className={`grid gap-3 rounded-2xl border p-4 lg:grid-cols-[1.5fr_140px_auto] lg:items-center ${selectedDivision?.id === d.id ? 'border-[#d9ff4a]/40 bg-[#d9ff4a]/[.04]' : 'border-white/10 bg-white/[.03]'}`}>
+      : <ul aria-label="Divisions" className="space-y-3">{divisions.map((d, index) => <li key={d.id} className={`grid gap-3 rounded-2xl border p-4 lg:grid-cols-[1.5fr_140px_auto] lg:items-center ${selectedDivision?.id === d.id ? 'border-[#d9ff4a]/40 bg-[#d9ff4a]/[.04]' : 'border-white/10 bg-white/[.03]'}`}>
         <div className="space-y-1">
           <input aria-label={`Name of ${d.slug}`} value={d.name} onChange={(e) => changeDivision(d.id, 'name', e.target.value)} className={`${inputClass} font-bold`} />
-          <div className="flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">/{d.slug} {d.visibility === 'hidden' && badge('Hidden')} {d.archived_at && badge('Archived', 'red')}</div>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">/{d.slug} {stateBadge(d)}</div>
         </div>
-        <select aria-label={`Visibility of ${d.slug}`} value={d.visibility} onChange={(e) => changeDivision(d.id, 'visibility', e.target.value)} className={inputClass}><option value="public">Public</option><option value="hidden">Hidden</option></select>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => saveDivision(d)} disabled={busy === `division-${d.id}`} className={ghostButton}><Save size={13} /> Save</button>
-          <button type="button" onClick={() => chooseDivision(d)} className={ghostButton}><Layers size={13} /> Seasons</button>
-          {d.archived_at
-            ? <button type="button" onClick={() => setDivisionArchived(d, false)} disabled={busy === `division-${d.id}`} className={ghostButton}><RotateCcw size={13} /> Restore</button>
-            : <button type="button" onClick={() => setDivisionArchived(d, true)} disabled={busy === `division-${d.id}`} className={ghostButton}><Archive size={13} /> Archive</button>}
-          <button type="button" onClick={() => deleteDivision(d)} disabled={busy === `division-${d.id}`} aria-label={`Delete ${d.name}`} className="rounded-lg border border-red-500/30 px-3 py-2 text-red-400 disabled:opacity-40"><Trash2 size={13} /></button>
+          <button type="button" onClick={() => saveDivision(d)} disabled={!!busy} className={ghostButton}><Save size={13} /> Save</button>
+          <button type="button" onClick={() => chooseDivision(d)} disabled={!!busy} className={ghostButton}><Layers size={13} /> Seasons</button>
+          {lifecycleButtons(d, patchDivision)}
+          {orderButtons(d.name, index, divisions.length, (offset) => reorder('divisions', divisions, index, offset))}
+          <button type="button" onClick={() => deleteDivision(d)} disabled={!!busy} aria-label={`Delete ${d.name}`} className="rounded-lg border border-red-500/30 px-3 py-2 text-red-400 disabled:opacity-40"><Trash2 size={13} /></button>
         </div>
       </li>)}</ul>}
 
@@ -333,29 +329,27 @@ export default function ManageDivisions() {
         <label className={labelClass}>Season slug<input value={newSeason.slug} onChange={(e) => setNewSeason({ ...newSeason, slug: e.target.value.trim().toLowerCase() })} placeholder="2026-27" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
         <label className={labelClass}>Starts<input type="date" value={newSeason.starts_on} onChange={(e) => setNewSeason({ ...newSeason, starts_on: e.target.value })} className={`${inputClass} mt-1`} /></label>
         <label className={labelClass}>Ends<input type="date" value={newSeason.ends_on} onChange={(e) => setNewSeason({ ...newSeason, ends_on: e.target.value })} className={`${inputClass} mt-1`} /></label>
-        <label className={labelClass}>Status<select value={newSeason.status} onChange={(e) => setNewSeason({ ...newSeason, status: e.target.value })} className={`${inputClass} mt-1 normal-case tracking-normal`}>{SEASON_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
         <label className={labelClass}>Format<select value={newSeason.format} onChange={(e) => setNewSeason({ ...newSeason, format: e.target.value })} className={`${inputClass} mt-1 normal-case tracking-normal`}>{SEASON_FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}</select></label>
-        <button type="submit" disabled={busy === 'create-season'} className={primaryButton}>{busy === 'create-season' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add season</button>
+        <button type="submit" disabled={!!busy} className={primaryButton}>{busy === 'create-season' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add season</button>
       </form>
 
       {seasonsLoading && !seasons.length ? <p className="text-zinc-500">Loading seasons...</p> : !seasons.length
         ? <p className="text-zinc-500">No seasons yet. Add the first season of {selectedDivision.name} above.</p>
-        : <ul aria-label="Seasons" className="space-y-2">{seasons.map((s) => <li key={s.id} className={`grid gap-2 rounded-xl border p-3 lg:grid-cols-[1fr_140px_140px_140px_150px_auto] lg:items-center ${selectedSeason?.id === s.id ? 'border-[#d9ff4a]/40' : 'border-white/5 bg-black/30'}`}>
+        : <ul aria-label="Seasons" className="space-y-2">{seasons.map((s, index) => <li key={s.id} className={`grid gap-2 rounded-xl border p-3 lg:grid-cols-[1fr_140px_140px_140px_150px_auto] lg:items-center ${selectedSeason?.id === s.id ? 'border-[#d9ff4a]/40' : 'border-white/5 bg-black/30'}`}>
           <div className="space-y-1">
             <input aria-label={`Name of season ${s.slug}`} value={s.name} onChange={(e) => changeSeason(s.id, 'name', e.target.value)} className={`${inputClass} font-bold`} />
-            <div className="flex flex-wrap gap-2">{s.is_current && badge('Current', 'lime')} {s.archived_at && badge('Archived', 'red')}</div>
+            <div className="flex flex-wrap gap-2">{s.is_current && badge('Current', 'lime')} {stateBadge(s)}</div>
           </div>
           <input aria-label={`Start of season ${s.slug}`} type="date" value={s.starts_on || ''} onChange={(e) => changeSeason(s.id, 'starts_on', e.target.value)} className={inputClass} />
           <input aria-label={`End of season ${s.slug}`} type="date" value={s.ends_on || ''} onChange={(e) => changeSeason(s.id, 'ends_on', e.target.value)} className={inputClass} />
           <select aria-label={`Status of season ${s.slug}`} value={s.status} onChange={(e) => changeSeason(s.id, 'status', e.target.value)} className={inputClass}>{SEASON_STATUSES.map((x) => <option key={x} value={x}>{x}</option>)}</select>
           <select aria-label={`Format of season ${s.slug}`} value={s.format} onChange={(e) => changeSeason(s.id, 'format', e.target.value)} className={inputClass}>{SEASON_FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}</select>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => saveSeason(s)} disabled={busy === `season-${s.id}`} className={ghostButton}><Save size={13} /> Save</button>
-            <button type="button" onClick={() => chooseSeason(s)} className={ghostButton}><Layers size={13} /> Sections</button>
-            {!s.is_current && !s.archived_at && <button type="button" onClick={() => makeCurrent(s)} disabled={busy === `season-${s.id}`} className={ghostButton}><Star size={13} /> Make current</button>}
-            {s.archived_at
-              ? <button type="button" onClick={() => setSeasonArchived(s, false)} disabled={busy === `season-${s.id}`} className={ghostButton}><RotateCcw size={13} /> Restore</button>
-              : <button type="button" onClick={() => setSeasonArchived(s, true)} disabled={busy === `season-${s.id}`} className={ghostButton}><Archive size={13} /> Archive</button>}
+            <button type="button" onClick={() => saveSeason(s)} disabled={!!busy} className={ghostButton}><Save size={13} /> Save</button>
+            <button type="button" onClick={() => chooseSeason(s)} disabled={!!busy} className={ghostButton}><Layers size={13} /> Sections</button>
+            {!s.is_current && !s.archived_at && s.visibility === 'public' && <button type="button" onClick={() => makeCurrent(s)} disabled={!!busy} className={ghostButton}><Star size={13} /> Make current</button>}
+            {lifecycleButtons(s, patchSeason)}
+            {orderButtons(s.name, index, seasons.length, (offset) => reorder('seasons', seasons, index, offset))}
           </div>
         </li>)}</ul>}
     </section>}
@@ -364,14 +358,16 @@ export default function ManageDivisions() {
       <h3 className="text-sm font-black uppercase tracking-wider text-zinc-300">Sections of {selectedDivision?.name} {selectedSeason.name}</h3>
       {sectionsLoading && !sections.length ? <p className="text-zinc-500">Loading sections...</p> : !sections.length
         ? <p className="text-zinc-500">No section types are defined.</p>
-        : <ul aria-label="Sections" className="space-y-2">{sections.map((sec) => <li key={sec.key} className="grid gap-2 rounded-xl border border-white/5 bg-black/30 p-3 lg:grid-cols-[1.2fr_auto_auto_90px_1.4fr_auto] lg:items-center">
-          <div><p className="text-sm font-bold">{sec.label}</p><p className="text-[10px] text-zinc-500">{sec.description}{!sec.saved && ' · default, not saved yet'}</p></div>
+        : <ul aria-label="Sections" className="space-y-2">{sections.map((sec, index) => <li key={sec.key} className="grid gap-2 rounded-xl border border-white/5 bg-black/30 p-3 lg:grid-cols-[1.2fr_auto_auto_90px_1.4fr_auto] lg:items-center">
+          <div><label className={labelClass}>{sec.label} label<input value={sec.customLabel} placeholder={sec.label} maxLength={40} onChange={(e) => changeSection(sec.key, 'customLabel', e.target.value)} className={inputClass} /></label><p className="text-[10px] text-zinc-500">{sec.description}{!sec.saved && ' · default, not saved yet'}</p></div>
           <label className="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" checked={sec.enabled} onChange={(e) => changeSection(sec.key, 'enabled', e.target.checked)} aria-label={`${sec.label} enabled`} /> Enabled</label>
           <label className="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" checked={sec.nav_visible} onChange={(e) => changeSection(sec.key, 'nav_visible', e.target.checked)} aria-label={`${sec.label} in navigation`} /> In navigation</label>
-          <input type="number" aria-label={`${sec.label} order`} value={sec.sort_order} onChange={(e) => changeSection(sec.key, 'sort_order', e.target.value)} className={inputClass} />
+          <div className="flex gap-1">{orderButtons(sec.label, index, sections.length, (offset) => setSections(move(sections, index, offset)))}</div>
           <input aria-label={`${sec.label} settings`} value={sec.settingsText} onChange={(e) => changeSection(sec.key, 'settingsText', e.target.value)} placeholder='Settings JSON, e.g. {"placement": "top"}' className={`${inputClass} font-mono text-xs`} />
-          <button type="button" onClick={() => saveSection(sec)} disabled={busy === `section-${sec.key}`} className={ghostButton}>{busy === `section-${sec.key}` ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Save</button>
         </li>)}</ul>}
+      <button type="button" onClick={saveSections} disabled={!!busy || !sections.length || sectionsLoading} className={primaryButton}>
+        <Check size={13} /> Save sections
+      </button>
     </section>}
   </div>;
 }

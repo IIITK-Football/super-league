@@ -135,7 +135,7 @@ export async function GET(request: Request) {
 
     // This user's predictions in the selected season (?division=<slug>&season=<slug or id>; default current)
     const { searchParams } = new URL(request.url);
-    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }, { section: 'fantasy' });
 
     // Fetch all predictions for this user, joined with match data + team names via FK join
     const { data: predictions, error } = await supabase

@@ -6,6 +6,8 @@ const DATABASE_STATUS: Record<string, [number, string | null]> = {
   '23505': [409, 'That already exists.'], // unique violation
   '23503': [409, 'That refers to something that does not exist or is still in use.'], // foreign key violation
   '22023': [400, null], // invalid parameter value (our functions' validation)
+  '22007': [400, 'Enter a valid date.'],
+  '22008': [400, 'Enter a valid date.'],
   '22P02': [400, 'Bad Request: Invalid value.'], // invalid text representation, e.g. a malformed id
   '23514': [400, null], // check violation (our functions' rules)
   P0002: [404, null], // no data found (our functions)

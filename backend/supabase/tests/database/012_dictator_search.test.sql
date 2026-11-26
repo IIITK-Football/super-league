@@ -44,10 +44,10 @@ RESET ROLE;
 SELECT ok(NOT has_function_privilege('anon', 'public.account_directory(text, uuid[], integer)', 'EXECUTE'), 'visitors cannot call the account directory');
 
 -- search_players --------------------------------------------------------------------------------------------------
-INSERT INTO public.divisions (id, slug, name) VALUES ('a0d00000-0000-4000-8000-000000000001', 'sd-div', 'Search Division');
-INSERT INTO public.seasons (id, division_id, slug, name, starts_on, is_current) VALUES
-  ('a0500000-0000-4000-8000-000000000001', 'a0d00000-0000-4000-8000-000000000001', '2025', 'Search 2025', '2025-01-01', false),
-  ('a0500000-0000-4000-8000-000000000002', 'a0d00000-0000-4000-8000-000000000001', '2026', 'Search 2026', '2026-01-01', true);
+INSERT INTO public.divisions (id, slug, name, visibility) VALUES ('a0d00000-0000-4000-8000-000000000001', 'sd-div', 'Search Division', 'public');
+INSERT INTO public.seasons (id, division_id, slug, name, starts_on, is_current, visibility) VALUES
+  ('a0500000-0000-4000-8000-000000000001', 'a0d00000-0000-4000-8000-000000000001', '2025', 'Search 2025', '2025-01-01', false, 'public'),
+  ('a0500000-0000-4000-8000-000000000002', 'a0d00000-0000-4000-8000-000000000001', '2026', 'Search 2026', '2026-01-01', true, 'public');
 CREATE TEMP TABLE _sp AS SELECT 'a0500000-0000-4000-8000-000000000001'::uuid AS old_season, 'a0500000-0000-4000-8000-000000000002'::uuid AS new_season;
 GRANT SELECT ON _sp TO authenticated;
 INSERT INTO public.teams (id, name) VALUES ('ad000000-0000-4000-8000-000000000001', 'Search Reds'), ('ad000000-0000-4000-8000-000000000002', 'Search Blues');

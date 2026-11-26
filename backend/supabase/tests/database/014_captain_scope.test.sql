@@ -10,10 +10,10 @@ SELECT plan(16);
 CREATE TEMP TABLE _registrations (id uuid DEFAULT gen_random_uuid(), captain_id uuid, team_name text, season_id uuid, team_id uuid) ON COMMIT DROP;
 
 -- Two current seasons in two divisions, a team in each, and one player on both rosters (one shared card).
-INSERT INTO public.divisions (id, slug, name) VALUES ('c1d00000-0000-4000-8000-000000000001', 'cs-a', 'Scope A'), ('c1d00000-0000-4000-8000-000000000002', 'cs-b', 'Scope B');
-INSERT INTO public.seasons (id, division_id, slug, name, is_current) VALUES
-  ('c1500000-0000-4000-8000-000000000001', 'c1d00000-0000-4000-8000-000000000001', '2026', 'Scope A 2026', true),
-  ('c1500000-0000-4000-8000-000000000002', 'c1d00000-0000-4000-8000-000000000002', '2026', 'Scope B 2026', true);
+INSERT INTO public.divisions (id, slug, name, visibility) VALUES ('c1d00000-0000-4000-8000-000000000001', 'cs-a', 'Scope A', 'public'), ('c1d00000-0000-4000-8000-000000000002', 'cs-b', 'Scope B', 'public');
+INSERT INTO public.seasons (id, division_id, slug, name, is_current, visibility) VALUES
+  ('c1500000-0000-4000-8000-000000000001', 'c1d00000-0000-4000-8000-000000000001', '2026', 'Scope A 2026', true, 'public'),
+  ('c1500000-0000-4000-8000-000000000002', 'c1d00000-0000-4000-8000-000000000002', '2026', 'Scope B 2026', true, 'public');
 INSERT INTO public.teams (id, name) VALUES ('c1700000-0000-4000-8000-000000000001', 'Scope Reds'), ('c1700000-0000-4000-8000-000000000002', 'Scope Blues');
 INSERT INTO public.team_entries (id, team_id, season_id) VALUES
   ('c1e00000-0000-4000-8000-000000000001', 'c1700000-0000-4000-8000-000000000001', 'c1500000-0000-4000-8000-000000000001'),

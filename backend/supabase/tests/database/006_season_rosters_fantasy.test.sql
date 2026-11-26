@@ -40,8 +40,8 @@ SELECT ok(NOT EXISTS (
                      WHERE p.user_id = f.user_id AND m.season_id = f.season_id)), 'each season total is that season''s predictions only');
 
 -- A second season: a prediction there changes only that season.
-INSERT INTO public.seasons (id, division_id, slug, name) VALUES
-  ('f6000000-0000-4000-8000-000000000001', (SELECT id FROM public.divisions WHERE slug = 'wsl'), '2027', '2027');
+INSERT INTO public.seasons (id, division_id, slug, name, visibility) VALUES
+  ('f6000000-0000-4000-8000-000000000001', (SELECT id FROM public.divisions WHERE slug = 'wsl'), '2027', '2027', 'public');
 INSERT INTO public.matches (id, home_team_id, away_team_id, season_id, status)
 SELECT 'f6100000-0000-4000-8000-000000000001', (SELECT id FROM public.teams ORDER BY id LIMIT 1), (SELECT id FROM public.teams ORDER BY id OFFSET 1 LIMIT 1),
        'f6000000-0000-4000-8000-000000000001', 'completed';

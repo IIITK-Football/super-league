@@ -26,9 +26,9 @@ INSERT INTO public.user_roles (user_id, role) SELECT id, 'dictator' FROM auth.us
 INSERT INTO public.user_roles (user_id, role) SELECT id, 'captain' FROM auth.users WHERE id = 'c5000000-0000-4000-8000-000000000002' ON CONFLICT DO NOTHING;
 DELETE FROM public.user_roles WHERE user_id = 'c5000000-0000-4000-8000-000000000003';
 
-INSERT INTO public.seasons (id, division_id, slug, name, status) VALUES
-  ('f5000000-0000-4000-8000-000000000001', (SELECT id FROM public.divisions WHERE slug = 'super-league'), '2027', '2027', 'planned'),
-  ('f5000000-0000-4000-8000-000000000002', (SELECT id FROM public.divisions WHERE slug = 'super-league'), '2028', '2028', 'planned');
+INSERT INTO public.seasons (id, division_id, slug, name, status, visibility) VALUES
+  ('f5000000-0000-4000-8000-000000000001', (SELECT id FROM public.divisions WHERE slug = 'super-league'), '2027', '2027', 'planned', 'public'),
+  ('f5000000-0000-4000-8000-000000000002', (SELECT id FROM public.divisions WHERE slug = 'super-league'), '2028', '2028', 'planned', 'public');
 UPDATE public.seasons SET archived_at = now() WHERE id = 'f5000000-0000-4000-8000-000000000002';
 
 CREATE TEMP TABLE old_current AS

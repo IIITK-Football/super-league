@@ -64,4 +64,37 @@ describe('prediction submission', () => {
     expect((await submit(null, prediction())).status).toBe(401);
     expect((await admin.from('predictions').select('id', { count: 'exact', head: true }).eq('match_id', matchId)).count).toBe(before);
   });
+
+  it('refuses match prediction reads and writes when its season has disabled fantasy', async () => {
+    const { data: existing } = await admin.from('matches').select('home_team_id, away_team_id, season:seasons(division_id)')
+      .eq('id', matchId).single();
+    const scope = existing!.season as unknown as { division_id: string };
+    const { data: season, error: seasonError } = await admin.from('seasons').insert({
+      division_id: scope.division_id, name: 'Disabled fantasy', slug: `fantasy-off-${Date.now()}`, visibility: 'public',
+    }).select('id').single();
+    if (seasonError) throw seasonError;
+    let disabledMatch: string | undefined;
+    try {
+      const settings = await admin.from('season_sections').insert({ season_id: season!.id, section_key: 'fantasy', enabled: false });
+      if (settings.error) throw settings.error;
+      const { data, error } = await admin.from('matches').insert({
+        home_team_id: existing!.home_team_id, away_team_id: existing!.away_team_id,
+        season_id: season!.id, status: 'scheduled', date: '2031-03-01T10:00:00Z',
+      }).select('id').single();
+      if (error) throw error;
+      disabledMatch = data!.id;
+      const { GET, POST } = await import('../../app/api/predictions/[match_id]/route');
+      const params = { params: Promise.resolve({ match_id: disabledMatch! }) };
+      const url = `http://localhost/api/predictions/${disabledMatch}`;
+      const headers = { Authorization: `Bearer ${fan.token}`, 'Content-Type': 'application/json' };
+      expect((await GET(new Request(url, { headers }), params)).status).toBe(404);
+      expect((await POST(new Request(url, { method: 'POST', headers, body: JSON.stringify(prediction()) }), params)).status).toBe(404);
+      const { count } = await admin.from('predictions').select('id', { count: 'exact', head: true }).eq('match_id', disabledMatch);
+      expect(count).toBe(0);
+    } finally {
+      if (disabledMatch) await admin.from('matches').delete().eq('id', disabledMatch);
+      await admin.from('seasons').delete().eq('id', season!.id);
+    }
+  });
+
 });
