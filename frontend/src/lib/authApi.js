@@ -2,16 +2,46 @@ import { COLLEGE_EMAIL_DOMAIN, COLLEGE_EMAIL_MESSAGE, isCollegeEmail, validateNe
 
 const fail = (error) => ({ error });
 
-function friendly(error) {
+// The one place a sign-in or account error becomes copy a person reads. Raw provider messages are never shown.
+export function friendly(error) {
   const msg = error?.message || '';
   if (/invalid login credentials/i.test(msg)) return 'Incorrect email or password.';
   if (/email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox for the confirmation link.';
   if (/rate limit|too many/i.test(msg)) return 'Too many attempts. Please wait a few minutes and try again.';
   if (/captcha/i.test(msg)) return 'The verification did not complete. Please try the verification again.';
   if (/provider is not enabled|unsupported provider/i.test(msg)) {
-    return 'Google sign-in is not set up in this environment. Use your college email and password instead.';
+    return 'Google sign-in is unavailable right now. Use your college email and password instead.';
   }
-  return msg || 'Something went wrong. Please try again.';
+  return 'Something went wrong. Please try again.';
+}
+
+// Where each role's workspace lives. A person with no staff role goes to the home page.
+export function roleHome(roles) {
+  if (!Array.isArray(roles)) return '/';
+  if (roles.includes('dictator')) return '/dictator';
+  if (roles.includes('captain')) return '/team-builder';
+  if (roles.includes('editor')) return '/editor';
+  if (roles.includes('scorer')) return '/dictator';
+  return '/';
+}
+
+// The World Cup teams, one list for onboarding and the profile.
+export async function fetchWorldCupTeams(apiBase) {
+  const res = await fetch(`${apiBase}/wc/teams`);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.success || !Array.isArray(json.data)) throw new Error('The nation list could not be loaded.');
+  return [...json.data].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The World Cup pick goes through the one endpoint that writes it (the caller's own row only).
+export async function saveWorldCupFlair(supabase, apiBase, userId, flair) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`${apiBase}/wc/flair`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+    body: JSON.stringify({ user_id: userId, wc_team_flair: flair }),
+  });
+  if (!res.ok) throw new Error('Your World Cup pick was not saved.');
 }
 
 /**

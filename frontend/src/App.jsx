@@ -8,6 +8,7 @@ import { useLocation } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { ResetPassword } from './pages/ResetPassword';
 import { GlobalAuthRedirect } from './components/GlobalAuthRedirect';
+import { ErrorState } from './components/ui';
 
 // Pages
 import { Home } from './pages/Home';
@@ -34,15 +35,18 @@ import MatchTimeline from './components/MatchTimeline';
 
 import { lazy, Suspense, useEffect } from 'react';
 import { useLeague } from './context/LeagueContext';
-// A smart wrapper to protect routes that require login
-function ProtectedRoute({ children }) {
-  const { user, profile, loading } = useAuth();
+// Protects routes that need a signed-in account with a nickname. A failed profile load is an error with a retry, not a
+// request to set up a profile that may already exist.
+export function ProtectedRoute({ children }) {
+  const { user, profile, profileError, loading, retryAuth } = useAuth();
   const location = useLocation();
 
   if (loading) return <div className="min-h-screen bg-bg flex justify-center items-center"><Loader /></div>;
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-  
-  if (!profile?.nickname || !profile?.wc_team_flair) return <Onboarding />;
+  if (profileError) {
+    return <div className="min-h-screen bg-bg p-4 flex items-center justify-center"><ErrorState title="Could not load your profile" message="Check your connection, then try again." onRetry={retryAuth} className="max-w-md w-full" /></div>;
+  }
+  if (!profile?.nickname) return <Onboarding />;
 
   return <AppShell>{children}</AppShell>;
 }
