@@ -46,6 +46,32 @@ Paths are relative to `/api`. The method list comes from the [route table](../..
 
 The legacy handler files for `/auth/login`, `/admin/teams`, the `/predictions` root and `/legends` remain unmounted. Polls, `freshers_fixtures`, `/matches/update`, `/admin/stats`, and unused World Cup matches, champion-predictors, test, sync and grading routes are retired. Freshers registration is tracked in [SL-045](../../backlog/items/SL-045.md).
 
+## Parity status (SL-032, 2026-11-26)
+
+Every active group passed, locally and on staging (`develop.super-league.pages.dev`; Worker `ef64164`, then the site at `77fc356`). Two checks verified each group:
+- **API runner:** `scripts/parity/verify-parity.mjs`. 37 checks through the site origin (Pages function, then `API` binding, then Worker), covering the allowed caller, every refused caller, and the stored state (rows and audit actor). Evidence: [local](../walkthroughs/evidence/SL-032-parity-local.json), [staging](../walkthroughs/evidence/SL-032-parity-staging.json).
+- **Browser walkthrough:** `scripts/ui-walkthrough/parity.mjs`. 11 steps in Chromium as the real roles, down to the stored result; every `/api` call it makes is recorded. Evidence: [local](../walkthroughs/evidence/SL-032-ui-local.json), [staging](../walkthroughs/evidence/SL-032-ui-staging.json).
+
+| Group | Operations | API runner | Browser |
+| --- | --- | --- | --- |
+| G1 Division and season data | `/health`, `/home/dashboard`, direct `divisions`/`seasons` | pass | division home |
+| G2 Fixtures, results, standings | `/schedule`, `/standings`, `/teams/:id/matches`, direct `matches`/`match_events` | pass | standings, matches |
+| G3 Teams and players | `/teams` (season and all), `/players`, `/players/:id` (404s), `/leaderboard`, direct entries, rosters and cards | pass | teams |
+| G4 Accounts and profile | `PATCH /wc/flair`, direct `user_profiles`, `division_flairs`, `my_player`/`update_my_player` | pass | My Player Card save with portrait |
+| G5 Division predictions | predict, read, history, leaderboard, grade, regrade-all | pass | dictator grades; fan sees the points |
+| G6 Scoped match and roster writes | `/admin/matches` (GET/POST/PUT/DELETE), `/admin/matches/live`, `/captain/team-branding`, `captain_update_roster_player` | pass | captain team details; scorer goal and final whistle |
+| G7 Editorial | `/news`, `POST`/`DELETE /admin/newsletter` | pass | vault; editor publishes with an image |
+| G8 Current uploads | news image, roster portrait, team logo, own portrait (each served back) | pass | portrait and news image within G4 and G7 |
+
+**Found and fixed during the parity runs:**
+- **Grading** (`20261205000002`): grading and regrading made one Data API call per prediction and per match with the secret key. That exceeded the Worker's subrequest limit on staging (a full regrade answered 500). Both now run in the database, in one call each, as the dictator.
+- **Prediction submission** (`POST /predictions`): it dropped the caller's token (SL-030).
+
+**Outside the gate, by decision:**
+- The World Cup archive's feature fidelity, including the saved-bracket rendering (D-02).
+- HLS playback through `/media/*` (SL-106).
+- The local-only media route.
+
 ## Direct Supabase dependencies
 
 “Keep direct” means Phase 3 preserves the existing browser call and database enforcement. A named backlog item identifies the next relevant product handoff. Its acceptance criteria govern any later caller change.
