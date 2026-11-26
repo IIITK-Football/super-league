@@ -18,9 +18,14 @@ const fail = (status: number, message: string) => Response.json({ success: false
 async function sessionUserId(authorization: string | undefined): Promise<string | null> {
   const token = bearerToken(authorization);
   if (!token) return null;
-  const { data, error } = await publicClient().auth.getClaims(token);
-  if (error || !data?.claims?.sub) return null;
-  return data.claims.sub;
+  // An expired or otherwise unverifiable token can throw rather than return an error; either way it is no session.
+  try {
+    const { data, error } = await publicClient().auth.getClaims(token);
+    if (error || !data?.claims?.sub) return null;
+    return data.claims.sub;
+  } catch {
+    return null;
+  }
 }
 
 // Fail closed on configuration: a non-production Worker (staging, local) never talks to the production database.
