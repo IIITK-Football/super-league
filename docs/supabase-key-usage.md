@@ -12,9 +12,12 @@ Where each Supabase API key is used and why. The list of files using the **secre
 | Routes | Authorization and reason |
 |---|---|
 | `admin/predictions/{grade,regrade-all}` | The caller must be a dictator before a privileged client grades other users' predictions. |
-| `captain/team-branding` | The caller reads their own assignments under RLS. A dictator or a writable captain assignment is required before using the privileged client for the selected team's branding. |
 | `wc/{leaderboard,teams,players}` | Read-only World Cup archive data with existing response contracts. |
 | `wc/predictions/{awards,groups,knockouts,knockouts/submit}` | Frozen archive reads and submission handlers. The Worker requires a valid session for mutations, and the submission deadlines keep writes locked. |
+
+`captain/team-branding` no longer uses the secret key (2026-11-26): it reads and writes through `team_details_for_edit` and `captain_update_team_details` as the caller, which check for a dictator or a writable captain assignment, so the audit history names the person.
+
+Every server client is built by `backend/lib/supabase/clients.ts` (`publicClient`, `requestClient`/`userClient`, `jobClient`); `jobClient` is the only reader of the secret key, and the files that call it are the list above (tested).
 
 The Worker and the flair handler require an authenticated caller for
 `PATCH /api/wc/flair`. The handler updates the caller under RLS with the

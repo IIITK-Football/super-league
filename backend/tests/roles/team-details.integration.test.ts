@@ -30,6 +30,8 @@ beforeAll(async () => {
   who.captain = await account(f, 'captain', ['captain']);
   who.noGrant = await account(f, 'no-grant');
   who.pastCaptain = await account(f, 'past', ['captain']);
+  who.scorer = await account(f, 'scorer', ['scorer']);
+  who.plain = await account(f, 'plain');
   const rows = [
     { team_entry_id: w.entries.cur[0], user_id: who.captain.id },
     { team_entry_id: w.entries.cur[1], user_id: who.noGrant.id }, // assigned, but holds no captain grant
@@ -84,6 +86,41 @@ describe('team details', () => {
     expect((await save(who.dictator.token, { team_color: '#00ff00' })).status).toBe(400);
     expect((await save(who.dictator.token, { team_color: '#00ff00', team_entry_id: w.entries.cur[1] })).status).toBe(200);
     expect((await team(w.teams[1])).team_color).toBe('#00ff00');
+  });
+});
+
+// D-04: a write a person starts runs as that person, so the audit history names them (never the server key).
+describe('team details run as the caller', () => {
+  const lastTeamAudit = async (teamId: string) =>
+    (await f.admin.from('audit_log').select('actor_id, action, changes').eq('table_name', 'teams').eq('record_id', teamId)
+      .order('id', { ascending: false }).limit(1).single()).data!;
+
+  it('records the captain, and the dictator, as the actor of their change', async () => {
+    expect((await save(who.captain.token, { team_color: '#0a0b0c' })).status).toBe(200);
+    expect(await lastTeamAudit(w.teams[0])).toMatchObject({ actor_id: who.captain.id, action: 'update' });
+    expect((await save(who.dictator.token, { team_color: '#0c0b0a', team_entry_id: w.entries.cur[0] })).status).toBe(200);
+    expect(await lastTeamAudit(w.teams[0])).toMatchObject({ actor_id: who.dictator.id, action: 'update' });
+  });
+
+  it('refuses a scorer and a plain user through the route, changing nothing', async () => {
+    const before = await team(w.teams[0]);
+    expect((await save(who.scorer.token, { team_color: '#abcdef', team_entry_id: w.entries.cur[0] })).status).toBe(403);
+    expect((await save(who.plain.token, { team_color: '#abcdef', team_entry_id: w.entries.cur[0] })).status).toBe(403);
+    expect(await team(w.teams[0])).toEqual(before);
+  });
+
+  it('refuses a direct call for another team, by a scorer, a plain user or a visitor, changing nothing', async () => {
+    const before = await team(w.teams[1]);
+    const args = { p_entry: w.entries.cur[1], p_name: null, p_short_name: null, p_color: '#abcdef', p_logo_url: null };
+    for (const caller of [who.captain, who.scorer, who.plain, who.pastCaptain]) {
+      const r = await caller.db.rpc('captain_update_team_details', args);
+      expect(r.error?.code, caller.id).toBe('42501');
+      const read = await caller.db.rpc('team_details_for_edit', { p_entry: w.entries.cur[1] });
+      expect(read.error?.code).toBe('42501');
+    }
+    const anon = await f.anon().rpc('captain_update_team_details', args);
+    expect(anon.error).not.toBeNull();
+    expect(await team(w.teams[1])).toEqual(before);
   });
 });
 

@@ -1,5 +1,5 @@
 import { keys, StorageError, storageFor, type Storage } from '@/lib/storage';
-import { jobClient, requestClient } from '@/lib/supabase/clients';
+import { requestClient } from '@/lib/supabase/clients';
 import { myRoles } from '@/lib/auth/roles';
 import { UUID } from '@/lib/roster/access';
 
@@ -26,11 +26,7 @@ export async function POST(request: Request) {
   let uploadedKey: string | null = null;
 
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const publishable = process.env.SUPABASE_PUBLISHABLE_KEY;
-    const secret = process.env.SUPABASE_SECRET_KEY;
-
-    if (!supabaseUrl || !publishable || !secret) {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_PUBLISHABLE_KEY) {
       return Response.json({ error: 'Team setup is not configured on the server.' }, { status: 503 });
     }
     // Storage is needed only when a logo is uploaded; a name or colour change works without it.
@@ -81,17 +77,12 @@ export async function POST(request: Request) {
     if (writable.length > 1) {
       return Response.json({ error: 'Choose which of your teams to change.' }, { status: 400 });
     }
-    const adminClient = jobClient();
-    const { data: entryRow, error: entryError } = await adminClient
-      .from('team_entries')
-      .select('id, team_id, season:seasons!inner(slug, division:divisions!inner(slug)), teams!inner(id, name, short_name, logo_url, team_color)')
-      .eq('id', writable[0])
-      .maybeSingle();
+    // Read and write as the caller (D-04): the functions check the captain or dictator again, and the audit history
+    // names the person who made the change.
+    const { data: rows, error: entryError } = await authClient.rpc('team_details_for_edit', { p_entry: writable[0] });
     if (entryError) throw entryError;
-    if (!entryRow) return Response.json({ error: 'Team entry not found.' }, { status: 404 });
-    const registration = entryRow as any;
-
-    const team = Array.isArray(registration.teams) ? registration.teams[0] : registration.teams;
+    const team = (rows as { team_id: string; name: string; short_name: string | null; logo_url: string | null; team_color: string | null }[] | null)?.[0];
+    if (!team) return Response.json({ error: 'Team entry not found.' }, { status: 404 });
     // Name and short name are optional: an omitted field keeps the current value.
     const rawName = formData.get('team_name');
     const rawShort = formData.get('short_name');
@@ -143,15 +134,18 @@ export async function POST(request: Request) {
 
       // One logo per team identity (shared by all its seasons), keyed by the team id; a version query string makes
       // a replaced logo show at once despite caching.
-      uploadedKey = keys.teamLogo(registration.team_id);
+      uploadedKey = keys.teamLogo(team.team_id);
       await storage.put(uploadedKey, buffer, 'image/png');
       logoUrl = `${storage.publicUrl(uploadedKey)}?v=${Date.now()}`;
     }
 
-    const { error: updateError } = await adminClient
-      .from('teams')
-      .update({ name: newName, short_name: newShort || null, logo_url: logoUrl, team_color: teamColor })
-      .eq('id', registration.team_id);
+    const { error: updateError } = await authClient.rpc('captain_update_team_details', {
+      p_entry: writable[0],
+      p_name: newName,
+      p_short_name: newShort || '',
+      p_color: teamColor,
+      p_logo_url: logoUrl,
+    });
 
     if (updateError) {
       if (uploadedKey && store) {

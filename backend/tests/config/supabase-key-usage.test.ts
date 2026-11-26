@@ -31,8 +31,6 @@ const ELEVATED: Record<string, string> = {
   // Admin grading writes other users' rows
   'app/api/admin/predictions/grade/route.ts': 'admin grading',
   'app/api/admin/predictions/regrade-all/route.ts': 'admin grading',
-  // Role-checked writes: to be replaced by RLS and role policies in the authorization work
-  'app/api/captain/team-branding/route.ts': 'role-checked write (to downscope)',
   // World Cup archive routes (frozen, D-02): reads, and submissions that refuse every write since the deadline
   'app/api/wc/leaderboard/route.ts': 'to downscope',
   'app/api/wc/teams/route.ts': 'to downscope',
