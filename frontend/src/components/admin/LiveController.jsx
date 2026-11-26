@@ -7,6 +7,7 @@ import { DivisionSwitch } from './DivisionSwitch';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, ConfirmDialog, EmptyState, Field, Notice, Pill, Scoreline, Table, useConfirm } from '../ui';
 import { formatKickoff } from './adminFormat';
+import { cn } from '../../utils/cn';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -205,6 +206,7 @@ export default function LiveController() {
   const [whistle, setWhistle] = useState(null); // open final-whistle form: { home, away, koTie }
   const tied = selectedMatch?.home_score === selectedMatch?.away_score;
   const finishedMatch = selectedMatch?.status === 'completed';
+  const liveNow = selectedMatch?.status === 'live';
   const penaltiesAsked = tied && (seasonFormat === 'knockout' || (seasonFormat === 'league_knockout' && whistle?.koTie));
 
   const endMatch = async () => {
@@ -298,11 +300,11 @@ export default function LiveController() {
     const teamId = isHome ? selectedMatch.home_team_id : selectedMatch.away_team_id;
     return (
       <div className="min-w-0 text-center">
-        <div className="truncate text-sm font-semibold">{name}</div>
-        <div className="font-display text-6xl font-bold leading-none tabular-nums sm:text-7xl" aria-label={`${isHome ? 'Home' : 'Away'} score`}>{score}</div>
+        <div className="truncate text-base font-black uppercase tracking-tight">{name}</div>
+        <div className="font-display text-8xl font-black leading-none tabular-nums sm:text-9xl" aria-label={`${isHome ? 'Home' : 'Away'} score`}>{score}</div>
         {!finishedMatch && (
           <div className="mt-4 flex flex-col items-center gap-2">
-            <Button size="lg" variant="secondary" disabled={busyId !== ''} onClick={() => quickGoal(teamId)} aria-label={`Goal for ${name}`} className="w-full">Goal</Button>
+            <Button size="lg" disabled={busyId !== ''} onClick={() => quickGoal(teamId)} aria-label={`Goal for ${name}`} className="w-full">Goal</Button>
             <Button size="sm" variant="quiet" disabled={busyId !== ''} onClick={() => scoreStep(side, -1)} aria-label={`Minus one ${side}`}>Undo</Button>
           </div>
         )}
@@ -316,7 +318,7 @@ export default function LiveController() {
         <DivisionSwitch value={division} onChange={handleDivisionSwitch} />
 
         <section aria-labelledby="live-heading" className="space-y-3">
-          <h2 id="live-heading" className="font-display text-2xl font-bold text-ink">Live and scheduled</h2>
+          <h2 id="live-heading" className="font-display text-2xl font-black uppercase tracking-tight text-ink">Live and scheduled</h2>
           {matches.length > 0 ? (
             <ul className="space-y-2">
               {matches.map((m) => {
@@ -347,7 +349,7 @@ export default function LiveController() {
         </section>
 
         <section aria-labelledby="finished-heading" className="space-y-3">
-          <h2 id="finished-heading" className="font-display text-2xl font-bold text-ink">Finished matches</h2>
+          <h2 id="finished-heading" className="font-display text-2xl font-black uppercase tracking-tight text-ink">Finished matches</h2>
           <p className="text-sm text-mut">Kicked off in the last 7 days.</p>
           {finished.length > 0 ? (
             <ul className="space-y-2">
@@ -377,15 +379,18 @@ export default function LiveController() {
           <div className="space-y-8">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="font-display text-2xl font-bold text-ink">{selectedMatch.home_team_name} vs {selectedMatch.away_team_name}</h2>
+                <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">{selectedMatch.home_team_name} vs {selectedMatch.away_team_name}</h2>
                 <p className="text-sm text-mut">{[selectedMatch.division_name, selectedMatch.season_name, formatKickoff(selectedMatch.date), selectedMatch.venue].filter(Boolean).join(' · ')}</p>
               </div>
               <Pill tone={finishedMatch ? 'neutral' : selectedMatch.status === 'live' ? 'live' : 'acc'}>{finishedMatch ? 'Finished' : selectedMatch.status}</Pill>
             </div>
 
-            <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3 rounded-card bg-blk p-5 text-blkink">
+            <div className={cn('pitch grid grid-cols-[1fr_auto_1fr] items-start gap-3 rounded-card border border-line p-5 text-ink', liveNow && 'beam')}>
               {scoreboardTeam('home')}
-              <div className="pt-3 font-display text-2xl font-bold">{finishedMatch ? 'FT' : 'v'}</div>
+              <div className="flex flex-col items-center gap-3 pt-4 font-display text-2xl font-black uppercase tracking-tight">
+                {liveNow && <span aria-hidden="true" className="size-2.5 rounded-full bg-live motion-safe:animate-ping" />}
+                {finishedMatch ? 'FT' : 'v'}
+              </div>
               {scoreboardTeam('away')}
             </div>
 
@@ -397,7 +402,7 @@ export default function LiveController() {
             ) : (
               <Card className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="font-display text-xl font-bold text-ink">Match clock</h3>
+                  <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">Match clock</h3>
                   <span className={`font-display text-4xl font-bold tabular-nums text-ink ${timerRunning ? 'motion-safe:animate-pulse text-live' : ''}`}>
                     {displayTime || `${liveMinute}'`}
                   </span>
@@ -453,7 +458,7 @@ export default function LiveController() {
             {showCardForm && (
               <Card as="form" onSubmit={submitCard} className="space-y-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-display text-xl font-bold text-ink">Add card</h3>
+                  <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">Add card</h3>
                   <Button variant="quiet" size="sm" aria-label="Close card form" onClick={() => setShowCardForm(false)} className="px-2"><X size={18} aria-hidden="true" /></Button>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -479,7 +484,7 @@ export default function LiveController() {
             {showGoalForm ? (
               <Card as="form" onSubmit={submitGoal} className="space-y-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-display text-xl font-bold text-ink">{goalForm.editId ? 'Correct goal' : 'Register goal'}</h3>
+                  <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">{goalForm.editId ? 'Correct goal' : 'Register goal'}</h3>
                   <Button variant="quiet" size="sm" aria-label="Close goal form" onClick={() => setShowGoalForm(false)} className="px-2"><X size={18} aria-hidden="true" /></Button>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -546,7 +551,7 @@ export default function LiveController() {
             </ConfirmDialog>
 
             <section aria-labelledby="events-heading" className="space-y-3">
-              <h3 id="events-heading" className="font-display text-xl font-bold text-ink">Match events ({events.length})</h3>
+              <h3 id="events-heading" className="font-display text-xl font-black uppercase tracking-tight text-ink">Match events ({events.length})</h3>
               {eventsState.status === 'loading' && events.length === 0 && <p className="text-sm text-mut">Loading events...</p>}
               {eventsState.status === 'error' && <Notice tone="error" role="alert">Events could not be loaded ({eventsState.error}). <Button variant="quiet" size="sm" onClick={fetchMatchEvents}>Try again</Button></Notice>}
               {events.length > 0 ? (
