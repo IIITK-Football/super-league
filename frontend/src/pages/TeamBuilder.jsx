@@ -576,7 +576,7 @@ export function TeamBuilder() {
         else toast({ title: `Saved ${saved} ${saved === 1 ? 'player' : 'players'}`, tone: 'success' });
     };
 
-    if (loading) return <main className="mx-auto w-full max-w-5xl space-y-4 px-4 py-6 sm:px-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-40 w-full" /></main>;
+    if (loading) return <div className="w-full space-y-4"><Skeleton className="h-8 w-48" /><Skeleton className="h-40 w-full" /></div>;
 
     const pickers = isDictator && <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Division">
@@ -604,13 +604,7 @@ export function TeamBuilder() {
             }))} />}
     </Field>;
 
-    const heading = <header className="space-y-1">
-        <p className="eyebrow">{isDictator ? 'Dictator workspace' : 'Captain workspace'}</p>
-        <h1 className="font-display text-5xl font-black uppercase leading-[0.9] tracking-tight sm:text-6xl">Team builder</h1>
-    </header>;
-
-    if (!registration) return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
-        {heading}
+    if (!registration) return <div className="w-full space-y-6 text-ink">
         {isDictator
             ? <>
                 <p className="text-mut">Pick a division, season and team to manage its roster.</p>
@@ -618,11 +612,10 @@ export function TeamBuilder() {
                 {error && <Notice tone="error">{error}</Notice>}
             </>
             : <EmptyState title="No squad assigned">A dictator will assign your team and roster here.{error && <span className="mt-2 block text-live">{error}</span>}</EmptyState>}
-    </main>;
+    </div>;
 
     // A captain whose team has no logo or colour yet sets them up before the roster.
-    if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictator && registration.registrationId && !readOnly) return <main className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6 text-ink sm:px-6">
-        {heading}
+    if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictator && registration.registrationId && !readOnly) return <div className="w-full max-w-2xl space-y-6 text-ink">
         <Card className="space-y-5">
             <div>
                 <h2 className="font-display text-2xl font-black uppercase tracking-tight">Set up {teamLabel(registration)}</h2>
@@ -641,9 +634,9 @@ export function TeamBuilder() {
                 onSubmit={handleBrandingSubmit}
             />
         </Card>
-    </main>;
+    </div>;
 
-    const teamCard = <section className="glass flex flex-col gap-4 rounded-card p-5 sm:flex-row sm:items-center" style={registration.team?.team_color ? { borderTop: `3px solid ` } : undefined}>
+    const teamCard = <section className="glass flex flex-col gap-4 rounded-card p-5 sm:flex-row sm:items-center" style={registration.team?.team_color ? { borderTop: `3px solid ${registration.team.team_color}` } : undefined}>
         <Crest name={teamLabel(registration)} src={registration.team?.logo_url} color={registration.team?.team_color || undefined} size="lg" className="ring-1 ring-line" />
         <div className="min-w-0 flex-1">
             <p className="font-display text-4xl font-black uppercase leading-none tracking-tight">{teamLabel(registration)}</p>
@@ -672,8 +665,7 @@ export function TeamBuilder() {
         <Button type="submit" disabled={saving || !changedPlayers.length} aria-busy={saving || undefined}>{saving ? 'Saving...' : 'Save player profiles'}</Button>
     </div>;
 
-    if (!players.length) return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
-        {heading}
+    if (!players.length) return <div className="w-full space-y-6 text-ink">
         {pickers}
         {captainPicker}
         {teamCard}
@@ -681,7 +673,7 @@ export function TeamBuilder() {
         {!rosterLoading && error && <ErrorState message={`The roster could not be loaded: ${error}`} onRetry={() => openContext(registration)} />}
         {!rosterLoading && !error && <EmptyState title="Roster pending">{isDictator ? 'No players on this roster yet. Add them in Teams and rosters.' : 'Your dictator is forming the player roster.'}</EmptyState>}
         {brandingSheet}
-    </main>;
+    </div>;
 
     const panel = currentPlayer && <Card className="space-y-6">
         <div>
@@ -729,8 +721,7 @@ export function TeamBuilder() {
         </div>}
     </Card>;
 
-    return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
-        {heading}
+    return <div className="w-full space-y-6 text-ink">
         {pickers}
         {captainPicker}
         {teamCard}
@@ -762,5 +753,5 @@ export function TeamBuilder() {
             </fieldset>
         </form>
         {brandingSheet}
-    </main>;
+    </div>;
 }

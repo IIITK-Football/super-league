@@ -124,7 +124,7 @@ export function UserProfile() {
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-8 pb-12 text-ink">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 text-ink">
       <header className="space-y-4">
         <p className="eyebrow">Your profile</p>
         <h1 className="font-display text-4xl break-words text-ink sm:text-6xl">{profile?.nickname || 'Choose a nickname'}</h1>
@@ -203,6 +203,6 @@ export function UserProfile() {
       </div>
 
       <MyPlayerCard />
-    </main>
+    </div>
   );
 }

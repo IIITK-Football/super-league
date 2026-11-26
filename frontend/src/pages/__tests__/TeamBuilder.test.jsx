@@ -4,7 +4,7 @@
 // the team record, keeps empty card values empty (no generated stats or rating), and saves only changed players'
 // allow-listed fields through captain_update_roster_player. It never shows or sends a player's private email. Against an in-memory Data API fake; the real
 // path is TeamBuilder.local.test.jsx (rosters group).
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -187,7 +187,6 @@ describe('TeamBuilder on season rosters', () => {
     renderBuilder();
     await screen.findByRole('button', { name: /01 Ada Striker/ });
     expect(screen.getByRole('button', { name: /Team/ }).textContent).toContain('Alpha');
-    expect(screen.getByText(/Dictator workspace/)).toBeTruthy();
     setNumber(/jersey number/i, 15);
     fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
     await waitFor(() => expect(screen.getByText(/^Saved \d players?$/)).toBeTruthy());

@@ -16,13 +16,13 @@ const PILL = 'inline-flex min-h-11 w-full items-center justify-center rounded-pi
 // The centred glass card every sign-in screen shares: the mark, a big heading, then the form.
 function AuthShell({ heading, children }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-12 text-ink">
+    <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center text-ink">
       <section className="glass flex w-full max-w-md flex-col gap-8 rounded-card p-6 sm:p-10">
         <span role="img" aria-label="Super League, IIIT Kottayam" className="block size-12 bg-ink" style={MARK_MASK} />
         <h1 className="font-display text-4xl text-ink sm:text-5xl">{heading}</h1>
         {children}
       </section>
-    </main>
+    </div>
   );
 }
 
