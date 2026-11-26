@@ -3,6 +3,8 @@
 
 <head>
     <meta charset="UTF-8" />
+    <!-- Apply a saved light or dark choice before first paint (no flash). Absent choice follows the device. -->
+    <script>try{var t=localStorage.getItem("sl-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,8 +12,10 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Monsoon type: Big Shoulders Display (headings, numerals), Public Sans (text). Inter and Montserrat stay
+         for the World Cup pages, which set their own font families. -->
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Public+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap"
         rel="stylesheet" />
 
     <!-- Primary Meta Tags -->

@@ -1,37 +1,122 @@
 @import "tailwindcss";
 
-@theme {
-  --animate-fade-up: fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-fade-in: fade-in 0.6s ease-out forwards;
-  --animate-slide-right: slide-right 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-float: float 6s ease-in-out infinite;
-  
+/*
+ * Monsoon tokens. Dark is the default; light follows the device unless the reader picks dark, and a
+ * toggle sets data-theme on <html>. Utilities (bg-bg, text-ink, border-line, ...) read these variables.
+ * Division accent: --div is set by the app shell from divisions.primary_color; it falls back to --color-acc.
+ */
+@theme static {
+  --color-bg: #0E1716;
+  --color-surf: #152120;
+  --color-raise: #1D2C2A;
+  --color-ink: #E5EEEB;
+  --color-mut: #8FA19C;
+  --color-line: #273735;
+  --color-acc: #E07A4C;
+  --color-accink: #0E1716;
+  --color-acc2: #7DBA92;
+  --color-live: #FF5A4E;
+
+  --font-display: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --font-body: "Public Sans", system-ui, sans-serif;
+
+  --radius-card: 10px;
+  --radius-ctl: 8px;
+  --radius-pill: 999px;
+
+  --animate-fade-up: fade-up 0.25s ease-out both;
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-sheet-up: sheet-up 0.22s ease-out both;
+  --animate-sheet-in: sheet-in 0.22s ease-out both;
+  --animate-tick: tick 0.4s ease-out both;
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+
   @keyframes fade-up {
-    0% { opacity: 0; transform: translateY(20px); }
+    0% { opacity: 0; transform: translateY(8px); }
     100% { opacity: 1; transform: translateY(0); }
   }
   @keyframes fade-in {
     0% { opacity: 0; }
     100% { opacity: 1; }
   }
-  @keyframes slide-right {
-    0% { opacity: 0; transform: translateX(-20px); }
-    100% { opacity: 1; transform: translateX(0); }
+  @keyframes sheet-up {
+    0% { transform: translateY(100%); }
+    100% { transform: translateY(0); }
   }
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+  @keyframes sheet-in {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(0); }
   }
+  @keyframes tick {
+    0% { transform: translateY(-40%); opacity: 0.2; color: var(--color-acc2); }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+}
+
+:root {
+  --div: var(--color-acc);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --color-bg: #EEF3F1;
+    --color-surf: #FFFFFF;
+    --color-raise: #E2EAE7;
+    --color-ink: #11201E;
+    --color-mut: #566A65;
+    --color-line: #CBD8D4;
+    --color-acc: #B8532A;
+    --color-accink: #FFFFFF;
+    --color-acc2: #2F7A52;
+    --color-live: #D6332A;
+    --div: var(--color-acc);
+    color-scheme: light;
+  }
+}
+
+[data-theme="light"] {
+  --color-bg: #EEF3F1;
+  --color-surf: #FFFFFF;
+  --color-raise: #E2EAE7;
+  --color-ink: #11201E;
+  --color-mut: #566A65;
+  --color-line: #CBD8D4;
+  --color-acc: #B8532A;
+  --color-accink: #FFFFFF;
+  --color-acc2: #2F7A52;
+  --color-live: #D6332A;
+  --div: var(--color-acc);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --color-bg: #0E1716;
+  --color-surf: #152120;
+  --color-raise: #1D2C2A;
+  --color-ink: #E5EEEB;
+  --color-mut: #8FA19C;
+  --color-line: #273735;
+  --color-acc: #E07A4C;
+  --color-accink: #0E1716;
+  --color-acc2: #7DBA92;
+  --color-live: #FF5A4E;
+  --div: var(--color-acc);
+  color-scheme: dark;
 }
 
 @layer base {
   body {
-    @apply bg-gradient-to-b from-black to-zinc-950 text-white min-h-screen antialiased;
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
   }
-}
-
-.glass-panel {
-  @apply bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl hover:bg-white/[0.05] transition-colors duration-500;
 }
 
 /* Stagger Delays for Entrance Animations */
@@ -40,3 +125,12 @@
 .stagger-3 { animation-delay: 300ms; }
 .stagger-4 { animation-delay: 400ms; }
 .stagger-5 { animation-delay: 500ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
