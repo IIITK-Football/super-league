@@ -32,6 +32,18 @@ describe('Crest', () => {
     fireEvent.error(screen.getByRole('img', { name: 'Kottayam FC crest' }));
     expect(screen.getByRole('img', { name: 'Kottayam FC' }).textContent).toBe('KF');
   });
+
+  it('shows up to three initials so a long name still fits', () => {
+    render(<Crest name="Iceberg Lounge Club Extra" />);
+    expect(screen.getByRole('img', { name: 'Iceberg Lounge Club Extra' }).textContent).toBe('ILC');
+  });
+
+  it('contains a logo on a neutral surface with padding', () => {
+    const { container } = render(<Crest name="Slough House" src="/logo.png" />);
+    const img = container.querySelector('img');
+    expect(img.className).toContain('object-contain');
+    expect(img.parentElement.className).toContain('p-1.5');
+  });
 });
 
 describe('Scoreline', () => {
