@@ -13,7 +13,8 @@ import { bearerToken, publicClient, serverTiming, withTiming } from '../../backe
 const METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-const fail = (status: number, message: string) => Response.json({ success: false, message }, { status });
+const fail = (status: number, message: string) =>
+  Response.json({ success: false, message }, { status, headers: { 'Cache-Control': 'no-store' } });
 
 async function sessionUserId(authorization: string | undefined): Promise<string | null> {
   const token = bearerToken(authorization);
@@ -60,18 +61,21 @@ export function createApp() {
     return next();
   });
 
-  // Server-Timing on every response (D-04): total time, Data API time and its sequential rounds. Counts and durations
-  // only, never a query, key or token.
+  // Every response carries Server-Timing (D-04): total time, Data API time and its sequential rounds; counts and
+  // durations only, never a query, key or token. It is also explicit about caching (SL-031): API answers include live
+  // scores and caller-specific data, so a response that does not choose its own policy is never stored by the browser
+  // or anything between it and the Worker.
   app.use('*', async (c, next) => {
     const started = performance.now();
     const { result, timing } = withTiming(() => next());
     await result;
-    const header = serverTiming(timing, performance.now() - started);
+    const headers: [string, string][] = [['Server-Timing', serverTiming(timing, performance.now() - started)]];
+    if (!c.res.headers.has('Cache-Control')) headers.push(['Cache-Control', 'no-store']);
     try {
-      c.res.headers.set('Server-Timing', header);
+      for (const [name, value] of headers) c.res.headers.set(name, value);
     } catch {
       c.res = new Response(c.res.body, c.res);
-      c.res.headers.set('Server-Timing', header);
+      for (const [name, value] of headers) c.res.headers.set(name, value);
     }
   });
 

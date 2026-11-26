@@ -29,7 +29,9 @@ describe('api worker', () => {
     const saved = { ...process.env };
     try {
       Object.assign(process.env, { SL_ENVIRONMENT: 'staging', SL_PRODUCTION_SUPABASE_REF: 'obkxfepdpdufxawhzaen', SUPABASE_URL: 'https://obkxfepdpdufxawhzaen.supabase.co' });
-      expect((await call('/health')).status).toBe(503);
+      const refused = await call('/health');
+      expect(refused.status).toBe(503);
+      expect(refused.headers.get('Cache-Control')).toBe('no-store');
       expect((await call('/standings')).status).toBe(503);
     } finally {
       process.env = saved;
@@ -72,6 +74,25 @@ describe('api worker', () => {
       expect((await call(path)).status).toBe(404);
     },
   );
+
+  // SL-031: stable error and cache behaviour on the same-origin /api contract.
+  it('answers errors as JSON with success false, and never lets a response be cached by default', async () => {
+    for (const [path, init, status] of [
+      ['/no-such-route', undefined, 404],
+      ['/admin/matches', { method: 'POST', body: '{}' }, 401],
+      ['/standings?division=no-such-division', undefined, 404],
+      ['/standings?division=Bad%20Slug', undefined, 400],
+    ] as [string, RequestInit | undefined, number][]) {
+      const res = await call(path, init);
+      expect(res.status, path).toBe(status);
+      expect(res.headers.get('Content-Type'), path).toMatch(/application\/json/);
+      expect((await res.json()).success, path).toBe(false);
+      expect(res.headers.get('Cache-Control'), path).toBe('no-store');
+    }
+    const ok = await call('/standings?division=super-league');
+    expect(ok.headers.get('Cache-Control')).toBe('no-store');
+    expect(ok.headers.get('Server-Timing')).toMatch(/^total;dur=/);
+  });
 
   it('answers 405 for a method the handler does not export', async () => {
     expect((await call('/standings', { method: 'OPTIONS' })).status).toBe(405);
