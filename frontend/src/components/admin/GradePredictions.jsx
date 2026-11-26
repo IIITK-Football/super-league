@@ -4,38 +4,48 @@ import { API_BASE_URL } from '../../lib/api';
 import { Calculator, Loader2, CheckCircle2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { DivisionSwitch } from './DivisionSwitch';
+import { Notice, useConfirm } from '../ui';
 
+// Grading works on one season: the completed matches of the division's current season (the list's scope). Regrading
+// sends that season with the division, so it never touches another season's points.
 export default function GradePredictions() {
   const [division, setDivision] = useState('super-league');
   const { data: resp, refetch, loading: fetchLoading } = useApi(`/admin/matches?status=completed&division=${division}`);
   const matches = resp?.data || [];
-  
+  const seasonId = matches[0]?.season_id;
+  const seasonName = matches[0]?.season_name;
+  const confirm = useConfirm();
+
   const [gradingId, setGradingId] = useState(null);
   const [isRegradingAll, setIsRegradingAll] = useState(false);
+  const [notice, setNotice] = useState(null); // { tone, text }
 
   const handleRegradeAll = async () => {
-    if (!confirm("⚠️ WARNING: This will re-calculate points for EVERY prediction in the database and synchronize the leaderboard. This operation may take a few seconds. Do you want to proceed?")) return;
-    
+    const ok = await confirm({
+      title: `Regrade ${seasonName}?`,
+      description: 'Recalculates points for every graded prediction in this season from its match events, then updates the season leaderboards. Other seasons are not changed.',
+      confirmLabel: 'Regrade season',
+      tone: 'danger',
+    });
+    if (!ok) return;
+
     setIsRegradingAll(true);
+    setNotice(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = API_BASE_URL;
-      
-      const res = await fetch(`${API_URL}/admin/predictions/regrade-all`, {
+      const res = await fetch(`${API_BASE_URL}/admin/predictions/regrade-all?division=${division}&season=${seasonId}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session?.access_token}` }
       });
-      
-      const result = await res.json();
+      const result = await res.json().catch(() => ({}));
       if (result.success) {
-        alert("✅ " + result.message);
+        setNotice({ tone: 'success', text: result.message });
         refetch();
       } else {
-        alert("❌ Error: " + result.message);
+        setNotice({ tone: 'error', text: `Regrade failed: ${result.message || 'Unknown error'}` });
       }
     } catch (err) {
-      console.error(err);
-      alert("Mass regrade failed. Check console.");
+      setNotice({ tone: 'error', text: 'Regrade failed. Check your connection and try again.' });
     } finally {
       setIsRegradingAll(false);
     }
@@ -46,9 +56,11 @@ export default function GradePredictions() {
   const gradedMatches = matches.filter(m => m.is_graded);
 
   const handleGrade = async (matchId, matchName) => {
-    if (!confirm(`Are you sure you want to grade predictions for ${matchName}?`)) return;
-    
+    const ok = await confirm({ title: `Grade predictions for ${matchName}?`, description: 'Points are worked out from the final result.', confirmLabel: 'Grade match' });
+    if (!ok) return;
+
     setGradingId(matchId);
+    setNotice(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const API_URL = API_BASE_URL;
@@ -59,16 +71,15 @@ export default function GradePredictions() {
         body: JSON.stringify({ match_id: matchId })
       });
       
-      const result = await res.json();
+      const result = await res.json().catch(() => ({}));
       if (result.success) {
-        alert("✅ " + result.message);
+        setNotice({ tone: 'success', text: result.message });
         refetch(); // Refresh the list so the match moves to the "Graded" section!
       } else {
-        alert("❌ Error: " + result.message);
+        setNotice({ tone: 'error', text: `Grading failed: ${result.message || 'Unknown error'}` });
       }
     } catch (err) {
-      console.error(err);
-      alert("Grading failed. Check console.");
+      setNotice({ tone: 'error', text: 'Grading failed. Check your connection and try again.' });
     } finally {
       setGradingId(null);
     }
@@ -131,17 +142,18 @@ export default function GradePredictions() {
           </div>
           <button
             onClick={handleRegradeAll}
-            disabled={isRegradingAll}
+            disabled={isRegradingAll || !seasonId}
             className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
           >
             {isRegradingAll ? (
               <><Loader2 size={14} className="animate-spin" /> Processing...</>
             ) : (
-              <><AlertTriangle size={14} /> Regrade All Scores</>
+              <><AlertTriangle size={14} /> Regrade season</>
             )}
           </button>
         </div>
 
+        {notice && <div className="mb-6"><Notice tone={notice.tone}>{notice.text}</Notice></div>}
         {fetchLoading ? (
            <div className="flex justify-center py-10"><Loader2 className="animate-spin text-zinc-500" /></div>
         ) : matches.length === 0 ? (
