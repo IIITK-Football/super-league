@@ -54,7 +54,7 @@ export function Sheet({ open, onClose, title, children, className }) {
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-[70]">
       <button
         type="button"
         tabIndex={-1}
