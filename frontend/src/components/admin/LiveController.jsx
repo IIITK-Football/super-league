@@ -248,6 +248,9 @@ export default function LiveController() {
   };
 
   const scoreStep = (side, delta) => runEvent({ action: 'score_step', side, delta, id: crypto.randomUUID() }, `${side}${delta}`);
+  // One tap: a goal for the team at the clock minute. The scorer is attributed afterwards (Attribute on the event).
+  const clockMinute = timerRunning ? (liveMinute || selectedMatch?.timer_calibration || 0) : parseInt(displayTime, 10);
+  const quickGoal = (teamId) => runEvent({ action: 'add_event', event: { id: crypto.randomUUID(), kind: 'goal', team_id: teamId, minute: Number.isNaN(clockMinute) ? null : String(clockMinute) } }, `goal-${teamId}`);
 
   const unattributedCount = events.filter((e) => e.kind === 'goal' && !e.player_id).length;
   const eventLabel = (e) => (e.player_id ? getPlayerName(e.player_id) : e.kind === 'goal' || e.kind === 'own_goal' ? 'Unknown scorer' : 'Unknown player');
@@ -303,7 +306,7 @@ export default function LiveController() {
               <div className="text-4xl font-black" aria-label="Home score">{selectedMatch.home_score}</div>
               <div className="text-xs font-bold text-zinc-400 uppercase mt-2">{selectedMatch.home_team_name}</div>
               <div className="mt-3 flex justify-center gap-2">
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('home', 1)} className="min-h-11 rounded-lg bg-white/10 px-4 text-xs font-black hover:bg-white/20 disabled:opacity-40">+1 Home</button>
+                <button type="button" disabled={busyId !== ''} onClick={() => quickGoal(selectedMatch.home_team_id)} aria-label={`Goal for ${selectedMatch.home_team_name}`} className="min-h-11 rounded-lg bg-white/10 px-4 text-xs font-black hover:bg-white/20 disabled:opacity-40">Goal</button>
                 <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('home', -1)} className="min-h-11 min-w-11 rounded-lg bg-white/10 px-3 text-xs font-black hover:bg-white/20 disabled:opacity-40" aria-label="Minus one home">−1</button>
               </div>
             </div>
@@ -312,7 +315,7 @@ export default function LiveController() {
               <div className="text-4xl font-black" aria-label="Away score">{selectedMatch.away_score}</div>
               <div className="text-xs font-bold text-zinc-400 uppercase mt-2">{selectedMatch.away_team_name}</div>
               <div className="mt-3 flex justify-center gap-2">
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('away', 1)} className="min-h-11 rounded-lg bg-white/10 px-4 text-xs font-black hover:bg-white/20 disabled:opacity-40">+1 Away</button>
+                <button type="button" disabled={busyId !== ''} onClick={() => quickGoal(selectedMatch.away_team_id)} aria-label={`Goal for ${selectedMatch.away_team_name}`} className="min-h-11 rounded-lg bg-white/10 px-4 text-xs font-black hover:bg-white/20 disabled:opacity-40">Goal</button>
                 <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('away', -1)} className="min-h-11 min-w-11 rounded-lg bg-white/10 px-3 text-xs font-black hover:bg-white/20 disabled:opacity-40" aria-label="Minus one away">−1</button>
               </div>
             </div>

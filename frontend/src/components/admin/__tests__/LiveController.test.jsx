@@ -78,14 +78,22 @@ describe('LiveController on match events', () => {
     expect(await screen.findByText('Match events (0)')).toBeTruthy();
   });
 
-  it('+1 Home sends one score_step request and shows the fresh score and message', async () => {
+  it('Goal for a team records a goal at the clock minute with no scorer, as one add_event request', async () => {
     await openMatch();
-    fireEvent.click(screen.getByRole('button', { name: '+1 Home' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Goal for Alpha' }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Done.'));
     expect(db.requests).toHaveLength(1);
-    expect(db.requests[0]).toMatchObject({ match_id: 'm1', action: 'score_step', side: 'home', delta: 1 });
-    expect(db.requests[0].id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(db.requests[0]).toMatchObject({ match_id: 'm1', action: 'add_event', event: { kind: 'goal', team_id: 't1', minute: '20' } });
+    expect(db.requests[0].event.player_id).toBeUndefined();
+    expect(db.requests[0].event.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(screen.getByLabelText('Home score').textContent).toBe('2');
+  });
+
+  it('-1 removes the newest unattributed goal of that side as one score_step request', async () => {
+    await openMatch();
+    fireEvent.click(screen.getByLabelText('Minus one home'));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    expect(db.requests[0]).toMatchObject({ match_id: 'm1', action: 'score_step', side: 'home', delta: -1 });
   });
 
   it('attributes the goal with the version the scorer saw, as one edit_event request', async () => {
@@ -216,7 +224,7 @@ describe('LiveController on match events', () => {
   it('shows a server refusal inline', async () => {
     db.responses = [{ status: 403, body: { success: false, message: 'Forbidden: you are not assigned to score this match.' } }];
     await openMatch();
-    fireEvent.click(screen.getByRole('button', { name: '+1 Away' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Goal for Beta' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/not assigned to score/);
   });
 });
