@@ -104,24 +104,23 @@ export default function LiveController() {
     return () => clearInterval(interval);
   }, [timerRunning, selectedMatch]);
 
-  // 4. Silent Sync Function
-  const syncTimeToDb = async (timeStr, startTime = undefined, calib = undefined) => {
-    if (!selectedMatch) return;
-    if (timeStr) setDisplayTime(timeStr);
-    
-    const payload = { match_id: selectedMatch.id, action: 'update_time', minute: timeStr };
-    if (startTime !== undefined) payload.timer_start_time = startTime;
-    if (calib !== undefined) payload.timer_calibration = calib;
-
+  // 4. Saves the clock. The screen changes only when the server has stored the change; a refusal is shown inline.
+  const [clockBusy, setClockBusy] = useState(false);
+  const saveClock = async (fields) => {
+    setClockBusy(true);
+    setNotice({ type: '', text: '' });
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = API_BASE_URL;
-      await fetch(`${API_URL}/admin/matches/live`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify(payload)
-      });
-    } catch (err) { console.error(err); }
+      const r = await callLive({ action: 'update_time', ...fields });
+      if (!r.ok) { setNotice({ type: 'error', text: r.message || 'The clock was not saved.' }); return false; }
+      setSelectedMatch((prev) => ({ ...prev, ...fields }));
+      if (fields.minute !== undefined) setDisplayTime(fields.minute);
+      if (fields.timer_start_time !== undefined) setTimerRunning(Boolean(fields.timer_start_time));
+      if (fields.timer_calibration !== undefined) setCalibration(fields.timer_calibration);
+      return true;
+    } catch (err) {
+      setNotice({ type: 'error', text: 'The clock was not saved. Check your connection and try again.' });
+      return false;
+    } finally { setClockBusy(false); }
   };
 
   // One call to the live route. A response carries the match's fresh score (a cache of its events) and the event.
@@ -286,60 +285,37 @@ export default function LiveController() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {!timerRunning ? (
-                <button type="button" onClick={() => { 
-                  const startIso = new Date().toISOString();
-                  setTimerRunning(true); 
-                  syncTimeToDb(`${calibration}'`, startIso, calibration);
-                  // Optimistically update local selectedMatch to prevent jump
-                  setSelectedMatch(prev => ({ ...prev, timer_start_time: startIso, timer_calibration: calibration }));
-                }} className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
+                <button type="button" disabled={clockBusy} onClick={() => saveClock({ minute: `${calibration}'`, timer_start_time: new Date().toISOString(), timer_calibration: calibration })} className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors disabled:opacity-40">
                   ▶ Start
                 </button>
               ) : (
-                <button type="button" onClick={() => { 
-                  setTimerRunning(false); 
-                  // Update calibration to lock the time
-                  const startTime = selectedMatch.timer_start_time ? new Date(selectedMatch.timer_start_time).getTime() : Date.now();
-                  const elapsed = Math.floor((Date.now() - startTime) / 60000);
-                  const newCalib = elapsed + calibration;
-                  setCalibration(newCalib);
-                  syncTimeToDb(`${newCalib}'`, null, newCalib); 
-                  setSelectedMatch(prev => ({ ...prev, timer_start_time: null, timer_calibration: newCalib }));
-                }} className="bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30 font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
+                <button type="button" disabled={clockBusy} onClick={() => {
+                  // Pause stores the minutes played and stops the clock.
+                  const startTime = new Date(selectedMatch.timer_start_time).getTime();
+                  const newCalib = Math.floor((Date.now() - startTime) / 60000) + (selectedMatch.timer_calibration || 0);
+                  saveClock({ minute: `${newCalib}'`, timer_start_time: null, timer_calibration: newCalib });
+                }} className="bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30 font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors disabled:opacity-40">
                   ⏸ Pause
                 </button>
               )}
-              <button type="button" onClick={() => {
-                  // Keep the minutes played (as Pause does) so the second half resumes from them.
+              <button type="button" disabled={clockBusy} onClick={() => {
+                  // Half time keeps the minutes played (as Pause does) so the second half resumes from them.
                   const startTime = selectedMatch.timer_start_time ? new Date(selectedMatch.timer_start_time).getTime() : null;
-                  const newCalib = timerRunning && startTime ? Math.floor((Date.now() - startTime) / 60000) + calibration : calibration;
-                  setTimerRunning(false);
-                  setCalibration(newCalib);
-                  syncTimeToDb('HT', null, newCalib);
-                  setSelectedMatch(prev => ({ ...prev, timer_start_time: null, timer_calibration: newCalib }));
-              }} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
+                  const newCalib = timerRunning && startTime ? Math.floor((Date.now() - startTime) / 60000) + (selectedMatch.timer_calibration || 0) : calibration;
+                  saveClock({ minute: 'HT', timer_start_time: null, timer_calibration: newCalib });
+              }} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border disabled:opacity-40 ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
                 Half Time
               </button>
               <div className="flex border border-white/10 rounded-xl overflow-hidden bg-black/60">
-                <input 
-                  type="number" 
-                  value={calibration} 
-                  onChange={e => {
-                    const val = parseInt(e.target.value) || 0;
-                    setCalibration(val);
-                    // If not running, immediately show the updated calibration
-                    if (!timerRunning) {
-                       setLiveMinute(val);
-                       setDisplayTime(`${val}'`);
-                    }
-                  }} 
-                  className="w-full bg-transparent text-white text-center font-bold outline-none" 
+                <input
+                  type="number"
+                  aria-label="Clock minute"
+                  value={calibration}
+                  onChange={e => setCalibration(parseInt(e.target.value) || 0)}
+                  className="w-full bg-transparent text-white text-center font-bold outline-none"
                   placeholder="Calib"
                 />
-                <button type="button" onClick={() => {
-                  syncTimeToDb(timerRunning ? undefined : `${calibration}'`, undefined, calibration);
-                  setSelectedMatch(prev => ({ ...prev, timer_calibration: calibration }));
-                }} className="bg-white/20 px-4 hover:bg-white/30 text-xs font-bold uppercase tracking-widest transition-colors">Set</button>
+                <button type="button" disabled={clockBusy} onClick={() => saveClock(timerRunning ? { timer_calibration: calibration } : { minute: `${calibration}'`, timer_calibration: calibration })} className="bg-white/20 px-4 hover:bg-white/30 text-xs font-bold uppercase tracking-widest transition-colors disabled:opacity-40">Set</button>
               </div>
             </div>
           </div>

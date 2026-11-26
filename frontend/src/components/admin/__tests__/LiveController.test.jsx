@@ -159,6 +159,23 @@ describe('LiveController on match events', () => {
     expect(db.requests[3]).toMatchObject({ action: 'update_time', minute: "42'", timer_calibration: 42 });
   });
 
+  it('does not start the clock on screen when the server refuses the save, and says why', async () => {
+    db.responses = [{ status: 500, body: { success: false, message: 'Database timeout' } }];
+    await openMatch();
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Database timeout/);
+    expect(screen.queryByRole('button', { name: /pause/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /start/i })).toBeTruthy();
+  });
+
+  it('shows the clock as running only after the server stored the start', async () => {
+    await openMatch();
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    expect(await screen.findByRole('button', { name: /pause/i })).toBeTruthy();
+    expect(db.requests[0]).toMatchObject({ action: 'update_time', minute: "20'", timer_calibration: 20 });
+    expect(db.requests[0].timer_start_time).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
   it('shows a server refusal inline', async () => {
     db.responses = [{ status: 403, body: { success: false, message: 'Forbidden: you are not assigned to score this match.' } }];
     await openMatch();
