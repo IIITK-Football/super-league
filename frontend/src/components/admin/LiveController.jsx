@@ -157,6 +157,7 @@ export default function LiveController() {
       return r;
     } catch (err) {
       setNotice({ type: 'error', text: 'The change was not saved. Check your connection and try again.' });
+      await fetchMatchEvents();
     } finally { setBusyId(''); }
   };
 
@@ -204,11 +205,6 @@ export default function LiveController() {
   const eventLabel = (e) => (e.player_id ? getPlayerName(e.player_id) : e.kind === 'goal' || e.kind === 'own_goal' ? 'Unknown scorer' : 'Unknown player');
 
   const teamPlayers = allPlayers.filter(p => (p.team_id || p.teams?.id) === goalForm.team_id);
-
-  const toggleOwnGoal = (e) => {
-    const isOwn = e.target.checked;
-    setGoalForm(prev => ({ ...prev, is_own_goal: isOwn, assist_id: isOwn ? '' : prev.assist_id }));
-  };
 
   const handleDivisionSwitch = (newDiv) => {
     setDivision(newDiv);
@@ -259,8 +255,8 @@ export default function LiveController() {
               <div className="text-4xl font-black" aria-label="Home score">{selectedMatch.home_score}</div>
               <div className="text-xs font-bold text-zinc-400 uppercase mt-2">{selectedMatch.home_team_name}</div>
               <div className="mt-3 flex justify-center gap-2">
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('home', 1)} className="rounded-lg bg-white/10 px-3 py-1 text-xs font-black hover:bg-white/20 disabled:opacity-40">+1 Home</button>
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('home', -1)} className="rounded-lg bg-white/10 px-3 py-1 text-xs font-black hover:bg-white/20 disabled:opacity-40" aria-label="Minus one home">−1</button>
+                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('home', 1)} className="min-h-11 rounded-lg bg-white/10 px-4 text-xs font-black hover:bg-white/20 disabled:opacity-40">+1 Home</button>
+                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('home', -1)} className="min-h-11 min-w-11 rounded-lg bg-white/10 px-3 text-xs font-black hover:bg-white/20 disabled:opacity-40" aria-label="Minus one home">−1</button>
               </div>
             </div>
             <div className="text-2xl font-black text-zinc-700">VS</div>
@@ -268,8 +264,8 @@ export default function LiveController() {
               <div className="text-4xl font-black" aria-label="Away score">{selectedMatch.away_score}</div>
               <div className="text-xs font-bold text-zinc-400 uppercase mt-2">{selectedMatch.away_team_name}</div>
               <div className="mt-3 flex justify-center gap-2">
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('away', 1)} className="rounded-lg bg-white/10 px-3 py-1 text-xs font-black hover:bg-white/20 disabled:opacity-40">+1 Away</button>
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('away', -1)} className="rounded-lg bg-white/10 px-3 py-1 text-xs font-black hover:bg-white/20 disabled:opacity-40" aria-label="Minus one away">−1</button>
+                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('away', 1)} className="min-h-11 rounded-lg bg-white/10 px-4 text-xs font-black hover:bg-white/20 disabled:opacity-40">+1 Away</button>
+                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('away', -1)} className="min-h-11 min-w-11 rounded-lg bg-white/10 px-3 text-xs font-black hover:bg-white/20 disabled:opacity-40" aria-label="Minus one away">−1</button>
               </div>
             </div>
           </div>
@@ -417,7 +413,7 @@ export default function LiveController() {
                     handleAction('close_match', { home_penalties: hp, away_penalties: ap }); 
                   } 
                 }} 
-                className="flex items-center justify-center gap-3 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-600/30 transition-colors"
+                className="flex items-center justify-center gap-3 min-h-11 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-600/30 transition-colors"
               >
                 <CheckCircle2 size={18} /> Final Whistle
               </button>
@@ -442,8 +438,8 @@ export default function LiveController() {
                    </div>
                    <div className="flex items-center gap-3 ml-4">
                      {busyId === ev.id ? <span className="text-xs text-zinc-500">Saving...</span> : <>
-                       {(ev.kind === 'goal' || ev.kind === 'own_goal') && <button type="button" onClick={() => openGoalForm(ev)} className="text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-white">{ev.player_id ? 'Edit' : 'Attribute'}</button>}
-                       <button type="button" onClick={() => voidEvent(ev)} className="text-zinc-600 hover:text-red-500 transition-colors" title="Void" aria-label="Void event"><Trash2 size={16} /></button>
+                       {(ev.kind === 'goal' || ev.kind === 'own_goal') && <button type="button" onClick={() => openGoalForm(ev)} className="min-h-11 px-2 text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-white">{ev.player_id ? 'Edit' : 'Attribute'}</button>}
+                       <button type="button" onClick={() => voidEvent(ev)} className="flex h-11 w-11 items-center justify-center text-zinc-600 hover:text-red-500 transition-colors" title="Void" aria-label="Void event"><Trash2 size={16} /></button>
                      </>}
                    </div>
                  </div>
