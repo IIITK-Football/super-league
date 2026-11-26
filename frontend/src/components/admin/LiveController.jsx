@@ -12,9 +12,14 @@ export default function LiveController() {
   const confirm = useConfirm();
   const [division, setDivision] = useState('super-league');
   const { data: resp, refetch } = useApi(`/admin/matches?status=live,scheduled&division=${division}`);
+  const { data: doneResp, refetch: refetchDone } = useApi(`/admin/matches?status=completed&division=${division}`);
   const { data: playersResp } = useApi(`/players?division=${division}`); // the selected division's current season roster 
   
   const matches = resp?.data || [];
+  // shortcut: the latest 10 finished matches of the season, not the last 7 days (the admin list has no match date), upgrade when it returns one.
+  const finishedAll = doneResp?.data || [];
+  const finished = finishedAll.slice(-10).reverse();
+  const [reopenTarget, setReopenTarget] = useState(null);
   const allPlayers = playersResp?.data || [];
 
   const [selectedMatch, setSelectedMatch] = useState(null);
@@ -175,7 +180,7 @@ export default function LiveController() {
     setLoading(true);
     try {
       const r = await callLive({ action, ...extraData });
-      if (r.ok) { setNotice({ type: 'ok', text: r.message }); refetch(); return true; }
+      if (r.ok) { setNotice({ type: 'ok', text: r.message }); refetch(); refetchDone(); return true; }
       setNotice({ type: 'error', text: r.message || 'The action failed.' });
       return false;
     } catch (err) { setNotice({ type: 'error', text: 'Action failed. Check your connection.' }); return false; }
@@ -193,6 +198,7 @@ export default function LiveController() {
   }, [selectedMatch?.season_id]);
   const [whistle, setWhistle] = useState(null); // open final-whistle form: { home, away, koTie }
   const tied = selectedMatch?.home_score === selectedMatch?.away_score;
+  const finishedMatch = selectedMatch?.status === 'completed';
   const penaltiesAsked = tied && (seasonFormat === 'knockout' || (seasonFormat === 'league_knockout' && whistle?.koTie));
 
   const endMatch = async () => {
@@ -208,6 +214,17 @@ export default function LiveController() {
     if (!ok) throw new Error('The match was not ended. The scores are unchanged.');
     setTimerRunning(false);
     setSelectedMatch((prev) => ({ ...prev, timer_start_time: null }));
+  };
+
+  // Reopening sends the match back to live at its last recorded minute. Its scores and events are kept.
+  const reopenMatch = async () => {
+    const { data } = await supabase.from('match_events').select('minute').eq('match_id', selectedMatch.id).is('voided_at', null);
+    const last = Math.max(0, ...(data || []).map((e) => Number(e.minute) || 0));
+    const r = await callLive({ action: 'update_time', minute: `${last}'` });
+    if (!r.ok) throw new Error(r.message || 'The match was not reopened.');
+    setNotice({ type: 'ok', text: 'Match reopened. It is live again.' });
+    refetch();
+    refetchDone();
   };
 
   const askHalfTime = async () => {
@@ -297,6 +314,20 @@ export default function LiveController() {
         )}
       </div>
 
+      <section aria-labelledby="finished-heading" className="space-y-3">
+        <h3 id="finished-heading" className="text-sm font-black uppercase tracking-widest text-zinc-400">Finished matches</h3>
+        {finished.length > 0 ? finished.map(m => (
+          <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 p-3">
+            <span className="font-bold">{m.home_team_name} {m.home_score} to {m.away_score} {m.away_team_name}</span>
+            <div className="flex gap-1">
+              <button type="button" aria-label={`Correct ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => { setSelectedMatch(m); setShowGoalForm(false); }} className="min-h-11 px-3 text-xs font-black uppercase tracking-widest text-zinc-300 hover:text-white">Correct</button>
+              <button type="button" aria-label={`Reopen ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => { setSelectedMatch(m); setReopenTarget(m); }} className="min-h-11 px-3 text-xs font-black uppercase tracking-widest text-zinc-300 hover:text-white">Reopen</button>
+            </div>
+          </div>
+        )) : <p className="text-sm text-zinc-500">No finished matches yet.</p>}
+        {finishedAll.length > finished.length && <p className="text-xs text-zinc-500">Showing the latest {finished.length} of {finishedAll.length} finished matches.</p>}
+      </section>
+
       {selectedMatch && (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 animate-in fade-in slide-in-from-bottom-4">
           <h3 className="text-center text-sm font-black uppercase tracking-widest text-zinc-500 mb-6">Control Center</h3>
@@ -321,6 +352,12 @@ export default function LiveController() {
             </div>
           </div>
 
+          {finishedMatch ? (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/50 p-4">
+              <p className="text-sm text-zinc-300">Finished. Correct the events below, or reopen the match to keep scoring.</p>
+              <button type="button" onClick={() => setReopenTarget(selectedMatch)} className="min-h-11 rounded-lg border border-white/20 px-4 text-xs font-black uppercase tracking-widest hover:bg-white/10">Reopen match</button>
+            </div>
+          ) : (
           <div className="bg-black/50 p-6 rounded-2xl border border-white/10 mb-8 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-white/5 pb-4">
               <h4 className="font-black uppercase tracking-widest text-sm text-zinc-400">Match Clock</h4>
@@ -361,6 +398,7 @@ export default function LiveController() {
               </div>
             </div>
           </div>
+          )}
 
           <ConfirmDialog
             open={Boolean(voidTarget)}
@@ -445,7 +483,7 @@ export default function LiveController() {
                 {busyId !== '' ? "Saving..." : goalForm.editId ? "Save correction" : "Confirm Goal"}
               </button>
             </form>
-          ) : (
+          ) : !finishedMatch && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button onClick={() => { setCardForm({ id: crypto.randomUUID(), kind: 'yellow', team_id: '', player_id: '', minute: '' }); setShowGoalForm(false); setShowCardForm(true); }} className="flex items-center justify-center gap-3 bg-yellow-500/10 text-yellow-300 border border-yellow-500/30 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-yellow-500/20 transition-colors">
                 Add Card
@@ -461,6 +499,14 @@ export default function LiveController() {
                       </div>
           )}
 
+          <ConfirmDialog
+            open={reopenTarget !== null}
+            onOpenChange={(open) => { if (!open) setReopenTarget(null); }}
+            title="Reopen this match?"
+            description={`${selectedMatch.home_team_name} vs ${selectedMatch.away_team_name} goes back to live at its last recorded minute. Scores and events are kept.`}
+            confirmLabel="Reopen match"
+            onConfirm={reopenMatch}
+          />
           <ConfirmDialog
             open={whistle !== null}
             onOpenChange={(open) => { if (!open) setWhistle(null); }}

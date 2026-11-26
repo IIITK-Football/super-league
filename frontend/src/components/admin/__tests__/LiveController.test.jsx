@@ -14,8 +14,12 @@ const players = [
   { id: 'p3', first_name: 'Cy', last_name: 'Keeper', team_id: 't2' },
 ];
 
+const finished = { ...match, id: 'm2', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Gamma', away_team_name: 'Delta', home_score: 2, away_score: 2, status: 'completed', minute: 'FT' };
 vi.mock('../../../hooks/useApi', () => ({
-  useApi: (endpoint) => ({ data: endpoint.startsWith('/players') ? { data: players } : { data: [match] }, refetch: vi.fn(), loading: false }),
+  useApi: (endpoint) => ({
+    data: endpoint.startsWith('/players') ? { data: players } : endpoint.includes('status=completed') ? { data: [finished] } : { data: [match] },
+    refetch: vi.fn(), loading: false,
+  }),
 }));
 vi.mock('../DivisionSwitch', () => ({ DivisionSwitch: () => null }));
 vi.mock('../../../context/AuthContext', () => ({ useAuth: () => ({ hasRole: (r) => r === 'scorer' }) }));
@@ -54,6 +58,7 @@ async function openMatch() {
   fireEvent.click(await screen.findByText(/Alpha vs Beta/));
   await screen.findByText(/Match events \(/);
 }
+
 
 describe('LiveController on match events', () => {
   it('lists the events, flags a goal without a scorer and offers Attribute', async () => {
@@ -219,6 +224,17 @@ describe('LiveController on match events', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'End match' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
     expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'close_match' });
+  });
+
+  it('lists finished matches; Correct opens its events, and Reopen asks first', async () => {
+    renderLive();
+    expect(screen.getByRole('heading', { name: 'Finished matches' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen Gamma vs Delta' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(db.requests).toHaveLength(0);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reopen match' }));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    expect(db.requests[0]).toEqual({ match_id: 'm2', action: 'update_time', minute: "20'" });
   });
 
   it('shows a server refusal inline', async () => {
