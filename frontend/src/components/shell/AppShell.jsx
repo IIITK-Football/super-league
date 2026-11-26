@@ -155,6 +155,8 @@ function MenuOverlay({ open, onClose, division, divisions, loading, current, isA
 // The app frame, mounted once for every page: a live ticker, a glass bar with the wordmark, the main sections in a
 // floating pill and the account and menu buttons, and a full-screen menu. The division in view sets --div. The World
 // Cup page (frozen) keeps its own legacy navigation.
+const WORKSPACES = new Set(['dictator', 'editor', 'team-builder']);
+
 export function AppShell({ children }) {
   const location = useLocation();
   const { division } = useLeague();
@@ -227,9 +229,10 @@ export function AppShell({ children }) {
       />
 
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 md:pt-8">
-        {/* Keyed on the address: the page rises in, the shell around it stays put. No exit, so nothing waits. */}
+        {/* Keyed on the page: it rises in, the shell around it stays put. No exit, so nothing waits. The staff
+            workspace keeps one key so switching tools does not remount its sidebar. */}
         <motion.div
-          key={location.pathname}
+          key={WORKSPACES.has(location.pathname.split('/')[1]) ? location.pathname.split('/')[1] : location.pathname}
           initial={reduced ? false : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.22, ease: EASE }}
