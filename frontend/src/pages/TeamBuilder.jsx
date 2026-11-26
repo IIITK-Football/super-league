@@ -5,6 +5,8 @@ import { getPlayStyle, PLAY_STYLES } from '../data/playStyles';
 import { CARD_STATS, FEET, applyCardDraft, cardDraft } from '../lib/playerCard';
 import { API_BASE_URL } from '../lib/api';
 import { rosterPlayerRpcArgs } from '../lib/rosterPlayerUpdate';
+import { cardBackground } from '../components/players/FutCard';
+import '../components/admin/workspace.css';
 import { Button, Card, EmptyState, ErrorState, Crest, Field, Notice, Sheet, Skeleton, Tabs, useConfirm } from '../components/ui';
 
 const API_URL = API_BASE_URL;
@@ -561,7 +563,7 @@ export function TeamBuilder() {
         else setSuccess(`Saved ${saved} ${saved === 1 ? 'player' : 'players'}.`);
     };
 
-    if (loading) return <main className="mx-auto w-full max-w-5xl space-y-4 px-4 py-6 sm:px-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-40 w-full" /></main>;
+    if (loading) return <main className="workspace mx-auto w-full max-w-5xl space-y-4 px-4 py-6 sm:px-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-40 w-full" /></main>;
 
     const pickers = isDictator && <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Division" as="select" value={divisionId} onChange={(event) => { const v = event.target.value; discardIfConfirmed(() => chooseDivision(v)); }}>
@@ -583,11 +585,11 @@ export function TeamBuilder() {
     </Field>;
 
     const heading = <header className="space-y-1">
-        <p className="text-sm text-mut">{isDictator ? 'Dictator workspace' : 'Captain workspace'}</p>
-        <h1 className="font-display text-3xl font-bold">Team builder</h1>
+        <p className="eyebrow">{isDictator ? 'Dictator workspace' : 'Captain workspace'}</p>
+        <h1 className="font-display text-5xl font-black uppercase leading-[0.9] tracking-tight sm:text-6xl">Team builder</h1>
     </header>;
 
-    if (!registration) return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
+    if (!registration) return <main className="workspace mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
         {heading}
         {isDictator
             ? <>
@@ -599,11 +601,11 @@ export function TeamBuilder() {
     </main>;
 
     // A captain whose team has no logo or colour yet sets them up before the roster.
-    if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictator && registration.registrationId && !readOnly) return <main className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6 text-ink sm:px-6">
+    if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictator && registration.registrationId && !readOnly) return <main className="workspace mx-auto w-full max-w-2xl space-y-6 px-4 py-6 text-ink sm:px-6">
         {heading}
         <Card className="space-y-5">
             <div>
-                <h2 className="font-display text-2xl font-bold">Set up {teamLabel(registration)}</h2>
+                <h2 className="font-display text-2xl font-black uppercase tracking-tight">Set up {teamLabel(registration)}</h2>
                 <p className="text-mut">{registration.season?.division?.name} {registration.season?.name}. Add a logo and colour before you edit the roster.</p>
             </div>
             <BrandingForm
@@ -621,11 +623,11 @@ export function TeamBuilder() {
         </Card>
     </main>;
 
-    const teamCard = <section className="flex flex-col gap-4 rounded-card bg-blk p-5 text-blkink sm:flex-row sm:items-center">
-        <Crest name={teamLabel(registration)} src={registration.team?.logo_url} color={registration.team?.team_color || undefined} size="lg" className="ring-2 ring-blkink" />
+    const teamCard = <section className="glass flex flex-col gap-4 rounded-card p-5 sm:flex-row sm:items-center" style={registration.team?.team_color ? { borderTop: `3px solid ` } : undefined}>
+        <Crest name={teamLabel(registration)} src={registration.team?.logo_url} color={registration.team?.team_color || undefined} size="lg" className="ring-1 ring-line" />
         <div className="min-w-0 flex-1">
-            <p className="font-display text-3xl font-bold leading-tight">{teamLabel(registration)}</p>
-            <p className="text-sm opacity-80">{registration.season?.division?.name} {registration.season?.name}</p>
+            <p className="font-display text-4xl font-black uppercase leading-none tracking-tight">{teamLabel(registration)}</p>
+            <p className="eyebrow mt-2">{registration.season?.division?.name} {registration.season?.name}</p>
         </div>
         {registration.registrationId && !readOnly && <Button variant="secondary" onClick={openBrandingSheet}>Edit team details</Button>}
     </section>;
@@ -650,7 +652,7 @@ export function TeamBuilder() {
         <Button type="submit" disabled={saving || !changedPlayers.length} aria-busy={saving || undefined}>{saving ? 'Saving...' : 'Save player profiles'}</Button>
     </div>;
 
-    if (!players.length) return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
+    if (!players.length) return <main className="workspace mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
         {heading}
         {pickers}
         {captainPicker}
@@ -663,7 +665,7 @@ export function TeamBuilder() {
 
     const panel = currentPlayer && <Card className="space-y-6">
         <div>
-            <h2 className="font-display text-2xl font-bold">{currentPlayer.fullName || 'Player'}</h2>
+            <h2 className="font-display text-2xl font-black uppercase tracking-tight">{currentPlayer.fullName || 'Player'}</h2>
             <p className="text-sm text-mut">{currentPlayer.jerseyNumber ? `#${currentPlayer.jerseyNumber}` : 'No jersey number yet'}{currentPlayer.position ? ` · ${currentPlayer.position}` : ''}</p>
         </div>
         <Tabs label="Player details" tabs={PLAYER_TABS} value={activeTab} onChange={setActiveTab} />
@@ -701,7 +703,7 @@ export function TeamBuilder() {
         </div>}
     </Card>;
 
-    return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
+    return <main className="workspace mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
         {heading}
         {pickers}
         {captainPicker}
@@ -710,7 +712,7 @@ export function TeamBuilder() {
         <form onSubmit={handleSubmit} className="space-y-6 pb-2" noValidate>
             <fieldset disabled={readOnly || saving} className="space-y-6">
                 <section aria-label="Squad" className="space-y-3">
-                    <h2 className="font-display text-xl font-bold">Squad</h2>
+                    <h2 className="font-display text-xl font-black uppercase tracking-tight">Squad</h2>
                     <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
                         {players.map((player, index) => {
                             const selected = index === activePlayer;
@@ -719,8 +721,9 @@ export function TeamBuilder() {
                                 type="button"
                                 aria-pressed={selected}
                                 onClick={() => { setActivePlayer(index); setActiveTab('details'); }}
-                                className={`min-h-11 shrink-0 rounded-pill border px-4 text-sm font-semibold transition-colors duration-200 ease-out ${selected ? 'border-ink bg-ink text-bg' : 'border-line bg-surf text-ink hover:border-mut'}`}
+                                className={`flex min-h-11 shrink-0 items-center gap-2 rounded-pill border py-1 pl-1 pr-4 text-sm font-semibold transition-colors duration-200 ease-out `}
                             >
+                                <span aria-hidden="true" className="h-9 w-6 shrink-0 rounded-[3px] bg-center bg-no-repeat" style={{ backgroundImage: cardBackground(player.overallRating), backgroundSize: "100% 100%" }} />
                                 <span className="tabular-nums text-mut">{String(index + 1).padStart(2, '0')}</span> {player.fullName || 'Player'}
                                 {isChanged(player) && <span className="sr-only"> (unsaved changes)</span>}
                             </button>;
