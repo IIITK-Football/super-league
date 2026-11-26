@@ -3,7 +3,30 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { roleHome } from '../lib/authApi';
 import { TurnstileWidget, turnstileSiteKey } from '../components/TurnstileWidget';
-import { Button, Card, Field, Notice, buttonClasses } from '../components/ui';
+import { Button, Field, Notice } from '../components/ui';
+
+// The Super League mark, drawn in the ink colour through a mask of the logo file.
+const MARK_MASK = {
+  maskImage: 'url(/slklogo3.png)', WebkitMaskImage: 'url(/slklogo3.png)', maskSize: 'contain', WebkitMaskSize: 'contain',
+  maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat', maskPosition: 'center', WebkitMaskPosition: 'center',
+};
+const PILL = 'inline-flex min-h-11 w-full items-center justify-center rounded-pill bg-ink px-6 text-sm font-black uppercase tracking-[0.2em] text-bg transition hover:opacity-85 disabled:pointer-events-none disabled:opacity-40';
+const GLASS_PILL = 'glass inline-flex min-h-11 w-full items-center justify-center rounded-pill px-6 text-sm font-black uppercase tracking-[0.2em] text-ink transition hover:text-mut';
+
+// The centred glass card every sign-in screen shares: the mark, a big heading, then the form.
+function AuthShell({ heading, children }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-12 text-ink">
+      <section className="glass flex w-full max-w-md flex-col gap-8 rounded-card p-6 sm:p-10">
+        <span role="img" aria-label="Super League, IIIT Kottayam" className="block size-12 bg-ink" style={MARK_MASK} />
+        <h1 className="font-display text-4xl text-ink sm:text-5xl">{heading}</h1>
+        {children}
+      </section>
+    </main>
+  );
+}
+
+
 
 // The one sign-in for people. The page they were headed to is kept (router state, or sessionStorage after Google
 // sends them back here), then their role's home, then the home page.
@@ -78,66 +101,64 @@ export function Login() {
   const shownError = error || accessError;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 bg-bg px-4 py-10 text-ink">
-      <Link to="/" className={buttonClasses('quiet', 'sm', 'self-start')}>Back to home</Link>
-      <Card className="flex flex-col gap-6 p-6 sm:p-8">
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold text-mut">Super League</p>
-          <h1 className="font-display text-3xl font-bold">{heading}</h1>
-          <p className="text-mut">Use your college account. Only @iiitkottayam.ac.in addresses can sign in.</p>
+    <AuthShell heading={heading}>
+      <div className="space-y-3">
+        <p className="text-mut">Use your college account. Only @iiitkottayam.ac.in addresses can sign in.</p>
+      </div>
+
+      {rolesError && (
+        <div className="flex flex-col items-start gap-2">
+          <Notice tone="error" role="alert">We could not load your access. Check your connection and try again.</Notice>
+          <Button variant="secondary" size="sm" onClick={retryAuth}>Try again</Button>
         </div>
+      )}
+      {shownError && <Notice tone="error" role="alert">{shownError}</Notice>}
+      {notice && <Notice tone="success">{notice}</Notice>}
 
-        {rolesError && (
-          <div className="flex flex-col items-start gap-2">
-            <Notice tone="error" role="alert">We could not load your access. Check your connection and try again.</Notice>
-            <Button variant="secondary" size="sm" onClick={retryAuth}>Try again</Button>
-          </div>
-        )}
-        {shownError && <Notice tone="error" role="alert">{shownError}</Notice>}
-        {notice && <Notice tone="success">{notice}</Notice>}
+      {mode !== 'reset' && (
+        <>
+          <button type="button" onClick={handleGoogle} disabled={loading || busy} className={GLASS_PILL}>
+            Continue with Google
+          </button>
+          <p className="eyebrow text-center">or use your email and password</p>
+        </>
+      )}
 
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+        <Field
+          label="College email"
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="name@iiitkottayam.ac.in"
+          required
+        />
         {mode !== 'reset' && (
-          <>
-            <Button variant="secondary" size="lg" onClick={handleGoogle} disabled={loading || busy} className="w-full">
-              Continue with Google
-            </Button>
-            <p className="text-center text-sm text-mut">or use your email and password</p>
-          </>
-        )}
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
           <Field
-            label="College email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@iiitkottayam.ac.in"
+            label="Password"
+            type="password"
+            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            hint={mode === 'signup' ? 'At least 8 characters, and not your email address.' : undefined}
             required
           />
-          {mode !== 'reset' && (
-            <Field
-              label="Password"
-              type="password"
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              hint={mode === 'signup' ? 'At least 8 characters, and not your email address.' : undefined}
-              required
-            />
-          )}
-          <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
-          <Button type="submit" variant="primary" size="lg" disabled={busy || loading} className="w-full">
-            {submitLabel}
-          </Button>
-        </form>
+        )}
+        <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
+        <button type="submit" disabled={busy || loading} className={PILL}>
+          {submitLabel}
+        </button>
+      </form>
 
-        <div className="flex flex-wrap justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
           {mode !== 'signin' && <Button variant="quiet" size="sm" onClick={() => switchMode('signin')}>Sign in</Button>}
           {mode !== 'signup' && <Button variant="quiet" size="sm" onClick={() => switchMode('signup')}>Create account</Button>}
           {mode !== 'reset' && <Button variant="quiet" size="sm" onClick={() => switchMode('reset')}>Forgot password</Button>}
         </div>
-      </Card>
-    </main>
+        <Link to="/" className="eyebrow inline-flex min-h-11 items-center hover:text-ink">Back to home</Link>
+      </div>
+    </AuthShell>
   );
 }
