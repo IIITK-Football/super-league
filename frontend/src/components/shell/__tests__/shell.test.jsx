@@ -75,6 +75,20 @@ describe('header bar', () => {
   });
 });
 
+describe('menu contents', () => {
+  it('carries only the sections the header pill does not show, at the widths where the pill is there', () => {
+    const mediaQuery = window.matchMedia;
+    window.matchMedia = (query) => ({ matches: query === '(min-width: 1024px)', addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    try {
+      shellAt('/super-league');
+      const labels = [...document.querySelectorAll('#site-menu nav[aria-label="Sections"] .sm-panel-itemLabel')].map((node) => node.textContent);
+      expect(labels).toEqual(['Clubs', 'Predictions', 'Rules']);
+    } finally {
+      window.matchMedia = mediaQuery;
+    }
+  });
+});
+
 describe('DivisionSwitcher label', () => {
   it('shows a skeleton, not the slug, while divisions load', () => {
     const { container } = render(

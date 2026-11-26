@@ -8,6 +8,7 @@ import { cn } from '../../utils/cn';
 import { AccountMenu } from './AccountMenu';
 import { DivisionSwitcher } from './DivisionSwitcher';
 import { LiveTicker } from './LiveTicker';
+import { StaggeredMenu } from './StaggeredMenu';
 import { ThemeToggle } from './ThemeToggle';
 import { TopNavbar } from '../TopNavbar';
 
@@ -29,6 +30,21 @@ function sections(division) {
   ];
 }
 
+// True at the width where the header carries the section pill, so the menu can carry just the rest. Without media
+// queries (tests, very old browsers) the menu lists every section, so nothing is unreachable.
+const WIDE_HEADER = '(min-width: 1024px)';
+function useWideHeader() {
+  const [wide, setWide] = useState(() => window.matchMedia?.(WIDE_HEADER).matches ?? false);
+  useEffect(() => {
+    const query = window.matchMedia?.(WIDE_HEADER);
+    if (!query) return undefined;
+    const update = () => setWide(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return wide;
+}
+
 // The site wordmark, stacked like the original "SUPER / LEAGUE" mark, in a box of one fixed size. The division in
 // view shows beside it as a small label that truncates, so the bar never changes width between divisions or while
 // they load.
@@ -40,7 +56,7 @@ function Wordmark({ label }) {
         <span>League</span>
       </span>
       <span aria-hidden="true" className="h-7 w-px shrink-0 bg-line" />
-      <span className="eyebrow min-w-0 truncate">{label || ' '}</span>
+      <span className="eyebrow min-w-0 truncate">{label || ' '}</span>
     </span>
   );
 }
@@ -77,83 +93,8 @@ function PillNav({ division, isActive, reduced }) {
   );
 }
 
-const overlay = {
-  closed: { opacity: 0, transition: { duration: 0.22, ease: EASE, when: 'afterChildren' } },
-  open: { opacity: 1, transition: { duration: 0.25, ease: EASE, when: 'beforeChildren', staggerChildren: 0.03 } },
-};
-const panel = {
-  closed: { opacity: 0, scale: 0.985, filter: 'blur(6px)', transition: { duration: 0.18, ease: EASE } },
-  open: { opacity: 1, scale: 1, filter: 'blur(0px)', transition: { duration: 0.3, ease: EASE, staggerChildren: 0.035, delayChildren: 0.04 } },
-};
-const rise = {
-  closed: { opacity: 0, y: 14, transition: { duration: 0.15 } },
-  open: { opacity: 1, y: 0, transition: { duration: 0.32, ease: EASE } },
-};
-const still = { closed: { opacity: 0 }, open: { opacity: 1 } };
-
-// Full-screen menu: the division switcher and every section in big type. It stays mounted (inert while closed) so the
-// menu button can point at it; Escape or the close button shuts it.
-function MenuOverlay({ open, onClose, division, divisions, loading, current, isActive, reduced }) {
-  const firstLink = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (event) => { if (event.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    firstLink.current?.focus();
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; };
-  }, [open, onClose]);
-
-  const item = reduced ? still : rise;
-  return (
-    <motion.div
-      id="site-menu"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Menu"
-      inert={open ? undefined : ''}
-      initial={false}
-      animate={open ? 'open' : 'closed'}
-      variants={reduced ? still : overlay}
-      className={cn('fixed inset-0 z-50 flex flex-col overflow-y-auto bg-bg/80 px-6 pb-8 pt-32 backdrop-blur-2xl sm:px-10', !open && 'pointer-events-none')}
-    >
-      <motion.div variants={reduced ? still : panel} className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10">
-        <motion.div variants={item}>
-          <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} onPick={onClose} />
-        </motion.div>
-        <nav aria-label="Sections" className="flex-1">
-          <ul className="grid gap-x-10 gap-y-1 sm:grid-cols-2">
-            {sections(division).map(({ to, label, exact }, index) => {
-              const active = isActive(to, exact);
-              return (
-                <motion.li key={to} variants={item}>
-                  <Link
-                    ref={index === 0 ? firstLink : undefined}
-                    to={to}
-                    onClick={onClose}
-                    aria-current={active ? 'page' : undefined}
-                    className={cn('group flex min-h-14 items-baseline py-1 font-display text-4xl font-black uppercase tracking-tighter transition-colors sm:text-5xl',
-                      active ? 'chrome text-ink' : 'text-mut/60 hover:text-ink')}
-                  >
-                    <span className="transition-transform duration-300 group-hover:translate-x-1.5">{label}</span>
-                  </Link>
-                </motion.li>
-              );
-            })}
-          </ul>
-        </nav>
-        <motion.div variants={item} className="flex items-center justify-between border-t border-line pt-5">
-          <span className="eyebrow">Super League · IIIT Kottayam</span>
-          <ThemeToggle />
-        </motion.div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
 // The app frame, mounted once for every page: a live ticker, a glass bar with the wordmark, the main sections in a
-// floating pill and the account and menu buttons, and a full-screen menu. The division in view sets --div. The World
+// floating pill and the account and menu buttons, and the staggered menu. The division in view sets --div. The World
 // Cup page (frozen) keeps its own legacy navigation.
 const WORKSPACES = new Set(['dictator', 'editor', 'team-builder']);
 
@@ -162,8 +103,10 @@ export function AppShell({ children }) {
   const { division } = useLeague();
   const { divisions, loading } = useDivisions();
   const reduced = useReducedMotion();
+  const wide = useWideHeader();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const menuButtonRef = useRef(null);
 
   // Close the menu whenever the page changes.
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
@@ -189,6 +132,11 @@ export function AppShell({ children }) {
   const style = accent ? { '--div': accent } : undefined;
   const isActive = (to, exact) => location.pathname === to || (!exact && location.pathname.startsWith(`${to}/`));
 
+  // The pill already lists the main sections, so the menu carries those only where the pill is not shown.
+  const allSections = sections(division);
+  const menuItems = (wide ? allSections.filter((s) => !s.primary) : allSections)
+    .map(({ to, label, exact }) => ({ to, label, active: isActive(to, exact) }));
+
   return (
     <div className="min-h-screen bg-bg" style={style}>
       <div className="sticky top-0 z-[55]">
@@ -203,6 +151,7 @@ export function AppShell({ children }) {
             <div className="flex items-center justify-self-end gap-2 sm:gap-3">
               <AccountMenu />
               <button
+                ref={menuButtonRef}
                 type="button"
                 onClick={() => setMenuOpen((value) => !value)}
                 aria-expanded={menuOpen}
@@ -217,16 +166,22 @@ export function AppShell({ children }) {
         </header>
       </div>
 
-      <MenuOverlay
+      <StaggeredMenu
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        division={division}
-        divisions={divisions}
-        loading={loading}
-        current={current}
-        isActive={isActive}
-        reduced={reduced}
-      />
+        toggleRef={menuButtonRef}
+        items={menuItems}
+        colors={[accent || 'var(--color-raise)', 'var(--color-ink)']}
+        accentColor={accent}
+      >
+        <div className="sm-panel-extra flex flex-1 flex-col justify-between gap-8">
+          <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} onPick={() => setMenuOpen(false)} />
+          <div className="flex items-center justify-between border-t border-line pt-4">
+            <span className="eyebrow">Super League · IIIT Kottayam</span>
+            <ThemeToggle />
+          </div>
+        </div>
+      </StaggeredMenu>
 
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 md:pt-8">
         {/* Keyed on the page: it rises in, the shell around it stays put. No exit, so nothing waits. The staff
