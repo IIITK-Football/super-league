@@ -216,3 +216,28 @@ export async function cleanupFixtures(db, made) {
     await db.deleteUser(id);
   }
 }
+
+// Every graded prediction's stored grade (paged), so a target-wide regrade can be undone.
+export async function snapshotGraded(db) {
+  const rows = [];
+  for (let from = 0; ; from += 1000) {
+    const page = await db.must(`/rest/v1/predictions?select=*&status=eq.graded&order=id`, {
+      headers: { Range: `${from}-${from + 999}`, 'Range-Unit': 'items' },
+    });
+    rows.push(...page);
+    if (page.length < 1000) return rows;
+  }
+}
+
+// Puts the snapshotted grades back (fixture matches excepted, which the run graded itself), in batches.
+export async function restoreGraded(db, rows, fixtureMatches = []) {
+  const keep = rows.filter((r) => !fixtureMatches.includes(r.match_id));
+  for (let i = 0; i < keep.length; i += 500) {
+    await db.must('/rest/v1/predictions?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(keep.slice(i, i + 500)),
+    });
+  }
+  return keep.length;
+}

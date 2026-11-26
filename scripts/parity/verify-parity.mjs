@@ -16,7 +16,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cleanupFixtures, createFixtures, createReport, localProblems, png, serverApi, start, stop, waitFor } from './lib.mjs';
+import { cleanupFixtures, createFixtures, createReport, localProblems, png, restoreGraded, serverApi, snapshotGraded, start, stop, waitFor } from './lib.mjs';
 import { loadEnvText, STAGING_REF, verifyTarget } from '../staging-checks.mjs';
 import { accessHeaders, verifySite } from '../staging-media-check.mjs';
 
@@ -271,8 +271,16 @@ async function main() {
     const [graded] = await db.select('predictions', `select=status,points_awarded,graded_events_version&match_id=eq.${match.id}`);
     C('G5', 'POST /admin/predictions/grade', 'a dictator grades the match from its events; a normal user 403', gNormal.status === 403 && gDict.status === 200 && graded?.status !== 'pending' && graded?.points_awarded !== null && graded?.graded_events_version !== null, { normal: gNormal.status, dictator: gDict.status, prediction: graded });
     const rgNormal = await site('/api/admin/predictions/regrade-all', { token: who.normal.token, method: 'POST', json: {} });
-    const rgDict = await site('/api/admin/predictions/regrade-all', { token: who.dictator.token, method: 'POST', json: {} });
-    C('G5', 'POST /admin/predictions/regrade-all', 'a dictator regrades all; a normal user 403', rgNormal.status === 403 && rgDict.status === 200, { normal: rgNormal.status, dictator: rgDict.status });
+    // Regrade-all recomputes every graded prediction on the target, not only the fixtures. Their stored values are
+    // snapshotted first and put back afterwards, so the check leaves the target's other data as it found it.
+    const gradedBefore = await snapshotGraded(db);
+    let rgDict;
+    try {
+      rgDict = await site('/api/admin/predictions/regrade-all', { token: who.dictator.token, method: 'POST', json: {} });
+    } finally {
+      await restoreGraded(db, gradedBefore, made.matches);
+    }
+    C('G5', 'POST /admin/predictions/regrade-all', 'a dictator regrades all; a normal user 403', rgNormal.status === 403 && rgDict.status === 200, { normal: rgNormal.status, dictator: rgDict.status, restored: gradedBefore.length });
     const hist = await site('/api/predictions/history?division=super-league', { token: who.normal.token });
     const histAnon = await site('/api/predictions/history?division=super-league');
     C('G5', 'GET /predictions/history', 'the fan sees their graded prediction; a visitor 401', hist.status === 200 && JSON.stringify(hist.body?.data ?? '').includes(match.id) && histAnon.status === 401, { status: hist.status, anon: histAnon.status });
