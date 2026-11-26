@@ -190,7 +190,7 @@ export default function MatchTimeline() {
                   className="flex items-center gap-4 px-4 py-4 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:gap-6 sm:px-6"
                   data-testid={card ? 'timeline-card' : undefined}
                 >
-                  <span className={home ? 'flex min-w-0 flex-1 sm:flex-none' : 'hidden sm:block'}>{home && body}</span>
+                  <span className={home ? 'flex min-w-0 flex-1 sm:flex-none sm:justify-end' : 'hidden sm:block'}>{home && body}</span>
                   <span className="order-first flex w-16 shrink-0 flex-col items-center gap-1 text-center sm:order-none sm:w-auto">
                     <span className="font-display text-3xl leading-none tabular-nums text-ink">{minuteLabel(event)}</span>
                     {!card && <span className="font-display text-sm tabular-nums text-mut">{event.runningHome}–{event.runningAway}</span>}
