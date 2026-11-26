@@ -13,45 +13,27 @@ handoff steps.
   - World Cup secret-key reads: downscope where row-level security gives the same response; list any that cannot as owner exceptions.
   - Staging: Claude makes the read-only GETs on staging; the owner switches Smart Placement on or off when asked and attests C3.
 
-## Done
+## Done (all pushed to `develop`)
 
-- `fdb78b3`: client factories in `backend/lib/supabase/clients.ts`:
-  - `publicClient`, `requestClient`/`userClient` and `jobClient`, the only reader of `secretKey()`;
-  - 8 s and 20 s timeouts, one retry for GET or HEAD only on a network error;
-  - per-request round counting through `AsyncLocalStorage`, and a `Server-Timing` header set in `api/src/app.ts`.
-
-  Every handler the Worker serves now builds its clients through the factories (tested in `supabase-key-usage.test.ts`). Scope resolution takes one round. The dashboard takes 3 rounds, down from 11 (`api/test/rounds.test.ts`). Prediction submission now forwards the caller's token. Unit tests and both `tsc` checks pass, and `wrangler deploy --dry-run` builds.
-- **Not yet run:** the database-backed groups. Docker (Colima) was down; the project rules say not to start it.
+- `fdb78b3`: client factories (`backend/lib/supabase/clients.ts`) with timeouts, an idempotent-read retry, round counting and `Server-Timing`. Every served handler builds its clients through them.
+- `99a22d6`: captain and dictator team details go through `team_details_for_edit` and `captain_update_team_details` (migration `20261205000000`) as the caller. The audit actor is tested, and the route no longer uses the secret key.
+- `5991490`: World Cup team list and saved-bracket read use the publishable key, with parity tests. Closed submissions no longer write. Four archive reads are owner-approved exceptions.
+- `a92f094`: `create_awarded_match` (migration `20261205000001`) creates and awards a match in one transaction, with a rollback test.
+- `05f6a28`: an expired token now answers 401, where it used to answer 500. Database refusals map to 403, 400, 404 or 409, and a 500 gives a fixed message. Worker tests cover tokens, refusals, the actor and rollback.
+- `d622763`, `0b06082`: `pnpm --dir api verify:local` passes 11 of 11 checks through real `wrangler dev`; evidence is in `docs/walkthroughs/evidence/SL-030-local-worker.json`. Bundle and config key scans added.
+- `fe99954`: `/api/health` reports the commit and Worker version.
+- `e60da4b`: `node scripts/staging-worker-probe.mjs` gathers read-only staging evidence: release, scoped read and timings.
+- `882a3eb`: every active GET route stays within 3 rounds (`api/test/route-rounds.test.ts`). Standings, the fantasy leaderboard and the dictator match list were fixed.
+- First staging smoke at `fe99954`: health showed environment `staging`, the commit and the version. Timings: standings wall median 9.9 s against a Worker total of about 0.9 s; dashboard wall 1.8 s against a Worker total of 1.1 s; Data API rounds about 250 ms each.
 
 ## Exact next step
 
-1. Owner starts Docker (`colima start`), then `pnpm db:check` (port 54322).
-2. Run `pnpm test:group api-services config divisions auth-roles audit`. The shared `resolveScope` changed (season and division in one query), so check the divisions group closely. Fix any failures.
-3. **Step 3, captain branding.** Add a migration with `captain_update_team_details(p_entry, p_name, p_short_name, p_color, p_logo_url)`:
-   - `SECURITY DEFINER` with an empty `search_path`;
-   - an `auth.uid()` check, plus `is_captain_of(p_entry) OR is_dictator()`.
-
-   Switch `backend/app/api/captain/team-branding/route.ts` from `jobClient` to the RPC through `requestClient`. Remove it from the secret-key allowlist in `supabase-key-usage.test.ts` and `docs/supabase-key-usage.md`.
-
-   Integration tests:
-   - the audit actor is recorded for a captain and for a dictator;
-   - another team's captain, a scorer and a plain user are refused, with the row unchanged;
-   - the logo cleanup still runs on failure.
-4. **Step 4, World Cup reads.** The routes in `wc/**` currently call `jobClient()`. Run a parity test of each against the seed with the secret key versus the publishable key or caller token, and downscope the ones that match. The submit routes should use the session caller instead of a body `user_id`.
-5. **Step 6, real Wrangler evidence.** Add `api/scripts/verify-local-worker.mjs` with JSON evidence. It covers:
-   - health;
-   - a scoped read;
-   - missing, expired (HS256 signed with the local default secret), tampered and valid tokens, with rows unchanged on denial;
-   - the dictator audit actor;
-   - rollback of an induced failure in a multi-write RPC;
-   - `Server-Timing`;
-   - a non-local URL refused with 503.
-
-   Mirror the checks in `api/test/security.test.ts`.
-6. **Step 7, bundle scan.** Build the frontend and run `wrangler deploy --dry-run --outdir`. Scan both outputs for secret names and value formats.
-7. **Steps 8 and 9.**
-   - Docs: the D-04 compliance table in `docs/plans/SL-030.md`, the key-usage doc and the walkthrough `docs/walkthroughs/SL-030.md`.
-   - Push `develop`, then collect the staging evidence: build ID and commit, health, a scoped read through the Pages URL, timings, and the Smart Placement on/off comparison.
+1. Wait until `/api/health` on staging reports `882a3eb` or later.
+2. Baseline: `node scripts/staging-worker-probe.mjs --samples 30 --label placement-off`. Save the output as `docs/walkthroughs/evidence/SL-030-staging-placement-off.json`.
+3. Add `"placement": { "mode": "smart" }` to `env.staging` in `api/wrangler.jsonc` only, then push. Wait for the deploy, then run the probe again with `--label placement-smart`.
+4. Keep Smart Placement only if the Worker-total median and p95 improve; otherwise revert it. Record the decision in `docs/plans/SL-030.md`.
+5. Investigate the gap between wall time and Worker time (Access, Pages Function, cold start). If it is outside the Worker, record it for SL-029 or SL-031.
+6. `pnpm work done SL-030` writes the walkthrough. Fill in the walkthrough, then ask the owner to attest C3.
 
 ## In flight
 
@@ -59,7 +41,7 @@ Nothing uncommitted.
 
 ## Local database
 
-Not running (Docker down). There are no new migrations yet.
+Rebuilt on 2026-11-26 with `bash scripts/local-db.sh reset --yes`; migrations are applied through `20261205000001`. Note: the guard blocks `supabase migration up`, so use the reset helper after adding a migration.
 
 ## Not migrated on purpose
 
