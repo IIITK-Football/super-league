@@ -1,28 +1,21 @@
-import { jobClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../../lib/errorHandler';
 import { callerClient } from '@/lib/roster/access';
-import { gradeMatch } from '@/lib/grading';
 
-// Regrades every completed match that already has graded predictions, from its match events. Dictator only. Safe to
-// repeat: points are overwritten with the same values.
+// Regrades every completed match that already has graded predictions, from its match events. Dictator only. One
+// database call as the caller (regrade_all_predictions, D-04), so it stays within the Worker's request limits however
+// many matches there are, and the audit history names the dictator. Safe to repeat.
 export async function POST(request: Request) {
   try {
-    if (!process.env.SUPABASE_SECRET_KEY) {
-      return Response.json({ success: false, message: 'Server configuration error: SUPABASE_SECRET_KEY is missing.' }, { status: 500 });
-    }
     const supabase = await callerClient(request);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw { status: 401, message: 'Unauthorized' };
-    const { data: isDictator } = await supabase.rpc('is_dictator');
-    if (!isDictator) throw { status: 403, message: 'Only a dictator can regrade predictions.' };
 
-    const admin = jobClient();
-    const { data: matches, error } = await admin.from('matches').select('id').eq('status', 'completed');
-    if (error) throw error;
-    if (!matches?.length) return Response.json({ success: true, message: 'No completed matches found to regrade.' });
-
-    let regraded = 0;
-    for (const m of matches) regraded += await gradeMatch(admin, m.id as string, { onlyGraded: true });
+    const { data: regraded, error } = await supabase.rpc('regrade_all_predictions');
+    if (error) {
+      if (error.code === '42501') throw { status: 403, message: 'Only a dictator can regrade predictions.' };
+      throw error;
+    }
+    if (!regraded) return Response.json({ success: true, message: 'No graded predictions found to regrade.' });
     return Response.json({ success: true, message: `Regraded ${regraded} predictions from the match events; season leaderboards follow the new points.` });
   } catch (error) {
     return handleError(error, 'Regrade Predictions');

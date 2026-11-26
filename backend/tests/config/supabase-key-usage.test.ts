@@ -28,9 +28,6 @@ const ELEVATED_USE = /jobClient\b|secretKey\(\)|SUPABASE_SECRET_KEY/;
 
 // Files that genuinely use the secret key, with why. Reasons are summarised in docs/supabase-key-usage.md.
 const ELEVATED: Record<string, string> = {
-  // Admin grading writes other users' rows
-  'app/api/admin/predictions/grade/route.ts': 'admin grading',
-  'app/api/admin/predictions/regrade-all/route.ts': 'admin grading',
   // World Cup archive reads (frozen, D-02) of tables with no public read policy: owner-approved exceptions to the D-04
   // allowlist (2026-11-26). Read-only; their submissions are closed and no longer write.
   'app/api/wc/leaderboard/route.ts': 'archive read, no public policy on wc_leaderboard',

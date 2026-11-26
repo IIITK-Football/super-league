@@ -11,8 +11,9 @@ Where each Supabase API key is used and why. The list of files using the **secre
 
 | Routes | Authorization and reason |
 |---|---|
-| `admin/predictions/{grade,regrade-all}` | The caller must be a dictator before a privileged client grades other users' predictions. |
 | `wc/{leaderboard,players}`, `wc/predictions/{awards,groups}` (GET) | Owner-approved D-04 exception (2026-11-26): read-only World Cup archive data from tables with no public read policy (`wc_leaderboard`, `wc_players`, `wc_award_predictions`, `wc_group_predictions`). Example: `GET /api/wc/leaderboard` with the publishable key would return an empty list. |
+
+Fantasy grading no longer uses the secret key (2026-11-26, SL-032). `admin/predictions/{grade,regrade-all}` call `grade_match` and `regrade_all_predictions` as the caller (migration `20261205000002`). The database checks for a dictator and grades in one call. The old secret-key loop made one Worker subrequest per prediction and per match, beyond the Worker's limit for a full regrade on staging.
 
 `wc/teams` and the saved-bracket read of `wc/predictions/knockouts` use the publishable key (their tables are publicly readable; parity is tested). The World Cup submission handlers (`wc/predictions/{groups,awards,knockouts/submit}` POST) no longer touch the database: the deadline passed, so they serve only the refusal, and the old secret-key write that trusted a body `user_id` is gone.
 

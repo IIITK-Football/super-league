@@ -1,0 +1,457 @@
+{
+  "item": "SL-032",
+  "target": "local",
+  "mode": "current pair",
+  "site": "http://127.0.0.1:8790",
+  "release": {
+    "site": {
+      "commit": "7748753904db40b8b98584c82938127ed505dfbd",
+      "branch": null,
+      "builtAt": "2026-11-26T12:52:26.586Z"
+    },
+    "worker": {
+      "ok": true,
+      "service": "super-league-api",
+      "environment": "local",
+      "commit": null,
+      "version": "75e7cc30-4c6a-47a1-87b5-55ad99e171cb"
+    }
+  },
+  "recordedAt": "2026-11-26T12:52:34.316Z",
+  "passed": true,
+  "groups": {
+    "G1": {
+      "status": "pass",
+      "operations": {
+        "GET /health": "pass",
+        "GET /home/dashboard": "pass",
+        "direct divisions+seasons": "pass"
+      }
+    },
+    "G2": {
+      "status": "pass",
+      "operations": {
+        "GET /schedule": "pass",
+        "GET /standings": "pass",
+        "GET /teams/:team_id/matches": "pass",
+        "direct matches+match_events": "pass"
+      }
+    },
+    "G3": {
+      "status": "pass",
+      "operations": {
+        "GET /teams": "pass",
+        "GET /players": "pass",
+        "GET /players/:player_id": "pass",
+        "GET /leaderboard": "pass",
+        "direct team_entries+roster+players": "pass"
+      }
+    },
+    "G4": {
+      "status": "pass",
+      "operations": {
+        "PATCH /wc/flair": "pass",
+        "direct user_profiles": "pass",
+        "direct division_flairs": "pass",
+        "direct my_player+update_my_player": "pass"
+      }
+    },
+    "G5": {
+      "status": "pass",
+      "operations": {
+        "POST /predictions/:match_id": "pass",
+        "GET /predictions/:match_id": "pass",
+        "GET /predictions/history": "pass",
+        "GET /predictions/leaderboard": "pass",
+        "POST /admin/predictions/grade": "pass",
+        "POST /admin/predictions/regrade-all": "pass"
+      }
+    },
+    "G6": {
+      "status": "pass",
+      "operations": {
+        "GET /admin/matches": "pass",
+        "POST /admin/matches": "pass",
+        "PUT /admin/matches": "pass",
+        "DELETE /admin/matches": "pass",
+        "POST /admin/matches/live": "pass",
+        "POST /captain/team-branding": "pass",
+        "direct captain_update_roster_player": "pass"
+      }
+    },
+    "G7": {
+      "status": "pass",
+      "operations": {
+        "GET /news": "pass",
+        "POST /admin/newsletter": "pass",
+        "DELETE /admin/newsletter": "pass"
+      }
+    },
+    "G8": {
+      "status": "pass",
+      "operations": {
+        "POST /admin/newsletter/image": "pass",
+        "POST /admin/freshers/player-image": "pass",
+        "POST /captain/team-branding (logo)": "pass",
+        "POST /profile/player-portrait": "pass"
+      }
+    }
+  },
+  "unknownOperations": [],
+  "checks": [
+    {
+      "group": "G1",
+      "operation": "GET /health",
+      "name": "health answers for the target",
+      "pass": true,
+      "observed": {
+        "ok": true,
+        "service": "super-league-api",
+        "environment": "local",
+        "commit": null,
+        "version": "75e7cc30-4c6a-47a1-87b5-55ad99e171cb"
+      }
+    },
+    {
+      "group": "G1",
+      "operation": "GET /home/dashboard",
+      "name": "dashboard: scoped aggregate with its consumed keys",
+      "pass": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "group": "G1",
+      "operation": "GET /home/dashboard",
+      "name": "dashboard: unknown division is 404 JSON",
+      "pass": true
+    },
+    {
+      "group": "G1",
+      "operation": "direct divisions+seasons",
+      "name": "a visitor reads the division and its current season",
+      "pass": true
+    },
+    {
+      "group": "G2",
+      "operation": "GET /schedule",
+      "name": "schedule lists the upcoming fixture with paging",
+      "pass": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "group": "G2",
+      "operation": "GET /standings",
+      "name": "standings include the season entries and the bracket input",
+      "pass": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "group": "G2",
+      "operation": "GET /teams/:team_id/matches",
+      "name": "a team's fixtures include its match",
+      "pass": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "group": "G2",
+      "operation": "direct matches+match_events",
+      "name": "a visitor reads the match and its (empty) timeline",
+      "pass": true
+    },
+    {
+      "group": "G3",
+      "operation": "GET /teams",
+      "name": "season teams and the all-teams mode include the entered team",
+      "pass": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "group": "G3",
+      "operation": "GET /players",
+      "name": "the season roster lists the rostered player",
+      "pass": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "group": "G3",
+      "operation": "GET /players/:player_id",
+      "name": "a player card answers; malformed and unknown ids are 404",
+      "pass": true,
+      "observed": {
+        "card": 200,
+        "malformed": 404,
+        "unknown": 404
+      }
+    },
+    {
+      "group": "G3",
+      "operation": "GET /leaderboard",
+      "name": "season scorers and assisters",
+      "pass": true
+    },
+    {
+      "group": "G3",
+      "operation": "direct team_entries+roster+players",
+      "name": "a visitor reads the entry, its roster and the public card",
+      "pass": true
+    },
+    {
+      "group": "G4",
+      "operation": "PATCH /wc/flair",
+      "name": "own flair 200; another user 403; visitor 401; the other row unchanged",
+      "pass": true,
+      "observed": {
+        "own": 200,
+        "other": 403,
+        "anon": 401
+      }
+    },
+    {
+      "group": "G4",
+      "operation": "direct user_profiles",
+      "name": "a user changes their own nickname and not someone else's",
+      "pass": true
+    },
+    {
+      "group": "G4",
+      "operation": "direct division_flairs",
+      "name": "own division flair saved; another user's refused",
+      "pass": true,
+      "observed": {
+        "own": 201,
+        "other": 403
+      }
+    },
+    {
+      "group": "G4",
+      "operation": "direct my_player+update_my_player",
+      "name": "a linked player reads and edits their own card; an unlinked account has none and cannot edit",
+      "pass": true,
+      "observed": {
+        "update": 204,
+        "unlinked": 403
+      }
+    },
+    {
+      "group": "G5",
+      "operation": "POST /predictions/:match_id",
+      "name": "a fan predicts once (200, pending); a repeat is 400; a visitor 401; one row stored",
+      "pass": true,
+      "observed": {
+        "anon": 401,
+        "own": 200,
+        "repeat": 400,
+        "rows": 1
+      }
+    },
+    {
+      "group": "G5",
+      "operation": "GET /predictions/:match_id",
+      "name": "the fan sees their prediction; a visitor 401",
+      "pass": true
+    },
+    {
+      "group": "G6",
+      "operation": "POST /admin/matches/live",
+      "name": "only the assigned scorer records the goal (audited as them) and closes the match; others refused with nothing stored",
+      "pass": true,
+      "observed": {
+        "anon": 401,
+        "unassigned": 403,
+        "captain": 403,
+        "scorer": 200,
+        "close": 200,
+        "status": "completed"
+      }
+    },
+    {
+      "group": "G6",
+      "operation": "GET /admin/matches",
+      "name": "dictator sees the season; the scorer only their match; a normal user none; a visitor 401",
+      "pass": true,
+      "observed": {
+        "dictator": 57,
+        "scorer": 1,
+        "normal": 0,
+        "anon": 401
+      }
+    },
+    {
+      "group": "G6",
+      "operation": "POST /admin/matches",
+      "name": "a dictator schedules a match (audited as them); a normal user 403 and a visitor 401 store nothing",
+      "pass": true,
+      "observed": {
+        "normal": 403,
+        "anon": 401,
+        "dictator": 200
+      }
+    },
+    {
+      "group": "G6",
+      "operation": "PUT /admin/matches",
+      "name": "a dictator reschedules; a normal user is refused and the match is unchanged",
+      "pass": true,
+      "observed": {
+        "normal": 404,
+        "dictator": 200
+      }
+    },
+    {
+      "group": "G6",
+      "operation": "DELETE /admin/matches",
+      "name": "a normal user cannot delete the match; a dictator can",
+      "pass": true,
+      "observed": {
+        "normal": 200,
+        "dictator": 200
+      }
+    },
+    {
+      "group": "G6",
+      "operation": "POST /captain/team-branding",
+      "name": "the captain changes their team colour (audited as them); a normal user 403; a visitor 401",
+      "pass": true,
+      "observed": {
+        "normal": 403,
+        "anon": 401,
+        "captain": 200
+      }
+    },
+    {
+      "group": "G6",
+      "operation": "direct captain_update_roster_player",
+      "name": "the captain edits their own roster place; another team's and a normal user are refused",
+      "pass": true,
+      "observed": {
+        "captain": 204,
+        "otherTeam": 400,
+        "normal": 400
+      }
+    },
+    {
+      "group": "G5",
+      "operation": "POST /admin/predictions/grade",
+      "name": "a dictator grades the match from its events; a normal user 403",
+      "pass": true,
+      "observed": {
+        "normal": 403,
+        "dictator": 200,
+        "prediction": {
+          "status": "graded",
+          "points_awarded": 300,
+          "graded_events_version": 1
+        }
+      }
+    },
+    {
+      "group": "G5",
+      "operation": "POST /admin/predictions/regrade-all",
+      "name": "a dictator regrades all; a normal user 403",
+      "pass": true,
+      "observed": {
+        "normal": 403,
+        "dictator": 200
+      }
+    },
+    {
+      "group": "G5",
+      "operation": "GET /predictions/history",
+      "name": "the fan sees their graded prediction; a visitor 401",
+      "pass": true,
+      "observed": {
+        "status": 200,
+        "anon": 401
+      }
+    },
+    {
+      "group": "G5",
+      "operation": "GET /predictions/leaderboard",
+      "name": "the season fantasy leaderboard",
+      "pass": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "group": "G7",
+      "operation": "POST /admin/newsletter",
+      "name": "an editor publishes; a normal user 403 and a visitor 401 publish nothing",
+      "pass": true,
+      "observed": {
+        "normal": 403,
+        "anon": 401,
+        "editor": 200,
+        "rows": 1
+      }
+    },
+    {
+      "group": "G7",
+      "operation": "GET /news",
+      "name": "the published article is listed, newest first, with paging",
+      "pass": true
+    },
+    {
+      "group": "G7",
+      "operation": "DELETE /admin/newsletter",
+      "name": "an editor cannot delete (publishing is not deletion); a dictator can",
+      "pass": true,
+      "observed": {
+        "editor": 403,
+        "dictator": 200
+      }
+    },
+    {
+      "group": "G8",
+      "operation": "POST /admin/newsletter/image",
+      "name": "an editor uploads a news image that is served; a normal user 403",
+      "pass": true,
+      "observed": {
+        "editor": 200,
+        "normal": 403
+      }
+    },
+    {
+      "group": "G8",
+      "operation": "POST /admin/freshers/player-image",
+      "name": "the captain uploads their player's portrait; another team's and a normal user are refused",
+      "pass": true,
+      "observed": {
+        "captain": 200,
+        "otherTeam": 403,
+        "normal": 403
+      }
+    },
+    {
+      "group": "G8",
+      "operation": "POST /captain/team-branding (logo)",
+      "name": "the captain uploads a 256x256 team logo that is served",
+      "pass": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "group": "G8",
+      "operation": "POST /profile/player-portrait",
+      "name": "a linked player uploads their own portrait; an account without a player is refused",
+      "pass": true,
+      "observed": {
+        "player": 200,
+        "unlinked": 403
+      }
+    }
+  ]
+}

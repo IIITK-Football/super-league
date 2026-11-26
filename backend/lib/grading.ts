@@ -1,10 +1,9 @@
-// Fantasy grading from match events (D-08). One points function serves grading, regrading and the history breakdown, so
-// they can never disagree. The scoreline comes from the match's score columns (a cache of its events or an awarded
+// Fantasy points from match events (D-08). Grading and regrading run in the database (grade_match and
+// regrade_all_predictions, migration 20261205000002); this module computes the same points for the history breakdown,
+// and a test checks that the two agree. The scoreline comes from the match's score columns (a cache of its events or an awarded
 // result); player points come from attributed goal events and their assisters. Unattributed goals count toward the
 // scoreline only. Grading overwrites points_awarded and records the events version it graded at, so repeating it gives
 // the same points and a later correction shows as "needs regrade".
-import type { SupabaseClient } from '@supabase/supabase-js';
-
 export type ActualPlayers = { scorers: string[]; assists: string[] };
 export type GradeableMatch = { id: string; home_score: number | null; away_score: number | null; status: string; events_version: number };
 type MatchEventRow = { kind: string; player_id: string | null; assist_player_id: string | null; voided_at?: string | null };
@@ -57,44 +56,4 @@ export function predictionPoints(
     playerHits(prediction.predicted_scorers, actual.scorers) * SCORER_POINTS +
     playerHits(prediction.predicted_assists, actual.assists) * ASSIST_POINTS
   );
-}
-
-export class GradingError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-  }
-}
-
-export async function loadActualPlayers(client: SupabaseClient, matchId: string): Promise<ActualPlayers> {
-  const { data, error } = await client.from('match_events').select('kind, player_id, assist_player_id, voided_at').eq('match_id', matchId);
-  if (error) throw error;
-  return actualPlayers(data ?? []);
-}
-
-/**
- * Grades every prediction of one completed match from its events. Safe to repeat: each prediction's points are
- * overwritten with the same value, and graded_events_version records the version they came from. Returns the count.
- */
-export async function gradeMatch(admin: SupabaseClient, matchId: string, opts: { onlyGraded?: boolean } = {}): Promise<number> {
-  const { data: match, error: matchError } = await admin.from('matches').select('id, home_score, away_score, status, events_version').eq('id', matchId).single();
-  if (matchError || !match) throw new GradingError(404, 'Match not found.');
-  const m = match as GradeableMatch;
-  if (m.status !== 'completed') throw new GradingError(400, "Match must be marked 'completed' before grading.");
-
-  let query = admin.from('predictions').select('id, predicted_home_score, predicted_away_score, predicted_scorers, predicted_assists').eq('match_id', matchId);
-  if (opts.onlyGraded) query = query.eq('status', 'graded');
-  const { data: predictions, error: predError } = await query;
-  if (predError) throw predError;
-
-  const actual = await loadActualPlayers(admin, matchId);
-  for (const p of predictions ?? []) {
-    const { error } = await admin
-      .from('predictions')
-      .update({ points_awarded: predictionPoints(p, m, actual), status: 'graded', graded_events_version: m.events_version })
-      .eq('id', p.id);
-    if (error) throw error;
-  }
-  const { error: flagError } = await admin.from('matches').update({ is_graded: true }).eq('id', matchId);
-  if (flagError) throw flagError;
-  return predictions?.length ?? 0;
 }
