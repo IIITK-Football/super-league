@@ -27,6 +27,7 @@ function seed() {
     { user_id: 'u-ada', email: 'ada@iiitkottayam.ac.in', linked_player_id: 'p1', linked_player_name: 'Ada Striker', linked_player_place: 'Alpha · 2026 (WSL)', key_player_id: null },
     { user_id: 'u-wait', email: 'adam.two@iiitkottayam.ac.in', linked_player_id: null, key_player_id: 'p2', key_player_name: 'Adam Other', key_player_place: null },
   ];
+  db.tables.matches = [];
   db.tables.seasons.push({ id: 's0', division_id: 'd1', slug: '2025', name: '2025', is_current: false, sort_order: 0 });
   db.calls = [];
   db.fail = {};
@@ -164,10 +165,24 @@ const writes = () => db.calls.filter((c) => (c.rpc && !READS.has(c.rpc)) || ['in
 const pick = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
 // The new player's account comes first: search verified accounts by email and choose one.
+// Opens the add-player sheet from the squad, then searches verified accounts by email and chooses one.
+async function openAdd() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Add player' }));
+  return screen.findByRole('dialog');
+}
 async function chooseNewAccount(text, action = 'Choose') {
+  if (!screen.queryByRole('dialog')) await openAdd();
   pick('New player email search', text);
   const list = await screen.findByRole('list', { name: 'New player matches' });
   fireEvent.click(within(list).getByRole('button', { name: new RegExp(`^${action} `) }));
+}
+
+const closeSheet = () => fireEvent.keyDown(document, { key: 'Escape' });
+
+// Opens the chosen squad player's edit sheet.
+async function openPlayer(name = 'Ada Striker') {
+  fireEvent.click(await screen.findByRole('button', { name: `Edit ${name}` }));
+  return screen.findByRole('dialog');
 }
 
 async function openTeam(team = 'e1') {
@@ -231,19 +246,20 @@ describe('choosing a division, season and team', () => {
 
   it('marks a player linked to an account and shows the account\'s email in the player panel', async () => {
     await openTeam();
-    await waitFor(() => expect(screen.getByRole('option', { name: /9 · Ada Striker · ST · linked account/ })).toBeTruthy());
+    expect(await screen.findByRole('button', { name: 'Account for Ada Striker' })).toBeTruthy();
     expect(rpc).toHaveBeenCalledWith('player_link_status', { p_player_ids: expect.arrayContaining(['p1']) });
-    pick('Player', 'm1');
-    expect(within(screen.getByRole('group', { name: 'Player account' })).getByText(/Linked to/).textContent).toMatch(/ada@iiitkottayam/);
+    fireEvent.click(screen.getByRole('button', { name: 'Account for Ada Striker' }));
+    const sheet = await screen.findByRole('dialog');
+    expect(within(within(sheet).getByRole('group', { name: 'Player account' })).getByText(/Linked to/).textContent).toMatch(/ada@iiitkottayam/);
     expect(screen.getByText('Account matching')).toBeTruthy();
     expect(screen.getByText('Link an account to a player')).toBeTruthy();
   });
 
   it('lists the team\'s players in a dropdown and opens the chosen one with its card and roster place; the email is read-only', async () => {
     await openTeam();
-    await waitFor(() => expect(screen.getByRole('option', { name: /9 · Ada Striker · ST/ })).toBeTruthy());
+    expect(await screen.findByRole('list', { name: 'Squad' })).toBeTruthy();
     expect(screen.queryByLabelText('Edit first name')).toBeNull();
-    pick('Player', 'm1');
+    await openPlayer();
     expect(screen.getByLabelText('Edit first name').value).toBe('Ada');
     expect(screen.getByLabelText('Edit jersey').value).toBe('9');
     expect(screen.getByLabelText('Edit rating').value).toBe('70');
@@ -252,7 +268,9 @@ describe('choosing a division, season and team', () => {
     expect(screen.getByLabelText('Edit preferred foot').value).toBe('');
     expect(screen.getByLabelText('Edit play style').value).toBe(''); // no play style: not set
     expect(screen.queryByLabelText('Edit email')).toBeNull(); // no email field: the email is the account's
-    expect(within(screen.getByRole('group', { name: 'Player account' })).getByText(/read-only/)).toBeTruthy();
+    closeSheet();
+    fireEvent.click(await screen.findByRole('button', { name: 'Account for Ada Striker' }));
+    expect(within(within(await screen.findByRole('dialog')).getByRole('group', { name: 'Player account' })).getByText(/read-only/)).toBeTruthy();
   });
   it('shows the roster of the team chosen last, even when an earlier team answers later', async () => {
     db.slow = 'e1';
@@ -291,9 +309,10 @@ describe('teams in the season', () => {
 describe('players', () => {
   it('creates a player for a chosen verified account through create_player_for_account, after validating', async () => {
     await openTeam();
-    const form = screen.getByRole('form', { name: 'New player' });
+    await openAdd();
     expect(screen.queryByLabelText('New first name')).toBeNull(); // the account comes first
     await chooseNewAccount('bea');
+    const form = screen.getByRole('form', { name: 'New player' });
     pick('New first name', 'Bea');
     pick('New rating', '150');
     fireEvent.click(within(form).getByRole('button', { name: /create player/i }));
@@ -309,7 +328,7 @@ describe('players', () => {
       p_user: 'u-bea', p_team_entry_id: 'e1', p_first_name: 'Bea', p_last_name: 'Keeper', p_jersey_number: 1, p_position: 'GK',
       p_overall_rating: 64, p_attributes: {}, p_image_url: null,
     });
-    await waitFor(() => expect(screen.getByRole('option', { name: /1 · Bea Keeper · GK/ })).toBeTruthy());
+    await screen.findByRole('button', { name: 'Edit Bea Keeper' });
   });
 
   it('creates a player without a rating when none is entered (never 50)', async () => {
@@ -357,8 +376,8 @@ describe('players', () => {
 
   it('saves the card and the roster place in one call, with no email', async () => {
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
-    pick('Player', 'm1');
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openPlayer();
     pick('Edit last name', 'Finisher');
     pick('Edit jersey', '10');
     fireEvent.click(screen.getByRole('button', { name: /save player/i }));
@@ -372,8 +391,8 @@ describe('players', () => {
   it('saves in one database call, so a refused jersey number saves nothing and says why', async () => {
     db.fail['rpc.update_rostered_player'] = { code: '23505', message: 'duplicate key value violates unique constraint "roster_memberships_entry_jersey_key"' };
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
-    pick('Player', 'm1');
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openPlayer();
     pick('Edit last name', 'Finisher');
     fireEvent.click(screen.getByRole('button', { name: /save player/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/jersey number is already taken/i));
@@ -383,8 +402,8 @@ describe('players', () => {
 
   it('moves a player to another team of the season', async () => {
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
-    pick('Player', 'm1');
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openPlayer();
     pick('Move to team', 'e2');
     fireEvent.click(screen.getByRole('button', { name: /^move$/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Moved to Beta/));
@@ -394,8 +413,8 @@ describe('players', () => {
   it('explains why a roster place with goals is kept', async () => {
     db.fail['roster_memberships.delete'] = { code: '23503', message: 'This player has goals or assists this season, so their place on the roster is kept' };
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
-    pick('Player', 'm1');
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openPlayer();
     fireEvent.click(screen.getByRole('button', { name: /remove from roster/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/goals or assists this season/));
     expect(db.tables.roster_memberships).toHaveLength(1);
@@ -404,8 +423,8 @@ describe('players', () => {
   it('deletes a player who never played in one database call, and explains a refusal without changing the form', async () => {
     db.fail['rpc.delete_unplayed_player'] = { code: '23503', message: 'This player has match history, so the player is kept' };
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
-    pick('Player', 'm1');
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openPlayer();
     fireEvent.click(screen.getByRole('button', { name: /delete player/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/match history, so the player is kept/));
     expect(db.tables.roster_memberships).toHaveLength(1);
@@ -422,14 +441,15 @@ describe('players', () => {
 
   it('searches as you type by full name, telling same-name players apart by their latest roster place', async () => {
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openAdd();
     pick('Search players', 'a');
     expect(await screen.findByText('Type at least two letters of the name.')).toBeTruthy();
     pick('Search players', 'adam other');
     const list = await screen.findByRole('list', { name: 'Matching players' });
     expect(screen.getByText('2 players found')).toBeTruthy();
     const items = within(list).getAllByRole('listitem').map((li) => li.textContent);
-    expect(items[0]).toMatch(/Adam Other.*OVR 60.*Latest: Not on a roster yet.*Not linked to an account: link first/);
+    expect(items[0]).toMatch(/Adam Other.*OVR 60.*Latest: Not on a roster yet.*No account: link one first/);
     expect(items[1]).toMatch(/Adam Other.*OVR 65.*Latest: Gamma · 2025 \(WSL\) · #4/);
     expect(db.calls.find((c) => c.rpc === 'search_players').args).toMatchObject({ p_query: 'adam other', p_season_id: 's1' });
     // Only the linked one can be added.
@@ -441,7 +461,8 @@ describe('players', () => {
 
   it('marks a player already in this season instead of offering to add them, and explains no matches', async () => {
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openAdd();
     pick('Search players', 'ada striker');
     const list = await screen.findByRole('list', { name: 'Matching players' });
     expect(within(list).getByText('Already in this season')).toBeTruthy();
@@ -453,7 +474,8 @@ describe('players', () => {
   it('reports a failed search and can retry', async () => {
     db.fail['rpc.search_players'] = { message: 'timeout' };
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openAdd();
     pick('Search players', 'adam');
     expect(await screen.findByText(/player search failed \(timeout\)/i)).toBeTruthy();
     delete db.fail['rpc.search_players'];
@@ -463,13 +485,13 @@ describe('players', () => {
 
   it('shows the chosen player\'s FUT card from the identity, with this season\'s place beside it', async () => {
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
-    pick('Player', 'm1');
-    const card = within(screen.getByLabelText('Edit player')).getByRole('figure', { name: 'FUT card: Ada Striker' });
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openPlayer();
+    const card = within(screen.getByRole('dialog')).getByRole('figure', { name: 'FUT card: Ada Striker' });
     expect(within(card).getByTestId('card-rating').textContent).toBe('70');
     expect(card.textContent).toMatch(/PAC80/); // the older flat value, shown in its canonical place
     expect(card.textContent).not.toMatch(/#9|\bST\b/);
-    expect(within(screen.getByLabelText('Edit player')).getByLabelText("This season's place").textContent).toMatch(/#9 · ST · Alpha/);
+    expect(within(screen.getByRole('dialog')).getByLabelText("This season's place").textContent).toMatch(/#9 · ST · Alpha/);
   });
 });
 
@@ -483,7 +505,7 @@ describe('the FUT card in the player forms', () => {
   });
   const respond = (status, body) => fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
   const newCard = () => within(screen.getByRole('form', { name: 'New player' })).getByRole('figure');
-  const editCard = () => within(screen.getByLabelText('Edit player')).getByRole('figure');
+  const editCard = () => within(screen.getByRole('dialog')).getByRole('figure');
   const png = () => new File(['png'], 'face.png', { type: 'image/png' });
 
   it('previews a new player while it is typed: name, rating, stats, foot and play style, with no invented values', async () => {
@@ -553,8 +575,8 @@ describe('the FUT card in the player forms', () => {
   it('edits the card with structured fields, previewing the draft and keeping values the form does not show', async () => {
     db.tables.players[0].attributes = { pace: 80, stats: { Shooting: { total: 66, finishing: 70 } }, bio: { height: 170 }, playStyle: 'Power Shot', custom: 1 };
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
-    pick('Player', 'm1');
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openPlayer();
     expect(screen.getByLabelText('Edit Shooting').value).toBe('66');
     expect(screen.getByLabelText('Edit play style').value).toBe('Power Shot');
     pick('Edit Shooting', '75');
@@ -576,8 +598,8 @@ describe('the FUT card in the player forms', () => {
 
   it('previews a replacement portrait, reports a failed upload without claiming it saved, and retries', async () => {
     await openTeam();
-    await waitFor(() => screen.getByRole('option', { name: /Ada Striker/ }));
-    pick('Player', 'm1');
+    await screen.findByRole('button', { name: 'Edit Ada Striker' });
+    await openPlayer();
     respond(500, { message: 'too large' });
     fireEvent.change(screen.getByLabelText('Portrait file'), { target: { files: [png()] } });
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/The portrait did not save: too large/));
@@ -585,9 +607,43 @@ describe('the FUT card in the player forms', () => {
     expect(editCard().textContent).toMatch(/did not save/);
     expect(screen.queryByText('Portrait saved.')).toBeNull();
     respond(200, { imageUrl: 'https://media/ada.png' });
-    fireEvent.click(screen.getByRole('button', { name: /retry portrait upload/i }));
+    fireEvent.click(screen.getByRole('button', { name: /retry portrait/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Portrait saved/));
     await waitFor(() => expect(within(editCard()).getByRole('img', { name: 'Ada Striker portrait' }).getAttribute('src')).toBe('https://media/ada.png'));
     expect(editCard().textContent).not.toMatch(/not saved|did not save/);
+  });
+});
+
+describe('team actions in a season', () => {
+  it('renames the team through its one team record, after a name check', async () => {
+    await openTeam('e2');
+    fireEvent.click(await screen.findByRole('button', { name: 'Rename team' }));
+    pick('Rename team', 'B');
+    fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+    expect(await screen.findByText(/A team name needs 2 to 60 characters/)).toBeTruthy();
+    expect(writes()).toEqual([]);
+    pick('Rename team', 'Beta Kings');
+    fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+    await waitFor(() => expect(writes()).toHaveLength(1));
+    expect(db.calls.find((c) => c.table === 'teams' && c.op === 'update')).toMatchObject({ payload: { name: 'Beta Kings' }, filters: [['id', 't2']] });
+    expect(await screen.findByText('Renamed to Beta Kings in every season.')).toBeTruthy();
+  });
+
+  it('refuses to remove a team that still has players on the roster, and says what to do', async () => {
+    await openTeam('e1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove from season' }));
+    expect(await screen.findByText(/still has 1 player on this roster/)).toBeTruthy();
+    expect(writes()).toEqual([]);
+  });
+
+  it('removes an empty team from this season only, after a confirm that names it', async () => {
+    const asked = vi.fn(async () => true);
+    globalThis.confirmAnswer = asked;
+    await openTeam('e2');
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove from season' }));
+    await waitFor(() => expect(writes()).toHaveLength(1));
+    expect(asked.mock.calls[0][0]).toMatchObject({ title: 'Remove Beta from 2026?', tone: 'danger' });
+    expect(db.calls.find((c) => c.table === 'team_entries' && c.op === 'delete')).toMatchObject({ filters: [['id', 'e2']] });
+    expect(db.tables.teams.find((t) => t.id === 't2')).toBeTruthy();
   });
 });

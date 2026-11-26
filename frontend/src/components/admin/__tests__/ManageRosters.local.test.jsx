@@ -198,8 +198,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(ada.roster_memberships).toEqual([expect.objectContaining({ team_entry_id: made.entries.Alpha, jersey_number: 9, position: 'ST' })]);
 
     // Edit the card and the roster place.
-    await option(/9 · .*Ada Striker · ST/);
-    type('Player', ada.roster_memberships[0].id);
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Ada Striker$/ }));
     type('Edit last name', 'Finisher');
     type('Edit jersey', '10');
     fireEvent.click(screen.getByRole('button', { name: /save player/i }));
@@ -208,6 +207,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(must(await admin.from('roster_memberships').select('jersey_number').eq('id', ada.roster_memberships[0].id).single()).jersey_number).toBe(10);
 
     // Add last season's player: the same identity now has a roster place in two seasons.
+    fireEvent.click(screen.getByRole('button', { name: 'Add player' }));
     type('Search players', `${tag}Vera`); // searched as you type, through search_players
     const list = await screen.findByRole('list', { name: 'Matching players' }, { timeout: 15000 });
     expect(within(list).getByText(/Latest: .*· #/)).toBeTruthy(); // the earlier season's roster place tells them apart
@@ -218,8 +218,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(must(await admin.from('players').select('id').eq('first_name', `${tag}Vera`))).toHaveLength(1);
 
     // Move Ada to Beta within the season.
-    await option(/10 · .*Ada Finisher/);
-    type('Player', ada.roster_memberships[0].id);
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Ada Finisher$/ }));
     type('Move to team', made.entries.Beta);
     fireEvent.click(screen.getByRole('button', { name: /^move$/i }));
     await statusText(/Moved to/);
@@ -227,8 +226,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
 
     // Remove the veteran from this season's roster: the player and last season's place stay.
     const veteranPlace = must(await admin.from('roster_memberships').select('id').eq('player_id', made.veteran).eq('season_id', made.seasons.now).single()).id;
-    await option(/Vera Veteran/);
-    type('Player', veteranPlace);
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Vera Veteran$/ }));
     fireEvent.click(screen.getByRole('button', { name: /remove from roster/i }));
     await statusText(/Removed from the roster/);
     expect(must(await admin.from('roster_memberships').select('season_id').eq('player_id', made.veteran))).toEqual([{ season_id: made.seasons.old }]);
@@ -258,8 +256,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     await statusText(/Temp Trialist added to/);
     const temp = must(await admin.from('players').select('id, roster_memberships(id)').eq('first_name', `${tag}Temp`).single());
     expect(temp.roster_memberships).toHaveLength(1);
-    await option(/Temp Trialist/);
-    type('Player', temp.roster_memberships[0].id);
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Temp Trialist$/ }));
     fireEvent.click(screen.getByRole('button', { name: /delete player/i }));
     await statusText(/Temp Trialist deleted/);
     expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/Delete .*Temp Trialist for good/));

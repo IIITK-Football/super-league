@@ -1,23 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRightLeft, ImagePlus, Loader2, Plus, Save, Search, Trash2, UserMinus, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
 import FutCard from '../players/FutCard';
 import { CARD_STATS, FEET, applyCardDraft, blankCardDraft, cardDraft } from '../../lib/playerCard';
 import { PLAY_STYLES } from '../../data/playStyles';
-import { ghostButton, inputClass, labelClass, primaryButton } from './adminStyles';
 import PlayerAccountLink from './PlayerAccountLink';
 import AccountMatches from './AccountMatches';
 import ManualLink from './ManualLink';
 import AccountPicker from './AccountPicker';
-import { useConfirm } from '../ui';
-
-// Dictator flow for season teams and rosters: division -> season -> team entry, then that team's players.
-// A player is one reusable identity (the FUT card: name, portrait, rating, attributes); a roster place puts the
-// player on a team for one season, with that season's jersey number and position. Writes go straight to the Data
-// API with the signed-in session, so row level security and the database decide (only a dictator may write, a
-// player is on one team per season, and a roster place with goals or assists is kept); this screen reports it.
+import { Button, Card, Crest, EmptyState, Field, Notice, Sheet, useConfirm } from '../ui';
 
 export const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'CF', 'ST'];
 
@@ -61,12 +53,14 @@ export function describeError(error) {
 // The player form fields, shared by the edit and create forms (a render helper, not a component).
 function playerFields(value, onChange, idPrefix) {
   const field = (key) => (e) => onChange({ ...value, [key]: e.target.value });
-  return <div className="grid gap-3 md:grid-cols-4">
-    <label className={labelClass}>First name<input aria-label={`${idPrefix} first name`} value={value.first_name} onChange={field('first_name')} className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
-    <label className={labelClass}>Last name<input aria-label={`${idPrefix} last name`} value={value.last_name} onChange={field('last_name')} className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
-    <label className={labelClass}>Jersey<input aria-label={`${idPrefix} jersey`} type="number" min="0" max="99" value={value.jersey_number ?? ''} onChange={field('jersey_number')} className={`${inputClass} mt-1`} /></label>
-    <label className={labelClass}>Position<select aria-label={`${idPrefix} position`} value={value.position || ''} onChange={field('position')} className={`${inputClass} mt-1 normal-case tracking-normal`}><option value="">Not set</option>{[...new Set([...POSITIONS, value.position].filter(Boolean))].map((p) => <option key={p} value={p}>{p}</option>)}</select></label>
-    <label className={labelClass}>Overall rating<input aria-label={`${idPrefix} rating`} type="number" min="1" max="99" placeholder="Not set" value={value.overall_rating} onChange={field('overall_rating')} className={`${inputClass} mt-1`} /></label>
+  return <div className="grid grid-cols-2 gap-3">
+    <Field label="First name" aria-label={`${idPrefix} first name`} value={value.first_name} onChange={field('first_name')} />
+    <Field label="Last name" aria-label={`${idPrefix} last name`} value={value.last_name} onChange={field('last_name')} />
+    <Field type="number" min="0" max="99" label="Jersey" aria-label={`${idPrefix} jersey`} value={value.jersey_number ?? ''} onChange={field('jersey_number')} />
+    <Field as="select" label="Position" aria-label={`${idPrefix} position`} value={value.position || ''} onChange={field('position')}>
+      <option value="">Not set</option>{[...new Set([...POSITIONS, value.position].filter(Boolean))].map((p) => <option key={p} value={p}>{p}</option>)}
+    </Field>
+    <Field type="number" min="1" max="99" label="Overall rating" placeholder="Not set" aria-label={`${idPrefix} rating`} value={value.overall_rating} onChange={field('overall_rating')} />
     {cardFields(value, onChange, idPrefix)}
   </div>;
 }
@@ -76,25 +70,19 @@ function playerFields(value, onChange, idPrefix) {
 function cardFields(value, onChange, idPrefix) {
   const card = value.card || blankCardDraft();
   const setCard = (next) => onChange({ ...value, card: { ...card, ...next } });
-  return <fieldset className="space-y-3 rounded-lg border border-white/10 p-3 md:col-span-4">
-    <legend className={`${labelClass} px-1`}>FUT card (every season)</legend>
-    <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
-      {CARD_STATS.map(({ key, short }) => <label key={key} className={labelClass}>{short}
-        <input aria-label={`${idPrefix} ${key}`} type="number" min="1" max="99" placeholder="—" value={card.stats[key]}
-          onChange={(e) => setCard({ stats: { ...card.stats, [key]: e.target.value } })} className={`${inputClass} mt-1`} />
-      </label>)}
+  return <fieldset className="col-span-2 space-y-3 rounded-card border border-line p-3">
+    <legend className="px-1 text-sm font-semibold text-ink">FUT card (every season)</legend>
+    <div className="grid grid-cols-3 gap-2">
+      {CARD_STATS.map(({ key, short }) => <Field key={key} type="number" min="1" max="99" label={short} aria-label={`${idPrefix} ${key}`} value={card.stats[key]}
+        onChange={(e) => setCard({ stats: { ...card.stats, [key]: e.target.value } })} />)}
     </div>
-    <div className="grid gap-3 md:grid-cols-2">
-      <label className={labelClass}>Preferred foot
-        <select aria-label={`${idPrefix} preferred foot`} value={card.preferredFoot} onChange={(e) => setCard({ preferredFoot: e.target.value })} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">Not set</option>{FEET.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
-      </label>
-      <label className={labelClass}>Play style
-        <select aria-label={`${idPrefix} play style`} value={card.playStyle} onChange={(e) => setCard({ playStyle: e.target.value })} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">Not set</option>{PLAY_STYLES.map((style) => <option key={style.id} value={style.name}>{style.name}</option>)}
-        </select>
-      </label>
+    <div className="grid grid-cols-2 gap-3">
+      <Field as="select" label="Preferred foot" aria-label={`${idPrefix} preferred foot`} value={card.preferredFoot} onChange={(e) => setCard({ preferredFoot: e.target.value })}>
+        <option value="">Not set</option>{FEET.map((f) => <option key={f} value={f}>{f}</option>)}
+      </Field>
+      <Field as="select" label="Play style" aria-label={`${idPrefix} play style`} value={card.playStyle} onChange={(e) => setCard({ playStyle: e.target.value })}>
+        <option value="">Not set</option>{PLAY_STYLES.map((style) => <option key={style.id} value={style.name}>{style.name}</option>)}
+      </Field>
     </div>
   </fieldset>;
 }
@@ -102,7 +90,7 @@ function cardFields(value, onChange, idPrefix) {
 // This season's place (not part of the card): jersey, position and team, from the form being edited.
 function seasonPlace(value, teamName) {
   const jersey = value.jersey_number === '' || value.jersey_number == null ? 'No jersey' : `#${value.jersey_number}`;
-  return <p aria-label="This season's place" className="text-xs text-zinc-400"><span className={labelClass}>This season</span><br />{jersey} · {value.position || 'No position'} · {teamName}</p>;
+  return <p aria-label="This season's place" className="text-sm text-mut"><span className="font-semibold text-ink">This season</span><br />{jersey} · {value.position || 'No position'} · {teamName}</p>;
 }
 
 // What the card preview shows for a form: the draft values over the stored card, and the picture to show.
@@ -138,6 +126,10 @@ export default function ManageRosters() {
   // Account link of each player on the roster: { [playerId]: { linked, account_label } }, from player_link_status.
   const [links, setLinks] = useState({});
   const [linksError, setLinksError] = useState('');
+  // Team rename (null when closed), the add-player sheet, and the account sheet's roster place.
+  const [renameText, setRenameText] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [linkPlaceId, setLinkPlaceId] = useState('');
   // Pictures chosen but not (yet) saved, previewed on the card: 'edit' for the chosen player, 'new' for the new-player
   // form. { file, url (a local preview), status: 'local' | 'uploading' | 'failed', membershipId, playerId, name }.
   const [portraits, setPortraits] = useState({});
@@ -442,171 +434,250 @@ export default function ManageRosters() {
 
   // Render -----------------------------------------------------------------------------------------------------
 
-  return <div className="space-y-6 p-6">
-    <div>
-      <h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><Users size={20} /> Teams &amp; rosters</h2>
-      <p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Choose a division, season and team, then manage that season&apos;s roster. A player keeps one card across seasons.</p>
+  const linkRow = roster.find((r) => r.id === linkPlaceId) || null;
+  const linkName = linkRow?.player ? `${linkRow.player.first_name} ${linkRow.player.last_name}` : 'this player';
+  const editOpen = Boolean(place && editing);
+  const sheetOpen = editOpen || adding || Boolean(linkRow);
+
+  const closeEditor = () => { setPortrait('edit', null); setSelectedPlace(''); setEditing(null); setMoveTo(''); };
+
+  const renameTeam = async (event) => {
+    event.preventDefault();
+    const name = renameText.trim();
+    if (name.length < 2 || name.length > 60) { fail('A team name needs 2 to 60 characters.'); return; }
+    setBusy('rename-team');
+    // The team is one record shared by every season, so the new name applies everywhere it is entered.
+    const { data, error: err } = await supabase.from('teams').update({ name }).eq('id', entry.team_id).select('id');
+    setBusy('');
+    if (!err && !data?.length) { report({ code: '42501' }); return; }
+    if (report(err, `Renamed to ${name} in every season.`)) { setRenameText(null); loadEntries(seasonId); }
+  };
+
+  // Removes the team's entry from this season only. The team, its other seasons and its players stay. A season with
+  // fixtures or players on the roster is refused here, with what to do first.
+  const removeFromSeason = async () => {
+    setBusy('remove-team');
+    const [home, away] = await Promise.all([
+      supabase.from('matches').select('id').eq('season_id', seasonId).eq('home_team_id', entry.team_id),
+      supabase.from('matches').select('id').eq('season_id', seasonId).eq('away_team_id', entry.team_id),
+    ]);
+    setBusy('');
+    const fixtureError = home.error || away.error;
+    if (fixtureError) { report(fixtureError); return; }
+    const count = (home.data?.length ?? 0) + (away.data?.length ?? 0);
+    if (count) { fail(`${entry.name} has ${count} fixture${count === 1 ? '' : 's'} in ${season?.name}. Cancel them in Fixtures first.`); return; }
+    if (roster.length) { fail(`${entry.name} still has ${roster.length} player${roster.length === 1 ? '' : 's'} on this roster. Move or remove them first.`); return; }
+    if (!(await confirm({ title: `Remove ${entry.name} from ${season?.name}?`, description: 'The team stays in the division and in its other seasons. Only this season’s entry is removed.', confirmLabel: 'Remove from season', tone: 'danger' }))) return;
+    setBusy('remove-team');
+    const { data, error: err } = await supabase.from('team_entries').delete().eq('id', entryId).select('id');
+    setBusy('');
+    if (!err && !data?.length) { report({ code: '42501' }); return; }
+    if (report(err, `${entry.name} removed from ${season?.name}.`)) { setEntryId(''); setRoster([]); loadEntries(seasonId); }
+  };
+
+  // Messages show inside the open sheet (the page behind it is covered), and at the top of the page otherwise.
+  const notices = <div className="space-y-3">
+    {error && <Notice tone="error" role="alert">{error}</Notice>}
+    {message && <Notice tone="success" role="status">{message}</Notice>}
+  </div>;
+
+  return <div className="space-y-8">
+    <div className="space-y-1">
+      <h2 className="font-display text-2xl font-bold text-ink">Teams and rosters</h2>
+      <p className="text-sm text-mut">Choose a division, season and team. A player keeps one card across seasons; a roster place belongs to one season.</p>
     </div>
 
-    {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
-    {message && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</p>}
+    {!sheetOpen && notices}
 
-    <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-5 md:grid-cols-3">
-      <label className={labelClass}>Division
-        <select aria-label="Division" value={divisionId} onChange={(e) => chooseDivision(e.target.value)} disabled={loading.divisions} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">{loading.divisions ? 'Loading divisions...' : divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
-          {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-      </label>
-      <label className={labelClass}>Season
-        <select aria-label="Season" value={seasonId} onChange={(e) => chooseSeason(e.target.value)} disabled={!divisionId || loading.seasons} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">{loading.seasons ? 'Loading seasons...' : !divisionId ? 'Choose a division first' : seasons.length ? 'Choose a season' : 'This division has no seasons'}</option>
-          {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>)}
-        </select>
-      </label>
-      <label className={labelClass}>Team
-        <select aria-label="Team" value={entryId} onChange={(e) => chooseEntry(e.target.value)} disabled={!seasonId || loading.entries} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">{loading.entries ? 'Loading teams...' : !seasonId ? 'Choose a season first' : entries.length ? 'Choose a team' : 'No teams in this season yet'}</option>
-          {entries.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-        </select>
-      </label>
+    <div className="grid gap-4 md:grid-cols-3">
+      <Field as="select" label="Division" aria-label="Division" value={divisionId} onChange={(e) => chooseDivision(e.target.value)} disabled={loading.divisions}>
+        <option value="">{loading.divisions ? 'Loading divisions...' : divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
+        {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+      </Field>
+      <Field as="select" label="Season" aria-label="Season" value={seasonId} onChange={(e) => chooseSeason(e.target.value)} disabled={!divisionId || loading.seasons}>
+        <option value="">{loading.seasons ? 'Loading seasons...' : !divisionId ? 'Choose a division first' : seasons.length ? 'Choose a season' : 'This division has no seasons'}</option>
+        {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>)}
+      </Field>
+      <Field as="select" label="Team" aria-label="Team" value={entryId} onChange={(e) => chooseEntry(e.target.value)} disabled={!seasonId || loading.entries}>
+        <option value="">{loading.entries ? 'Loading teams...' : !seasonId ? 'Choose a season first' : entries.length ? 'Choose a team' : 'No teams in this season yet'}</option>
+        {entries.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+      </Field>
     </div>
 
-    {seasonId && !loading.entries && <section aria-label="Teams in this season" className="grid gap-3 rounded-2xl border border-white/10 bg-white/[.02] p-5 md:grid-cols-2">
+    {seasonId && !loading.entries && <Card className="grid gap-5 md:grid-cols-2">
       <div className="flex items-end gap-2">
-        <label className={`${labelClass} flex-1`}>Add an existing team to {season?.name}
-          <select aria-label="Existing team" value={teamToAdd} onChange={(e) => setTeamToAdd(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-            <option value="">{teamsNotInSeason.length ? 'Choose a team' : 'Every team of this division is already in the season'}</option>
-            {teamsNotInSeason.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </label>
-        <button type="button" onClick={addExistingTeam} disabled={busy === 'add-team' || !teamsNotInSeason.length} className={ghostButton}><Plus size={13} /> Add team</button>
+        <Field as="select" label={`Add an existing team to ${season?.name ?? 'the season'}`} aria-label="Existing team" value={teamToAdd} onChange={(e) => setTeamToAdd(e.target.value)} className="min-w-0 flex-1">
+          <option value="">{teamsNotInSeason.length ? 'Choose a team' : 'Every team of this division is already in the season'}</option>
+          {teamsNotInSeason.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </Field>
+        <Button variant="secondary" onClick={addExistingTeam} disabled={busy === 'add-team' || !teamsNotInSeason.length}>Add team</Button>
       </div>
       <div className="flex items-end gap-2">
-        <label className={`${labelClass} flex-1`}>Or create a new team
-          <input aria-label="New team name" value={newTeamName} onChange={(e) => setNewTeamName(e.target.value)} placeholder="Team name" className={`${inputClass} mt-1 normal-case tracking-normal`} />
-        </label>
-        <button type="button" onClick={createTeam} disabled={busy === 'new-team'} className={ghostButton}>{busy === 'new-team' ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Create team</button>
+        <Field label="Or create a new team" aria-label="New team name" value={newTeamName} onChange={(e) => setNewTeamName(e.target.value)} placeholder="Team name" className="min-w-0 flex-1" />
+        <Button variant="secondary" onClick={createTeam} disabled={busy === 'new-team'}>Create team</Button>
       </div>
+    </Card>}
+
+    {entryId && <section aria-label={`Roster of ${entry?.name}`} className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-display text-xl font-bold text-ink">{entry?.name}</h3>
+          <p className="text-sm text-mut">{season?.name} · {loading.roster ? 'Loading players...' : `${roster.length} on the roster`}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setRenameText(entry?.name ?? '')} disabled={renameText !== null}>Rename team</Button>
+          <Button variant="quiet" size="sm" onClick={removeFromSeason} disabled={busy === 'remove-team'} className="text-live">Remove from season</Button>
+          <Button size="sm" onClick={() => { setSearch(''); setAdding(true); }}>Add player</Button>
+        </div>
+      </div>
+
+      {renameText !== null && <Card as="form" onSubmit={renameTeam} className="flex flex-wrap items-end gap-2">
+        <Field label="Team name" aria-label="Rename team" value={renameText} onChange={(e) => setRenameText(e.target.value)} hint={`Changes the name in every season ${entry?.name ? `${entry.name} is in` : ''}.`} className="min-w-0 flex-1 basis-64" />
+        <Button type="submit" disabled={busy === 'rename-team'}>Save name</Button>
+        <Button variant="quiet" onClick={() => setRenameText(null)}>Cancel</Button>
+      </Card>}
+
+      {linksError && <Notice tone="error" role="alert">The account links could not be loaded ({linksError}).</Notice>}
+
+      {loading.roster ? <p className="text-sm text-mut">Loading players...</p>
+        : !roster.length ? <EmptyState title="No players on this roster yet" action={<Button size="sm" onClick={() => setAdding(true)}>Add player</Button>}>Add a player who already exists, or create one with a verified account.</EmptyState>
+          : <ul aria-label="Squad" className="rounded-card border border-line bg-surf px-4">
+            {roster.map((r) => {
+              const name = r.player ? `${r.player.first_name} ${r.player.last_name}` : 'Unknown player';
+              const linked = links[r.player_id]?.linked === true;
+              return <li key={r.id} className="flex items-center gap-3 border-b border-line py-1 last:border-0">
+                <button type="button" onClick={() => choosePlace(r.id)} aria-label={`Edit ${name}`} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-ctl py-2 text-left transition-colors duration-200 ease-out hover:bg-raise">
+                  <Crest name={name} src={r.player?.image_url} size="md" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-ink">{name}</span>
+                    <span className="block truncate text-sm text-mut">{r.jersey_number != null ? `#${r.jersey_number}` : 'No jersey'} · {r.position || 'No position'} · {linked ? 'Linked' : 'No account'}</span>
+                  </span>
+                  <span className="font-display text-2xl font-bold tabular-nums text-ink" aria-label="Overall rating">{r.player?.overall_rating ?? '–'}</span>
+                </button>
+                <Button variant="quiet" size="sm" onClick={() => setLinkPlaceId(r.id)} aria-label={`${linked ? 'Account for' : 'Link account for'} ${name}`}>{linked ? 'Account' : 'Link account'}</Button>
+              </li>;
+            })}
+          </ul>}
     </section>}
 
-    {entryId && <section aria-label={`Roster of ${entry?.name}`} className="space-y-4 rounded-2xl border border-white/10 bg-white/[.02] p-5">
-      <h3 className="text-sm font-black uppercase tracking-wider text-zinc-300">Roster of {entry?.name} · {season?.name}</h3>
-      {loading.roster ? <p className="text-zinc-500">Loading players...</p> : !roster.length
-        ? <p className="text-zinc-500">No players on this roster yet. Add an existing player or create one below.</p>
-        : <label className={labelClass}>Player
-          <select aria-label="Player" value={selectedPlace} onChange={(e) => choosePlace(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-            <option value="">Choose a player to edit ({roster.length} on the roster)</option>
-            {roster.map((r) => <option key={r.id} value={r.id}>{r.jersey_number ?? '–'} · {r.player ? `${r.player.first_name} ${r.player.last_name}` : 'Unknown player'}{r.position ? ` · ${r.position}` : ''}{links[r.player_id]?.linked ? ' · linked account' : ''}</option>)}
-          </select>
-        </label>}
+    {!divisionId && !loading.divisions && divisions.length > 0 && <p className="text-sm text-mut">Choose a division to see its seasons and teams.</p>}
 
-      {place && editing && <div aria-label="Edit player" className="space-y-3 rounded-xl border border-[#d9ff4a]/30 p-4">
-        <div className="flex flex-wrap items-start gap-3">
+    {entryId && <div className="space-y-4">
+      <AccountMatches onChanged={() => entryId && loadRoster(entryId)} />
+      <ManualLink onChanged={() => entryId && loadRoster(entryId)} />
+    </div>}
+
+    <p className="text-sm text-mut">Players who have scored or assisted in a season keep their place on that season’s roster, and a player who has played is never deleted.</p>
+
+    <Sheet open={editOpen} onClose={closeEditor} title={place ? `Edit ${place.player ? `${place.player.first_name} ${place.player.last_name}` : 'player'}` : ''}>
+      {editOpen && <div className="space-y-5">
+        {notices}
+        <div className="flex flex-wrap items-start gap-4">
           <FutCard details player={previewPlayer(editing, place.player?.image_url)} portrait={portraits.edit?.membershipId === place.id ? portraits.edit : undefined} />
           {seasonPlace(editing, entry?.name)}
         </div>
         {playerFields(editing, setEditing, 'Edit')}
-        {place.player && <PlayerAccountLink key={place.player_id} player={place.player} status={links[place.player_id] || (linksError ? null : { linked: false })} statusError={linksError} onChanged={() => loadRoster(entryId)} />}
-        <div className="flex flex-wrap items-end gap-2">
-          <button type="button" onClick={savePlayer} disabled={busy === `save-${place.id}`} className={primaryButton}>{busy === `save-${place.id}` ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save player</button>
-          <label className={ghostButton}>
-            {busy === `portrait-${place.id}` ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />} Portrait (500 × 500 PNG)
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={savePlayer} disabled={busy === `save-${place.id}`}>{busy === `save-${place.id}` ? 'Saving...' : 'Save player'}</Button>
+          <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-ctl border border-line bg-raise px-4 text-base font-semibold text-ink hover:border-mut">
+            {busy === `portrait-${place.id}` ? 'Uploading portrait...' : 'Change portrait'}
             <input type="file" accept="image/png" className="sr-only" aria-label="Portrait file" onChange={(e) => { uploadPortrait(e.target.files?.[0]); e.target.value = ''; }} />
           </label>
           {portraits.edit?.status === 'failed' && portraits.edit.membershipId === place.id && <>
-            <button type="button" onClick={() => uploadPortrait(portraits.edit.file)} disabled={busy === `portrait-${place.id}`} className={ghostButton}>Retry portrait upload</button>
-            <button type="button" onClick={() => setPortrait('edit', null)} className={ghostButton}>Discard new picture</button>
+            <Button variant="secondary" onClick={() => uploadPortrait(portraits.edit.file)} disabled={busy === `portrait-${place.id}`}>Retry portrait</Button>
+            <Button variant="quiet" onClick={() => setPortrait('edit', null)}>Discard picture</Button>
           </>}
-          <select aria-label="Move to team" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className={`${inputClass} w-48`}>
-            <option value="">Move to another team</option>
+        </div>
+        <div className="flex flex-wrap items-end gap-2 border-t border-line pt-4">
+          <Field as="select" label="Move to another team" aria-label="Move to team" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className="min-w-0 flex-1 basis-48">
+            <option value="">Choose a team</option>
             {entries.filter((e) => e.id !== entryId).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-          <button type="button" onClick={movePlayer} disabled={busy === `move-${place.id}` || !moveTo} className={ghostButton}><ArrowRightLeft size={13} /> Move</button>
-          <button type="button" onClick={removeFromRoster} disabled={busy === `remove-${place.id}`} className="flex items-center gap-1 rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-400 disabled:opacity-40"><UserMinus size={13} /> Remove from roster</button>
-          <button type="button" onClick={deletePlayer} disabled={busy === `delete-${place.id}`} className="flex items-center gap-1 rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-400 disabled:opacity-40"><Trash2 size={13} /> Delete player</button>
+          </Field>
+          <Button variant="secondary" onClick={movePlayer} disabled={busy === `move-${place.id}` || !moveTo}>Move</Button>
+        </div>
+        <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+          <Button variant="secondary" onClick={removeFromRoster} disabled={busy === `remove-${place.id}`}>Remove from roster</Button>
+          <Button variant="danger" onClick={deletePlayer} disabled={busy === `delete-${place.id}`}>Delete player</Button>
         </div>
       </div>}
+    </Sheet>
 
-      <div role="search" aria-label="Find an existing player" className="space-y-2">
-        <label className={`${labelClass} block`}>Add an existing player (plays in another season or division)
-          <span className="mt-1 flex items-center gap-2 rounded-lg border border-white/10 bg-black/50 px-3 focus-within:border-[#d9ff4a]/60">
-            <Search size={14} className="text-zinc-500" aria-hidden="true" />
-            <input type="search" aria-label="Search players" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="First and/or last name"
-              className="w-full bg-transparent py-2 text-sm normal-case tracking-normal text-white outline-none" />
-          </span>
-        </label>
-        <p aria-live="polite" className="text-xs text-zinc-500">
-          {playerSearch.status === 'idle' && search.trim() && 'Type at least two letters of the name.'}
-          {playerSearch.status === 'loading' && <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Searching players...</span>}
-          {playerSearch.status === 'ready' && (playerSearch.results.length
-            ? `${playerSearch.results.length} player${playerSearch.results.length === 1 ? '' : 's'} found${playerSearch.results.length === 20 ? ' (the first 20; add more of the name to narrow)' : ''}`
-            : `No player matches “${search.trim()}”. Create them below.`)}
-        </p>
-        {playerSearch.status === 'error' && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-          The player search failed ({playerSearch.error}). <button type="button" onClick={playerSearch.retry} className="underline">Try again</button>
-        </p>}
-        {playerSearch.status === 'ready' && playerSearch.results.length > 0 && <ul aria-label="Matching players" className="space-y-1">{playerSearch.results.map((p) => {
-          const name = `${p.first_name} ${p.last_name}`.trim();
-          const context = p.last_team ? `${p.last_team} · ${p.last_season} (${p.last_division})${p.last_jersey != null ? ` · #${p.last_jersey}` : ''}` : 'Not on a roster yet';
-          return <li key={p.player_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/5 bg-black/30 px-3 py-2 text-sm">
-            <span><span className="font-bold text-white">{name}</span> <span className="text-zinc-500">· OVR {p.overall_rating ?? '—'}</span>
-              <span className="block text-xs text-zinc-500">Latest: {context}</span></span>
-            {p.in_season
-              ? <span className="text-xs text-zinc-500">Already in this season</span>
-              : !p.linked
-                ? <span className="text-xs text-amber-300">Not linked to an account: link first</span>
-              : <button type="button" onClick={() => addExistingPlayer(p)} disabled={busy === `add-${p.player_id}`} aria-label={`Add ${name} to ${entry?.name}`} className={ghostButton}><Plus size={13} /> Add to {entry?.name}</button>}
-          </li>;
-        })}</ul>}
-      </div>
+    <Sheet open={Boolean(linkRow)} onClose={() => setLinkPlaceId('')} title={`Account for ${linkName}`}>
+      {linkRow && linkRow.player && <div className="space-y-4">
+        {notices}
+        <PlayerAccountLink key={linkRow.player_id} player={linkRow.player} status={links[linkRow.player_id] || (linksError ? null : { linked: false })} statusError={linksError} onChanged={() => loadRoster(entryId)} />
+      </div>}
+    </Sheet>
 
-      <form noValidate onSubmit={createPlayer} aria-label="New player" className="space-y-3 rounded-xl border border-white/10 p-4">
-        <p className="text-xs font-black uppercase tracking-wider text-zinc-400">New player on {entry?.name}</p>
-        {!newAccount
-          ? <AccountPicker label="1. The new player's verified account" idPrefix="New player" onPick={(acc) => { setNewAccount(acc); setError(''); setMessage(''); }}
-            pickLabel={(acc) => (acc.linked_player_id || acc.key_player_id ? 'Use their player' : 'Choose')} />
-          : <p className="flex flex-wrap items-center gap-2 text-sm text-white">Account: <span className="font-bold">{newAccount.email}</span>
-            <button type="button" onClick={() => setNewAccount(null)} className={ghostButton}>Change</button></p>}
-        {newAccount && (newAccount.linked_player_id || newAccount.key_player_id) && <div role="group" aria-label="Existing player for this account" className="space-y-2 rounded-lg border border-amber-400/30 p-3 text-sm">
-          <p className="text-zinc-200">{newAccount.linked_player_id
-            ? `This account already has a player: ${newAccount.linked_player_name}${newAccount.linked_player_place ? ` (${newAccount.linked_player_place})` : ''}. A person has one player in every season, so add that player instead of creating another.`
-            : `${newAccount.key_player_name}${newAccount.key_player_place ? ` (${newAccount.key_player_place})` : ''} is waiting for this account (the same email). Link that player and add them instead of creating another.`}</p>
-          <button type="button" onClick={() => addAccountPlayer(newAccount)} disabled={busy === 'add-account-player'} className={primaryButton}>
-            {busy === 'add-account-player' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            {newAccount.linked_player_id ? `Add ${newAccount.linked_player_name} to ${entry?.name}` : `Link ${newAccount.key_player_name} and add to ${entry?.name}`}
-          </button>
-        </div>}
-        {newAccount && !newAccount.linked_player_id && !newAccount.key_player_id && <>
-        <div className="flex flex-wrap items-start gap-3">
-            <FutCard details player={previewPlayer(newPlayer, null)} portrait={portraits.new?.status === 'local' ? portraits.new : undefined} />
-            <div className="space-y-2">
-              {seasonPlace(newPlayer, entry?.name)}
-              <label className={ghostButton}><ImagePlus size={13} /> {portraits.new?.status === 'local' ? 'Change picture' : 'Choose portrait (500 × 500 PNG)'}
-                <input type="file" accept="image/png" className="sr-only" aria-label="New portrait file" onChange={(e) => {
-                  const file = e.target.files?.[0]; e.target.value = '';
-                  if (file) setPortrait('new', { file, url: URL.createObjectURL(file), status: 'local' });
-                }} />
-              </label>
-              {portraits.new?.status === 'local' && <button type="button" onClick={() => setPortrait('new', null)} className={ghostButton}>Remove picture</button>}
-              <p className="text-[10px] text-zinc-500">The picture uploads when the player is created.</p>
+    <Sheet open={adding} onClose={() => setAdding(false)} title={`Add a player to ${entry?.name ?? 'the team'}`} className="md:w-[520px]">
+      {adding && <div className="space-y-6">
+        {notices}
+        <div role="search" aria-label="Find an existing player" className="space-y-2">
+          <Field type="search" label="Add an existing player" hint="Plays in another season or division. First and last name both match." aria-label="Search players" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="First and/or last name" />
+          <p aria-live="polite" className="text-sm text-mut">
+            {playerSearch.status === 'idle' && search.trim() && 'Type at least two letters of the name.'}
+            {playerSearch.status === 'loading' && 'Searching players...'}
+            {playerSearch.status === 'ready' && (playerSearch.results.length
+              ? `${playerSearch.results.length} player${playerSearch.results.length === 1 ? '' : 's'} found${playerSearch.results.length === 20 ? ' (the first 20; add more of the name to narrow)' : ''}`
+              : `No player matches “${search.trim()}”. Create them below.`)}
+          </p>
+          {playerSearch.status === 'error' && <Notice tone="error" role="alert">The player search failed ({playerSearch.error}). <Button variant="quiet" size="sm" onClick={playerSearch.retry}>Try again</Button></Notice>}
+          {playerSearch.status === 'ready' && playerSearch.results.length > 0 && <ul aria-label="Matching players" className="divide-y divide-line rounded-card border border-line">{playerSearch.results.map((p) => {
+            const name = `${p.first_name} ${p.last_name}`.trim();
+            const context = p.last_team ? `${p.last_team} · ${p.last_season} (${p.last_division})${p.last_jersey != null ? ` · #${p.last_jersey}` : ''}` : 'Not on a roster yet';
+            return <li key={p.player_id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+              <span className="min-w-0"><span className="font-semibold text-ink">{name}</span> <span className="font-display tabular-nums text-mut">OVR {p.overall_rating ?? '–'}</span>
+                <span className="block text-sm text-mut">Latest: {context}</span></span>
+              {p.in_season
+                ? <span className="text-sm text-mut">Already in this season</span>
+                : !p.linked
+                  ? <span className="text-sm text-mut">No account: link one first</span>
+                  : <Button variant="secondary" size="sm" onClick={() => addExistingPlayer(p)} disabled={busy === `add-${p.player_id}`} aria-label={`Add ${name} to ${entry?.name}`}>Add to {entry?.name}</Button>}
+            </li>;
+          })}</ul>}
+        </div>
+
+        <form noValidate onSubmit={createPlayer} aria-label="New player" className="space-y-4 border-t border-line pt-6">
+          <h4 className="font-display text-lg font-bold text-ink">Create a new player</h4>
+          {!newAccount
+            ? <AccountPicker label="1. The new player's verified account" idPrefix="New player" onPick={(acc) => { setNewAccount(acc); setError(''); setMessage(''); }}
+              pickLabel={(acc) => (acc.linked_player_id || acc.key_player_id ? 'Use their player' : 'Choose')} />
+            : <p className="flex flex-wrap items-center gap-2 text-sm text-ink">Account: <span className="font-semibold">{newAccount.email}</span>
+              <Button variant="quiet" size="sm" onClick={() => setNewAccount(null)}>Change</Button></p>}
+          {newAccount && (newAccount.linked_player_id || newAccount.key_player_id) && <div role="group" aria-label="Existing player for this account" className="space-y-3 rounded-card border border-line p-3 text-sm">
+            <p className="text-ink">{newAccount.linked_player_id
+              ? `This account already has a player: ${newAccount.linked_player_name}${newAccount.linked_player_place ? ` (${newAccount.linked_player_place})` : ''}. A person has one player in every season, so add that player instead of creating another.`
+              : `${newAccount.key_player_name}${newAccount.key_player_place ? ` (${newAccount.key_player_place})` : ''} is waiting for this account (the same email). Link that player and add them instead of creating another.`}</p>
+            <Button onClick={() => addAccountPlayer(newAccount)} disabled={busy === 'add-account-player'}>
+              {newAccount.linked_player_id ? `Add ${newAccount.linked_player_name} to ${entry?.name}` : `Link ${newAccount.key_player_name} and add to ${entry?.name}`}
+            </Button>
+          </div>}
+          {newAccount && !newAccount.linked_player_id && !newAccount.key_player_id && <>
+            <div className="flex flex-wrap items-start gap-4">
+              <FutCard details player={previewPlayer(newPlayer, null)} portrait={portraits.new?.status === 'local' ? portraits.new : undefined} />
+              <div className="space-y-2">
+                {seasonPlace(newPlayer, entry?.name)}
+                <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-ctl border border-line bg-raise px-4 text-sm font-semibold text-ink hover:border-mut">
+                  {portraits.new?.status === 'local' ? 'Change picture' : 'Choose portrait (500 × 500 PNG)'}
+                  <input type="file" accept="image/png" className="sr-only" aria-label="New portrait file" onChange={(e) => {
+                    const file = e.target.files?.[0]; e.target.value = '';
+                    if (file) setPortrait('new', { file, url: URL.createObjectURL(file), status: 'local' });
+                  }} />
+                </label>
+                {portraits.new?.status === 'local' && <Button variant="quiet" size="sm" onClick={() => setPortrait('new', null)}>Remove picture</Button>}
+                <p className="text-sm text-mut">The picture uploads when the player is created.</p>
+              </div>
             </div>
-          </div>
-          {playerFields(newPlayer, setNewPlayer, 'New')}
-          <button type="submit" disabled={busy === 'create-player'} className={primaryButton}>{busy === 'create-player' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Create player</button>
-        </>}
-        {portraits.new?.status === 'failed' && <div role="group" aria-label="New player portrait" className="flex flex-wrap items-center gap-2 rounded-lg border border-red-500/20 p-2 text-xs text-red-300">
-          The portrait for {portraits.new.name} is not saved.
-          {portraits.new.membershipId && <button type="button" onClick={() => uploadNewPortrait(portraits.new).then((ok) => ok && (report(null, `Portrait saved for ${portraits.new.name}.`), loadRoster(entryId)))} disabled={busy === 'new-portrait'} className={ghostButton}>Retry portrait upload</button>}
-          <button type="button" onClick={() => setPortrait('new', null)} className={ghostButton}>Discard picture</button>
-        </div>}
-      </form>
-    </section>}
-
-    <AccountMatches onChanged={() => entryId && loadRoster(entryId)} />
-    <ManualLink onChanged={() => entryId && loadRoster(entryId)} />
-
-    {!divisionId && !loading.divisions && divisions.length > 0 && <p className="text-zinc-500">Choose a division to see its seasons and teams.</p>}
-    <p className="text-[10px] text-zinc-600">Players who have scored or assisted in a season keep their place on that season&apos;s roster, and a player who has played is never deleted.</p>
+            {playerFields(newPlayer, setNewPlayer, 'New')}
+            <Button type="submit" disabled={busy === 'create-player'}>{busy === 'create-player' ? 'Creating...' : 'Create player'}</Button>
+          </>}
+          {portraits.new?.status === 'failed' && <div role="group" aria-label="New player portrait" className="flex flex-wrap items-center gap-2 rounded-card border border-line p-3 text-sm text-live">
+            The portrait for {portraits.new.name} is not saved.
+            {portraits.new.membershipId && <Button variant="secondary" size="sm" onClick={() => uploadNewPortrait(portraits.new).then((ok) => ok && (report(null, `Portrait saved for ${portraits.new.name}.`), loadRoster(entryId)))} disabled={busy === 'new-portrait'}>Retry portrait upload</Button>}
+            <Button variant="quiet" size="sm" onClick={() => setPortrait('new', null)}>Discard picture</Button>
+          </div>}
+        </form>
+      </div>}
+    </Sheet>
   </div>;
 }
