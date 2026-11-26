@@ -42,18 +42,18 @@ export function Standings() {
   }
 
   const header = (
-    <header className="space-y-1">
-      <h1 className="font-display text-4xl font-bold text-ink sm:text-5xl">{seasonScope.divisionRecord?.name || ' '}</h1>
-      <p className="text-mut">{seasonScope.season ? `${seasonScope.season.name} season · League table` : 'League table'}</p>
+    <header className="space-y-2">
+      <p className="eyebrow">{[seasonScope.divisionRecord?.name, seasonScope.season && `${seasonScope.season.name} season`].filter(Boolean).join(' · ') || ' '}</p>
+      <h1 className="font-display text-4xl text-ink sm:text-6xl">Table</h1>
     </header>
   );
 
   if (loading || !endpoint) {
     return (
-      <div aria-busy="true" aria-label="Loading the table" className="space-y-6 pb-12">
+      <div aria-busy="true" aria-label="Loading the table" className="space-y-10 pb-12">
         {header}
         <div className="space-y-2">
-          {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+          {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-14 w-full rounded-card" />)}
         </div>
       </div>
     );
@@ -72,7 +72,7 @@ export function Standings() {
   const bracketMatches = apiResponse?.data?.bracketMatches ?? [];
 
   return (
-    <div className="space-y-10 pb-12">
+    <div className="space-y-14 pb-12">
       {header}
       {standings.length === 0 ? (
         <EmptyState title="No table yet">The table appears here once teams are entered in this season.</EmptyState>
@@ -81,8 +81,8 @@ export function Standings() {
       )}
       <SeasonBracket matches={bracketMatches} />
       {bracketRounds(bracketMatches).length === 0 && KNOCKOUT_FORMATS.includes(seasonScope.season?.format) && bracketMatches.length > 0 && (
-        <section aria-labelledby="knockout-heading" className="space-y-4">
-          <h2 id="knockout-heading" className="font-display text-2xl font-bold text-ink">Knockout matches</h2>
+        <section aria-labelledby="knockout-heading" className="space-y-5">
+          <h2 id="knockout-heading" className="font-display text-3xl text-ink sm:text-4xl">Knockout matches</h2>
           <MatchList matches={[...bracketMatches].sort(byDateAscending)} />
         </section>
       )}
