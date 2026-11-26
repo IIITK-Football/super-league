@@ -39,6 +39,7 @@ const fetchMock = vi.fn(async () => ({
 import { LeagueProvider } from '../../context/LeagueContext';
 import { DivisionHomeRoute } from '../DivisionHomeRoute';
 import { Home } from '../Home';
+import { pick } from '../../test/controls';
 
 const season = (slug, current = false) => ({ id: `s-${slug}`, slug, name: slug, is_current: current, starts_on: `${slug}-08-01`, ends_on: null, format: 'knockout' });
 
@@ -88,32 +89,35 @@ describe('season choice on the division homepage', () => {
   it('shows the dropdown with two seasons, defaulting to the current one', async () => {
     state.seasons = [season('2027'), season('2026', true)];
     renderAt('/wsl');
-    const select = await screen.findByLabelText('Season');
-    expect(select.value).toBe('2026');
-    expect([...select.options].map((o) => o.textContent)).toEqual(['2026 (current)', '2027']);
+    const select = await screen.findByRole('button', { name: /Season/ });
+    expect(select.textContent).toContain('2026');
+    fireEvent.click(select);
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['2026Current', '2027']);
     await waitFor(() => expect(lastQuery().get('season')).toBe('2026'));
   });
 
   it('changing the season updates the address and the content request', async () => {
     state.seasons = [season('2027'), season('2026', true)];
     renderAt('/wsl');
-    fireEvent.change(await screen.findByLabelText('Season'), { target: { value: '2027' } });
+    await screen.findByRole('button', { name: /Season/ });
+    await pick(/Season/, '2027');
     await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/wsl/2027'));
     await waitFor(() => expect(lastQuery().get('season')).toBe('2027'));
-    expect((await screen.findByLabelText('Season')).value).toBe('2027');
+    expect((await screen.findByRole('button', { name: /Season/ })).textContent).toContain('2027');
   });
 
   it('opens the season named in the address (/wsl/2027)', async () => {
     state.seasons = [season('2027'), season('2026', true)];
     renderAt('/wsl/2027');
-    expect((await screen.findByLabelText('Season')).value).toBe('2027');
+    expect((await screen.findByRole('button', { name: /Season/ })).textContent).toContain('2027');
     expect(requestedUrls().every((u) => new URL(u, 'http://x').searchParams.get('season') === '2027')).toBe(true);
   });
 
   it('choosing the current season goes back to the plain division address', async () => {
     state.seasons = [season('2027'), season('2026', true)];
     renderAt('/wsl/2027');
-    fireEvent.change(await screen.findByLabelText('Season'), { target: { value: '2026' } });
+    await screen.findByRole('button', { name: /Season/ });
+    await pick(/Season/, /2026/);
     await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/wsl'));
   });
 
