@@ -1,11 +1,14 @@
 // Test double for the Supabase client used by route handlers. Every query builder method returns the builder, and
-// awaiting it yields the result set for that table (or RPC name) in `db`. Tests fill `db` per case.
-export type Result = { data: unknown; error: unknown };
+// awaiting it yields the result set for that table (or RPC name) in `db`. Tests fill `db` per case and read `calls`
+// to check the filters a route sent.
+export type Result = { data: unknown; error: unknown; count?: number | null };
+export type Call = { target: string; method: string; args: unknown[] };
 
 export const db = {
   tables: {} as Record<string, Result>,
   rpc: {} as Record<string, Result>,
   user: null as { id: string } | null,
+  calls: [] as Call[],
   inserts: [] as { table: string; row: unknown }[],
   deletes: [] as string[],
 };
@@ -14,6 +17,7 @@ export const reset = () => {
   db.tables = {};
   db.rpc = {};
   db.user = null;
+  db.calls = [];
   db.inserts = [];
   db.deletes = [];
 };
@@ -21,12 +25,12 @@ export const reset = () => {
 const OK: Result = { data: null, error: null };
 const FILTERS = ['select', 'eq', 'neq', 'gt', 'gte', 'lt', 'in', 'is', 'or', 'order', 'limit', 'range', 'match', 'maybeSingle', 'single'];
 
-function builder(result: Result, table = '') {
+function builder(result: Result, target: string) {
   const b: Record<string, unknown> = {};
-  for (const name of FILTERS) b[name] = () => b;
-  b.insert = (row: unknown) => { db.inserts.push({ table, row }); return b; };
-  b.update = () => b;
-  b.delete = () => { db.deletes.push(table); return b; };
+  for (const method of FILTERS) b[method] = (...args: unknown[]) => { db.calls.push({ target, method, args }); return b; };
+  b.insert = (row: unknown) => { db.calls.push({ target, method: 'insert', args: [row] }); db.inserts.push({ table: target, row }); return b; };
+  b.update = (row: unknown) => { db.calls.push({ target, method: 'update', args: [row] }); return b; };
+  b.delete = () => { db.calls.push({ target, method: 'delete', args: [] }); db.deletes.push(target); return b; };
   b.then = (resolve: (r: Result) => unknown, reject?: (e: unknown) => unknown) => Promise.resolve(result).then(resolve, reject);
   return b;
 }
@@ -34,7 +38,10 @@ function builder(result: Result, table = '') {
 export function createFakeClient() {
   return {
     from: (table: string) => builder(db.tables[table] ?? OK, table),
-    rpc: (name: string) => builder(db.rpc[name] ?? OK),
+    rpc: (name: string, args?: unknown) => {
+      db.calls.push({ target: name, method: 'rpc', args: [args] });
+      return builder(db.rpc[name] ?? OK, name);
+    },
     auth: {
       getUser: async () => (db.user
         ? { data: { user: db.user }, error: null }

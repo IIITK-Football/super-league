@@ -1,6 +1,7 @@
 import { publicClient } from '@/lib/supabase/clients';
 import { scopeFromUrl } from '@/lib/scope';
 import { handleError } from '@/lib/errorHandler';
+import { FINAL_STATUSES, MATCH_STATUS } from '@/lib/matchStatus';
 
 export async function GET(request: Request) {
     const supabase = publicClient();
@@ -56,8 +57,8 @@ export async function GET(request: Request) {
 
         // FIX: Intelligently pick the Hero Match!
         // Priority 1: Find ANY Live Match. Priority 2: Fallback to the next Scheduled Match.
-        const liveMatch = allMatches?.find((m: any) => m.status === 'live');
-        const nextScheduled = allMatches?.find((m: any) => m.status === 'scheduled');
+        const liveMatch = allMatches?.find((m: any) => m.status === MATCH_STATUS.live);
+        const nextScheduled = allMatches?.find((m: any) => m.status === MATCH_STATUS.scheduled);
         let targetMatch: any = liveMatch || nextScheduled || null;
 
         let liveMatchData: any = null;
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
     // 4. PROCESS MATCHES (Calculate Form, Standings)
     allMatches?.forEach((match: any) => {
       // Calculate Stats & Form for COMPLETED matches
-      if (match.status === 'completed'||match.status==='forfeited') {
+      if (FINAL_STATUSES.includes(match.status)) {
         const home = scoreboard[match.home_team_id];
         const away = scoreboard[match.away_team_id];
 

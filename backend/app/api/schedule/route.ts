@@ -1,12 +1,14 @@
 import { requestClient } from '@/lib/supabase/clients';
 import { resolveScope } from '@/lib/scope';
 import { handleError } from '@/lib/errorHandler';
+import { OPEN_STATUSES } from '@/lib/matchStatus';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    // Paging is at least one page of one row (0 or a negative number would ask for an invalid range).
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+    const limit = Math.max(1, parseInt(searchParams.get('limit') || '10') || 10);
 
     const from = (page - 1) * limit;
     const to = from + limit - 1;
@@ -25,7 +27,7 @@ export async function GET(request: Request) {
         away_team:teams!matches_away_team_id_fkey ( id, name )
       `, { count: 'exact' })
       .eq('season_id', scope.season.id)
-      .in('status', ['upcoming', 'live', 'scheduled'])
+      .in('status', OPEN_STATUSES)
       .order('date', { ascending: true })
       .range(from, to);
 
