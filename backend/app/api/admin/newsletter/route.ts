@@ -24,12 +24,17 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { supabase, user } = await requireRole(request, ['editor', 'dictator']);
 
+    // The byline is the publisher's public display name, never their email or account id: the article and its history
+    // are public. The database refuses an author that looks like an email address (newsletter_author_not_email).
+    const { data: profile } = await supabase.from('user_profiles').select('nickname, real_name').eq('id', user.id).maybeSingle();
+    const author = profile?.nickname?.trim() || profile?.real_name?.trim() || 'Super League Editorial';
+
     const { data, error } = await supabase
       .from('newsletter')
       .insert([{
         title: body.title,
         summary: body.summary,
-        author: user.email || user.id, 
+        author,
         image_url: body.image_url || null,
         content: body.content || [], 
         category: body.category || 'Official Editorial',
