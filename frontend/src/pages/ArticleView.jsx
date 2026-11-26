@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Share2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { formatNewsDate } from '../components/NewsArticle';
+import { formatNewsDate } from '../lib/newsDate';
 import { Button, EmptyState, ErrorState, Skeleton, buttonClasses } from '../components/ui';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

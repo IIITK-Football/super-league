@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { Loader } from '../components/Loader';

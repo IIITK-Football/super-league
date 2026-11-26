@@ -1,11 +1,6 @@
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { Card } from './ui';
-
-// The date as a reader sees it, or '' when the article has none (never a made-up date).
-export function formatNewsDate(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-}
+import { formatNewsDate } from '../lib/newsDate';
 
 // A news card: image, headline and date. Wrap it in a link; it does not navigate by itself.
 export function NewsArticle({ article }) {
