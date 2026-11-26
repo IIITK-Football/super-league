@@ -3,9 +3,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { NewsArticle } from '../components/NewsArticle';
-import { EmptyState, ErrorState, Skeleton } from '../components/ui';
+import { EmptyState, ErrorState, Skeleton, Tabs } from '../components/ui';
 import { formatNewsDate } from '../lib/newsDate';
-import { cn } from '../utils/cn';
 
 const CATEGORIES = ['Latest News', 'Official Editorial', 'Match Reports', 'Satire', 'Features'];
 
@@ -46,22 +45,7 @@ export function Vault() {
           <h1 className="font-display text-4xl text-ink sm:text-6xl">News</h1>
           <p className="text-mut">Match reports, features and official notices.</p>
         </div>
-        <div role="group" aria-label="Category" className="glass inline-flex max-w-full gap-1 overflow-x-auto rounded-pill p-1 no-scrollbar">
-          {CATEGORIES.map((name) => {
-            const active = name === category;
-            return (
-              <button
-                key={name}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setCategory(name)}
-                className={cn('min-h-11 shrink-0 whitespace-nowrap rounded-pill px-4 text-xs font-bold uppercase tracking-wider transition-colors duration-300 sm:px-5 sm:text-sm', active ? 'bg-ink text-bg' : 'text-mut hover:text-ink')}
-              >
-                {name}
-              </button>
-            );
-          })}
-        </div>
+        <Tabs label="Category" value={category} onChange={setCategory} tabs={CATEGORIES.map((name) => ({ id: name, label: name }))} />
       </header>
 
       {error ? (
