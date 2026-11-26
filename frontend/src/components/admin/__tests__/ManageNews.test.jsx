@@ -12,6 +12,7 @@ vi.mock('../../../lib/api', () => ({ API_BASE_URL: '/api' }));
 vi.mock('../../../context/AuthContext', () => ({ useAuth: () => ({ roles: state.roles }) }));
 const { default: ManageNews } = await import('../ManageNews.jsx');
 const { ConfirmProvider } = await import('../../ui/ConfirmProvider.jsx');
+const { readToasts } = await import('../../ui/toastStore');
 
 let calls;
 let replies;
@@ -74,7 +75,7 @@ describe('news image upload', () => {
     expect(calls.some((c) => /upload-url|r2\.cloudflarestorage/.test(c.url))).toBe(false);
     const publish = calls.find((c) => c.url === '/api/admin/newsletter');
     expect(JSON.parse(publish.init.body).image_url).toBe('https://pub-news.r2.dev/news/abc.png');
-    expect(await screen.findByText('Article published.')).toBeTruthy();
+    await waitFor(() => expect(readToasts().at(-1)?.title).toBe('Article published.'));
     expect(alert).not.toHaveBeenCalled();
   });
 

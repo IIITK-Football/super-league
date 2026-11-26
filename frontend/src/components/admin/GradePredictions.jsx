@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { API_BASE_URL } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import { DivisionSwitch } from './DivisionSwitch';
-import { Button, Card, EmptyState, Notice, Pill, useConfirm } from '../ui';
+import { CheckCircle2, Target } from 'lucide-react';
+import { Button, Crest, Pill, SegmentedControl, Skeleton, toast, useConfirm } from '../ui';
 import { formatKickoff } from './adminFormat';
 
 // Grading works on one season: the completed matches of the division's current season (the list's scope). Regrading
@@ -18,7 +19,8 @@ export default function GradePredictions() {
 
   const [gradingId, setGradingId] = useState(null);
   const [isRegradingAll, setIsRegradingAll] = useState(false);
-  const [notice, setNotice] = useState(null); // { tone, text }
+  const [view, setView] = useState('pending');
+  const setNotice = (n) => n && toast({ tone: n.tone, title: n.text });
 
   const handleRegradeAll = async () => {
     const ok = await confirm({
@@ -87,56 +89,50 @@ export default function GradePredictions() {
 
   // One completed match: its result, its grading state and the action.
   const matchRow = (m, isGraded) => (
-    <Card key={m.id} className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <li key={m.id} className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0 space-y-1.5">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-mut">
-          <Pill tone={isGraded ? 'neutral' : 'acc'}>{isGraded ? 'Graded' : 'To grade'}</Pill>
-          {isGraded && m.needs_regrade && <Pill tone="live">Needs regrade</Pill>}
-          <span>{formatKickoff(m.date) || 'Date not set'}</span>
+        <div className="flex items-center gap-3">
+          <Crest name={m.home_team_name} size="sm" />
+          <span className="min-w-0 truncate font-black uppercase tracking-tight text-ink">{m.home_team_name}</span>
+          <span className="chrome shrink-0 font-display text-2xl tabular-nums text-ink">{m.home_score} - {m.away_score}</span>
+          <span className="min-w-0 truncate font-black uppercase tracking-tight text-ink">{m.away_team_name}</span>
+          <Crest name={m.away_team_name} size="sm" />
         </div>
-        <p className="font-semibold text-ink">
-          {m.home_team_name} <span className="font-display tabular-nums text-ink">{m.home_score} – {m.away_score}</span> {m.away_team_name}
+        <p className="flex flex-wrap items-center gap-2 text-xs text-mut">
+          <span>{formatKickoff(m.date) || 'Date not set'}</span>
+          {isGraded && m.needs_regrade && <Pill tone="live">Needs regrade</Pill>}
         </p>
       </div>
-      <Button variant={isGraded ? 'secondary' : 'primary'} disabled={gradingId !== null} className="md:min-w-44"
+      <Button variant={isGraded ? 'secondary' : 'primary'} size="sm" disabled={gradingId !== null} className="sm:min-w-40"
         onClick={() => handleGrade(m.id, `${m.home_team_name} vs ${m.away_team_name}`)}>
         {gradingId === m.id ? 'Processing...' : isGraded ? 'Regrade match' : 'Grade match'}
       </Button>
-    </Card>
+    </li>
   );
+  const shown = view === 'pending' ? pendingMatches : gradedMatches;
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <DivisionSwitch value={division} onChange={setDivision} />
+        <Button variant="secondary" onClick={handleRegradeAll} disabled={isRegradingAll || !seasonId} className="text-live">
+          {isRegradingAll ? 'Processing...' : 'Regrade season'}
+        </Button>
       </div>
 
-      <section aria-labelledby="grading-heading" className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <h2 id="grading-heading" className="font-display text-2xl font-black uppercase tracking-tight text-ink">Grade fantasy predictions</h2>
-            <p className="text-sm text-mut">Work out points for completed matches. Grading uses the current season only.</p>
+      {fetchLoading ? <Skeleton className="h-40 w-full rounded-card" />
+        : matches.length === 0 ? <div className="flex flex-col items-start gap-2 rounded-card border border-dashed border-line p-6 text-sm text-mut">
+            <Target size={26} aria-hidden="true" />
+            <p className="font-semibold text-ink">No completed matches yet</p>
+            Matches appear here once they have a final result{seasonName ? '' : ' in the current season'}.
           </div>
-          <Button variant="secondary" onClick={handleRegradeAll} disabled={isRegradingAll || !seasonId} className="text-live">
-            {isRegradingAll ? 'Processing...' : 'Regrade season'}
-          </Button>
-        </div>
-
-        {notice && <Notice tone={notice.tone} role={notice.tone === 'error' ? 'alert' : 'status'}>{notice.text}</Notice>}
-        {fetchLoading ? <p className="text-sm text-mut">Loading completed matches...</p>
-          : matches.length === 0 ? <EmptyState title="No completed matches yet">Matches appear here once they have a final result.</EmptyState>
-            : <div className="space-y-8">
-              <div className="space-y-3">
-                <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">To grade ({pendingMatches.length})</h3>
-                {pendingMatches.length === 0 ? <p className="text-sm text-mut">Every completed match is graded.</p>
-                  : <div className="space-y-3">{pendingMatches.map((m) => matchRow(m, false))}</div>}
-              </div>
-              {gradedMatches.length > 0 && <div className="space-y-3">
-                <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">Graded ({gradedMatches.length})</h3>
-                <div className="space-y-3">{gradedMatches.map((m) => matchRow(m, true))}</div>
-              </div>}
-            </div>}
-      </section>
+          : <section aria-label="Completed matches" className="space-y-4">
+            <SegmentedControl aria-label="Grading state" value={view} onChange={setView}
+              options={[{ value: 'pending', label: `To grade (${pendingMatches.length})` }, { value: 'graded', label: `Graded (${gradedMatches.length})` }]} />
+            {shown.length === 0
+              ? <p className="flex items-center gap-2 text-sm text-mut"><CheckCircle2 size={16} aria-hidden="true" />{view === 'pending' ? 'Every completed match is graded.' : 'Nothing graded yet.'}</p>
+              : <ul className="glass divide-y divide-line/70 rounded-card px-2">{shown.map((m) => matchRow(m, view === 'graded'))}</ul>}
+          </section>}
     </div>
   );
 }

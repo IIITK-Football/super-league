@@ -3,7 +3,8 @@ import { useApi } from '../../hooks/useApi';
 import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, EmptyState, Field, Notice, Skeleton, useConfirm } from '../ui';
+import { ImagePlus, Newspaper, Pencil, Pilcrow, Quote, Trash2 } from 'lucide-react';
+import { Button, Field, Notice, Select, Skeleton, toast, useConfirm } from '../ui';
 
 const API_URL = API_BASE_URL;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // Mirrors the API cap in app/api/admin/newsletter/image.
@@ -85,6 +86,7 @@ export default function ManageNews() {
     setHeroFile(null);
     setErrors({});
     setNotice(null);
+    document.getElementById('write-news')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
     setBlocks((article.content || []).map((b) => ({
       ...blankBlock(b.type),
       value: b.value || '',
@@ -145,7 +147,7 @@ export default function ManageNews() {
         body: JSON.stringify({ title: form.title, summary: form.summary, category: form.category, image_url: heroUrl, content }),
       });
       if (!res.ok) throw new Error(await errorMessage(res, 'Could not save the article.'));
-      setNotice({ tone: 'success', text: editing ? 'Changes saved.' : 'Article published.' });
+      toast({ tone: 'success', title: editing ? 'Changes saved.' : 'Article published.' });
       resetForm();
       refetchNews();
     } catch (err) {
@@ -173,7 +175,7 @@ export default function ManageNews() {
       });
       if (!res.ok) throw new Error(await errorMessage(res, 'Could not delete the article.'));
       if (editing?.id === article.id) resetForm();
-      setNotice({ tone: 'success', text: 'Article deleted.' });
+      toast({ tone: 'success', title: 'Article deleted.' });
       refetchNews();
     } catch (err) {
       setNotice({ tone: 'error', text: err.message || 'Could not delete the article.' });
@@ -182,24 +184,20 @@ export default function ManageNews() {
 
   const heroCurrent = heroFile ? null : editing?.image_url;
 
-  return (
-    <div className="mx-auto w-full max-w-3xl space-y-8 bg-bg px-4 py-6 text-ink sm:px-6">
-      <header className="space-y-1">
-        <h1 className="font-display text-5xl font-black uppercase leading-[0.9] tracking-tight sm:text-6xl">News desk</h1>
-        <p className="text-mut">Write, edit and publish articles. Each one appears in News as soon as it is saved.</p>
-      </header>
+  const BLOCKS = [{ type: 'paragraph', label: 'Add paragraph', icon: Pilcrow }, { type: 'quote', label: 'Add quote', icon: Quote }, { type: 'image', label: 'Add image', icon: ImagePlus }];
+  const blockIcon = { paragraph: Pilcrow, quote: Quote, image: ImagePlus };
 
-      <Card as="form" onSubmit={handleSubmit} className="space-y-6">
+  return (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
+      <form id="write-news" onSubmit={handleSubmit} className="glass scroll-mt-28 space-y-6 rounded-card p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-display text-xl font-black uppercase tracking-tight">{editing ? `Edit "${editing.title}"` : 'New article'}</h2>
+          <h2 className="font-display text-2xl text-ink">{editing ? `Edit "${editing.title}"` : 'New article'}</h2>
           {editing && <Button variant="quiet" size="sm" onClick={resetForm}>Cancel editing</Button>}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          <Field label="Category" as="select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </Field>
+          <Field label="Category">{(p) => <Select {...p} value={form.category} onChange={(category) => setForm({ ...form, category })} options={CATEGORIES.map((c) => ({ value: c, label: c }))} />}</Field>
           <Field className="sm:col-span-2" label="Summary" as="textarea" rows={2} required value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} hint="Shown under the title in News." />
           <div className="sm:col-span-2">
             <ImageInput label="Hero image" file={heroFile} currentUrl={heroCurrent} error={errors.hero} onFile={(file) => chooseFile('hero', file, setHeroFile)} />
@@ -207,38 +205,41 @@ export default function ManageNews() {
         </div>
 
         <section className="space-y-4 border-t border-line pt-6">
-          <h3 className="font-display text-lg font-black uppercase tracking-tight">Article content</h3>
-          {blocks.map((block, index) => (
-            <div key={block.id} className="space-y-3 rounded-ctl border border-line p-4">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold capitalize text-mut">{block.type}</span>
-                <Button variant="quiet" size="sm" aria-label={`Remove ${block.type} ${index + 1}`} onClick={() => setBlocks((list) => list.filter((b) => b.id !== block.id))}>Remove</Button>
+          <h3 className="eyebrow">Article content</h3>
+          {blocks.map((block, index) => {
+            const Icon = blockIcon[block.type];
+            return (
+              <div key={block.id} className="space-y-3 rounded-ctl border border-line p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold capitalize text-mut"><Icon size={16} aria-hidden="true" />{block.type}</span>
+                  <Button variant="quiet" size="sm" aria-label={`Remove ${block.type} ${index + 1}`} onClick={() => setBlocks((list) => list.filter((b) => b.id !== block.id))}><Trash2 size={15} aria-hidden="true" />Remove</Button>
+                </div>
+
+                {block.type === 'paragraph' && (
+                  <Field label="Text" as="textarea" rows={4} required value={block.value} onChange={(e) => updateBlock(block.id, 'value', e.target.value)} />
+                )}
+
+                {block.type === 'quote' && (
+                  <div className="space-y-3">
+                    <Field label="Quote" as="textarea" rows={2} required value={block.value} onChange={(e) => updateBlock(block.id, 'value', e.target.value)} />
+                    <Field label="Speaker" required value={block.author} onChange={(e) => updateBlock(block.id, 'author', e.target.value)} />
+                  </div>
+                )}
+
+                {block.type === 'image' && (
+                  <div className="space-y-3">
+                    <ImageInput label="Image" file={block.file} currentUrl={block.url} error={errors[block.id]} onFile={(file) => chooseFile(block.id, file, (f) => updateBlock(block.id, 'file', f))} />
+                    <Field label="Alt text" required value={block.alt} onChange={(e) => updateBlock(block.id, 'alt', e.target.value)} hint="Describes the image for screen readers." />
+                  </div>
+                )}
               </div>
-
-              {block.type === 'paragraph' && (
-                <Field label="Text" as="textarea" rows={4} required value={block.value} onChange={(e) => updateBlock(block.id, 'value', e.target.value)} />
-              )}
-
-              {block.type === 'quote' && (
-                <div className="space-y-3">
-                  <Field label="Quote" as="textarea" rows={2} required value={block.value} onChange={(e) => updateBlock(block.id, 'value', e.target.value)} />
-                  <Field label="Speaker" required value={block.author} onChange={(e) => updateBlock(block.id, 'author', e.target.value)} />
-                </div>
-              )}
-
-              {block.type === 'image' && (
-                <div className="space-y-3">
-                  <ImageInput label="Image" file={block.file} currentUrl={block.url} error={errors[block.id]} onFile={(file) => chooseFile(block.id, file, (f) => updateBlock(block.id, 'file', f))} />
-                  <Field label="Alt text" required value={block.alt} onChange={(e) => updateBlock(block.id, 'alt', e.target.value)} hint="Describes the image for screen readers." />
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setBlocks((list) => [...list, blankBlock('paragraph')])}>Add paragraph</Button>
-            <Button variant="secondary" size="sm" onClick={() => setBlocks((list) => [...list, blankBlock('quote')])}>Add quote</Button>
-            <Button variant="secondary" size="sm" onClick={() => setBlocks((list) => [...list, blankBlock('image')])}>Add image</Button>
+            {BLOCKS.map(({ type, label, icon: Icon }) => (
+              <Button key={type} variant="secondary" size="sm" onClick={() => setBlocks((list) => [...list, blankBlock(type)])}><Icon size={15} aria-hidden="true" />{label}</Button>
+            ))}
           </div>
         </section>
 
@@ -249,28 +250,34 @@ export default function ManageNews() {
             {busy ? 'Saving...' : editing ? 'Save changes' : 'Publish article'}
           </Button>
         </div>
-      </Card>
+      </form>
 
-      <section className="space-y-3">
-        <h2 className="font-display text-xl font-black uppercase tracking-tight">Published articles</h2>
+      <section aria-labelledby="news-published" className="space-y-3">
+        <h2 id="news-published" className="eyebrow">Published articles</h2>
         {loadingNews && !newsResp && <Skeleton className="h-20 w-full" />}
         {newsError && <Notice tone="error">Could not load the articles. <Button variant="quiet" size="sm" onClick={refetchNews}>Try again</Button></Notice>}
-        {!loadingNews && !newsError && articles.length === 0 && <EmptyState title="No articles yet">Write the first one above.</EmptyState>}
-        {articles.map((article) => (
-          <Card key={article.id} className="flex items-center gap-4 p-3 sm:p-4">
-            {article.image_url
-              ? <img src={article.image_url} alt="" className="h-14 w-20 shrink-0 rounded-ctl object-cover" />
-              : <div aria-hidden="true" className="h-14 w-20 shrink-0 rounded-ctl bg-raise" />}
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{article.title}</p>
-              <p className="text-sm text-mut">{article.category} · {new Date(article.date).toLocaleDateString()}</p>
-            </div>
-            <div className="flex shrink-0 gap-1">
-              <Button variant="secondary" size="sm" aria-label={`Edit ${article.title}`} onClick={() => startEdit(article)}>Edit</Button>
-              {canDelete && <Button variant="quiet" size="sm" aria-label={`Delete ${article.title}`} onClick={() => handleDelete(article)}>Delete</Button>}
-            </div>
-          </Card>
-        ))}
+        {!loadingNews && !newsError && articles.length === 0 && <div className="flex flex-col items-start gap-2 rounded-card border border-dashed border-line p-6 text-sm text-mut">
+          <Newspaper size={26} aria-hidden="true" />
+          <p className="font-semibold text-ink">No articles yet</p>
+          Write the first one and it appears in News as soon as it is saved.
+        </div>}
+        {articles.length > 0 && <ul className="glass divide-y divide-line/70 rounded-card px-2">
+          {articles.map((article) => (
+            <li key={article.id} className="group flex items-center gap-3 p-2.5">
+              {article.image_url
+                ? <img src={article.image_url} alt="" className="h-12 w-16 shrink-0 rounded-[10px] object-cover grayscale transition duration-300 group-hover:grayscale-0" />
+                : <div aria-hidden="true" className="flex h-12 w-16 shrink-0 items-center justify-center rounded-[10px] bg-raise text-mut"><Newspaper size={18} /></div>}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-ink">{article.title}</p>
+                <p className="truncate text-xs text-mut">{article.category} · {new Date(article.date).toLocaleDateString()}</p>
+              </div>
+              <div className="flex shrink-0">
+                <Button variant="quiet" size="sm" className="px-3" aria-label={`Edit ${article.title}`} onClick={() => startEdit(article)}><Pencil size={15} aria-hidden="true" /></Button>
+                {canDelete && <Button variant="quiet" size="sm" className="px-3 text-live" aria-label={`Delete ${article.title}`} onClick={() => handleDelete(article)}><Trash2 size={15} aria-hidden="true" /></Button>}
+              </div>
+            </li>
+          ))}
+        </ul>}
       </section>
     </div>
   );
