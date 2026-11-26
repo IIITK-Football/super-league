@@ -51,9 +51,9 @@ function Stat({ to, icon: Icon, label, value, note, live }) { // eslint-disable-
       <span className="flex items-center justify-between">
         <span className="flex min-w-0 items-center gap-2.5">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink/[0.07] text-ink"><Icon size={17} aria-hidden="true" /></span>
-          <span className="eyebrow truncate">{label}</span>
+          <span className="truncate text-[10px] font-extrabold uppercase leading-tight tracking-[0.12em] text-mut sm:text-[11px] sm:tracking-[0.18em]">{label}</span>
         </span>
-        <ArrowUpRight size={16} aria-hidden="true" className="text-mut transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+        <ArrowUpRight size={16} aria-hidden="true" className="hidden text-mut transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 sm:block" />
       </span>
       <span className="flex items-end gap-3">
         <span className="chrome font-display text-4xl tabular-nums sm:text-5xl leading-none text-ink">{value === null ? '-' : <NumberTicker value={value} />}</span>
@@ -113,7 +113,7 @@ export function Overview() {
         </>}
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <section aria-labelledby="ov-matches" className="glass rounded-card p-5">
           <div className="flex items-center justify-between">
             <h2 id="ov-matches" className="font-display text-2xl text-ink">This week</h2>

@@ -162,7 +162,7 @@ export function Home() {
         )}
 
         {(hero || table.length > 0) && (
-          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
             {hero ? <section aria-label={HERO_LABEL[hero.kind]}><HeroMatch match={hero.match} detail={detail} /></section> : <div className="hidden lg:block" />}
             {table.length > 0 && (
               <section className="space-y-3">
