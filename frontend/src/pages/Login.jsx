@@ -1,10 +1,11 @@
 /* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useEffect, useState } from 'react';
+import { Mail, Lock } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { roleHome } from '../lib/authApi';
 import { TurnstileWidget, turnstileSiteKey } from '../components/TurnstileWidget';
-import { Button, Field, Notice } from '../components/ui';
+import { Button, Field, Notice, TextInput } from '../components/ui';
 
 // The Super League mark, drawn in the ink colour through a mask of the logo file.
 const MARK_MASK = {
@@ -126,25 +127,13 @@ export function Login() {
       )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
-        <Field
-          label="College email"
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="name@iiitkottayam.ac.in"
-          required
-        />
+        <Field label="College email">
+          {(p) => <TextInput {...p} icon={Mail} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@iiitkottayam.ac.in" required />}
+        </Field>
         {mode !== 'reset' && (
-          <Field
-            label="Password"
-            type="password"
-            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            hint={mode === 'signup' ? 'At least 8 characters, and not your email address.' : undefined}
-            required
-          />
+          <Field label="Password" hint={mode === 'signup' ? 'At least 8 characters, and not your email address.' : undefined}>
+            {(p) => <TextInput {...p} icon={Lock} type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={(e) => setPassword(e.target.value)} required />}
+          </Field>
         )}
         <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
         <button type="submit" disabled={busy || loading} className={PILL}>

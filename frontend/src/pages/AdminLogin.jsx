@@ -1,12 +1,13 @@
 /* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Mail, KeyRound } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { COLLEGE_EMAIL_MESSAGE, isCollegeEmail } from '../lib/authRules';
 import { friendly, roleHome } from '../lib/authApi';
 import { appRoles } from '../context/AuthContext';
 import { TurnstileWidget, turnstileSiteKey } from '../components/TurnstileWidget';
-import { Field, Notice } from '../components/ui';
+import { Field, Notice, TextInput } from '../components/ui';
 
 // The Super League mark, drawn in the ink colour through a mask of the logo file.
 const MARK_MASK = {
@@ -79,8 +80,12 @@ export function AdminLogin() {
       {error && <Notice tone="error" role="alert">{error}</Notice>}
 
       <form onSubmit={handleLogin} className="flex flex-col gap-5" noValidate>
-        <Field label="Admin email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <Field label="Passcode" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <Field label="Admin email">
+          {(p) => <TextInput {...p} icon={Mail} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />}
+        </Field>
+        <Field label="Passcode">
+          {(p) => <TextInput {...p} icon={KeyRound} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />}
+        </Field>
         <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
         <button type="submit" disabled={loading} className={PILL}>
           {loading ? 'Signing in...' : 'Sign in'}

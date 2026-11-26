@@ -1,9 +1,10 @@
 /* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { roleHome } from '../lib/authApi';
-import { Field, Notice, Skeleton } from '../components/ui';
+import { Field, Notice, Skeleton, TextInput, toast } from '../components/ui';
 
 // The Super League mark, drawn in the ink colour through a mask of the logo file.
 const MARK_MASK = {
@@ -48,9 +49,13 @@ export function ResetPassword() {
     const { error: err } = await completePasswordReset(password);
     setBusy(false);
     if (err) setError(err);
-    else navigate(roleHome(roles), { replace: true });
+    else {
+      toast({ title: 'Password saved', tone: 'success' });
+      navigate(roleHome(roles), { replace: true });
+    }
   };
 
+  const mismatch = confirm && password !== confirm ? 'The two passwords do not match.' : undefined;
   let body;
   if (loading) {
     body = <Skeleton className="h-40 w-full" />;
@@ -63,8 +68,12 @@ export function ResetPassword() {
   } else {
     body = (
       <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
-        <Field label="New password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} hint="At least 8 characters, and not your email address." required />
-        <Field label="Confirm password" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+        <Field label="New password" hint="At least 8 characters, and not your email address.">
+          {(p) => <TextInput {...p} icon={Lock} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />}
+        </Field>
+        <Field label="Confirm password" error={mismatch}>
+          {(p) => <TextInput {...p} icon={Lock} type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />}
+        </Field>
         {error && <Notice tone="error" role="alert">{error}</Notice>}
         <button type="submit" disabled={busy} className={PILL}>
           {busy ? 'Saving...' : 'Save password'}

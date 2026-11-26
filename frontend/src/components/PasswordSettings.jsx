@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Lock, KeyRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Button, Field, Notice } from './ui';
+import { Button, Field, Notice, TextInput, toast } from './ui';
 
 // Lets a signed-in user (including one who signed in with Google) add or change a website
 // password on the same account. The Supabase user ID does not change. When Supabase asks for
@@ -33,6 +34,7 @@ export function PasswordSettings() {
     const { error: err, needsReauth } = needsCode ? await savePassword(password, code) : await savePassword(password);
     if (!err) {
       setNotice('Password saved. You can now sign in with your college email and this password.');
+      toast({ title: 'Password saved', tone: 'success' });
       setPassword('');
       setConfirm('');
       setCode('');
@@ -60,11 +62,17 @@ export function PasswordSettings() {
         <h2 className="font-display text-2xl text-ink">Website password</h2>
         <p className="text-sm text-mut">Add a password to sign in with your college email as well as Google. It stays on this same account.</p>
       </div>
-      <Field label="New password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} hint="At least 8 characters, and not your email address." required />
-      <Field label="Confirm new password" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+      <Field label="New password" hint="At least 8 characters, and not your email address.">
+        {(p) => <TextInput {...p} icon={Lock} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />}
+      </Field>
+      <Field label="Confirm new password" error={confirm && password !== confirm ? 'The two passwords do not match.' : undefined}>
+        {(p) => <TextInput {...p} icon={Lock} type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />}
+      </Field>
       {needsCode && (
         <div className="flex flex-col gap-2">
-          <Field label="Code from your email" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required />
+          <Field label="Code from your email">
+            {(p) => <TextInput {...p} icon={KeyRound} inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required />}
+          </Field>
           <Button variant="quiet" size="sm" onClick={handleSendNewCode} disabled={busy} className="self-start">Send a new code</Button>
         </div>
       )}
