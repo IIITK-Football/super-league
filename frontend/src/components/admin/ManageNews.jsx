@@ -188,7 +188,7 @@ export default function ManageNews() {
   const blockIcon = { paragraph: Pilcrow, quote: Quote, image: ImagePlus };
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
       <form id="write-news" onSubmit={handleSubmit} className="glass scroll-mt-28 space-y-6 rounded-card p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-display text-2xl text-ink">{editing ? `Edit "${editing.title}"` : 'New article'}</h2>

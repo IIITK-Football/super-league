@@ -149,7 +149,7 @@ export default function ScheduleMatches() {
           placeholder="No seasons yet" options={seasons.map((x) => ({ value: x.id, label: `${x.name}${x.is_current ? ' (current)' : ''}` }))} />}</Field>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:items-start">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:items-start">
         <section id="add-fixture" aria-labelledby="add-fixture-heading" className="glass scroll-mt-28 space-y-5 rounded-card p-5">
           <div className="space-y-1">
             <h2 id="add-fixture-heading" className="font-display text-2xl text-ink">Schedule a match</h2>
@@ -195,10 +195,11 @@ export default function ScheduleMatches() {
               {fixtures.map((m) => (
                 <li key={m.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap">
                   <div className="w-24 shrink-0 text-xs tabular-nums text-mut">{formatKickoff(m.date) || 'Not set'}</div>
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    {crestOf(m.home_team_id)}
-                    <span className="min-w-0 truncate text-sm font-black uppercase tracking-tight text-ink">{m.home_team_name} vs {m.away_team_name}</span>
-                    {crestOf(m.away_team_id)}
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    {[[m.home_team_id, m.home_team_name], [m.away_team_id, m.away_team_name]].map(([id, name]) => (
+                      <span key={id} className="flex min-w-0 items-center gap-2.5">{crestOf(id)}<span className="min-w-0 truncate text-sm font-black uppercase tracking-tight text-ink">{name}</span></span>
+                    ))}
+                    <span className="sr-only">{m.home_team_name} vs {m.away_team_name}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-mut">
                     {m.status === 'live' && <Pill tone="live">Live</Pill>}

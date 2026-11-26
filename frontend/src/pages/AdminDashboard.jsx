@@ -72,13 +72,15 @@ export function AdminDashboard({ toolId = 'overview' }) { // eslint-disable-line
   }, [location.hash]);
 
   if (!current || !allows(current, roles)) return null;
+  // One tool (an editor, a captain): nothing to navigate between, so no sidebar.
+  const solo = items.length === 1;
   const toggleRail = () => setRail((value) => { saveRail(!value); return !value; });
   const Icon = current.icon;
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="md:grid md:grid-cols-[auto_minmax(0,1fr)] md:gap-6 lg:gap-8">
-        <aside aria-label="Workspace" className={cn('glass sticky top-24 hidden max-h-[calc(100vh-7rem)] flex-col self-start overflow-y-auto rounded-card p-2 transition-[width] duration-200 md:flex',
+      <div className={cn(!solo && 'md:grid md:grid-cols-[auto_minmax(0,1fr)] md:gap-6 lg:gap-8')}>
+        {!solo && <aside aria-label="Workspace" className={cn('glass sticky top-24 hidden max-h-[calc(100vh-7rem)] flex-col self-start overflow-y-auto rounded-card p-2 transition-[width] duration-200 md:flex',
           rail ? 'w-[60px]' : 'w-[60px] lg:w-60')}>
           <nav aria-label="Workspace tools" className="flex-1">
             <NavList items={items} currentId={current.id} mode={rail ? 'rail' : 'auto'} highlight="workspace-active" />
@@ -87,16 +89,16 @@ export function AdminDashboard({ toolId = 'overview' }) { // eslint-disable-line
             className="mt-3 hidden min-h-11 items-center justify-center gap-2 rounded-ctl text-xs font-bold uppercase tracking-[0.16em] text-mut transition-colors hover:bg-ink/[0.06] hover:text-ink lg:flex">
             {rail ? <PanelLeftOpen size={18} aria-hidden="true" /> : <><PanelLeftClose size={18} aria-hidden="true" /><span>Collapse</span></>}
           </button>
-        </aside>
+        </aside>}
 
         <div className="min-w-0 space-y-8">
-          <button type="button" onClick={() => setSheet(true)} aria-haspopup="dialog"
+          {!solo && <button type="button" onClick={() => setSheet(true)} aria-haspopup="dialog"
             className="glass flex min-h-12 w-full items-center gap-3 rounded-pill px-4 text-left text-sm font-bold text-ink md:hidden">
             <Icon size={18} aria-hidden="true" />
             <span className="flex-1 truncate">{current.label}</span>
             <span className="eyebrow">Tools</span>
             <ChevronDown size={16} aria-hidden="true" className="text-mut" />
-          </button>
+          </button>}
           <Sheet open={sheet} onClose={() => setSheet(false)} title="Workspace">
             <nav aria-label="Workspace tools" className="pb-2">
               <NavList items={items} currentId={current.id} mode="full" highlight="workspace-active-sheet" onPick={() => setSheet(false)} />

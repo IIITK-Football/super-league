@@ -2,7 +2,7 @@
 // Group: frontend-components. The workspace sidebar offers each role only what it owns, each tool at its own address.
 // A dictator gets the overview and every tool (Teams and rosters and Divisions and seasons included, Captains and
 // Scorers for assignments); a scorer gets Live matches only; a scorer who is also an editor and a captain gets just
-// their own three tools, never a management tool; a captain, an editor and a normal user cannot open /dictator; the
+// their own three tools, never a management tool; with one tool there is no sidebar; a captain, an editor and a normal user cannot open /dictator; the
 // retired legacy admin value is nothing. Row level security refuses anyone else's writes anyway. No Players tool.
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -36,7 +36,8 @@ describe('workspace by role', () => {
     state.roles = ['scorer'];
     await renderWorkspace('/dictator');
     expect(await screen.findByText('LiveController panel')).toBeTruthy();
-    expect(navNames()).toEqual(['live matches']);
+    expect(navNames()).toEqual([]); // one tool: no sidebar
+    expect(screen.queryByRole('heading', { name: 'Fixtures' })).toBeNull();
   });
 
   it('gives a scorer who is also a captain and editor their own tools only: no role implies another', async () => {
@@ -46,16 +47,17 @@ describe('workspace by role', () => {
     expect(navNames()).toEqual(['live matches', 'my team', 'news']);
   });
 
-  it('opens the newsletter for an editor and the team builder for a captain, each alone in the sidebar', async () => {
+  it('opens the newsletter for an editor and the team builder for a captain, alone and without a sidebar', async () => {
     state.roles = ['editor'];
     await renderWorkspace('/editor');
     expect(await screen.findByText('ManageNews panel')).toBeTruthy();
-    expect(navNames()).toEqual(['news']);
+    expect(navNames()).toEqual([]);
+    expect(screen.queryByText('ManageScorers panel')).toBeNull();
     cleanup();
     state.roles = ['captain'];
     await renderWorkspace('/team-builder');
     expect(await screen.findByText('TeamBuilder panel')).toBeTruthy();
-    expect(navNames()).toEqual(['my team']);
+    expect(navNames()).toEqual([]);
   });
 
   it('keeps a captain, an editor, a normal user and the legacy admin value out of /dictator', async () => {
