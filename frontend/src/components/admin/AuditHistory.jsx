@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { History, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { Button, Card, Field, Notice, Pill } from '../ui';
 
 // Dictator view of the append-only audit history: who changed what, when, in which table, with a safe summary of
 // the change. Reads go straight to the Data API; row level security returns rows to dictators only, so anyone else
@@ -54,9 +54,6 @@ export function describeActor(entry, labels) {
   return `System (${entry.actor_role})`;
 }
 
-const inputClass = 'w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-[#d9ff4a]/60';
-const labelClass = 'text-[10px] font-black uppercase tracking-widest text-zinc-500';
-const ghostButton = 'flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/5 disabled:opacity-40';
 
 export default function AuditHistory() {
   const [table, setTable] = useState('');
@@ -120,48 +117,45 @@ export default function AuditHistory() {
 
   useEffect(() => { load(); }, [table, actor]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div className="space-y-6 p-6">
+  return <div className="space-y-6">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><History size={20} /> Audit history</h2>
-        <p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Who changed configuration, roles, captain and scorer assignments, matches and rosters, and when. The history cannot be edited.</p>
+      <div className="space-y-1">
+        <h2 className="font-display text-2xl font-bold text-ink">Audit history</h2>
+        <p className="text-sm text-mut">Who changed configuration, roles, captain and scorer assignments, matches and rosters, and when. The history cannot be edited.</p>
       </div>
-      <button type="button" onClick={() => load()} disabled={loading} className={ghostButton}><RefreshCw size={13} /> Refresh</button>
+      <Button variant="secondary" size="sm" onClick={() => load()} disabled={loading}>Refresh</Button>
     </div>
 
-    <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-5 md:grid-cols-2">
-      <label className={labelClass}>Table
-        <select aria-label="Table" value={table} onChange={(e) => setTable(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">All tables</option>
-          {AUDITED_TABLES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-      </label>
-      <label className={labelClass}>Changed by
-        <select aria-label="Changed by" value={actor} onChange={(e) => setActor(e.target.value)} disabled={actorsState !== 'ready'} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">{actorsState === 'loading' ? 'Loading people...' : 'Anyone'}</option>
-          {actors.map((a) => <option key={a.actor_id} value={a.actor_id}>{a.label}</option>)}
-        </select>
-        {actorsState === 'error' && <span role="status" className="mt-1 block normal-case tracking-normal text-amber-300">The people list could not be loaded, so the history cannot be filtered by person. <button type="button" onClick={loadActors} className="underline">Try again</button></span>}
-      </label>
-    </div>
+    <Card className="grid gap-4 md:grid-cols-2">
+      <Field as="select" label="Table" aria-label="Table" value={table} onChange={(e) => setTable(e.target.value)}>
+        <option value="">All tables</option>
+        {AUDITED_TABLES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+      </Field>
+      <Field as="select" label="Changed by" aria-label="Changed by" value={actor} onChange={(e) => setActor(e.target.value)} disabled={actorsState !== 'ready'}
+      >
+        <option value="">{actorsState === 'loading' ? 'Loading people...' : 'Anyone'}</option>
+        {actors.map((a) => <option key={a.actor_id} value={a.actor_id}>{a.label}</option>)}
+      </Field>
+      {actorsState === 'error' && <Notice tone="warning" role="status" className="md:col-span-2">
+        The people list could not be loaded, so the history cannot be filtered by person. <Button variant="quiet" size="sm" onClick={loadActors}>Try again</Button>
+      </Notice>}
+    </Card>
 
-    {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
+    {error && <Notice tone="error" role="alert">{error}</Notice>}
 
-    {loading && !entries.length ? <p className="text-zinc-500">Loading the audit history...</p> : !entries.length && !error
-      ? <p className="text-zinc-500">No changes recorded{table || actor ? ' for this filter' : ''} yet.</p>
-      : <ol aria-label="Audit entries" className="space-y-2">{entries.map((e) => <li key={e.id} className="rounded-xl border border-white/5 bg-black/30 p-3 text-sm">
+    {loading && !entries.length ? <p className="text-sm text-mut">Loading the audit history...</p> : !entries.length && !error
+      ? <p className="text-sm text-mut">No changes recorded{table || actor ? ' for this filter' : ''} yet.</p>
+      : <ol aria-label="Audit entries" className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surf">{entries.map((e) => <li key={e.id} className="p-4 text-sm">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <time dateTime={e.occurred_at} className="text-xs tabular-nums text-zinc-400">{new Date(e.occurred_at).toLocaleString()}</time>
-          <span className="font-bold">{describeActor(e, labels)}</span>
-          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-zinc-300">{e.action}</span>
-          <span className="text-zinc-300">{tableLabel(e.table_name)}</span>
-          {e.record_id && <span className="font-mono text-[10px] text-zinc-500">{e.record_id}</span>}
+          <time dateTime={e.occurred_at} className="tabular-nums text-mut">{new Date(e.occurred_at).toLocaleString()}</time>
+          <span className="font-semibold text-ink">{describeActor(e, labels)}</span>
+          <Pill>{e.action}</Pill>
+          <span className="text-ink">{tableLabel(e.table_name)}</span>
+          {e.record_id && <span className="font-mono text-xs text-mut">{e.record_id}</span>}
         </div>
-        <ul className="mt-1 space-y-0.5 font-mono text-xs text-zinc-400">{summarize(e).map((line) => <li key={line}>{line}</li>)}</ul>
+        <ul className="mt-2 space-y-0.5 font-mono text-xs text-mut">{summarize(e).map((line) => <li key={line}>{line}</li>)}</ul>
       </li>)}</ol>}
 
-    {more && <button type="button" onClick={() => load({ append: true })} disabled={loading} className={ghostButton}>
-      {loading ? <Loader2 size={13} className="animate-spin" /> : null} Show older changes
-    </button>}
+    {more && <div><Button variant="secondary" onClick={() => load({ append: true })} disabled={loading}>{loading ? 'Loading...' : 'Show older changes'}</Button></div>}
   </div>;
 }

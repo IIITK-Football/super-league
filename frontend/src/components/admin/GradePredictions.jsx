@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { API_BASE_URL } from '../../lib/api';
-import { Calculator, Loader2, CheckCircle2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { DivisionSwitch } from './DivisionSwitch';
-import { Notice, useConfirm } from '../ui';
+import { Button, Card, EmptyState, Notice, Pill, useConfirm } from '../ui';
+import { formatKickoff } from './adminFormat';
 
 // Grading works on one season: the completed matches of the division's current season (the list's scope). Regrading
 // sends that season with the division, so it never touches another season's points.
@@ -85,115 +85,58 @@ export default function GradePredictions() {
     }
   };
 
-  // Reusable Match Row Component
-  const MatchRow = ({ m, isGraded }) => (
-    <div className={`border rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${isGraded ? (m.needs_regrade ? 'bg-amber-500/5 border-amber-500/30' : 'bg-black/20 border-white/5 opacity-70') : 'bg-black/50 border-white/10 hover:bg-white/5'}`}>
-      <div>
-        <div className="flex items-center gap-3 mb-1">
-          <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-black tracking-widest ${isGraded ? 'bg-zinc-500/20 text-zinc-400' : 'bg-green-500/20 text-green-400'}`}>
-            {isGraded ? 'Graded' : 'Action Required'}
-          </span>
-          {isGraded && m.needs_regrade && (
-            <span className="text-[10px] px-2 py-0.5 rounded uppercase font-black tracking-widest bg-amber-500/20 text-amber-300" title="The match events changed after grading">Needs regrade</span>
-          )}
-          {/* Fixed the Invalid Date bug here! */}
-          <span className="text-xs text-zinc-500 font-mono">
-            {m.date ? new Date(m.date).toLocaleDateString() : 'Date TBD'}
-          </span>
+  // One completed match: its result, its grading state and the action.
+  const matchRow = (m, isGraded) => (
+    <Card key={m.id} className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="min-w-0 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-mut">
+          <Pill tone={isGraded ? 'neutral' : 'acc'}>{isGraded ? 'Graded' : 'To grade'}</Pill>
+          {isGraded && m.needs_regrade && <Pill tone="live">Needs regrade</Pill>}
+          <span>{formatKickoff(m.date) || 'Date not set'}</span>
         </div>
-        <h3 className="text-lg font-black text-white">
-          {m.home_team_name} <span className={isGraded ? "text-zinc-500 mx-1" : "text-[#E8C881] mx-1"}>{m.home_score} - {m.away_score}</span> {m.away_team_name}
-        </h3>
+        <p className="font-semibold text-ink">
+          {m.home_team_name} <span className="font-display tabular-nums text-ink">{m.home_score} – {m.away_score}</span> {m.away_team_name}
+        </p>
       </div>
-
-      <button 
-        onClick={() => handleGrade(m.id, `${m.home_team_name} vs ${m.away_team_name}`)}
-        disabled={gradingId !== null}
-        className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-black uppercase tracking-widest text-xs transition-colors disabled:opacity-50 min-w-[180px] ${
-          isGraded 
-            ? 'bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10' 
-            : 'bg-[#E8C881] hover:bg-[#F9D992] text-black'
-        }`}
-      >
-        {gradingId === m.id ? (
-          <><Loader2 size={16} className="animate-spin" /> Processing...</>
-        ) : isGraded ? (
-          <><RefreshCw size={16} /> Re-Grade</>
-        ) : (
-          <><Calculator size={16} /> Grade Match</>
-        )}
-      </button>
-    </div>
+      <Button variant={isGraded ? 'secondary' : 'primary'} disabled={gradingId !== null} className="md:min-w-44"
+        onClick={() => handleGrade(m.id, `${m.home_team_name} vs ${m.away_team_name}`)}>
+        {gradingId === m.id ? 'Processing...' : isGraded ? 'Regrade match' : 'Grade match'}
+      </Button>
+    </Card>
   );
 
   return (
-    <div className="p-6 space-y-8 animate-in fade-in duration-500 pb-20">
-      
-      <div className="flex justify-center mb-4">
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <DivisionSwitch value={division} onChange={setDivision} />
       </div>
 
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
-        <div className="flex items-center gap-3 mb-8 border-b border-white/10 pb-4">
-          <Calculator className="text-[#E8C881]" size={24} />
-          <div className="flex-1">
-            <h2 className="text-xl font-black uppercase tracking-widest text-white">Grade Fantasy Predictions</h2>
-            <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest mt-1">Run point calculations for completed matches</p>
+      <section aria-labelledby="grading-heading" className="space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <h2 id="grading-heading" className="font-display text-2xl font-bold text-ink">Grade fantasy predictions</h2>
+            <p className="text-sm text-mut">Work out points for completed matches. Grading uses the current season only.</p>
           </div>
-          <button
-            onClick={handleRegradeAll}
-            disabled={isRegradingAll || !seasonId}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
-          >
-            {isRegradingAll ? (
-              <><Loader2 size={14} className="animate-spin" /> Processing...</>
-            ) : (
-              <><AlertTriangle size={14} /> Regrade season</>
-            )}
-          </button>
+          <Button variant="secondary" onClick={handleRegradeAll} disabled={isRegradingAll || !seasonId} className="text-live">
+            {isRegradingAll ? 'Processing...' : 'Regrade season'}
+          </Button>
         </div>
 
-        {notice && <div className="mb-6"><Notice tone={notice.tone}>{notice.text}</Notice></div>}
-        {fetchLoading ? (
-           <div className="flex justify-center py-10"><Loader2 className="animate-spin text-zinc-500" /></div>
-        ) : matches.length === 0 ? (
-          <div className="text-center py-12 border border-white/5 rounded-2xl bg-black/40">
-            <span className="text-zinc-500 font-bold uppercase tracking-widest text-sm">No completed matches found.</span>
-          </div>
-        ) : (
-          <div className="space-y-10">
-            
-            {/* Section 1: Pending */}
-            <div>
-              <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                Pending Grades ({pendingMatches.length})
-              </h3>
-              {pendingMatches.length === 0 ? (
-                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest border border-dashed border-white/5 p-4 rounded-xl text-center">All caught up!</p>
-              ) : (
-                <div className="space-y-4">
-                  {pendingMatches.map(m => <MatchRow key={m.id} m={m} isGraded={false} />)}
-                </div>
-              )}
-            </div>
-
-            {/* Section 2: Already Graded */}
-            {gradedMatches.length > 0 && (
-              <div>
-                <h3 className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <CheckCircle2 size={16} className="text-green-500" />
-                  Already Graded ({gradedMatches.length})
-                </h3>
-                <div className="space-y-4">
-                  {gradedMatches.map(m => <MatchRow key={m.id} m={m} isGraded={true} />)}
-                </div>
+        {notice && <Notice tone={notice.tone} role={notice.tone === 'error' ? 'alert' : 'status'}>{notice.text}</Notice>}
+        {fetchLoading ? <p className="text-sm text-mut">Loading completed matches...</p>
+          : matches.length === 0 ? <EmptyState title="No completed matches yet">Matches appear here once they have a final result.</EmptyState>
+            : <div className="space-y-8">
+              <div className="space-y-3">
+                <h3 className="font-display text-xl font-bold text-ink">To grade ({pendingMatches.length})</h3>
+                {pendingMatches.length === 0 ? <p className="text-sm text-mut">Every completed match is graded.</p>
+                  : <div className="space-y-3">{pendingMatches.map((m) => matchRow(m, false))}</div>}
               </div>
-            )}
-
-          </div>
-        )}
-      </div>
+              {gradedMatches.length > 0 && <div className="space-y-3">
+                <h3 className="font-display text-xl font-bold text-ink">Graded ({gradedMatches.length})</h3>
+                <div className="space-y-3">{gradedMatches.map((m) => matchRow(m, true))}</div>
+              </div>}
+            </div>}
+      </section>
     </div>
   );
 }
