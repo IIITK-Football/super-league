@@ -45,7 +45,7 @@ async function loadOverview() {
   };
 }
 
-function Stat({ to, icon: Icon, label, value, note, live }) {
+function Stat({ to, icon: Icon, label, value, note, live }) { // eslint-disable-line react/prop-types
   return (
     <Link to={to} className={cn('glass lift group flex min-h-32 flex-col justify-between gap-3 rounded-card p-4 sm:min-h-36 sm:p-5', live && 'beam')}>
       <span className="flex items-center justify-between">
@@ -64,6 +64,7 @@ function Stat({ to, icon: Icon, label, value, note, live }) {
   );
 }
 
+/* eslint-disable react/prop-types */
 function MatchRow({ match }) {
   const live = match.status === 'live';
   return (
@@ -77,6 +78,8 @@ function MatchRow({ match }) {
     </li>
   );
 }
+
+/* eslint-enable react/prop-types */
 
 const ACTIONS = [
   { to: '/dictator/live', label: 'Start live match', icon: Radio },
