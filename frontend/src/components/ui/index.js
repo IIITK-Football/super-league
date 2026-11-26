@@ -1,4 +1,7 @@
 export { Button } from './Button';
+export { ConfirmDialog } from './ConfirmDialog';
+export { ConfirmProvider } from './ConfirmProvider';
+export { useConfirm } from './useConfirm';
 export { Menu, MenuTrigger, MenuContent, MenuItem, MenuSeparator } from './Menu';
 export { Popover, PopoverTrigger, PopoverContent } from './Popover';
 export { buttonClasses } from './buttonClasses';

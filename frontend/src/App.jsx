@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LeagueProvider } from './context/LeagueContext';
+import { ConfirmProvider } from './components/ui';
 import { AppShell } from './components/shell/AppShell';
 import { Loader } from './components/Loader';
 import { useLocation } from 'react-router-dom';
@@ -71,6 +72,7 @@ function App() {
   return (
     <AuthProvider>
       <LeagueProvider>
+        <ConfirmProvider>
         <BrowserRouter>
         <GlobalAuthRedirect />
           <Routes>
@@ -112,6 +114,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </BrowserRouter>
+        </ConfirmProvider>
       </LeagueProvider>
     </AuthProvider>
   );
