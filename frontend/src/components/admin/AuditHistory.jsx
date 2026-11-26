@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Button, Card, Field, Notice, Pill } from '../ui';
+import { History, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Button, Combobox, Field, Notice, Select } from '../ui';
+
+const ACTION_ICON = { insert: Plus, update: Pencil, delete: Trash2 };
 
 // Dictator view of the append-only audit history: who changed what, when, in which table, with a safe summary of
 // the change. Reads go straight to the Data API; row level security returns rows to dictators only, so anyone else
@@ -118,43 +121,41 @@ export default function AuditHistory() {
   useEffect(() => { load(); }, [table, actor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <div className="space-y-6">
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div className="space-y-1">
-        <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Audit history</h2>
-        <p className="text-sm text-mut">Who changed configuration, roles, captain and scorer assignments, matches and rosters, and when. The history cannot be edited.</p>
-      </div>
-      <Button variant="secondary" size="sm" onClick={() => load()} disabled={loading}>Refresh</Button>
-    </div>
-
-    <Card className="grid gap-4 md:grid-cols-2">
-      <Field as="select" label="Table" aria-label="Table" value={table} onChange={(e) => setTable(e.target.value)}>
-        <option value="">All tables</option>
-        {AUDITED_TABLES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-      </Field>
-      <Field as="select" label="Changed by" aria-label="Changed by" value={actor} onChange={(e) => setActor(e.target.value)} disabled={actorsState !== 'ready'}
-      >
-        <option value="">{actorsState === 'loading' ? 'Loading people...' : 'Anyone'}</option>
-        {actors.map((a) => <option key={a.actor_id} value={a.actor_id}>{a.label}</option>)}
-      </Field>
-      {actorsState === 'error' && <Notice tone="warning" role="status" className="md:col-span-2">
+    <div className="glass grid gap-4 rounded-card p-5 md:grid-cols-[1fr_1fr_auto] md:items-end">
+      <Field label="Table">{(p) => <Select {...p} aria-label="Table" value={table} onChange={setTable}
+        options={[{ value: '', label: 'All tables' }, ...AUDITED_TABLES]} />}</Field>
+      <Field label="Changed by">{(p) => <Combobox {...p} aria-label="Changed by" value={actor} onChange={setActor} disabled={actorsState !== 'ready'}
+        placeholder={actorsState === 'loading' ? 'Loading people...' : 'Anyone'} searchPlaceholder="Search people"
+        options={[{ value: '', label: 'Anyone' }, ...actors.map((a) => ({ value: a.actor_id, label: a.label }))]} />}</Field>
+      <Button variant="secondary" onClick={() => load()} disabled={loading}><RefreshCw size={15} aria-hidden="true" />Refresh</Button>
+      {actorsState === 'error' && <Notice tone="warning" role="status" className="md:col-span-3">
         The people list could not be loaded, so the history cannot be filtered by person. <Button variant="quiet" size="sm" onClick={loadActors}>Try again</Button>
       </Notice>}
-    </Card>
+    </div>
 
     {error && <Notice tone="error" role="alert">{error}</Notice>}
 
     {loading && !entries.length ? <p className="text-sm text-mut">Loading the audit history...</p> : !entries.length && !error
-      ? <p className="text-sm text-mut">No changes recorded{table || actor ? ' for this filter' : ''} yet.</p>
-      : <ol aria-label="Audit entries" className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surf">{entries.map((e) => <li key={e.id} className="p-4 text-sm">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <time dateTime={e.occurred_at} className="tabular-nums text-mut">{new Date(e.occurred_at).toLocaleString()}</time>
-          <span className="font-semibold text-ink">{describeActor(e, labels)}</span>
-          <Pill>{e.action}</Pill>
-          <span className="text-ink">{tableLabel(e.table_name)}</span>
-          {e.record_id && <span className="font-mono text-xs text-mut">{e.record_id}</span>}
+      ? <div className="flex flex-col items-start gap-2 rounded-card border border-dashed border-line p-6 text-sm text-mut">
+          <History size={26} aria-hidden="true" />
+          No changes recorded{table || actor ? ' for this filter' : ''} yet.
         </div>
-        <ul className="mt-2 space-y-0.5 font-mono text-xs text-mut">{summarize(e).map((line) => <li key={line}>{line}</li>)}</ul>
-      </li>)}</ol>}
+      : <ol aria-label="Audit entries" className="glass divide-y divide-line/70 rounded-card px-2">{entries.map((e) => {
+        const Icon = ACTION_ICON[e.action] ?? History;
+        return <li key={e.id} className="flex gap-3 p-3 text-sm">
+          <span aria-hidden="true" className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-ink/[0.07] text-ink"><Icon size={15} /></span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="font-semibold text-ink">{describeActor(e, labels)}</span>
+              <span className="text-mut">{e.action}</span>
+              <span className="font-semibold text-ink">{tableLabel(e.table_name)}</span>
+              <time dateTime={e.occurred_at} className="ml-auto text-xs tabular-nums text-mut">{new Date(e.occurred_at).toLocaleString()}</time>
+            </div>
+            {e.record_id && <p className="font-mono text-xs text-mut/80">{e.record_id}</p>}
+            <ul className="mt-1.5 space-y-0.5 break-words font-mono text-xs text-mut">{summarize(e).map((line) => <li key={line}>{line}</li>)}</ul>
+          </div>
+        </li>;
+      })}</ol>}
 
     {more && <div><Button variant="secondary" onClick={() => load({ append: true })} disabled={loading}>{loading ? 'Loading...' : 'Show older changes'}</Button></div>}
   </div>;
