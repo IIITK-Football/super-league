@@ -183,7 +183,7 @@ export default function ManageNews() {
   const heroCurrent = heroFile ? null : editing?.image_url;
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 text-ink sm:px-6">
+    <div className="mx-auto w-full max-w-3xl space-y-8 bg-bg px-4 py-6 text-ink sm:px-6">
       <header className="space-y-1">
         <h1 className="font-display text-3xl font-bold">News</h1>
         <p className="text-mut">Write, edit and publish articles. Each one appears in News as soon as it is saved.</p>

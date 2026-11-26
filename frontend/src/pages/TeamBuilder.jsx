@@ -622,7 +622,7 @@ export function TeamBuilder() {
     </main>;
 
     const teamCard = <section className="flex flex-col gap-4 rounded-card bg-blk p-5 text-blkink sm:flex-row sm:items-center">
-        <Crest name={teamLabel(registration)} src={registration.team?.logo_url} color={registration.team?.team_color || undefined} size="lg" />
+        <Crest name={teamLabel(registration)} src={registration.team?.logo_url} color={registration.team?.team_color || undefined} size="lg" className="ring-2 ring-blkink" />
         <div className="min-w-0 flex-1">
             <p className="font-display text-3xl font-bold leading-tight">{teamLabel(registration)}</p>
             <p className="text-sm opacity-80">{registration.season?.division?.name} {registration.season?.name}</p>
