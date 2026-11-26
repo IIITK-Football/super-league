@@ -1,4 +1,6 @@
 export { Button } from './Button';
+export { Menu, MenuTrigger, MenuContent, MenuItem, MenuSeparator } from './Menu';
+export { Popover, PopoverTrigger, PopoverContent } from './Popover';
 export { buttonClasses } from './buttonClasses';
 export { Card } from './Card';
 export { Pill } from './Pill';
