@@ -27,6 +27,8 @@ export function Standings() {
   const { data: apiResponse, loading, error, retry } = useApi(endpoint);
 
   if (seasonScope.ready && seasonScope.division === division && !seasonScope.divisionRecord) {
+    // A failed lookup is not a missing division.
+    if (seasonScope.error) return <ErrorState message="The division could not be loaded." />;
     return (
       <EmptyState title="Division not found">
         There is no division called &quot;{divisionParam}&quot;. <Link className="font-semibold text-ink underline underline-offset-4" to="/super-league">Go to Super League</Link>
