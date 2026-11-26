@@ -16,9 +16,15 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const supabase = await getSupabaseClient(request); 
-    // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
-    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+    const supabase = await getSupabaseClient(request);
+    // D-04: at most three sequential rounds. Round 1: who is calling, and which season (?division=<slug>&season=<slug
+    // or id>; without a season, the division's current season).
+    const [{ data: { user } }, { data: isDictator }, scope] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.rpc('is_dictator'),
+      resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }),
+    ]);
+    if (!user) throw { status: 401, message: "Unauthorized: Please log in." };
 
     let query = supabase
       .from('matches')
@@ -44,28 +50,23 @@ export async function GET(request: Request) {
       query = query.in('status', statusArray);
     }
 
-    const { data, error } = await query.order('date', { ascending: true });
-
+    // Round 2: the season's matches and, for a dictator, the completed graded matches whose events changed after
+    // grading (they need a regrade).
+    const [{ data, error }, stale] = await Promise.all([
+      query.order('date', { ascending: true }),
+      isDictator ? supabase.rpc('matches_needing_regrade', { p_season: scope.season.id }) : Promise.resolve({ data: [] }),
+    ]);
     if (error) throw error;
+    const needsRegrade = new Set<string>(((stale as { data: unknown }).data ?? []) as string[]);
 
-    // The dashboard lists matches for scoring: a dictator sees them all, a scorer only the matches assigned to them
-    // (their season or one match, unexpired). Anyone else, and anyone not signed in, sees none.
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw { status: 401, message: "Unauthorized: Please log in." };
-    const { data: isDictator } = await supabase.rpc('is_dictator');
+    // Round 3: the dashboard lists matches for scoring. A dictator sees them all, a scorer only the matches assigned to
+    // them (their season or one match, unexpired). Anyone else sees none.
     let visible = data ?? [];
     if (!isDictator && visible.length > 0) {
       const { data: ids, error: idsError } = await supabase.rpc('scorable_match_ids', { p_ids: visible.map((m: any) => m.id) });
       if (idsError) throw idsError;
       const allowed = new Set<string>((ids ?? []) as string[]);
       visible = visible.filter((m: any) => allowed.has(m.id));
-    }
-
-    // Completed, graded matches whose events changed after grading need a regrade (dictators grade).
-    let needsRegrade = new Set<string>();
-    if (isDictator) {
-      const { data: stale } = await supabase.rpc('matches_needing_regrade', { p_season: scope.season.id });
-      needsRegrade = new Set<string>((stale ?? []) as string[]);
     }
 
     const formattedData = visible.map((m:any) => {

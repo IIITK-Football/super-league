@@ -1,5 +1,5 @@
 import { publicClient } from '@/lib/supabase/clients';
-import { scopeFromUrl, seasonTeamIds } from '@/lib/scope';
+import { scopeFromUrl } from '@/lib/scope';
 import { handleError } from '@/lib/errorHandler';
 
 export const revalidate = 0; 
@@ -10,21 +10,21 @@ export async function GET(request: Request) {
     // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
     const scope = await scopeFromUrl(supabase, request);
 
-    // 1. The teams entered in this season
-    const teamIds = await seasonTeamIds(supabase, scope.season.id);
-    const { data: teams, error: teamsError } = teamIds.length
-      ? await supabase.from('teams').select('id, name, short_name, logo_url').in('id', teamIds)
-      : { data: [] as { id: string; name: string; short_name: string | null; logo_url: string | null }[], error: null };
-
-    if (teamsError) throw teamsError;
-
-    // 2. Fetch ALL matches (Ordered by Date!) 
-    // This fixes the Form Bug AND gives us the Bracket schedule!
-    const { data: allMatches, error: matchesError } = await supabase
-      .from('matches')
-      .select('id, home_team_id, away_team_id, home_score, away_score, home_penalties, away_penalties, status, date, home:teams!home_team_id(name), away:teams!away_team_id(name)')
-      .eq('season_id', scope.season.id)
-      .order('date', { ascending: true }); // MUST BE ASCENDING FOR CORRECT FORM
+    // The season's teams and all its matches, read together (D-04: at most three sequential rounds).
+    const [entriesRes, matchesRes] = await Promise.all([
+      supabase.from('team_entries').select('team:teams(id, name, short_name, logo_url)').eq('season_id', scope.season.id),
+      // All matches, ordered by date: the form needs the order, and the bracket uses the schedule.
+      supabase
+        .from('matches')
+        .select('id, home_team_id, away_team_id, home_score, away_score, home_penalties, away_penalties, status, date, home:teams!home_team_id(name), away:teams!away_team_id(name)')
+        .eq('season_id', scope.season.id)
+        .order('date', { ascending: true }), // MUST BE ASCENDING FOR CORRECT FORM
+    ]);
+    if (entriesRes.error) throw entriesRes.error;
+    const teams = (entriesRes.data ?? [])
+      .map((e: any) => (Array.isArray(e.team) ? e.team[0] : e.team))
+      .filter(Boolean) as { id: string; name: string; short_name: string | null; logo_url: string | null }[];
+    const { data: allMatches, error: matchesError } = matchesRes;
 
     if (matchesError) throw matchesError;
 

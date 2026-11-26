@@ -6,7 +6,6 @@ import { resolveScope } from '@/lib/scope';
 
 export async function GET(request: Request) {
   try {
-    
     const supabase = requestClient(request);
 
     // The division whose flair is shown (?division=<slug>; default Super League).
@@ -18,19 +17,17 @@ export async function GET(request: Request) {
     if (error) throw error;
     const pointsByUser = new Map((ranked ?? []).map((r: any) => [r.user_id, r.points]));
     const rankedIds = (ranked ?? []).map((r: any) => r.user_id);
-    const { data: profileRows, error: profilesError } = rankedIds.length
-      ? await supabase.from('user_profiles').select('id, nickname, real_name').in('id', rankedIds)
-      : { data: [] as any[], error: null };
+    // The leaders' profiles and their flair for this division, read together (D-04: at most three rounds).
+    const [{ data: profileRows, error: profilesError }, { data: flairs, error: flairsError }] = rankedIds.length
+      ? await Promise.all([
+          supabase.from('user_profiles').select('id, nickname, real_name').in('id', rankedIds),
+          supabase.from('division_flairs').select('user_id, team_name').eq('division_id', scope.division.id).in('user_id', rankedIds),
+        ])
+      : [{ data: [] as any[], error: null }, { data: [] as { user_id: string; team_name: string }[], error: null }];
     if (profilesError) throw profilesError;
+    if (flairsError) throw flairsError;
     const profileById = new Map((profileRows ?? []).map((p: any) => [p.id, p]));
     const profiles = rankedIds.map((id: string) => ({ ...(profileById.get(id) ?? { id }), id, points: pointsByUser.get(id) ?? 0 }));
-
-    // 2. Each user's flair for this division
-    const ids = profiles.map((p: any) => p.id as string);
-    const { data: flairs, error: flairsError } = ids.length
-      ? await supabase.from('division_flairs').select('user_id, team_name').eq('division_id', scope.division.id).in('user_id', ids)
-      : { data: [] as { user_id: string; team_name: string }[], error: null };
-    if (flairsError) throw flairsError;
     const flairByUser = new Map((flairs ?? []).map((f) => [f.user_id, f.team_name]));
 
     const overall = profiles.map((p: any) => ({
