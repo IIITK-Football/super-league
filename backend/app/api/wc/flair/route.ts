@@ -2,19 +2,14 @@
 // profile. The narrow SL-025 fix: the caller is identified from their session token and the update runs as them, so row
 // level security allows only their own row. A body user_id other than the caller's is refused (403); the secret key is
 // no longer used. The request and response shapes are unchanged.
-import { createClient } from '@supabase/supabase-js';
-import { publishableKey, supabaseUrl } from '@/lib/supabase/keys';
+import { bearerToken, userClient } from '@/lib/supabase/clients';
 
 export async function PATCH(request: Request) {
   try {
-    const authorization = request.headers.get('Authorization') ?? '';
-    const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+    const token = bearerToken(request.headers.get('Authorization'));
     if (!token) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const supabase = createClient(supabaseUrl(), publishableKey(), {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
+    const supabase = userClient(token);
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 

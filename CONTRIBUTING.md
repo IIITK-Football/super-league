@@ -77,6 +77,8 @@ More detail: `docs/local-development.md`, `docs/environment.md`, `docs/testing.m
 
 ## Make a change
 
+Review the linked backlog item's flow, key screens and acceptance scenarios before building. Contributors can prepare approved work in parallel on separate branches. Integration follows the shared Worker baseline and the [release prerequisites](backlog/phases.md). Maintainers record backlog status and staging evidence.
+
 1. Fork the repository, then branch from `develop`: `git checkout -b feat/short-name develop`.
 2. Write the test first where you can, then the change. Tests are grouped by area (`docs/testing.md`):
    - `pnpm test` runs the groups your changes affect;

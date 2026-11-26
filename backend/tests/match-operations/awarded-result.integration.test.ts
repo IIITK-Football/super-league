@@ -46,6 +46,22 @@ describe('awarded results', () => {
     expect((await f.admin.from('match_events').select('id').eq('match_id', id)).data).toHaveLength(0);
   });
 
+  // D-04: creating and awarding the match is one transaction. An award the database refuses (a negative score) after
+  // the match row was inserted rolls the insert back too, and a scorer's attempt stores nothing.
+  it('a refused award leaves no match behind, inside one transaction', async () => {
+    const count = async () => (await f.admin.from('matches').select('id', { count: 'exact', head: true }).in('home_team_id', w.teams)).count;
+    const before = await count();
+    const bad = await schedule(who.dictator.token, { is_walkover: true, walkover_winner: 'home', awarded_home: -1, awarded_away: 0, walkover_reason: 'bad score' });
+    expect(bad.status).toBeGreaterThanOrEqual(400);
+    expect(await count()).toBe(before);
+    const direct = await who.scorer.db.rpc('create_awarded_match', {
+      p_season: w.seasons.cur, p_home_team: w.teams[0], p_away_team: w.teams[1], p_date: new Date().toISOString(),
+      p_venue: null, p_kind: 'walkover', p_home: 3, p_away: 0, p_reason: 'x',
+    });
+    expect(direct.error?.code).toBe('42501');
+    expect(await count()).toBe(before);
+  });
+
   it('the awarded score is the dictator\'s choice, and a forfeit is its own kind', async () => {
     const r = await schedule(who.dictator.token, { is_walkover: true, result_kind: 'forfeit', walkover_winner: 'away', awarded_home: 0, awarded_away: 5, walkover_reason: 'ineligible player' });
     expect(r.status).toBe(200);

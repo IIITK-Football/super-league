@@ -31,20 +31,26 @@ export async function resolveScope(
   const seasonKey = params.season?.trim() || null;
   if (seasonKey && !SLUG.test(seasonKey) && !UUID.test(seasonKey)) throw new ScopeError(400, 'season must be a season slug or id');
 
-  const { data: division, error: divisionError } = await supabase
-    .from('divisions').select('id, slug, name').eq('slug', divisionSlug).maybeSingle();
-  if (divisionError) throw divisionError;
-  if (!division) throw new ScopeError(404, `Division "${divisionSlug}" not found`);
-
-  let query = supabase.from('seasons').select('id, slug, name, is_current, format').eq('division_id', division.id);
+  // One round (D-04): the season together with its division. Hidden or archived divisions and seasons are invisible
+  // under RLS, so the inner join finds nothing for them. Only a miss pays a second read, to name what is missing.
+  let query = supabase
+    .from('seasons')
+    .select('id, slug, name, is_current, format, division:divisions!inner(id, slug, name)')
+    .eq('division.slug', divisionSlug);
   if (!seasonKey) query = query.eq('is_current', true);
   else if (UUID.test(seasonKey)) query = query.eq('id', seasonKey);
   else query = query.eq('slug', seasonKey);
-  const { data: season, error: seasonError } = await query.maybeSingle();
+  const { data: row, error: seasonError } = await query.maybeSingle();
   if (seasonError) throw seasonError;
-  if (!season) {
+  if (!row) {
+    const { data: division, error: divisionError } = await supabase
+      .from('divisions').select('name').eq('slug', divisionSlug).maybeSingle();
+    if (divisionError) throw divisionError;
+    if (!division) throw new ScopeError(404, `Division "${divisionSlug}" not found`);
     throw new ScopeError(404, seasonKey ? `Season "${seasonKey}" not found in ${division.name}` : `${division.name} has no current season`);
   }
+  const { division: joined, ...season } = row as unknown as Scope['season'] & { division: Scope['division'] | Scope['division'][] };
+  const division = Array.isArray(joined) ? joined[0] : joined;
   return { division, season };
 }
 

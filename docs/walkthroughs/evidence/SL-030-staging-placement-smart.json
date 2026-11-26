@@ -1,0 +1,55 @@
+{
+  "item": "SL-030",
+  "label": "placement-smart",
+  "site": "https://develop.super-league.pages.dev",
+  "recordedAt": "2026-11-26T12:07:22.890Z",
+  "release": {
+    "environment": "staging",
+    "commit": "20b6dd5bbd8b8e062d731d6315394e22217dcc9a",
+    "version": "05339923-7438-4b38-a0c8-1b3aa0f54a21"
+  },
+  "scopedRead": {
+    "path": "/api/standings?division=super-league",
+    "status": 200,
+    "success": true,
+    "rows": null,
+    "serverTiming": "total;dur=2079.0, db;dur=2079.0;desc=\"rounds=2 calls=3\"",
+    "cacheControl": null
+  },
+  "timing": {
+    "standings": {
+      "samples": 30,
+      "ok": 30,
+      "wallMs": {
+        "median": 769.8,
+        "p95": 1204.8
+      },
+      "workerTotalMs": {
+        "median": 471,
+        "p95": 899
+      },
+      "dbMs": {
+        "median": 471,
+        "p95": 899
+      },
+      "maxRounds": 2
+    },
+    "dashboard": {
+      "samples": 30,
+      "ok": 30,
+      "wallMs": {
+        "median": 1095.3,
+        "p95": 1500.8
+      },
+      "workerTotalMs": {
+        "median": 721,
+        "p95": 1169
+      },
+      "dbMs": {
+        "median": 721,
+        "p95": 1169
+      },
+      "maxRounds": 3
+    }
+  }
+}

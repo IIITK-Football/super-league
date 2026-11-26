@@ -1,0 +1,103 @@
+{
+  "item": "SL-031",
+  "runtime": "wrangler pages dev (Pages functions) + wrangler dev (Worker) + vite dev proxy, local",
+  "commit": "72929c0b6b0a528440f6c8346bb9f32584427a67",
+  "dirtyTrackedFiles": false,
+  "recordedAt": "2026-11-26T12:16:26.571Z",
+  "passed": true,
+  "checks": [
+    {
+      "name": "the site and the Worker name their release from the same origin",
+      "pass": true,
+      "observed": {
+        "site": {
+          "commit": "72929c0b6b0a528440f6c8346bb9f32584427a67",
+          "branch": null,
+          "builtAt": "2026-11-26T12:16:22.027Z"
+        },
+        "worker": {
+          "ok": true,
+          "service": "super-league-api",
+          "environment": "local",
+          "commit": null,
+          "version": "c91252ed-47bb-4615-b1d8-9685868dc34c"
+        }
+      }
+    },
+    {
+      "name": "a public read reaches the Worker through the Pages function",
+      "pass": true,
+      "observed": {
+        "status": 200,
+        "serverTiming": "total;dur=31.0, db;dur=29.0;desc=\"rounds=2 calls=3\"",
+        "cacheControl": "no-store"
+      }
+    },
+    {
+      "name": "the caller's bearer token is forwarded on a read (signed-in 200, signed-out 401)",
+      "pass": true,
+      "observed": {
+        "signedIn": 200,
+        "signedOut": 401
+      }
+    },
+    {
+      "name": "a protected write: a signed-in non-dictator is refused by the database (403), a missing session by the Worker (401)",
+      "pass": true,
+      "observed": {
+        "signedIn": {
+          "status": 403,
+          "message": "You are not allowed to do that."
+        },
+        "signedOut": {
+          "status": 401,
+          "message": "Unauthorized: Middleware blocked request. Token missing or invalid."
+        }
+      }
+    },
+    {
+      "name": "errors are stable JSON (404 unknown route, 400 invalid input, 404 unknown division)",
+      "pass": true,
+      "observed": {
+        "answers": [
+          {
+            "status": 404,
+            "message": "Not Found"
+          },
+          {
+            "status": 400,
+            "message": "division must be a division slug, for example super-league"
+          },
+          {
+            "status": 404,
+            "message": "Division \"no-such-division\" not found"
+          }
+        ]
+      }
+    },
+    {
+      "name": "every /api answer carries Cache-Control: no-store",
+      "pass": true,
+      "observed": {
+        "values": [
+          "no-store"
+        ]
+      }
+    },
+    {
+      "name": "the Vite dev proxy forwards the same signed-in read to the Worker",
+      "pass": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "name": "without the API binding, /api fails closed with 503 and no-store",
+      "pass": true,
+      "observed": {
+        "status": 503,
+        "message": "The API is not configured for this site."
+      }
+    }
+  ]
+}

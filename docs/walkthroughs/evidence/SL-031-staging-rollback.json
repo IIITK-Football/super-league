@@ -1,0 +1,67 @@
+{
+  "item": "SL-031",
+  "mode": "restored previous pair",
+  "site": "https://e9240999.super-league.pages.dev",
+  "recordedAt": "2026-11-26T12:40:19.755Z",
+  "release": {
+    "site": null,
+    "worker": {
+      "ok": true,
+      "service": "super-league-api",
+      "environment": "staging",
+      "commit": "418deb9e9e8084be3ec080fba9b1392b86165163",
+      "version": "9cb1519f-ebd2-4b8d-88c9-efd17a92f335"
+    }
+  },
+  "observed": {
+    "standings": 200,
+    "history": {
+      "signedIn": 200,
+      "signedOut": 401
+    },
+    "write": {
+      "signedIn": 403,
+      "signedOut": 401
+    },
+    "errors": [
+      {
+        "status": 404,
+        "message": "Not Found"
+      },
+      {
+        "status": 400,
+        "message": "division must be a division slug, for example super-league"
+      },
+      {
+        "status": 404,
+        "message": "Division \"no-such-division\" not found"
+      }
+    ],
+    "cacheControl": [
+      null
+    ]
+  },
+  "passed": true,
+  "checks": [
+    {
+      "name": "the restored Worker answers from the same origin and names its release",
+      "pass": true
+    },
+    {
+      "name": "a public read reaches the staging Worker",
+      "pass": true
+    },
+    {
+      "name": "the caller's bearer token is forwarded on a read (signed-in 200, signed-out 401)",
+      "pass": true
+    },
+    {
+      "name": "a protected write: signed-in non-dictator refused by the database (403), missing session by the Worker (401)",
+      "pass": true
+    },
+    {
+      "name": "errors are stable JSON (404 unknown route, 400 invalid input, 404 unknown division)",
+      "pass": true
+    }
+  ]
+}

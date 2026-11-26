@@ -1,0 +1,141 @@
+{
+  "item": "SL-032",
+  "target": "local",
+  "site": "http://127.0.0.1:8790",
+  "recordedAt": "2026-11-26T13:30:30.295Z",
+  "screenshots": "/Users/kevinmathew/repos/sl-parity-shots-local",
+  "groups": [
+    "G1",
+    "G2",
+    "G3",
+    "G4",
+    "G5",
+    "G6",
+    "G7"
+  ],
+  "passed": true,
+  "steps": [
+    {
+      "group": "G1",
+      "name": "division home loads its dashboard",
+      "pass": true,
+      "api": [
+        "GET /api/home/dashboard 200"
+      ],
+      "screenshot": "01-G1-division-home-loads-its-dashboard.png"
+    },
+    {
+      "group": "G2",
+      "name": "standings list the entered teams",
+      "pass": true,
+      "api": [
+        "GET /api/standings 200"
+      ],
+      "screenshot": "02-G2-standings-list-the-entered-teams.png"
+    },
+    {
+      "group": "G2",
+      "name": "matches list the fixture",
+      "pass": true,
+      "api": [],
+      "screenshot": "03-G2-matches-list-the-fixture.png"
+    },
+    {
+      "group": "G3",
+      "name": "teams list the entered team",
+      "pass": true,
+      "api": [
+        "GET /api/teams 200",
+        "GET /api/players 200"
+      ],
+      "screenshot": "04-G3-teams-list-the-entered-team.png"
+    },
+    {
+      "group": "G7",
+      "name": "the news vault loads",
+      "pass": true,
+      "api": [
+        "GET /api/news 200"
+      ],
+      "screenshot": "05-G7-the-news-vault-loads.png"
+    },
+    {
+      "group": "G4",
+      "name": "a linked player saves their card with a new portrait",
+      "pass": true,
+      "note": "portrait and foot stored",
+      "api": [
+        "GET /api/predictions/leaderboard 200",
+        "GET /api/wc/teams 200",
+        "POST /api/profile/player-portrait 200"
+      ],
+      "screenshot": "06-G4-a-linked-player-saves-their-card-with-a-.png"
+    },
+    {
+      "group": "G7",
+      "name": "an editor publishes an article with an uploaded image",
+      "pass": true,
+      "note": "published with its image",
+      "api": [
+        "GET /api/news 200",
+        "POST /api/admin/newsletter/image 200",
+        "POST /api/admin/newsletter 200",
+        "GET /api/news 200"
+      ],
+      "screenshot": "07-G7-an-editor-publishes-an-article-with-an-u.png"
+    },
+    {
+      "group": "G6",
+      "name": "the captain saves their team details",
+      "pass": true,
+      "api": [
+        "POST /api/captain/team-branding 200"
+      ],
+      "screenshot": "08-G6-the-captain-saves-their-team-details.png"
+    },
+    {
+      "group": "G6",
+      "name": "the assigned scorer records a goal and the final whistle",
+      "pass": true,
+      "note": "goal stored and match completed",
+      "api": [
+        "GET /api/players 200",
+        "GET /api/admin/matches 200",
+        "POST /api/admin/matches/live 200",
+        "GET /api/admin/matches 200",
+        "POST /api/admin/matches/live 200",
+        "GET /api/admin/matches 200"
+      ],
+      "screenshot": "09-G6-the-assigned-scorer-records-a-goal-and-t.png"
+    },
+    {
+      "group": "G5",
+      "name": "the dictator grades the match from the dashboard",
+      "pass": true,
+      "note": "graded, 300 points",
+      "api": [
+        "GET /api/players 200",
+        "GET /api/admin/matches 200",
+        "GET /api/admin/matches 200",
+        "POST /api/admin/predictions/grade 200",
+        "GET /api/admin/matches 200"
+      ],
+      "screenshot": "10-G5-the-dictator-grades-the-match-from-the-d.png"
+    },
+    {
+      "group": "G5",
+      "name": "the fan sees the points of their graded prediction in fantasy",
+      "pass": true,
+      "note": "300 points shown",
+      "api": [
+        "GET /api/schedule 200",
+        "GET /api/players 200",
+        "GET /api/predictions/leaderboard 200",
+        "GET /api/wc/predictions/awards 200",
+        "GET /api/wc/teams 200",
+        "GET /api/wc/leaderboard 200"
+      ],
+      "screenshot": "11-G5-the-fan-sees-the-points-of-their-graded-.png"
+    }
+  ]
+}

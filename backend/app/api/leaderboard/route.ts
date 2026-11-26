@@ -1,7 +1,6 @@
-import { createServerClient } from '@supabase/ssr';
+import { requestClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../lib/errorHandler'; 
 import { resolveScope } from '@/lib/scope';
-import { noCookies } from '@/lib/http';
 
 // Turn off caching temporarily so you can test the Mens/Womens toggle instantly!
 export const revalidate = 0; 
@@ -10,20 +9,7 @@ export async function GET(request: Request) {
   try {
     // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
     const { searchParams } = new URL(request.url);
-
-    const cookieStore = noCookies;
-    const supabase = createServerClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-          },
-        },
-      }
-    );
+    const supabase = requestClient(request);
 
     const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
 

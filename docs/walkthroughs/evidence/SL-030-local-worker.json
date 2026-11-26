@@ -1,0 +1,114 @@
+{
+  "item": "SL-030",
+  "runtime": "wrangler dev (workerd), local",
+  "commit": "d622763321ab23970ebf940b2625ec16e3c2c7ac",
+  "dirtyTrackedFiles": false,
+  "recordedAt": "2026-11-26T11:42:47.263Z",
+  "supabase": "local 127.0.0.1:54321 / 54322",
+  "passed": true,
+  "checks": [
+    {
+      "name": "health answers from the local Worker",
+      "pass": true,
+      "observed": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "service": "super-league-api",
+          "environment": "local"
+        }
+      }
+    },
+    {
+      "name": "a scoped public read succeeds",
+      "pass": true,
+      "observed": {
+        "status": 200,
+        "rows": null,
+        "serverTiming": "total;dur=16.0, db;dur=11.0;desc=\"rounds=4 calls=4\""
+      }
+    },
+    {
+      "name": "the dashboard takes at most 3 sequential Data API rounds",
+      "pass": true,
+      "observed": {
+        "status": 200,
+        "serverTiming": "total;dur=22.0, db;dur=20.0;desc=\"rounds=3 calls=9\""
+      }
+    },
+    {
+      "name": "a missing token is refused with 401 and stores nothing",
+      "pass": true,
+      "observed": {
+        "status": 401,
+        "matchesBefore": 56,
+        "matchesAfter": 56
+      }
+    },
+    {
+      "name": "a malformed token is refused with 401 and stores nothing",
+      "pass": true,
+      "observed": {
+        "status": 401,
+        "matchesBefore": 56,
+        "matchesAfter": 56
+      }
+    },
+    {
+      "name": "a expired token is refused with 401 and stores nothing",
+      "pass": true,
+      "observed": {
+        "status": 401,
+        "matchesBefore": 56,
+        "matchesAfter": 56
+      }
+    },
+    {
+      "name": "a tampered token is refused with 401 and stores nothing",
+      "pass": true,
+      "observed": {
+        "status": 401,
+        "matchesBefore": 56,
+        "matchesAfter": 56
+      }
+    },
+    {
+      "name": "a valid caller without the dictator grant is refused (403) and stores nothing",
+      "pass": true,
+      "observed": {
+        "status": 403,
+        "matchesBefore": 56,
+        "matchesAfter": 56
+      }
+    },
+    {
+      "name": "a dictator's write records the dictator as actor",
+      "pass": true,
+      "observed": {
+        "status": 200,
+        "audit": [
+          {
+            "actorIsDictator": true,
+            "action": "insert"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a multi-write that fails part-way leaves nothing behind",
+      "pass": true,
+      "observed": {
+        "status": 400,
+        "matchesBefore": 57,
+        "matchesAfter": 57
+      }
+    },
+    {
+      "name": "a non-production Worker configured with the production database refuses every request",
+      "pass": true,
+      "observed": {
+        "status": 503
+      }
+    }
+  ]
+}

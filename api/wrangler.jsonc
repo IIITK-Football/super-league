@@ -15,6 +15,9 @@
   // the shared handlers and the Supabase client use.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // The deployed version (id and tag), shown by /api/health with the commit so a release can be identified. A binding,
+  // so each environment declares it again.
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   // Local development (never deployed): no public route; the Vite dev server proxies /api to wrangler dev on :8787.
   // The sl-local-* buckets are emulated on disk by wrangler dev and served by the local-only /api/local-media route.
   "workers_dev": false,
@@ -39,6 +42,7 @@
     "staging": {
       "name": "super-league-api-staging",
       "workers_dev": false,
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "r2_buckets": [
         { "binding": "R2_NEWS", "bucket_name": "sl-staging-news-images" },
         { "binding": "R2_PLAYERS", "bucket_name": "sl-staging-player-images" },
@@ -60,6 +64,7 @@
     "production": {
       "name": "super-league-api",
       "workers_dev": false,
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "r2_buckets": [
         { "binding": "R2_NEWS", "bucket_name": "news-images" },
         { "binding": "R2_PLAYERS", "bucket_name": "player-images" },

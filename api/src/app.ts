@@ -5,26 +5,28 @@
 //   per-account rate limit. PATCH is now included (the Next middleware missed it).
 // Same origin only: the browser reaches this through the Pages /api function, so no CORS policy is served.
 import { Hono } from 'hono';
-import { createClient } from '@supabase/supabase-js';
 import { routes, type RouteModule } from './routes';
 import { checkRateLimit } from '../../backend/lib/rate-limit';
 import { boundBucket, isMediaPurpose } from '../../backend/lib/storage';
+import { bearerToken, publicClient, serverTiming, withTiming } from '../../backend/lib/supabase/clients';
 
 const METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-const fail = (status: number, message: string) => Response.json({ success: false, message }, { status });
+const fail = (status: number, message: string) =>
+  Response.json({ success: false, message }, { status, headers: { 'Cache-Control': 'no-store' } });
 
 async function sessionUserId(authorization: string | undefined): Promise<string | null> {
-  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+  const token = bearerToken(authorization);
   if (!token) return null;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error('Missing required environment variable: SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY');
-  const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-  const { data, error } = await supabase.auth.getClaims(token);
-  if (error || !data?.claims?.sub) return null;
-  return data.claims.sub;
+  // An expired or otherwise unverifiable token can throw rather than return an error; either way it is no session.
+  try {
+    const { data, error } = await publicClient().auth.getClaims(token);
+    if (error || !data?.claims?.sub) return null;
+    return data.claims.sub;
+  } catch {
+    return null;
+  }
 }
 
 // Fail closed on configuration: a non-production Worker (staging, local) never talks to the production database.
@@ -40,6 +42,13 @@ export function configProblem(env: Record<string, string | undefined> = process.
   return null;
 }
 
+// The deployed release, for /api/health: the Worker version (from the version metadata binding) and the commit the
+// deploy command passed as SL_COMMIT. Both are null locally.
+let release: { id?: string; tag?: string } | undefined;
+export function setRelease(metadata: { id?: string; tag?: string } | undefined) {
+  release = metadata;
+}
+
 export function createApp() {
   const app = new Hono().basePath('/api');
 
@@ -52,7 +61,31 @@ export function createApp() {
     return next();
   });
 
-  app.get('/health', (c) => c.json({ ok: true, service: 'super-league-api', environment: process.env.SL_ENVIRONMENT ?? 'unknown' }));
+  // Every response carries Server-Timing (D-04): total time, Data API time and its sequential rounds; counts and
+  // durations only, never a query, key or token. It is also explicit about caching (SL-031): API answers include live
+  // scores and caller-specific data, so a response that does not choose its own policy is never stored by the browser
+  // or anything between it and the Worker.
+  app.use('*', async (c, next) => {
+    const started = performance.now();
+    const { result, timing } = withTiming(() => next());
+    await result;
+    const headers: [string, string][] = [['Server-Timing', serverTiming(timing, performance.now() - started)]];
+    if (!c.res.headers.has('Cache-Control')) headers.push(['Cache-Control', 'no-store']);
+    try {
+      for (const [name, value] of headers) c.res.headers.set(name, value);
+    } catch {
+      c.res = new Response(c.res.body, c.res);
+      for (const [name, value] of headers) c.res.headers.set(name, value);
+    }
+  });
+
+  app.get('/health', (c) => c.json({
+    ok: true,
+    service: 'super-league-api',
+    environment: process.env.SL_ENVIRONMENT ?? 'unknown',
+    commit: process.env.SL_COMMIT ?? null,
+    version: release?.id ?? null,
+  }));
 
   app.use('*', async (c, next) => {
     const method = c.req.method;

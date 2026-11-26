@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Scans the built frontend (dist/) for elevated Supabase key formats. Run after `vite build`:
+// Scans a build for elevated Supabase key formats: by default the built frontend (dist/), or any directory given as
+// the first argument (the Worker build: `pnpm --dir api build`, then `node frontend/scripts/check-bundle.mjs api/dist`).
 //   pnpm --filter ./frontend build && node frontend/scripts/check-bundle.mjs
 // Reports only the kind of key found and the file, never the key itself.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -33,12 +34,12 @@ function walk(dir, out = []) {
 }
 
 function main() {
-  const dist = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
+  const dist = process.argv[2] ? resolve(process.argv[2]) : resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
   let files;
   try {
     files = walk(dist);
   } catch {
-    console.error('check-bundle: no dist/ found. Run the frontend build first.');
+    console.error(`check-bundle: no build found at ${dist}. Run the build first.`);
     return 2;
   }
   let bad = 0;

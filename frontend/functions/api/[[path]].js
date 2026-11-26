@@ -3,7 +3,10 @@
 // exists. No logic lives here; if the binding is missing the request fails clearly instead of reaching anything else.
 export async function onRequest({ request, env }) {
   if (!env.API || typeof env.API.fetch !== 'function') {
-    return Response.json({ success: false, message: 'The API is not configured for this site.' }, { status: 503 });
+    return Response.json(
+      { success: false, message: 'The API is not configured for this site.' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+    );
   }
   return env.API.fetch(request);
 }

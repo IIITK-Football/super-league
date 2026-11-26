@@ -1,6 +1,6 @@
 # D-09 proposal: an outbound fixtures and results feed
 
-Status: **proposal, open on consumer access.** Reframed 2026-11-20 by the owner: Super League **provides** fixture and result data for other websites to consume. It does not import from Be.tech or any other fixture provider, and the earlier inbound-adapter proposal is withdrawn. Blocks SL-063 (Phase 6).
+Status: **historical proposal.** See [the resolved partner-feed decision](D-09-external-results.md). Reframed 2026-11-20 by the owner: Super League **provides** fixture and result data for other websites to consume. It does not import from Be.tech or any other fixture provider, and the earlier inbound-adapter proposal is withdrawn. Blocks SL-063 (Phase 6).
 
 ## 1. Current state
 - No outbound feed exists. Public division data is served by the application's own routes (`/api/home/dashboard`, matches, standings), shaped for the current UI, and every route names a division by slug and a season by slug or id (`backend/lib/scope.ts`).

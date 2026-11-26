@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain ESM script without types
-import { mediaProblems, readConfig, stagingProblems, STAGING_WORKER } from '../scripts/deploy-staging.mjs';
+import { deployArgs, mediaProblems, readConfig, stagingProblems, STAGING_WORKER } from '../scripts/deploy-staging.mjs';
 
 const script = join(__dirname, '../scripts/deploy-staging.mjs');
 const ci = { WORKERS_CI: '1', WORKERS_CI_BRANCH: 'develop' };
@@ -91,3 +91,19 @@ describe('staging deploy command', () => {
     expect(config.env.staging.r2_buckets.some((b: { bucket_name: string }) => production.has(b.bucket_name))).toBe(false);
   });
 });
+
+describe('staging release identity', () => {
+  it('passes the commit Workers Builds is building, and nothing that is not a commit id', () => {
+    expect(deployArgs({ WORKERS_CI_COMMIT_SHA: '2b15df9abc' })).toEqual(['exec', 'wrangler', 'deploy', '--env', 'staging', '--var', 'SL_COMMIT:2b15df9abc']);
+    expect(deployArgs({})).toEqual(['exec', 'wrangler', 'deploy', '--env', 'staging']);
+    expect(deployArgs({ WORKERS_CI_COMMIT_SHA: 'abc; rm -rf /' })).toEqual(['exec', 'wrangler', 'deploy', '--env', 'staging']);
+  });
+
+  it('binds the version metadata in every environment', () => {
+    const config = readConfig();
+    for (const env of [config, config.env.staging, config.env.production]) {
+      expect(env.version_metadata).toEqual({ binding: 'CF_VERSION_METADATA' });
+    }
+  });
+});
+

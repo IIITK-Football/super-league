@@ -15,6 +15,15 @@ export function localKeys(): Keys {
   return { url: out.API_URL, publishable: out.PUBLISHABLE_KEY, secret: out.SECRET_KEY };
 }
 
+// The local stack's JWT signing secret (HS256), for tests that forge an expired or tampered token. Local only: it is
+// read from the same guarded status call.
+export function localJwtSecret(): string {
+  const r = spawnSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { encoding: 'utf8', cwd: `${__dirname}/../..` });
+  const out = JSON.parse(r.stdout.slice(r.stdout.indexOf('{')));
+  if (out.API_URL !== 'http://127.0.0.1:54321' || !out.JWT_SECRET) throw new Error('Refusing: not the local stack, or no JWT secret');
+  return out.JWT_SECRET;
+}
+
 // Dummy token Cloudflare documents for its always-pass TEST secret (the local default). It is
 // ignored when CAPTCHA is not enabled, so existing tests behave the same either way.
 export const CAPTCHA_TEST_TOKEN = 'XXXX.DUMMY.TOKEN.XXXX';

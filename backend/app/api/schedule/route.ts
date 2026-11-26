@@ -1,8 +1,6 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
+import { requestClient } from '@/lib/supabase/clients';
 import { resolveScope } from '@/lib/scope';
 import { handleError } from '@/lib/errorHandler';
-import { noCookies } from '@/lib/http';
 
 export async function GET(request: Request) {
   try {
@@ -12,20 +10,7 @@ export async function GET(request: Request) {
 
     const from = (page - 1) * limit;
     const to = from + limit - 1;
-
-    const cookieStore = noCookies;
-    const supabase = createServerClient(
-      process.env.SUPABASE_URL!,
-      publishableKey(),
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-          },
-        },
-      }
-    );
+    const supabase = requestClient(request);
 
     // The selected division's season (?division=<slug>&season=<slug or id>; default its current season)
     const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });

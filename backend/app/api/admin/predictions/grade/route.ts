@@ -1,29 +1,25 @@
-import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../../../lib/errorHandler';
 import { callerClient } from '@/lib/roster/access';
-import { gradeMatch, GradingError } from '@/lib/grading';
 
-// Grades one completed match from its match events. Dictator only (grading writes everyone's points, with the server
-// key, so the caller is checked first). Repeating it gives the same points and records the events version graded at.
+// Grades one completed match from its match events. Dictator only. The database function grade_match does the work in
+// one call as the caller (D-04): it checks the dictator, grades every prediction, records the events version graded
+// at, and the audit history names the dictator. Repeating it gives the same points.
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     if (!body.match_id) throw { status: 400, message: 'match_id is required for grading.' };
-    if (!process.env.SUPABASE_SECRET_KEY) {
-      return Response.json({ success: false, message: 'Server configuration error: SUPABASE_SECRET_KEY is missing.' }, { status: 500 });
-    }
 
     const supabase = await callerClient(request);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw { status: 401, message: 'Unauthorized' };
-    const { data: isDictator } = await supabase.rpc('is_dictator');
-    if (!isDictator) throw { status: 403, message: 'Only a dictator can grade predictions.' };
 
-    const admin = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_SECRET_KEY as string, { auth: { autoRefreshToken: false, persistSession: false } });
-    const graded = await gradeMatch(admin, body.match_id);
+    const { data: graded, error } = await supabase.rpc('grade_match', { p_match: body.match_id });
+    if (error) {
+      if (error.code === '42501') throw { status: 403, message: 'Only a dictator can grade predictions.' };
+      throw error;
+    }
     return Response.json({ success: true, message: graded ? `Graded ${graded} predictions from the match events.` : 'No predictions found for this match.' });
   } catch (error) {
-    if (error instanceof GradingError) return Response.json({ success: false, message: error.message }, { status: error.status });
     return handleError(error, 'Grade Predictions Engine');
   }
 }

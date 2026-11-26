@@ -1,22 +1,12 @@
+import { requestClient } from '@/lib/supabase/clients';
 export const dynamic = 'force-dynamic';
 
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
 import { actualPlayers, frequencyMap } from '@/lib/grading';
-import { noCookies } from '@/lib/http';
 
 async function getSupabaseClient(request: Request) {
-  const cookieStore = noCookies;
-  const authHeader = request.headers.get('Authorization');
-
-  return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
-    cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-    global: {
-      headers: { Authorization: authHeader || '' },
-    },
-  });
+  return requestClient(request);
 }
 
 // Grading logic lives in lib/grading.ts (events are the source); the breakdown here only explains the points.

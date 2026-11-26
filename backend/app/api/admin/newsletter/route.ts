@@ -1,23 +1,11 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
+import { requestClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 import { hasAnyRole, myRoles, type Role } from '../../../../lib/auth/roles';
-import { noCookies } from '@/lib/http';
 // Note: Zod is removed here to keep it simple, but you can add it back if you have it installed!
 
-// 1. THE MAGIC FIX: Teach the client to read the Auth Header!
+// The caller's client (D-04): publishable key plus their token, so RLS and the audit actor are theirs.
 async function getSupabaseClient(request: Request) {
-  const cookieStore = noCookies;
-  const authHeader = request.headers.get('Authorization'); // Grab the VIP Pass from the frontend!
-
-  return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
-    cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-    global: {
-      headers: {
-        Authorization: authHeader || '', // Force Supabase to use the token!
-      },
-    },
-  });
+  return requestClient(request);
 }
 
 async function requireRole(request: Request, allowedRoles: string[]) {
@@ -36,12 +24,17 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { supabase, user } = await requireRole(request, ['editor', 'dictator']);
 
+    // The byline is the publisher's public display name, never their email or account id: the article and its history
+    // are public. The database refuses an author that looks like an email address (newsletter_author_not_email).
+    const { data: profile } = await supabase.from('user_profiles').select('nickname, real_name').eq('id', user.id).maybeSingle();
+    const author = profile?.nickname?.trim() || profile?.real_name?.trim() || 'Super League Editorial';
+
     const { data, error } = await supabase
       .from('newsletter')
       .insert([{
         title: body.title,
         summary: body.summary,
-        author: user.email || user.id, 
+        author,
         image_url: body.image_url || null,
         content: body.content || [], 
         category: body.category || 'Official Editorial',

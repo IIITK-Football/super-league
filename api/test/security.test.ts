@@ -2,9 +2,10 @@
 // visitors and signed-in users; a user changes only their own profile and never its email or id; visitors cannot write
 // anything; the World Cup flair route needs a session and changes only the caller's own flair.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createHmac } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createApp } from '../src/app';
-import { clients, localKeys, uniqueEmail } from '../../backend/tests/auth/local-supabase';
+import { clients, localJwtSecret, localKeys, uniqueEmail } from '../../backend/tests/auth/local-supabase';
 
 const keys = localKeys();
 const c = clients(keys);
@@ -87,6 +88,82 @@ describe('Worker route authorization', () => {
 
   it.each(['/matches/update', '/wc/sync/manual', '/wc/grade/groups'])('%s stays retired', async (path) => {
     expect((await app.request(`http://localhost/api${path}`)).status).toBe(404);
+  });
+});
+
+// SL-030 (D-04): the session check runs before any handler, so a missing, expired or tampered token is refused with
+// 401 and nothing is stored; a valid caller without the grant is refused by the handler and nothing is stored; a
+// dictator's write records the dictator as its actor; a failed multi-write leaves nothing behind.
+describe('Worker session, actor and atomicity', () => {
+  const b64url = (v: string | Buffer) => Buffer.from(v).toString('base64url');
+  const sign = (payload: Record<string, unknown>) => {
+    const head = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+    const body = b64url(JSON.stringify(payload));
+    return `${head}.${body}.${createHmac('sha256', localJwtSecret()).update(`${head}.${body}`).digest('base64url')}`;
+  };
+  const claims = (token: string) => JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+  let dictator: Awaited<ReturnType<typeof account>>;
+  let seasonId = '';
+  let teams: string[] = [];
+  const created: string[] = [];
+
+  beforeAll(async () => {
+    dictator = await account('dictator');
+    const r = await admin.from('user_roles').insert({ user_id: dictator.id, role: 'dictator' });
+    if (r.error) throw r.error;
+    const { data: season } = await admin.from('seasons').select('id, division:divisions!inner(slug)').eq('division.slug', 'super-league').eq('is_current', true).single();
+    seasonId = season!.id;
+    teams = ((await admin.from('team_entries').select('team_id').eq('season_id', seasonId).limit(2)).data ?? []).map((e) => e.team_id);
+    expect(teams).toHaveLength(2);
+  }, 60000);
+  afterAll(async () => {
+    if (created.length) await admin.from('matches').delete().in('id', created);
+  });
+
+  const matchCount = async () => (await admin.from('matches').select('id', { count: 'exact', head: true }).eq('season_id', seasonId)).count;
+  const createMatch = (authorization: string | null, extra: Record<string, unknown> = {}) =>
+    app.request('http://localhost/api/admin/matches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(authorization ? { Authorization: authorization } : {}) },
+      body: JSON.stringify({ division: 'super-league', home_team_id: teams[0], away_team_id: teams[1], date: '2030-01-01T10:00:00Z', ...extra }),
+    });
+
+  it('refuses missing, malformed, expired and tampered tokens with 401 and stores nothing', async () => {
+    const before = await matchCount();
+    const real = claims(alice.token);
+    const expired = sign({ ...real, iat: 1_600_000_000, exp: 1_600_003_600 });
+    const [head, , sig] = alice.token.split('.');
+    const tampered = `${head}.${b64url(JSON.stringify({ ...real, role: 'service_role' }))}.${sig}`;
+    for (const authorization of [null, 'Basic abc', 'Bearer not-a-token', `Bearer ${expired}`, `Bearer ${tampered}`]) {
+      const res = await createMatch(authorization);
+      expect(res.status, String(authorization).slice(0, 20)).toBe(401);
+    }
+    expect(await matchCount()).toBe(before);
+  });
+
+  it('a valid caller without the dictator grant is refused by the database and stores nothing', async () => {
+    const before = await matchCount();
+    const res = await createMatch(`Bearer ${alice.token}`);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+    expect(await matchCount()).toBe(before);
+  });
+
+  it("a dictator's write is recorded with the dictator as its actor", async () => {
+    const res = await createMatch(`Bearer ${dictator.token}`);
+    expect(res.status).toBe(200);
+    const id = (await res.json()).data.id;
+    created.push(id);
+    const { data: audit } = await admin.from('audit_log').select('actor_id, action').eq('table_name', 'matches').eq('record_id', id);
+    expect(audit).toEqual([{ actor_id: dictator.id, action: 'insert' }]);
+    expect(res.headers.get('Server-Timing')).toMatch(/rounds=\d+/);
+  });
+
+  it('a multi-write that fails part-way leaves nothing behind', async () => {
+    const before = await matchCount();
+    const res = await createMatch(`Bearer ${dictator.token}`, { is_walkover: true, walkover_winner: 'home', walkover_reason: 'x', awarded_home: -1, awarded_away: 0 });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await matchCount()).toBe(before);
   });
 });
 

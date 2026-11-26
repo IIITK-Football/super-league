@@ -1,5 +1,7 @@
 # D-11 proposal: homepage sections that follow the current division
 
+Historical proposal. See [the current decision](D-11-home-sections.md) for the archive placement.
+
 Status: **proposal, open**. Blocks SL-060 (configurable first version) and SL-093 (redesign). The video is D-07. Drafted 2026-11-18.
 
 ## 1. Current state

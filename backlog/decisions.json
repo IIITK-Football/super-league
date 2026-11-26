@@ -12,9 +12,10 @@
     },
     {
       "id": "D-02",
-      "question": "How World Cup's separate page/domain shares account and UI primitives without coupling its fantasy rules to division fantasy.",
+      "question": "How to keep the legacy World Cup archive available separately from division fantasy and define its release disposition.",
       "status": "resolved",
       "items": [
+        "SL-032",
         "SL-043"
       ],
       "proposal": "docs/decisions/D-02-world-cup-separation-proposal.md",
@@ -63,7 +64,7 @@
     },
     {
       "id": "D-07",
-      "question": "HLS chapter/segment authoring, timestamp rotation rules, mobile video behavior, and what “resume” means when a visitor changes division selection.",
+      "question": "HLS chapter/segment authoring, timestamp rotation rules, mobile video behavior, and what \u201cresume\u201d means when a visitor changes division selection.",
       "status": "resolved",
       "items": [
         "SL-060",
@@ -85,15 +86,16 @@
     {
       "id": "D-09",
       "question": "How Super League offers its fixtures, results and events to other websites: a versioned, read-only outbound feed, who may consume it, and its caching and rate limits. (Reframed 2026-11-20: Super League provides data; it does not import from a fixture provider.)",
-      "status": "open",
+      "status": "resolved",
       "items": [
         "SL-063"
       ],
-      "proposal": "docs/decisions/D-09-external-results-proposal.md"
+      "proposal": "docs/decisions/D-09-external-results-proposal.md",
+      "resolution": "docs/decisions/D-09-external-results.md"
     },
     {
       "id": "D-10",
-      "question": "How overlapping GitHub ownership rules satisfy “Kevin for everything, Ebin for backend, Abhinav for frontend” under the chosen branch protection configuration.",
+      "question": "How overlapping GitHub ownership rules satisfy \u201cKevin for everything, Ebin for backend, Abhinav for frontend\u201d under the chosen branch protection configuration.",
       "status": "resolved",
       "items": [
         "SL-081"

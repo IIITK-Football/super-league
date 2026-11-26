@@ -1,0 +1,75 @@
+{
+  "item": "SL-031",
+  "mode": "current pair",
+  "site": "https://develop.super-league.pages.dev",
+  "recordedAt": "2026-11-26T12:43:07.490Z",
+  "release": {
+    "site": {
+      "commit": "c1798239d5af7fa2e33af9f07bb405c30eccab4d",
+      "branch": "develop",
+      "builtAt": "2026-11-26T12:42:04.356Z"
+    },
+    "worker": {
+      "ok": true,
+      "service": "super-league-api",
+      "environment": "staging",
+      "commit": "cd810a69732dbf5001a97400af27e092472c8331",
+      "version": "458dbc77-ca6f-41e0-b596-4224492c6f39"
+    }
+  },
+  "observed": {
+    "standings": 200,
+    "history": {
+      "signedIn": 200,
+      "signedOut": 401
+    },
+    "write": {
+      "signedIn": 403,
+      "signedOut": 401
+    },
+    "errors": [
+      {
+        "status": 404,
+        "message": "Not Found"
+      },
+      {
+        "status": 400,
+        "message": "division must be a division slug, for example super-league"
+      },
+      {
+        "status": 404,
+        "message": "Division \"no-such-division\" not found"
+      }
+    ],
+    "cacheControl": [
+      "no-store"
+    ]
+  },
+  "passed": true,
+  "checks": [
+    {
+      "name": "the site and the Worker name their release from the same origin",
+      "pass": true
+    },
+    {
+      "name": "a public read reaches the staging Worker",
+      "pass": true
+    },
+    {
+      "name": "the caller's bearer token is forwarded on a read (signed-in 200, signed-out 401)",
+      "pass": true
+    },
+    {
+      "name": "a protected write: signed-in non-dictator refused by the database (403), missing session by the Worker (401)",
+      "pass": true
+    },
+    {
+      "name": "errors are stable JSON (404 unknown route, 400 invalid input, 404 unknown division)",
+      "pass": true
+    },
+    {
+      "name": "every /api answer carries Cache-Control: no-store",
+      "pass": true
+    }
+  ]
+}

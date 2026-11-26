@@ -1,8 +1,6 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
+import { requestClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../lib/errorHandler';
 import { z } from 'zod';
-import { noCookies } from '@/lib/http';
 
 // 1. ZOD SCHEMA WITH ADVANCED MATH VALIDATION
 const predictionSchema = z.object({
@@ -24,11 +22,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const validatedData = predictionSchema.parse(body);
-
-    const cookieStore = noCookies;
-    const supabase = createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
-      cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-    });
+    const supabase = requestClient(request);
 
     // 2. SECURE THE ROUTE: Only logged-in fans can predict
     const { data: { user }, error: authError } = await supabase.auth.getUser();

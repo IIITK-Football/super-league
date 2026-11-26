@@ -41,6 +41,7 @@
         "backend/tsconfig.json",
         "frontend/.dev.vars.example",
         "frontend/functions/**",
+        "frontend/scripts/build-version.js",
         "frontend/scripts/check-bundle.mjs",
         "frontend/src/lib/env.js",
         "frontend/src/lib/supabase.js"
@@ -87,6 +88,7 @@
         "frontend/.dev.vars.example",
         "backend/lib/supabase/**",
         "backend/middleware.ts",
+        "frontend/scripts/build-version.js",
         "frontend/scripts/check-bundle.mjs"
       ],
       "testPaths": [

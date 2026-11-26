@@ -1,25 +1,13 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
+import { requestClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
-import { noCookies } from '@/lib/http';
 
 // Turn off caching so the admin sees live updates instantly!
 export const revalidate = 0;
 
-// 1. THE MAGIC FIX: Teach the client to read the Auth Header!
+// The caller's client (D-04): publishable key plus their token, so RLS and the audit actor are theirs.
 async function getSupabaseClient(request: Request) {
-  const cookieStore = noCookies;
-  const authHeader = request.headers.get('Authorization'); 
-
-  return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
-    cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-    global: {
-      headers: {
-        Authorization: authHeader || '', 
-      },
-    },
-  });
+  return requestClient(request);
 }
 
 // 2. PASS `request` INTO THE GET ROUTE
@@ -28,9 +16,15 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const supabase = await getSupabaseClient(request); 
-    // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
-    const scope = await resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') });
+    const supabase = await getSupabaseClient(request);
+    // D-04: at most three sequential rounds. Round 1: who is calling, and which season (?division=<slug>&season=<slug
+    // or id>; without a season, the division's current season).
+    const [{ data: { user } }, { data: isDictator }, scope] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.rpc('is_dictator'),
+      resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }),
+    ]);
+    if (!user) throw { status: 401, message: "Unauthorized: Please log in." };
 
     let query = supabase
       .from('matches')
@@ -56,28 +50,23 @@ export async function GET(request: Request) {
       query = query.in('status', statusArray);
     }
 
-    const { data, error } = await query.order('date', { ascending: true });
-
+    // Round 2: the season's matches and, for a dictator, the completed graded matches whose events changed after
+    // grading (they need a regrade).
+    const [{ data, error }, stale] = await Promise.all([
+      query.order('date', { ascending: true }),
+      isDictator ? supabase.rpc('matches_needing_regrade', { p_season: scope.season.id }) : Promise.resolve({ data: [] }),
+    ]);
     if (error) throw error;
+    const needsRegrade = new Set<string>(((stale as { data: unknown }).data ?? []) as string[]);
 
-    // The dashboard lists matches for scoring: a dictator sees them all, a scorer only the matches assigned to them
-    // (their season or one match, unexpired). Anyone else, and anyone not signed in, sees none.
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw { status: 401, message: "Unauthorized: Please log in." };
-    const { data: isDictator } = await supabase.rpc('is_dictator');
+    // Round 3: the dashboard lists matches for scoring. A dictator sees them all, a scorer only the matches assigned to
+    // them (their season or one match, unexpired). Anyone else sees none.
     let visible = data ?? [];
     if (!isDictator && visible.length > 0) {
       const { data: ids, error: idsError } = await supabase.rpc('scorable_match_ids', { p_ids: visible.map((m: any) => m.id) });
       if (idsError) throw idsError;
       const allowed = new Set<string>((ids ?? []) as string[]);
       visible = visible.filter((m: any) => allowed.has(m.id));
-    }
-
-    // Completed, graded matches whose events changed after grading need a regrade (dictators grade).
-    let needsRegrade = new Set<string>();
-    if (isDictator) {
-      const { data: stale } = await supabase.rpc('matches_needing_regrade', { p_season: scope.season.id });
-      needsRegrade = new Set<string>((stale ?? []) as string[]);
     }
 
     const formattedData = visible.map((m:any) => {
@@ -122,31 +111,32 @@ export async function POST(request: Request) {
     const awardHome = Number.isInteger(body.awarded_home) ? body.awarded_home : winner === 'home' ? 3 : 0;
     const awardAway = Number.isInteger(body.awarded_away) ? body.awarded_away : winner === 'away' ? 3 : 0;
 
-    const { data, error } = await supabase
-      .from('matches')
-      .insert([{
-        home_team_id: body.home_team_id,
-        away_team_id: body.away_team_id,
-        date: body.date,
-        venue: body.venue,
-        season_id: scope.season.id,
-        status: 'scheduled',
-      }])
-      .select()
-      .single();
+    // An awarded match is created and awarded in one transaction (D-04): both or neither.
+    const { data, error } = isAward
+      ? await supabase.rpc('create_awarded_match', {
+          p_season: scope.season.id,
+          p_home_team: body.home_team_id,
+          p_away_team: body.away_team_id,
+          p_date: body.date ?? null,
+          p_venue: body.venue ?? null,
+          p_kind: kind,
+          p_home: awardHome,
+          p_away: awardAway,
+          p_reason: reason,
+        }).single()
+      : await supabase
+          .from('matches')
+          .insert([{
+            home_team_id: body.home_team_id,
+            away_team_id: body.away_team_id,
+            date: body.date,
+            venue: body.venue,
+            season_id: scope.season.id,
+            status: 'scheduled',
+          }])
+          .select()
+          .single();
 
-    if (!error && isAward) {
-      const { error: awardError } = await supabase.rpc('award_match_result', { p_match: data.id, p_kind: kind, p_home: awardHome, p_away: awardAway, p_reason: reason });
-      if (awardError) {
-        // Do not leave a half-made match behind: the match was created only to be awarded.
-        await supabase.from('matches').delete().eq('id', data.id);
-        throw awardError;
-      }
-      data.status = 'completed';
-      data.result_kind = kind;
-      data.home_score = awardHome;
-      data.away_score = awardAway;
-    }
     if (error) throw error;
     return Response.json({ success: true, message: "Match scheduled successfully", data });
   } catch (error) {

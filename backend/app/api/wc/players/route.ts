@@ -1,15 +1,10 @@
-import { secretKey } from '@/lib/supabase/keys';
-import { createClient } from '@supabase/supabase-js';
+import { jobClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  secretKey()
-);
-
 export async function GET(request: Request) {
+  const supabase = jobClient();
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');

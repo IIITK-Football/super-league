@@ -1,12 +1,7 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createClient } from '@supabase/supabase-js';
+import { publicClient } from '@/lib/supabase/clients';
 import { getOpponent } from '../../../lib/roundOf32';
 
 export const dynamic = 'force-dynamic';
-
-const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseKey = publishableKey();
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // The 16 "Home" slots based on the 48-team World Cup matrix
 const R32_HOME_SLOTS = [
@@ -27,6 +22,7 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: Request) {
+  const supabase = publicClient();
     try {
         const body = await req.json();
         const { user_id, advancing_third_place_groups } = body;

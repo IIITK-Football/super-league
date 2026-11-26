@@ -1,0 +1,74 @@
+{
+  "head": "a8058a64b320863c285bc332a226b041c92c4d68",
+  "tree": "407b61891551b56fd9812aeeb5df0460d81422e2",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-26T14:00:33.689Z",
+  "groups": [
+    {
+      "name": "api-services",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "api",
+          "cmd": "pnpm exec tsc --noEmit",
+          "exit": 0,
+          "ms": 1643
+        },
+        {
+          "cwd": "api",
+          "cmd": "pnpm exec vitest run",
+          "exit": 0,
+          "ms": 20677
+        }
+      ]
+    },
+    {
+      "name": "divisions",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/divisions",
+          "exit": 0,
+          "ms": 10384
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageDivisions.local.test.jsx",
+          "exit": 0,
+          "ms": 4369
+        }
+      ]
+    },
+    {
+      "name": "match-operations",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/match-operations",
+          "exit": 0,
+          "ms": 9762
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run src/components/admin/__tests__/LiveController.test.jsx",
+          "exit": 0,
+          "ms": 2109
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "api-services",
+    "divisions",
+    "match-operations"
+  ],
+  "commandChecks": {},
+  "id": "SL-032",
+  "base": "46e9700fd58d7a05ef09f7376e069e9f988a9c10"
+}

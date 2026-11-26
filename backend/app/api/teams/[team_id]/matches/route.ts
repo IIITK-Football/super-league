@@ -1,18 +1,13 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createClient } from '@supabase/supabase-js';
+import { publicClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../../lib/errorHandler';
 
 export const revalidate = 60;
-
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  publishableKey()
-);
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ team_id: string }> }
 ) {
+  const supabase = publicClient();
   try {
     const { team_id } = await params;
 
