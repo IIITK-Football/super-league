@@ -1,4 +1,5 @@
-export { Button, buttonClasses } from './Button';
+export { Button } from './Button';
+export { buttonClasses } from './buttonClasses';
 export { Card } from './Card';
 export { Pill } from './Pill';
 export { Skeleton } from './Skeleton';
@@ -9,5 +10,5 @@ export { Sheet } from './Sheet';
 export { Tabs } from './Tabs';
 export { Field } from './Field';
 export { Table } from './Table';
-export { Crest, initials } from './Crest';
+export { Crest } from './Crest';
 export { Scoreline } from './Scoreline';

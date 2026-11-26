@@ -31,6 +31,8 @@ vi.mock('../../lib/supabase', () => ({
 vi.mock('../../components/Loader', () => ({ Loader: ({ text }) => <p>{text || 'Loading'}</p> }));
 
 const fetchMock = vi.fn(async () => ({
+  ok: true,
+  status: 200,
   json: async () => ({ success: true, data: { standings: [], news: [], fantasyTop: [], liveMatch: null, topScorer: null, topAssist: null } }),
 }));
 

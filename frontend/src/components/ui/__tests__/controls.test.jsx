@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { Button, buttonClasses } from '../Button';
+import { Button } from '../Button';
+import { buttonClasses } from '../buttonClasses';
 import { Pill } from '../Pill';
 import { Card } from '../Card';
 import { Notice } from '../Notice';

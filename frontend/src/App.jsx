@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LeagueProvider } from './context/LeagueContext';
-import { TopNavbar } from './components/TopNavbar';
+import { AppShell } from './components/shell/AppShell';
 import { Loader } from './components/Loader';
 import { useLocation } from 'react-router-dom';
 import { Login } from './pages/Login';
@@ -24,44 +24,34 @@ import { Matches } from './pages/Matches';
 import { Vault } from './pages/Vault';
 import { Rules } from './pages/Rules';
 import { LeagueLanding } from './pages/LeagueLanding';
-import { TeamBuilder } from './pages/TeamBuilder';
 import { RoleWorkspace } from './pages/RoleWorkspace';
 import { LEGACY_REDIRECTS, LegacyRedirect } from './routes/legacyRedirects';
 import { DivisionHomeRoute } from './pages/DivisionHomeRoute';
 import { SectionGate } from './pages/SectionGate';
 import MatchTimeline from './components/MatchTimeline';
 
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useLeague } from './context/LeagueContext';
 // A smart wrapper to protect routes that require login
 function ProtectedRoute({ children }) {
   const { user, profile, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return <div className="min-h-screen bg-black flex justify-center items-center"><Loader /></div>;
+  if (loading) return <div className="min-h-screen bg-bg flex justify-center items-center"><Loader /></div>;
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
   
   if (!profile?.nickname || !profile?.wc_team_flair) return <Onboarding />;
 
-  const isWc = location.pathname === '/wc';
-
-  return (
-    <div className={`min-h-screen pt-24 pb-12 px-4 sm:px-6 mx-auto ${isWc ? 'max-w-full' : 'max-w-7xl'}`}>
-      <TopNavbar />
-      <main className="animate-in fade-in duration-500">{children}</main>
-    </div>
-  );
+  return <AppShell>{children}</AppShell>;
 }
 
-// A wrapper for public routes (so they still get the Navbar)
+// A wrapper for public routes (they get the app shell too)
 function PublicRoute({ children }) {
-  return (
-    <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 mx-auto max-w-7xl">
-      <TopNavbar />
-      <main className="animate-in fade-in duration-500">{children}</main>
-    </div>
-  );
+  return <AppShell>{children}</AppShell>;
 }
+
+// The developer-only page that renders every UI primitive in both themes (not in production builds).
+const DevUi = import.meta.env.DEV ? lazy(() => import('./pages/DevUi')) : null;
 
 function WcRoute() {
   const { setFantasySection } = useLeague();
@@ -76,14 +66,6 @@ function WcRoute() {
 function LeagueDashboardRoute() {
   return <PublicRoute><DivisionHomeRoute><Home /></DivisionHomeRoute></PublicRoute>;
 }
-
-function AuthenticatedRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-black" />;
-  if (!user) return <Navigate to="/login" replace />;
-  return children;
-}
-
 
 function App() {
   return (
@@ -102,9 +84,10 @@ function App() {
             <Route path="/" element={<LeagueLanding />} />
             <Route path="/:division" element={<LeagueDashboardRoute />} />
             <Route path="/:division/:season" element={<LeagueDashboardRoute />} />
-            <Route path="/team-builder" element={<RoleWorkspace requiredRole="captain" />} />
-            <Route path="/editor" element={<RoleWorkspace requiredRole="editor" />} />
-            <Route path="/dictator" element={<RoleWorkspace requiredRole="dictator" />} />
+            <Route path="/team-builder" element={<AppShell><RoleWorkspace requiredRole="captain" /></AppShell>} />
+            <Route path="/editor" element={<AppShell><RoleWorkspace requiredRole="editor" /></AppShell>} />
+            <Route path="/dictator" element={<AppShell><RoleWorkspace requiredRole="dictator" /></AppShell>} />
+            {DevUi && <Route path="/dev/ui" element={<Suspense fallback={null}><DevUi /></Suspense>} />}
             <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
             <Route path="/standings/:division" element={<PublicRoute><SectionGate section="standings"><Standings /></SectionGate></PublicRoute>} />
             <Route path="/teams" element={<PublicRoute><SectionGate section="teams"><Teams /></SectionGate></PublicRoute>} />

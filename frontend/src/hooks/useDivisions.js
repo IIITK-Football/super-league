@@ -7,7 +7,7 @@ export function useDivisions({ publicOnly = false } = {}) {
   const [state, setState] = useState({ divisions: [], loading: true, error: '' });
   useEffect(() => {
     let cancelled = false;
-    let query = supabase.from('divisions').select('id, slug, name, short_name, archived_at');
+    let query = supabase.from('divisions').select('id, slug, name, short_name, primary_color, logo_url, archived_at');
     if (publicOnly) query = query.eq('visibility', 'public').is('archived_at', null);
     query.order('sort_order', { ascending: true }).order('name', { ascending: true })
       .then(({ data, error }) => {

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Table } from '../Table';
-import { Crest, initials } from '../Crest';
+import { Crest } from '../Crest';
 import { Scoreline } from '../Scoreline';
 
 afterEach(cleanup);
@@ -25,7 +25,6 @@ describe('Crest', () => {
   it('shows initials when there is no image', () => {
     render(<Crest name="Super League" />);
     expect(screen.getByRole('img', { name: 'Super League' }).textContent).toBe('SL');
-    expect(initials('al balal')).toBe('AB');
   });
 
   it('falls back to initials when the image fails to load', () => {

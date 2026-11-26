@@ -4,7 +4,7 @@ import { cn } from '../../utils/cn';
 const SIZES = { sm: 'size-8 text-xs', md: 'size-11 text-sm', lg: 'size-16 text-xl' };
 
 // initials("Super League") -> "SL". Used when there is no logo or it fails to load.
-export function initials(name = '') {
+function initials(name = '') {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0].toUpperCase()).join('');
 }
 
