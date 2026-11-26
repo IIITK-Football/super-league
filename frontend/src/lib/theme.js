@@ -22,7 +22,7 @@ export const PALETTES = ['cobalt', 'pitch', 'signal'];
 
 export function currentPalette() {
   const p = document.documentElement.dataset.palette;
-  return PALETTES.includes(p) ? p : 'cobalt';
+  return PALETTES.includes(p) ? p : 'pitch';
 }
 
 export function setPalette(palette) {
