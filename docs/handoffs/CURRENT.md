@@ -28,12 +28,14 @@ handoff steps.
 
 ## Exact next step
 
-1. Wait until `/api/health` on staging reports `882a3eb` or later.
-2. Baseline: `node scripts/staging-worker-probe.mjs --samples 30 --label placement-off`. Save the output as `docs/walkthroughs/evidence/SL-030-staging-placement-off.json`.
-3. Add `"placement": { "mode": "smart" }` to `env.staging` in `api/wrangler.jsonc` only, then push. Wait for the deploy, then run the probe again with `--label placement-smart`.
-4. Keep Smart Placement only if the Worker-total median and p95 improve; otherwise revert it. Record the decision in `docs/plans/SL-030.md`.
-5. Investigate the gap between wall time and Worker time (Access, Pages Function, cold start). If it is outside the Worker, record it for SL-029 or SL-031.
-6. `pnpm work done SL-030` writes the walkthrough. Fill in the walkthrough, then ask the owner to attest C3.
+Staging evidence and the placement decision are recorded in `docs/plans/SL-030.md` ("Staging evidence (2026-11-26)").
+- Placement off: standings Worker median 462 ms; Smart Placement brought no gain, so it was reverted in `418deb9`.
+- PR #192 was closed by the owner's decision: the release PR is opened only after the phase gate.
+- Strict test rules pass locally against `main` (`5033fd0`).
+
+1. The owner attests C3: `pnpm work attest SL-030 C3`.
+2. `pnpm work done SL-030` runs the groups and writes the walkthrough skeleton. Fill in the walkthrough (summary, local evidence, staging evidence, open discrepancies from the plan) and run it again.
+3. Then start SL-031 (same-origin `/api` routing evidence through Pages; rollback pair).
 
 ## In flight
 
