@@ -7,7 +7,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
-vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer, toast: (t) => globalThis.toasts.push(t) }));
+globalThis.toasts = [];
 globalThis.confirmAnswer = vi.fn(async () => true);
 
 const db = {};
@@ -86,6 +87,7 @@ vi.mock('../../../lib/supabase', () => ({
   },
 }));
 const { default: ManageCaptains } = await import('../ManageCaptains');
+const { pick, optionsOf, trigger } = await import('./listbox');
 
 beforeEach(() => {
   seed();
@@ -93,43 +95,44 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-const pick = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 const captainText = () => screen.getByRole('region', { name: 'Captain' }).textContent;
 async function openTeam(team) {
   render(<ManageCaptains />);
-  await waitFor(() => expect(screen.getByRole('option', { name: 'Freshers' })).toBeTruthy());
-  pick('Division', 'd1');
-  await waitFor(() => expect(screen.getByRole('option', { name: '2026 (current)' })).toBeTruthy());
-  pick('Season', 's1');
-  await waitFor(() => expect(screen.getByRole('option', { name: 'Alpha' })).toBeTruthy());
-  if (team) pick('Team', team);
+  await waitFor(() => expect(trigger('Division').disabled).toBe(false));
+  await pick('Division', 'Freshers');
+  await waitFor(() => expect(trigger('Season').disabled).toBe(false));
+  await pick('Season', '2026 (current)');
+  await waitFor(() => expect(trigger('Team').disabled).toBe(false));
+  if (team) await pick('Team', team);
 }
-async function chooseAccount(teamName, query, value) {
+async function chooseAccount(teamName, query, name) {
   fireEvent.change(screen.getByLabelText(`Find captain for ${teamName}`), { target: { value: query } });
-  await waitFor(() => expect(within(screen.getByLabelText(`New captain for ${teamName}`)).getAllByRole('option').length).toBeGreaterThan(1));
-  pick(`New captain for ${teamName}`, value);
+  await waitFor(() => expect(trigger(`New captain for ${teamName}`).textContent).toMatch(/Choose from the search results/));
+  await pick(`New captain for ${teamName}`, name);
 }
 
 describe('ManageCaptains', () => {
   it('offers each level only after the previous choice, and only that season’s teams', async () => {
     render(<ManageCaptains />);
-    await waitFor(() => expect(screen.getByRole('option', { name: 'Freshers' })).toBeTruthy());
-    expect(screen.getByLabelText('Season').disabled).toBe(true);
-    expect(screen.getByLabelText('Team').disabled).toBe(true);
-    pick('Division', 'd2');
-    expect(await screen.findByRole('option', { name: 'This division has no seasons' })).toBeTruthy();
-    pick('Division', 'd1');
-    await waitFor(() => expect(screen.getByRole('option', { name: '2026 (current)' })).toBeTruthy());
-    pick('Season', 's1');
-    await waitFor(() => expect(screen.getByRole('option', { name: 'Alpha' })).toBeTruthy());
-    expect(within(screen.getByLabelText('Team')).queryByRole('option', { name: 'Gamma' })).toBeNull();
+    await waitFor(() => expect(trigger('Division').disabled).toBe(false));
+    expect(await optionsOf('Division')).toEqual(['Freshers', 'WSL']);
+    expect(trigger('Season').disabled).toBe(true);
+    expect(trigger('Team').disabled).toBe(true);
+    await pick('Division', 'WSL');
+    await waitFor(() => expect(trigger('Season').textContent).toMatch('This division has no seasons'));
+    await pick('Division', 'Freshers');
+    await waitFor(() => expect(trigger('Season').disabled).toBe(false));
+    expect(await optionsOf('Season')).toEqual(['2026 (current)', '2025']);
+    await pick('Season', '2026 (current)');
+    await waitFor(() => expect(trigger('Team').disabled).toBe(false));
+    expect(await optionsOf('Team')).toEqual(['Alpha', 'Beta']);
     expect(screen.queryByRole('region', { name: 'Captain' })).toBeNull();
   });
 
   it('shows only the chosen team’s captain for the chosen season, by directory label', async () => {
-    await openTeam('t1');
+    await openTeam('Alpha');
     await waitFor(() => expect(captainText()).toMatch(/Captain of Alpha in this season: Cara Cap \(cara@iiitkottayam\.ac\.in\)/));
-    pick('Team', 't2');
+    await pick('Team', 'Beta');
     await waitFor(() => expect(captainText()).toMatch(/Beta has no captain in this season/));
     expect(document.body.textContent).not.toMatch(/Cara Cap|u-cap|Olly/);
   });
@@ -137,8 +140,8 @@ describe('ManageCaptains', () => {
   it('ignores a late answer for the previously chosen team', async () => {
     await openTeam();
     db.slowTeam = 'e1';
-    pick('Team', 't1');
-    pick('Team', 't2');
+    await pick('Team', 'Alpha');
+    await pick('Team', 'Beta');
     await waitFor(() => expect(captainText()).toMatch(/Beta has no captain/));
     await new Promise((r) => setTimeout(r, 120));
     expect(captainText()).toMatch(/Beta has no captain/);
@@ -146,34 +149,37 @@ describe('ManageCaptains', () => {
   });
 
   it('changes a captain by replacing the entry\'s one assignment, then shows the captain the database holds', async () => {
-    await openTeam('t1');
+    await openTeam('Alpha');
     await waitFor(() => expect(captainText()).toMatch(/Cara Cap/));
-    await chooseAccount('Alpha', 'ada lane', 'u-ada2');
-    const choices = within(screen.getByLabelText('New captain for Alpha')).getAllByRole('option').map((o) => o.textContent);
-    expect(choices).toEqual(['Choose from the search results', 'Ada Lane (ada@iiitkottayam.ac.in)', 'Ada Lane (ada.l@iiitkottayam.ac.in)']);
+    fireEvent.change(screen.getByLabelText('Find captain for Alpha'), { target: { value: 'ada lane' } });
+    await waitFor(() => expect(trigger('New captain for Alpha').textContent).toMatch(/Choose from the search results/));
+    expect(await optionsOf('New captain for Alpha')).toEqual(['Ada Lane (ada@iiitkottayam.ac.in)', 'Ada Lane (ada.l@iiitkottayam.ac.in)']);
+    await pick('New captain for Alpha', 'Ada Lane (ada.l@iiitkottayam.ac.in)');
     fireEvent.click(screen.getByRole('button', { name: /change captain/i }));
     await waitFor(() => expect(captainText()).toMatch(/Captain of Alpha in this season: Ada Lane \(ada\.l@iiitkottayam\.ac\.in\)/));
     expect(db.calls).toEqual([{ name: 'assign_captain', p_entry: 'e1', p_user: 'u-ada2', p_replace: true }]);
     expect(db.captain_assignments.filter((a) => a.team_entry_id === 'e1')).toHaveLength(1);
-    expect(screen.getByRole('status').textContent).toMatch(/Ada Lane \(ada\.l@iiitkottayam\.ac\.in\) is now the captain of Alpha/);
+    expect(globalThis.toasts.at(-1).description).toMatch(/Ada Lane \(ada\.l@iiitkottayam\.ac\.in\) is now the captain of Alpha/);
   });
 
   it('assigns a captain to a team without one, and offers accounts that captain another team too', async () => {
-    await openTeam('t2');
+    await openTeam('Beta');
     await waitFor(() => expect(captainText()).toMatch(/Beta has no captain/));
     fireEvent.change(screen.getByLabelText('Find captain for Beta'), { target: { value: 'iiitkottayam' } });
-    await waitFor(() => expect(within(screen.getByLabelText('New captain for Beta')).getAllByRole('option').length).toBe(5));
-    expect(screen.getByLabelText('New captain for Beta').textContent).toMatch(/Cara Cap/); // one person may captain several entries
-    pick('New captain for Beta', 'u-ada1');
+    await waitFor(() => expect(trigger('New captain for Beta').textContent).toMatch(/Choose from the search results/));
+    const offered = await optionsOf('New captain for Beta');
+    expect(offered).toHaveLength(4);
+    expect(offered.join()).toMatch(/Cara Cap/); // one person may captain several entries
+    await pick('New captain for Beta', 'Ada Lane (ada@iiitkottayam.ac.in)');
     fireEvent.click(screen.getByRole('button', { name: /assign captain/i }));
     await waitFor(() => expect(captainText()).toMatch(/Captain of Beta in this season: Ada Lane \(ada@iiitkottayam\.ac\.in\)/));
     expect(db.calls).toEqual([{ name: 'assign_captain', p_entry: 'e2', p_user: 'u-ada1', p_replace: false }]);
   });
 
   it('revokes a captain and shows the team without one; a refused change keeps the database\'s captain', async () => {
-    await openTeam('t1');
+    await openTeam('Alpha');
     await waitFor(() => expect(captainText()).toMatch(/Cara Cap/));
-    await chooseAccount('Alpha', 'ada', 'u-ada1');
+    await chooseAccount('Alpha', 'ada', 'Ada Lane (ada@iiitkottayam.ac.in)');
     db.rpcFail = { code: '22023', message: 'A captain cannot be assigned in a completed or archived season' };
     fireEvent.click(screen.getByRole('button', { name: /change captain/i }));
     expect(await screen.findByRole('alert')).toBeTruthy();

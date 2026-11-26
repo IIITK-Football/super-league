@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
-import { Button, Card, Field, Notice, useConfirm } from '../ui';
+import { CalendarClock, Search, Timer, Trophy } from 'lucide-react';
+import { Button, DateTimeField, Field, Notice, Select, Combobox, Skeleton, TextInput, toast, useConfirm } from '../ui';
 
 // Scorers. A scorer holds the scorer grant and an assignment scoped to one season (every match of it) or one match, with
 // an optional expiry. The dictator assigns and revokes here through the dictator-only database functions
@@ -27,7 +28,6 @@ export default function ManageScorers({ person }) { // eslint-disable-line react
   const [captainWarning, setCaptainWarning] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
   const latest = useRef({ list: 0, seasons: 0, matches: 0, warning: 0 });
   const confirm = useConfirm();
   useEffect(() => { if (person) setPicked({ id: person.user_id, label: person.label }); }, [person]);
@@ -95,7 +95,7 @@ export default function ManageScorers({ person }) { // eslint-disable-line react
   const assign = async () => {
     if (!picked.id) { setError('Find and choose the scorer’s account first.'); return; }
     if (!seasonId) { setError('Choose a season; add a match to limit the assignment to one match.'); return; }
-    setBusy('assign'); setError(''); setMessage('');
+    setBusy('assign'); setError('');
     const { error: err } = await supabase.rpc('assign_scorer', {
       p_user: picked.id,
       p_season: matchId ? null : seasonId,
@@ -104,7 +104,7 @@ export default function ManageScorers({ person }) { // eslint-disable-line react
     });
     setBusy('');
     if (err) setError(err.code === '23505' ? 'This scorer already has that assignment.' : err.message || 'Could not assign the scorer.');
-    else { setMessage(`${picked.label} can now score ${matchId ? 'that match' : 'every match of the season'}.`); setPicked({ id: '', label: '' }); setExpires(''); }
+    else { toast({ tone: 'success', title: 'Scorer assigned', description: `${picked.label} can now score ${matchId ? 'that match' : 'every match of the season'}.` }); setPicked({ id: '', label: '' }); setExpires(''); }
     load();
   };
 
@@ -112,11 +112,11 @@ export default function ManageScorers({ person }) { // eslint-disable-line react
     const who = state.labels[row.user_id] || 'this scorer';
     const ok = await confirm({ title: `Revoke ${who}?`, description: 'Matches already scored keep their data.', confirmLabel: 'Revoke', tone: 'danger' });
     if (!ok) return;
-    setBusy(row.id); setError(''); setMessage('');
+    setBusy(row.id); setError('');
     const { error: err } = await supabase.rpc('revoke_scorer', { p_assignment: row.id });
     setBusy('');
     if (err) setError(err.message);
-    else setMessage(`${who} no longer scores that assignment.`);
+    else toast({ tone: 'success', title: 'Scorer revoked', description: `${who} no longer scores that assignment.` });
     load();
   };
 
@@ -124,39 +124,42 @@ export default function ManageScorers({ person }) { // eslint-disable-line react
   const found = search.results;
   const options = picked.id && !found.some((a) => a.user_id === picked.id) ? [{ user_id: picked.id, label: picked.label }, ...found] : found;
   return <div className="space-y-6">
-    <div className="space-y-1">
-      <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Scorers</h2>
-      <p className="text-sm text-mut">Assign a scorer to a season or to one match. Scorers use Live matches only; they cannot change fixtures, teams, rosters, roles or news.</p>
-    </div>
     {error && <Notice tone="error" role="alert">{error}</Notice>}
-    {message && <Notice tone="success" role="status">{message}</Notice>}
 
     <section aria-label="Assignments" className="space-y-3">
-      {state.status === 'loading' && <p className="text-sm text-mut">Loading assignments...</p>}
+      {state.status === 'loading' && <Skeleton className="h-20 w-full rounded-card" />}
       {state.status === 'error' && <Notice tone="error" role="alert">Assignments could not be loaded ({state.error}). <Button variant="quiet" size="sm" onClick={load}>Try again</Button></Notice>}
-      {state.status === 'ready' && !state.rows.length && <p className="text-sm text-mut">No scorers are assigned yet.</p>}
-      {state.status === 'ready' && state.rows.length > 0 && <ul aria-label="Scorer assignments" className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surf">
-        {state.rows.map((row) => <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div className="min-w-0">
-            <p className="break-words font-semibold text-ink">{state.labels[row.user_id] || 'An account that is no longer available'}</p>
-            <p className="text-sm text-mut">
-              {row.match ? `${named(row.match)} (${row.match.season?.name ?? 'match'})` : `Every match of ${row.season?.division?.name ?? ''} ${row.season?.name ?? 'the season'}`}
-              {' · '}{row.expires_at && new Date(row.expires_at) < new Date() ? <span className="text-live">Expired {when(row.expires_at)}</span> : when(row.expires_at)}
-            </p>
-          </div>
-          <Button variant="quiet" size="sm" onClick={() => revoke(row)} disabled={busy !== ''} className="text-live">Revoke</Button>
-        </li>)}
+      {state.status === 'ready' && !state.rows.length && <div className="flex flex-col items-start gap-2 rounded-card border border-dashed border-line p-6 text-sm text-mut">
+        <Timer size={26} aria-hidden="true" />
+        <p className="font-semibold text-ink">No scorers are assigned yet.</p>
+        Assign someone below to score a season or a single match.
+      </div>}
+      {state.status === 'ready' && state.rows.length > 0 && <ul aria-label="Scorer assignments" className="glass divide-y divide-line/70 rounded-card px-2">
+        {state.rows.map((row) => {
+          const expired = row.expires_at && new Date(row.expires_at) < new Date();
+          return <li key={row.id} className="flex flex-wrap items-center gap-3 p-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-ink/[0.07] text-ink">{row.match ? <CalendarClock size={18} aria-hidden="true" /> : <Trophy size={18} aria-hidden="true" />}</span>
+            <div className="min-w-0 flex-1">
+              <p className="break-words font-black uppercase tracking-tight text-ink">{state.labels[row.user_id] || 'An account that is no longer available'}</p>
+              <p className="text-sm text-mut">
+                {row.match ? `${named(row.match)} (${row.match.season?.name ?? 'match'})` : `Every match of ${row.season?.division?.name ?? ''} ${row.season?.name ?? 'the season'}`}
+                {' · '}{expired ? <span className="text-live">Expired {when(row.expires_at)}</span> : when(row.expires_at)}
+              </p>
+            </div>
+            <Button variant="quiet" size="sm" onClick={() => revoke(row)} disabled={busy !== ''} className="text-live">Revoke</Button>
+          </li>;
+        })}
       </ul>}
     </section>
 
-    <Card as="section" aria-label="Assign a scorer" className="space-y-5">
-      <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">Assign a scorer</h3>
+    <section id="assign-scorer" aria-label="Assign a scorer" className="glass scroll-mt-28 space-y-5 rounded-card p-5">
+      <h2 className="font-display text-2xl text-ink">Assign a scorer</h2>
       <div className="grid gap-4 md:grid-cols-2">
-        <Field type="search" label="Find an account" aria-label="Find scorer" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" />
-        <Field as="select" label="Scorer" aria-label="Scorer" value={picked.id} onChange={(e) => setPicked({ id: e.target.value, label: found.find((a) => a.user_id === e.target.value)?.label || picked.label })}>
-          <option value="">{options.length ? 'Choose from the search results' : 'Search to choose an account'}</option>
-          {options.map((a) => <option key={a.user_id} value={a.user_id}>{a.label}</option>)}
-        </Field>
+        <Field label="Find an account">{(p) => <TextInput {...p} icon={Search} type="search" aria-label="Find scorer" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" />}</Field>
+        <Field label="Scorer">{(p) => <Select {...p} aria-label="Scorer" value={picked.id}
+          onChange={(id) => setPicked({ id, label: found.find((a) => a.user_id === id)?.label || picked.label })}
+          placeholder={options.length ? 'Choose from the search results' : 'Search to choose an account'}
+          options={options.map((a) => ({ value: a.user_id, label: a.label }))} />}</Field>
         <p aria-live="polite" className="text-sm text-mut md:col-span-2">
           {search.status === 'idle' && query.trim() && 'Type at least two letters.'}
           {search.status === 'loading' && 'Searching...'}
@@ -165,22 +168,18 @@ export default function ManageScorers({ person }) { // eslint-disable-line react
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Field as="select" label="Division" aria-label="Division" value={divisionId} onChange={(e) => chooseDivision(e.target.value)}>
-          <option value="">{divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
-          {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </Field>
-        <Field as="select" label="Season" aria-label="Season" value={seasonId} disabled={!divisionId} onChange={(e) => chooseSeason(e.target.value)}>
-          <option value="">{divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}</option>
-          {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>)}
-        </Field>
-        <Field as="select" label="One match (optional)" aria-label="Match" value={matchId} disabled={!seasonId} onChange={(e) => setMatchId(e.target.value)}>
-          <option value="">Every match of the season</option>
-          {matches.map((m) => <option key={m.id} value={m.id}>{named(m)} · {m.date ? new Date(m.date).toLocaleDateString() : 'no date'}</option>)}
-        </Field>
-        <Field type="datetime-local" label="Expires (optional)" aria-label="Expires" value={expires} onChange={(e) => setExpires(e.target.value)} />
+        <Field label="Division">{(p) => <Select {...p} aria-label="Division" value={divisionId} onChange={chooseDivision}
+          placeholder={divisions.length ? 'Choose a division' : 'No divisions yet'} options={divisions.map((d) => ({ value: d.id, label: d.name }))} />}</Field>
+        <Field label="Season">{(p) => <Select {...p} aria-label="Season" value={seasonId} disabled={!divisionId} onChange={chooseSeason}
+          placeholder={divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}
+          options={seasons.map((x) => ({ value: x.id, label: `${x.name}${x.is_current ? ' (current)' : ''}` }))} />}</Field>
+        <Field label="One match (optional)">{(p) => <Combobox {...p} aria-label="Match" value={matchId} disabled={!seasonId} onChange={setMatchId}
+          placeholder="Every match of the season" searchPlaceholder="Search teams"
+          options={[{ value: '', label: 'Every match of the season' }, ...matches.map((m) => ({ value: m.id, label: named(m), description: m.date ? new Date(m.date).toLocaleDateString() : 'No date' }))]} />}</Field>
+        <Field label="Expires (optional)">{(p) => <DateTimeField {...p} type="datetime-local" aria-label="Expires" value={expires} onChange={(e) => setExpires(e.target.value)} />}</Field>
       </div>
       {captainWarning && <Notice tone="warning" role="note">{captainWarning}</Notice>}
       <Button onClick={assign} disabled={busy !== '' || !picked.id || !seasonId}>{busy === 'assign' ? 'Assigning...' : 'Assign scorer'}</Button>
-    </Card>
+    </section>
   </div>;
 }
