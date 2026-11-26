@@ -23,13 +23,13 @@ export function SeasonBracket({ matches = [] }) {
   if (rounds.length === 0) return null;
 
   return (
-    <section aria-labelledby="bracket-heading" className="space-y-4">
-      <h2 id="bracket-heading" className="font-display text-2xl font-bold text-ink">Knockout</h2>
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+    <section aria-labelledby="bracket-heading" className="space-y-5">
+      <h2 id="bracket-heading" className="font-display text-3xl text-ink sm:text-4xl">Knockout</h2>
+      <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
         {rounds.map((round) => (
-          <div key={round.stage} className="space-y-3">
-            <h3 className="font-semibold text-mut">{round.label}</h3>
-            {round.matches.map((match) => <MatchStrip key={match.id} match={match} />)}
+          <div key={round.stage} className="space-y-4">
+            <h3 className="eyebrow">{round.label}</h3>
+            {round.matches.map((match) => <MatchStrip key={match.id} match={match} className="h-full" />)}
           </div>
         ))}
       </div>

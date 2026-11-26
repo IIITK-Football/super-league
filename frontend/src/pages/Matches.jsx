@@ -37,31 +37,29 @@ export function Matches() {
   }, [seasonScope.ready, seasonId, attempt]);
 
   const header = (
-    <header className="space-y-1">
-      <h1 className="font-display text-4xl font-bold text-ink sm:text-5xl">Matches</h1>
-      <p className="text-mut">
-        {[seasonScope.divisionRecord?.name, seasonScope.season?.name].filter(Boolean).join(' · ') || ' '}
-      </p>
+    <header className="space-y-2">
+      <p className="eyebrow">{[seasonScope.divisionRecord?.name, seasonScope.season && `${seasonScope.season.name} season`].filter(Boolean).join(' · ') || ' '}</p>
+      <h1 className="font-display text-4xl text-ink sm:text-6xl">Matches</h1>
     </header>
   );
 
   // A failed season lookup is not an empty season.
   if (seasonScope.ready && seasonScope.error) {
-    return <div className="space-y-6 pb-12">{header}<ErrorState message="The season could not be loaded." /></div>;
+    return <div className="space-y-10 pb-12">{header}<ErrorState message="The season could not be loaded." /></div>;
   }
 
   if (state.loading) {
     return (
-      <div aria-busy="true" aria-label="Loading matches" className="space-y-6 pb-12">
+      <div aria-busy="true" aria-label="Loading matches" className="space-y-10 pb-12">
         {header}
-        {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-28 w-full" />)}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-36 w-full rounded-card" />)}</div>
       </div>
     );
   }
 
   if (state.error) {
     return (
-      <div className="space-y-6 pb-12">
+      <div className="space-y-10 pb-12">
         {header}
         <ErrorState message={state.error} onRetry={() => setAttempt((n) => n + 1)} />
       </div>
@@ -71,7 +69,7 @@ export function Matches() {
   const { matches } = state;
   if (matches.length === 0) {
     return (
-      <div className="space-y-6 pb-12">
+      <div className="space-y-10 pb-12">
         {header}
         <EmptyState title={`No matches in ${seasonScope.season?.name ?? 'this season'} yet`}>
           Fixtures appear here once they are scheduled.
@@ -85,23 +83,23 @@ export function Matches() {
   const results = matches.filter(isFinal).sort(byDate(-1));
 
   return (
-    <div className="space-y-12 pb-12">
+    <div className="space-y-14 pb-12">
       {header}
       {live.length > 0 && (
-        <section aria-labelledby="live-heading" className="space-y-4">
-          <h2 id="live-heading" className="font-display text-2xl font-bold text-ink">Live now</h2>
+        <section aria-labelledby="live-heading" className="space-y-5">
+          <h2 id="live-heading" className="font-display text-3xl text-ink sm:text-4xl">Live now</h2>
           <MatchList matches={live} />
         </section>
       )}
       {upcoming.length > 0 && (
-        <section aria-labelledby="upcoming-heading" className="space-y-4">
-          <h2 id="upcoming-heading" className="font-display text-2xl font-bold text-ink">Upcoming</h2>
+        <section aria-labelledby="upcoming-heading" className="space-y-5">
+          <h2 id="upcoming-heading" className="font-display text-3xl text-ink sm:text-4xl">Upcoming</h2>
           <MatchList matches={upcoming} />
         </section>
       )}
       {results.length > 0 && (
-        <section aria-labelledby="results-heading" className="space-y-4">
-          <h2 id="results-heading" className="font-display text-2xl font-bold text-ink">Results</h2>
+        <section aria-labelledby="results-heading" className="space-y-5">
+          <h2 id="results-heading" className="font-display text-3xl text-ink sm:text-4xl">Results</h2>
           <MatchList matches={results} />
         </section>
       )}

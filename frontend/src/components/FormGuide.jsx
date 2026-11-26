@@ -14,7 +14,7 @@ export function FormGuide({ form = [] }) {
       {form.map((result, i) => (
         <li
           key={`${result}-${i}`}
-          className={cn('flex size-5 items-center justify-center rounded-full font-display text-xs font-bold', MARK[result] ?? MARK.L)}
+          className={cn('flex size-6 items-center justify-center rounded-full font-display text-[11px] font-black', MARK[result] ?? MARK.L)}
         >
           {result}
         </li>
