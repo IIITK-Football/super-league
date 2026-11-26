@@ -58,9 +58,9 @@ function playerFields(value, onChange, idPrefix) {
     <Field label="First name" aria-label={`${idPrefix} first name`} value={value.first_name} onChange={field('first_name')} />
     <Field label="Last name" aria-label={`${idPrefix} last name`} value={value.last_name} onChange={field('last_name')} />
     <Field type="number" min="0" max="99" label="Jersey" aria-label={`${idPrefix} jersey`} value={value.jersey_number ?? ''} onChange={field('jersey_number')} />
-    <Field as="select" label="Position" aria-label={`${idPrefix} position`} value={value.position || ''} onChange={field('position')}>
-      <option value="">Not set</option>{[...new Set([...POSITIONS, value.position].filter(Boolean))].map((p) => <option key={p} value={p}>{p}</option>)}
-    </Field>
+    <Field label="Position">{(p) => <Select {...p} aria-label={`${idPrefix} position`} value={value.position || ''} placeholder="Not set"
+      onChange={(next) => onChange({ ...value, position: next })}
+      options={[{ value: '', label: 'Not set' }, ...[...new Set([...POSITIONS, value.position].filter(Boolean))].map((pos) => ({ value: pos, label: pos }))]} />}</Field>
     <Field type="number" min="1" max="99" label="Overall rating" placeholder="Not set" aria-label={`${idPrefix} rating`} value={value.overall_rating} onChange={field('overall_rating')} />
     {cardFields(value, onChange, idPrefix)}
   </div>;
@@ -78,12 +78,12 @@ function cardFields(value, onChange, idPrefix) {
         onChange={(e) => setCard({ stats: { ...card.stats, [key]: e.target.value } })} />)}
     </div>
     <div className="grid grid-cols-2 gap-3">
-      <Field as="select" label="Preferred foot" aria-label={`${idPrefix} preferred foot`} value={card.preferredFoot} onChange={(e) => setCard({ preferredFoot: e.target.value })}>
-        <option value="">Not set</option>{FEET.map((f) => <option key={f} value={f}>{f}</option>)}
-      </Field>
-      <Field as="select" label="Play style" aria-label={`${idPrefix} play style`} value={card.playStyle} onChange={(e) => setCard({ playStyle: e.target.value })}>
-        <option value="">Not set</option>{PLAY_STYLES.map((style) => <option key={style.id} value={style.name}>{style.name}</option>)}
-      </Field>
+      <Field label="Preferred foot">{(p) => <Select {...p} aria-label={`${idPrefix} preferred foot`} value={card.preferredFoot} placeholder="Not set"
+        onChange={(preferredFoot) => setCard({ preferredFoot })}
+        options={[{ value: '', label: 'Not set' }, ...FEET.map((foot) => ({ value: foot, label: foot }))]} />}</Field>
+      <Field label="Play style">{(p) => <Combobox {...p} aria-label={`${idPrefix} play style`} value={card.playStyle} placeholder="No play style"
+        searchPlaceholder="Search play styles" onChange={(playStyle) => setCard({ playStyle })}
+        options={[{ value: '', label: 'No play style' }, ...PLAY_STYLES.map((style) => ({ value: style.name, label: style.name }))]} />}</Field>
     </div>
   </fieldset>;
 }
@@ -590,10 +590,8 @@ export default function ManageRosters() {
           </>}
         </div>
         <div className="flex flex-wrap items-end gap-2 border-t border-line pt-4">
-          <Field as="select" label="Move to another team" aria-label="Move to team" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className="min-w-0 flex-1 basis-48">
-            <option value="">Choose a team</option>
-            {entries.filter((e) => e.id !== entryId).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </Field>
+          <Field label="Move to another team" className="min-w-0 flex-1 basis-48">{(p) => <Select {...p} aria-label="Move to team" value={moveTo} onChange={setMoveTo} placeholder="Choose a team"
+            options={entries.filter((e) => e.id !== entryId).map((e) => ({ value: e.id, label: e.name }))} />}</Field>
           <Button variant="secondary" onClick={movePlayer} disabled={busy === `move-${place.id}` || !moveTo}>Move</Button>
         </div>
         <div className="flex flex-wrap gap-2 border-t border-line pt-4">

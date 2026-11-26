@@ -265,8 +265,8 @@ describe('choosing a division, season and team', () => {
     expect(screen.getByLabelText('Edit rating').value).toBe('70');
     expect(screen.getByLabelText('Edit Pace').value).toBe('80'); // an older flat value is shown in the structured field
     expect(screen.getByLabelText('Edit Shooting').value).toBe('');
-    expect(screen.getByLabelText('Edit preferred foot').value).toBe('');
-    expect(screen.getByLabelText('Edit play style').value).toBe(''); // no play style: not set
+    expect(trigger('Edit preferred foot').textContent).toMatch(/not set/i);
+    expect(trigger('Edit play style').textContent).toMatch(/no play style/i); // no play style: not set
     expect(screen.queryByLabelText('Edit email')).toBeNull(); // no email field: the email is the account's
     closeSheet();
     fireEvent.click(await screen.findByRole('button', { name: 'Account for Ada Striker' }));
@@ -321,7 +321,7 @@ describe('players', () => {
     pick('New rating', '64');
     pick('New last name', 'Keeper');
     pick('New jersey', '1');
-    pick('New position', 'GK');
+    await choose('New position', 'GK');
     fireEvent.click(within(form).getByRole('button', { name: /create player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Bea Keeper added to Alpha, linked to bea@iiitkottayam.ac.in/));
     expect(rpc).toHaveBeenCalledWith('create_player_for_account', {
@@ -404,7 +404,7 @@ describe('players', () => {
     await openTeam();
     await screen.findByRole('button', { name: 'Edit Ada Striker' });
     await openPlayer();
-    pick('Move to team', 'e2');
+    await choose('Move to team', 'Beta');
     fireEvent.click(screen.getByRole('button', { name: /^move$/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Moved to Beta/));
     expect(writes()).toEqual([expect.objectContaining({ table: 'roster_memberships', op: 'update', payload: { team_entry_id: 'e2' } })]);
@@ -521,17 +521,17 @@ describe('the FUT card in the player forms', () => {
     pick('New last name', 'Keeper');
     pick('New rating', '64');
     pick('New Pace', '71');
-    pick('New preferred foot', 'Left');
-    pick('New play style', 'Power Shot');
+    await choose('New preferred foot', 'Left');
+    await choose('New play style', 'Power Shot');
     expect(newCard().getAttribute('aria-label')).toBe('FUT card: Bea Keeper');
     expect(within(newCard()).getByTestId('card-rating').textContent).toBe('64');
     expect(newCard().textContent).toMatch(/PAC71/);
     expect(newCard().textContent).toMatch(/Preferred foot: Left/);
     expect(newCard().textContent).toMatch(/Play style: Power Shot/);
     expect(within(newCard()).getByRole('img', { name: 'Power Shot' })).toBeTruthy();
-    pick('New play style', '');
+    await choose('New play style', 'No play style');
     expect(newCard().textContent).toMatch(/Play style: not set/);
-    pick('New play style', 'Tiki Taka');
+    await choose('New play style', 'Tiki Taka');
     fireEvent.click(within(screen.getByRole('form', { name: 'New player' })).getByRole('button', { name: /create player/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Bea Keeper added to Alpha/));
     expect(rpc.mock.calls.find(([name]) => name === 'create_player_for_account')[1].p_attributes).toEqual({
@@ -578,10 +578,10 @@ describe('the FUT card in the player forms', () => {
     await screen.findByRole('button', { name: 'Edit Ada Striker' });
     await openPlayer();
     expect(screen.getByLabelText('Edit Shooting').value).toBe('66');
-    expect(screen.getByLabelText('Edit play style').value).toBe('Power Shot');
+    expect(trigger('Edit play style').textContent).toBe('Power Shot');
     pick('Edit Shooting', '75');
-    pick('Edit preferred foot', 'Right');
-    pick('Edit play style', 'Finesse Shot');
+    await choose('Edit preferred foot', 'Right');
+    await choose('Edit play style', 'Finesse Shot');
     expect(editCard().textContent).toMatch(/SHO75/);
     expect(editCard().textContent).toMatch(/Preferred foot: Right/);
     expect(editCard().textContent).toMatch(/Play style: Finesse Shot/);
