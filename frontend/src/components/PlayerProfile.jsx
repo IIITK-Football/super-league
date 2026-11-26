@@ -104,15 +104,15 @@ export default function PlayerProfile({ onBack }) {
 
                 <div className={styles.headerArea}>
                     <div>
-                        <span className="block font-display text-2xl font-bold leading-tight text-mut sm:text-3xl">
+                        <span className="block font-display text-2xl leading-none text-mut sm:text-3xl">
                             {player.first_name}
                         </span>
-                        <span className="block font-display text-4xl font-bold leading-none text-ink sm:text-5xl lg:text-6xl">
+                        <span className="block font-display text-6xl leading-[0.9] text-ink sm:text-7xl lg:text-8xl">
                             {player.last_name}
                         </span>
                     </div>
 
-                    <dl className={`w-max rounded-card border border-line bg-surf p-4 ${styles.bioGrid}`}>
+                    <dl className={`glass w-max rounded-card p-4 ${styles.bioGrid}`}>
                         <div>
                             <dt className="text-xs text-mut">Position</dt>
                             <dd className="mt-1 font-semibold text-ink">{player.position || '-'}</dd>
@@ -124,18 +124,16 @@ export default function PlayerProfile({ onBack }) {
                     </dl>
                 </div>
 
-                <section aria-label="Core attributes" className={`${styles.attrsArea} rounded-card border border-line bg-surf p-5 sm:p-6`}>
-                    <h2 className="mb-6 border-b border-line pb-4 font-display text-2xl font-bold text-ink">Core attributes</h2>
-                    <div className={styles.coreAttributesGrid}>
+                <section aria-label="Core attributes" className={`${styles.attrsArea} space-y-5`}>
+                    <h2 className="font-display text-3xl text-ink sm:text-4xl">Core attributes</h2>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {CORE_STATS.map((category) => {
                             const total = statValue(attrs, category);
                             return (
-                                <div key={category} className="grid gap-2 text-sm">
-                                    <div className="flex items-baseline justify-between font-semibold text-mut">
-                                        <span>{category}</span>
-                                        <span className="font-display text-2xl font-bold tabular-nums text-ink">{total ?? '-'}</span>
-                                    </div>
-                                    <div className="h-1.5 w-full overflow-hidden rounded-pill bg-raise" role="presentation">
+                                <div key={category} className="glass grid gap-4 rounded-card p-5">
+                                    <p className="eyebrow">{category}</p>
+                                    <p className="font-display text-6xl leading-none tabular-nums text-ink">{total ?? '-'}</p>
+                                    <div className="h-1 w-full overflow-hidden rounded-pill bg-raise" role="presentation">
                                         <div className="h-full bg-acc" style={{ width: `${total ?? 0}%` }} />
                                     </div>
                                 </div>
@@ -145,7 +143,7 @@ export default function PlayerProfile({ onBack }) {
                 </section>
 
                 {playStyle && (
-                    <section aria-label="Play style" className={`${styles.stylesArea} rounded-card border border-line bg-surf p-5`}>
+                    <section aria-label="Play style" className={`${styles.stylesArea} glass rounded-card p-5`}>
                         <div className="grid grid-cols-[auto_1fr] items-center gap-5">
                             {playStyle.imageUrl ? (
                                 <img
@@ -156,12 +154,13 @@ export default function PlayerProfile({ onBack }) {
                                     draggable="false"
                                 />
                             ) : (
-                                <div className="grid size-14 place-content-center rounded-ctl border border-line bg-raise">
+                                <div className="grid size-14 place-content-center rounded-ctl bg-raise">
                                     <Hexagon size={26} aria-hidden="true" className="text-mut" />
                                 </div>
                             )}
                             <div className="grid gap-1">
-                                <span className="font-display text-xl font-bold text-ink">{playStyle.name}</span>
+                                <span className="eyebrow">Play style</span>
+                                <span className="font-display text-2xl leading-none text-ink">{playStyle.name}</span>
                                 <p className="text-sm leading-relaxed text-mut">
                                     {playStyle.description || 'A play style from the catalogue.'}
                                 </p>
@@ -183,16 +182,16 @@ export default function PlayerProfile({ onBack }) {
 export function SeasonHistory({ player }) {
     const seasons = player?.seasons || [];
     return (
-        <section aria-label="Season history" className="col-span-full rounded-card border border-line bg-surf p-5 sm:p-6">
-            <h2 className="mb-4 border-b border-line pb-4 font-display text-2xl font-bold text-ink">Season history</h2>
+        <section aria-label="Season history" className="col-span-full space-y-5">
+            <h2 className="font-display text-3xl text-ink sm:text-4xl">Season history</h2>
             {seasons.length === 0 ? (
                 <p className="text-sm text-mut">No seasons played yet.</p>
             ) : (
-                <div className="overflow-x-auto">
+                <div className="glass overflow-x-auto rounded-card p-2 sm:p-4">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="text-left text-xs text-mut">
-                                <th scope="col" className="py-2 pr-4 font-semibold">Season</th>
+                                <th scope="col" className="px-2 py-2 pr-4 font-semibold">Season</th>
                                 <th scope="col" className="py-2 pr-4 font-semibold">Team</th>
                                 <th scope="col" className="py-2 pr-4 font-semibold">No.</th>
                                 <th scope="col" className="py-2 pr-4 font-semibold">Pos.</th>
@@ -202,22 +201,22 @@ export function SeasonHistory({ player }) {
                         </thead>
                         <tbody>
                             {seasons.map((line) => (
-                                <tr key={line.season.id} className="border-t border-line">
-                                    <td className="py-2 pr-4 font-semibold text-ink">{line.division?.name ? `${line.division.name} ` : ''}{line.season.name}</td>
-                                    <td className="py-2 pr-4 text-ink">{line.team?.name || '-'}</td>
-                                    <td className="py-2 pr-4 tabular-nums">{line.jersey_number ?? '-'}</td>
-                                    <td className="py-2 pr-4">{line.position || '-'}</td>
-                                    <td className="py-2 pr-4 text-right font-display text-lg font-bold tabular-nums">{line.goals}</td>
-                                    <td className="py-2 text-right font-display text-lg font-bold tabular-nums">{line.assists}</td>
+                                <tr key={line.season.id} className="border-t border-line/70">
+                                    <td className="px-2 py-3 pr-4 font-black uppercase tracking-tight text-ink">{line.division?.name ? `${line.division.name} ` : ''}{line.season.name}</td>
+                                    <td className="py-3 pr-4 text-ink">{line.team?.name || '-'}</td>
+                                    <td className="py-3 pr-4 tabular-nums">{line.jersey_number ?? '-'}</td>
+                                    <td className="py-3 pr-4">{line.position || '-'}</td>
+                                    <td className="py-3 pr-4 text-right font-display text-3xl leading-none tabular-nums text-ink">{line.goals}</td>
+                                    <td className="py-3 pr-2 text-right font-display text-3xl leading-none tabular-nums text-ink">{line.assists}</td>
                                 </tr>
                             ))}
                         </tbody>
                         {player.career && (
                             <tfoot>
                                 <tr className="border-t border-ink font-bold">
-                                    <td className="py-2 pr-4" colSpan={4}>Career ({player.career.seasons} {player.career.seasons === 1 ? 'season' : 'seasons'})</td>
-                                    <td className="py-2 pr-4 text-right font-display text-lg tabular-nums">{player.career.goals}</td>
-                                    <td className="py-2 text-right font-display text-lg tabular-nums">{player.career.assists}</td>
+                                    <td className="px-2 py-3 pr-4" colSpan={4}>Career ({player.career.seasons} {player.career.seasons === 1 ? 'season' : 'seasons'})</td>
+                                    <td className="py-3 pr-4 text-right font-display text-3xl leading-none tabular-nums">{player.career.goals}</td>
+                                    <td className="py-3 pr-2 text-right font-display text-3xl leading-none tabular-nums">{player.career.assists}</td>
                                 </tr>
                             </tfoot>
                         )}
