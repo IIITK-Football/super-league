@@ -174,7 +174,7 @@ export function Home() {
 
           {news.length > 0 && (
             <section className="space-y-3">
-              <SectionHead title="News" to="/vault" action="All news" />
+              <SectionHead title="News" to={`/${division}/news`} action="All news" />
               <ul className="divide-y divide-line rounded-card border border-line bg-surf">
                 {news.map((article) => (
                   <li key={article.id}>
