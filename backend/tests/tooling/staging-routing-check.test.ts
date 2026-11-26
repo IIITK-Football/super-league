@@ -32,3 +32,18 @@ describe('staging routing verdicts', () => {
     expect(fails((a) => { a.health = ok(200, { environment: 'production', commit: 'abcdef1' }); }).join()).toMatch(/release/);
   });
 });
+
+describe('a restored previous pair', () => {
+  it('needs no version.json or default no-store, and still needs every other rule', () => {
+    // Loosely typed: the restored release answers without the fields SL-031 added.
+    const a: any = answers();
+    a.version = { status: 404, body: null, type: 'text/html', cache: null };
+    for (const k of ['health', 'standings', 'history', 'historyAnon', 'write', 'writeAnon']) a[k] = { ...a[k], cache: null };
+    const checks = judge(a, { previous: true });
+    expect(checks.every((c: { pass: boolean }) => c.pass)).toBe(true);
+    expect(checks.map((c: { name: string }) => c.name).join()).not.toMatch(/no-store/);
+    a.history = ok(401, { success: false });
+    expect(judge(a, { previous: true }).find((c: { name: string }) => /bearer/.test(c.name))?.pass).toBe(false);
+  });
+});
+

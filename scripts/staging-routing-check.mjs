@@ -10,8 +10,12 @@
 // The temporary account is created on STAGING with the staging server key and deleted at the end. Nothing else is
 // written. Prints one JSON evidence document to standard output.
 //
-// Site: STAGING_SITE_URL, default https://develop.super-league.pages.dev; preview hosts only, never production.
-// Usage: node scripts/staging-routing-check.mjs
+// Site: STAGING_SITE_URL, default https://develop.super-league.pages.dev; preview hosts only, never production. A
+// rolled-back pair is checked at the older preview deployment's own URL (<hash>.super-league.pages.dev), since Pages
+// previews keep their URL but cannot be rolled back.
+// --previous: the restored pair predates SL-031, so its site has no /version.json and its answers no default
+// Cache-Control; those two rules are skipped and every other rule applies (docs/rollback/pages-worker-pair.md).
+// Usage: node scripts/staging-routing-check.mjs [--previous]
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -20,19 +24,23 @@ import { loadEnvText, STAGING_REF, verifyTarget } from './staging-checks.mjs';
 import { accessHeaders, verifySite } from './staging-media-check.mjs';
 
 // The same-origin answers that make up the routing contract, judged from what the site returned.
-export function judge(answers) {
+export function judge(answers, { previous = false } = {}) {
   const { version, health, standings, history, historyAnon, write, writeAnon, errors } = answers;
   const all = [health, standings, history, historyAnon, write, writeAnon, ...errors];
-  return [
-    ['the site and the Worker name their release from the same origin',
-      version.status === 200 && /^[0-9a-f]{7,40}$/.test(version.body?.commit ?? '') && health.status === 200 && health.body?.environment === 'staging' && /^[0-9a-f]{7,40}$/.test(health.body?.commit ?? '')],
+  const sha = (v) => /^[0-9a-f]{7,40}$/.test(v ?? '');
+  const checks = [
+    previous
+      ? ['the restored Worker answers from the same origin and names its release', health.status === 200 && health.body?.environment === 'staging' && sha(health.body?.commit)]
+      : ['the site and the Worker name their release from the same origin',
+        version.status === 200 && sha(version.body?.commit) && health.status === 200 && health.body?.environment === 'staging' && sha(health.body?.commit)],
     ['a public read reaches the staging Worker', standings.status === 200 && standings.body?.success === true],
     ["the caller's bearer token is forwarded on a read (signed-in 200, signed-out 401)", history.status === 200 && historyAnon.status === 401],
     ['a protected write: signed-in non-dictator refused by the database (403), missing session by the Worker (401)', write.status === 403 && writeAnon.status === 401],
     ['errors are stable JSON (404 unknown route, 400 invalid input, 404 unknown division)',
       errors.map((e) => e.status).join() === '404,400,404' && errors.every((e) => /application\/json/.test(e.type ?? '') && e.body?.success === false)],
-    ['every /api answer carries Cache-Control: no-store', all.every((a) => a.cache === 'no-store')],
-  ].map(([name, pass]) => ({ name, pass: Boolean(pass) }));
+  ];
+  if (!previous) checks.push(['every /api answer carries Cache-Control: no-store', all.every((a) => a.cache === 'no-store')]);
+  return checks.map(([name, pass]) => ({ name, pass: Boolean(pass) }));
 }
 
 async function main() {
@@ -86,10 +94,12 @@ async function main() {
         await get('/api/standings?division=no-such-division'),
       ],
     };
-    const checks = judge(answers);
+    const previous = process.argv.includes('--previous');
+    const checks = judge(answers, { previous });
     for (const c of checks) process.stderr.write(`${c.pass ? 'PASS' : 'FAIL'} ${c.name}\n`);
     const evidence = {
       item: 'SL-031',
+      mode: process.argv.includes('--previous') ? 'restored previous pair' : 'current pair',
       site,
       recordedAt: new Date().toISOString(),
       release: { site: answers.version.body, worker: answers.health.body },

@@ -22,12 +22,21 @@ A release breaks the site or the API on staging (or, with the owner's approval, 
 3. **Roll back the Worker:** Workers & Pages → `super-league-api-staging` (or `super-league-api` in production) → Deployments, then "Rollback" on the version whose id matches the chosen `/api/health` `version`.
    - A rollback deploys that version's code and settings as they were.
    - Secrets are unchanged.
-4. **Roll back the site:** Workers & Pages → the Pages project → Deployments, then "Rollback to this deployment" on the deployment built from the chosen commit (`develop` previews for staging).
-   - The `API` binding is a project setting, so the restored deployment still forwards `/api` to the Worker.
-5. **Repeat the requests:** run `node scripts/staging-routing-check.mjs`. It must pass with `release.site.commit` and `release.worker.commit` showing the restored pair.
+4. **Restore the site:**
+   - **Production:** Workers & Pages → the Pages project → Deployments, then "Rollback to this deployment" on the deployment built from the chosen commit.
+   - **Staging:** `develop` builds are preview deployments, which have no rollback or redeploy. Each one keeps its own URL (`<hash>.super-league.pages.dev`, listed under Deployments), and that URL serves the same functions with the same `API` binding. The restored site is the chosen deployment's own URL.
+5. **Repeat the requests:**
+
+   ```
+   STAGING_SITE_URL=https://<hash>.super-league.pages.dev node scripts/staging-routing-check.mjs
+   ```
+
+   It must pass, with `release.worker.commit` showing the restored Worker. A pair from before SL-031 has no `/version.json` and no default `Cache-Control`, so for such a pair add `--previous`. That mode skips those two rules, and the site is then named by its deployment URL.
 6. **Return to the newest release** once it is fixed, by pushing the fix to `develop` (Workers Builds and Pages both deploy it). Then run the check again.
 
 ## Notes
+
+- Workers Builds deploys the staging Worker only when `api/`, `backend/app/api/` or `backend/lib/` change (build watch paths, `docs/worker-staging.md`). A docs-only push therefore moves the site to a new commit and leaves the Worker on its last code release. That is a normal pair, because the `/api` contract is unchanged.
 
 - Database migrations are forward-only and are not rolled back with the code (see `docs/release.md`). A release whose code needs a new migration is compatible with the previous code only if that migration is additive. Every migration in Phase 3 is additive (new functions only).
 - `wrangler.jsonc` is the source of truth for Worker settings, so the next deploy from `develop` replaces whatever the rollback restored.
