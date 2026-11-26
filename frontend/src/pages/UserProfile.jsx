@@ -1,298 +1,210 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 import { PasswordSettings } from '../components/PasswordSettings';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom'; // IMPORT NAVIGATE
 import { useApi } from '../hooks/useApi';
-import { supabase } from '../lib/supabase';
-import { GlassPanel } from '../components/GlassPanel';
-import { Send, User, LogOut, Trophy, Medal } from 'lucide-react';
-import teamStyles from './Teams.module.css';
-import { cn } from '../utils/cn';
-import { API_BASE_URL } from '../lib/api';
 import { useDivisions } from '../hooks/useDivisions';
+import { supabase } from '../lib/supabase';
+import { API_BASE_URL } from '../lib/api';
+import { fetchWorldCupTeams, saveWorldCupFlair } from '../lib/authApi';
 import MyPlayerCard from '../components/players/MyPlayerCard';
+import { Button, Card, Field, Notice, Pill, Skeleton } from '../components/ui';
 
-const getTeamColorClass = (teamName) => {
-    if (!teamName) return teamStyles.defaultTeam;
-    const cleanName = teamName.trim();
-    const map = {
-        'KFC': teamStyles.kfc,
-        'HRZxKadayadis': teamStyles.hrzx,
-        'MILF': teamStyles.milf,
-        'BBC': teamStyles.bbc,
-        'AL Balal': teamStyles.alBalal,
-        'AC Nilan': teamStyles.acNilan,
-        'Red Wolves': teamStyles.redWolves,
-        'DILF': teamStyles.dilf,
-        'FAAAH United': teamStyles.faaah,
-        'KULASTHREE FC': teamStyles.kulasthree,
-        'Fivestars': teamStyles.fivestars
-    };
-    return map[cleanName] || teamStyles.defaultTeam;
-};
+// Clubs of each division's current season, and the clubs this person supports.
+async function loadClubs() {
+  const { data, error } = await supabase.from('seasons')
+    .select('division_id, team_entries(team:teams(id, name))').eq('is_current', true);
+  if (error) throw error;
+  const byDivision = {};
+  for (const season of data || []) {
+    byDivision[season.division_id] = (season.team_entries || []).map((e) => e.team).filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return byDivision;
+}
 
 export function UserProfile() {
-    const { user, profile, setProfile, signOut } = useAuth();
-    const navigate = useNavigate(); // USE NAVIGATE
-    const { data: lbResp, loading: lbLoading } = useApi('/predictions/leaderboard');
+  const { user, profile, setProfile, signOut } = useAuth();
+  const navigate = useNavigate();
+  const { data: lbResp, loading: lbLoading } = useApi('/predictions/leaderboard');
+  const { divisions } = useDivisions();
 
-    const leaderboard = lbResp?.data?.overall || [];
-    const myEntry = leaderboard.find(entry => entry.user_id === user?.id);
-    const myPoints = myEntry ? myEntry.total_points : 0;
-    const myRank = myEntry ? leaderboard.findIndex(e => e.user_id === user?.id) + 1 : null;
+  const leaderboard = lbResp?.data?.overall || [];
+  const myEntry = leaderboard.find((entry) => entry.user_id === user?.id);
+  const myRank = myEntry ? leaderboard.indexOf(myEntry) + 1 : null;
 
-    const [nickname, setNickname] = useState(profile?.nickname || '');
-    // The club the user supports in each division (division_flairs), keyed by division id.
-    const { divisions } = useDivisions();
-    const [flairs, setFlairs] = useState({});
-    const [savedFlairs, setSavedFlairs] = useState({});
-    const [wcFlair, setWcFlair] = useState(profile?.wc_team_flair || ''); // NEW WC FLAIR STATE
+  const [nickname, setNickname] = useState(profile?.nickname || '');
+  const [wcFlair, setWcFlair] = useState(profile?.wc_team_flair || '');
+  const [flairs, setFlairs] = useState({});
+  const [savedFlairs, setSavedFlairs] = useState({});
+  const [clubs, setClubs] = useState({ status: 'loading', byDivision: {} });
+  const [wcTeams, setWcTeams] = useState({ status: 'loading', list: [] });
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState(null);
 
-    const [saving, setSaving] = useState(false);
-    const [success, setSuccess] = useState(false);
-    const [error, setError] = useState(null);
+  const loadLists = () => {
+    setClubs({ status: 'loading', byDivision: {} });
+    loadClubs()
+      .then((byDivision) => setClubs({ status: 'ready', byDivision }))
+      .catch(() => setClubs({ status: 'error', byDivision: {} }));
+    setWcTeams({ status: 'loading', list: [] });
+    fetchWorldCupTeams(API_BASE_URL)
+      .then((list) => setWcTeams({ status: 'ready', list }))
+      .catch(() => setWcTeams({ status: 'error', list: [] }));
+  };
 
-    const [teamsByDivision, setTeamsByDivision] = useState({});
-    const [wcTeams, setWcTeams] = useState([]); // NEW WC TEAMS LIST
+  useEffect(() => {
+    loadLists();
+    if (!user) return;
+    supabase.from('division_flairs').select('division_id, team_name').eq('user_id', user.id).then(({ data }) => {
+      const map = Object.fromEntries((data || []).map((f) => [f.division_id, f.team_name]));
+      setFlairs(map);
+      setSavedFlairs(map);
+    });
+  }, [user]);
 
-    useEffect(() => {
-        const fetchAllTeams = async () => {
-            // The clubs of each division's current season
-            const { data: currentSeasons } = await supabase.from('seasons')
-                .select('division_id, team_entries(team:teams(id, name))').eq('is_current', true);
-            const byDivision = {};
-            for (const season of currentSeasons || []) {
-                byDivision[season.division_id] = (season.team_entries || []).map((e) => e.team).filter(Boolean)
-                    .sort((a, b) => a.name.localeCompare(b.name));
-            }
-            setTeamsByDivision(byDivision);
+  const name = nickname.trim();
+  const hasChanges = name !== (profile?.nickname || '')
+    || divisions.some((d) => (flairs[d.id] || '') !== (savedFlairs[d.id] || ''))
+    || wcFlair !== (profile?.wc_team_flair || '');
+  const canSave = !saving && name.length >= 3 && hasChanges;
 
-            if (user) {
-                const { data: mine } = await supabase.from('division_flairs').select('division_id, team_name').eq('user_id', user.id);
-                const map = Object.fromEntries((mine || []).map((f) => [f.division_id, f.team_name]));
-                setFlairs(map);
-                setSavedFlairs(map);
-            }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    setSuccess(false);
+    try {
+      const { error: updateError } = await supabase.from('user_profiles').update({ nickname: name }).eq('id', user.id);
+      if (updateError) throw new Error('Your nickname was not saved. Try again.');
+      if (wcFlair && wcFlair !== (profile?.wc_team_flair || '')) await saveWorldCupFlair(supabase, API_BASE_URL, user.id, wcFlair);
+    } catch (err) {
+      setError(err.message || 'Your profile was not saved. Try again.');
+      setSaving(false);
+      return;
+    }
 
-            // Fetch World Cup Teams (Assuming they are in 'wc_teams' table or similar from your API)
-            try {
-               const res = await fetch(`${API_BASE_URL}/wc/teams`);
-               const json = await res.json();
-               if (json.success && json.data) {
-                 // Sort them alphabetically for the dropdown
-                 const sortedWcTeams = json.data.sort((a, b) => a.name.localeCompare(b.name));
-                 setWcTeams(sortedWcTeams);
-               }
-            } catch (err) {
-               console.error("Failed to fetch WC teams for profile", err);
-            }
-        };
-        fetchAllTeams();
-    }, [user]);
+    // Division clubs: save the chosen ones, remove the cleared ones.
+    const chosen = Object.entries(flairs).filter(([, team]) => team);
+    const cleared = Object.keys(savedFlairs).filter((id) => !flairs[id]);
+    const { error: flairError } = chosen.length
+      ? await supabase.from('division_flairs').upsert(chosen.map(([division_id, team_name]) => ({ user_id: user.id, division_id, team_name })), { onConflict: 'user_id,division_id' })
+      : { error: null };
+    const { error: clearError } = cleared.length
+      ? await supabase.from('division_flairs').delete().eq('user_id', user.id).in('division_id', cleared)
+      : { error: null };
+    if (flairError || clearError) {
+      setError('Your profile was saved, but your clubs were not. Try again.');
+      setSaving(false);
+      return;
+    }
+    setSavedFlairs(Object.fromEntries(chosen));
+    setProfile({ ...profile, id: user.id, email: user.email, nickname: name, wc_team_flair: wcFlair || profile?.wc_team_flair || null });
+    setSaving(false);
+    setSuccess(true);
+  };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        // Require WC flair now too!
-        if (!nickname.trim() || !wcFlair) return;
+  if (!user) return null;
 
-        setSaving(true);
-        setError(null);
-        setSuccess(false);
+  const clubSelect = (d) => (
+    <Field
+      key={d.id}
+      as="select"
+      label={`${d.name} club`}
+      value={flairs[d.id] || ''}
+      onChange={(e) => setFlairs((current) => ({ ...current, [d.id]: e.target.value }))}
+      disabled={clubs.status !== 'ready'}
+    >
+      <option value="">No club</option>
+      {(clubs.byDivision[d.id] || []).map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+    </Field>
+  );
 
-        const updatedProfile = {
-            nickname: nickname.trim(),
-            wc_team_flair: wcFlair, // SAVE WC FLAIR
-        };
+  return (
+    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 bg-bg px-4 py-8 text-ink">
+      <header className="flex flex-col gap-1">
+        <h1 className="font-display text-3xl font-bold">Your profile</h1>
+        <p className="text-mut">{profile?.nickname || 'Choose a nickname'}</p>
+      </header>
 
-        const { error: updateError } = await supabase
-            .from('user_profiles')
-            .update(updatedProfile)
-            .eq('id', user.id);
+      <section aria-label="Your standing" className="grid grid-cols-2 gap-3">
+        <Card className="bg-blk text-blkink">
+          <p className="text-sm">Rank</p>
+          {lbLoading ? <Skeleton className="mt-1 h-8 w-16" /> : <p className="font-display text-3xl font-bold tabular-nums">{myRank ? `#${myRank}` : '-'}</p>}
+        </Card>
+        <Card>
+          <p className="text-sm text-mut">Prediction points</p>
+          {lbLoading ? <Skeleton className="mt-1 h-8 w-16" /> : <p className="font-display text-3xl font-bold tabular-nums">{(myEntry?.total_points ?? 0).toLocaleString()}</p>}
+        </Card>
+      </section>
 
-        if (updateError) {
-            console.error("Profile saving error:", updateError.message);
-            setError("Failed to update profile. Please try again.");
-            setSaving(false);
-            return;
-        }
+      <Card className="flex flex-col gap-6 p-5 sm:p-6">
+        {error && <Notice tone="error" role="alert">{error}</Notice>}
+        {success && <Notice tone="success">Profile saved.</Notice>}
 
-        // Division clubs: save the chosen ones, remove the cleared ones.
-        const chosen = Object.entries(flairs).filter(([, team]) => team);
-        const cleared = Object.keys(savedFlairs).filter((id) => !flairs[id]);
-        const { error: flairError } = chosen.length
-            ? await supabase.from('division_flairs').upsert(chosen.map(([division_id, team_name]) => ({ user_id: user.id, division_id, team_name })), { onConflict: 'user_id,division_id' })
-            : { error: null };
-        const { error: clearError } = cleared.length
-            ? await supabase.from('division_flairs').delete().eq('user_id', user.id).in('division_id', cleared)
-            : { error: null };
-        if (flairError || clearError) {
-            setError("Your profile was saved, but your clubs were not. Please try again.");
-            setSaving(false);
-            return;
-        }
-        setSavedFlairs(Object.fromEntries(chosen));
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+          <Field
+            label="Nickname"
+            hint="3 to 20 characters. Shown on the prediction table."
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            maxLength={20}
+          />
 
-        setProfile({ ...profile, id: user.id, email: user.email, ...updatedProfile });
-        setSaving(false);
-        setSuccess(true);
-
-        setTimeout(() => setSuccess(false), 3000);
-    };
-
-    const hasChanges =
-        nickname !== (profile?.nickname || '') ||
-        divisions.some((d) => (flairs[d.id] || '') !== (savedFlairs[d.id] || '')) ||
-        wcFlair !== (profile?.wc_team_flair || ''); // CHECK FOR WC CHANGES
-
-    if (!user) return null;
-
-    return (
-        <div className="space-y-8 animate-in fade-in duration-500 pb-12 w-full max-w-2xl mx-auto mt-8">
-            <div className="text-center space-y-4 mb-8">
-                <h1 className="text-4xl sm:text-5xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
-                    Your Profile
-                </h1>
+          {clubs.status === 'error' && (
+            <div className="flex flex-col items-start gap-2">
+              <Notice tone="error">The clubs could not be loaded.</Notice>
+              <Button variant="secondary" size="sm" onClick={loadLists}>Try again</Button>
             </div>
+          )}
+          {clubs.status === 'loading' && <Skeleton className="h-11 w-full" />}
+          {clubs.status === 'ready' && divisions.length > 0 && (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">{divisions.map(clubSelect)}</div>
+          )}
 
-            <GlassPanel className="p-8 sm:p-10 relative z-10 border border-white/10 bg-black/60 backdrop-blur-2xl">
-                <div className="flex flex-col items-center justify-center mb-8">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-white text-black flex items-center justify-center font-black text-4xl mb-4">
-                        {nickname ? nickname.charAt(0).toUpperCase() : <User size={40} />}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-2xl font-black text-white">{profile?.nickname || 'Unknown'}</span>
-                    </div>
+          {wcTeams.status === 'error' ? (
+            <Notice tone="error">The nation list could not be loaded, so the World Cup pick cannot change right now.</Notice>
+          ) : (
+            <Field
+              as="select"
+              label="World Cup nation (optional)"
+              hint="This pick belongs to the World Cup predictor, not the league."
+              value={wcFlair}
+              onChange={(e) => setWcFlair(e.target.value)}
+              disabled={wcTeams.status !== 'ready'}
+            >
+              <option value="">{wcTeams.status === 'ready' ? 'No pick' : 'Loading nations...'}</option>
+              {wcTeams.list.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+            </Field>
+          )}
 
-                    <div className="flex flex-wrap justify-center gap-2 mt-3">
-                        {divisions.filter((d) => savedFlairs[d.id]).map((d) => (
-                            <span key={d.id} title={d.name} className={cn("px-3 py-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-custom border border-white/10", getTeamColorClass(savedFlairs[d.id]))}>
-                                {savedFlairs[d.id]}
-                            </span>
-                        ))}
-                        {/* Display WC Flair Badge */}
-                        {profile?.wc_team_flair && (
-                            <span className="px-3 py-1 rounded-full text-[10px] text-black bg-[var(--fifa-gold)] font-black leading-none tracking-wide shadow-custom border border-white/10 uppercase">
-                                {profile.wc_team_flair}
-                            </span>
-                        )}
-                    </div>
+          <Button type="submit" variant="primary" size="lg" disabled={!canSave} className="w-full">
+            {saving ? 'Saving...' : hasChanges ? 'Save changes' : 'No changes'}
+          </Button>
+        </form>
 
-                    {!lbLoading && (
-                        <div className="flex items-center gap-4 mt-6 w-full max-w-xs">
-                            <div className="flex-1 bg-white/5 border border-white/10 rounded-xl p-4 text-center">
-                                <div className="flex items-center justify-center gap-1.5 mb-1">
-                                    {myRank && myRank <= 3 && <Trophy size={14} className="text-yellow-500" />}
-                                    <span className="text-2xl font-black text-white">{myRank ? `#${myRank}` : '—'}</span>
-                                </div>
-                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Rank</p>
-                            </div>
-                            <div className="flex-1 bg-white/5 border border-white/10 rounded-xl p-4 text-center">
-                                <div className="flex items-center justify-center gap-1.5 mb-1">
-                                    <Medal size={14} className="text-zinc-400" />
-                                    <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400">{myPoints.toLocaleString()}</span>
-                                </div>
-                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Season Fantasy Pts</p>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {error && (
-                    <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-3 rounded-lg mb-6 text-sm font-bold text-center">
-                        {error}
-                    </div>
-                )}
-
-                {success && (
-                    <div className="bg-green-500/20 border border-green-500/50 text-green-200 p-3 rounded-lg mb-6 text-sm font-bold text-center">
-                        Profile updated successfully!
-                    </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-6 text-left">
-                    <div>
-                        <label className="block text-xs font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
-                            Nickname
-                        </label>
-                        <input
-                            type="text"
-                            value={nickname}
-                            onChange={(e) => setNickname(e.target.value)}
-                            placeholder="e.g. MasterPredictor99"
-                            className="w-full bg-black/50 border border-white/10 rounded-xl px-5 py-4 text-white font-bold placeholder-zinc-700 outline-none focus:border-white/40 transition-colors"
-                            required
-                            maxLength={20}
-                            minLength={3}
-                        />
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-wider mt-2 ml-1">Visible on global leaderboards.</p>
-                    </div>
-
-                    {/* Team Flair Grid - Now 3 Columns on large screens */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {divisions.map((d) => (
-                            <div key={d.id}>
-                                <label htmlFor={`flair-${d.slug}`} className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
-                                    {d.name} Club
-                                </label>
-                                <select
-                                    id={`flair-${d.slug}`}
-                                    value={flairs[d.id] || ''}
-                                    onChange={(e) => setFlairs((current) => ({ ...current, [d.id]: e.target.value }))}
-                                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none cursor-pointer"
-                                >
-                                    <option value="">No club</option>
-                                    {(teamsByDivision[d.id] || []).map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
-                                </select>
-                            </div>
-                        ))}
-
-                        {/* NEW WORLD CUP FLAIR DROPDOWN */}
-                        <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--fifa-gold)] mb-2 ml-1">
-                                World Cup Nation
-                            </label>
-                            <select
-                                value={wcFlair}
-                                onChange={(e) => setWcFlair(e.target.value)}
-                                className="w-full bg-black/50 border border-[var(--fifa-gold)]/50 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-[var(--fifa-gold)] transition-colors appearance-none cursor-pointer"
-                                required
-                            >
-                                <option value="" disabled>Select Nation...</option>
-                                {wcTeams.map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
-                            </select>
-                        </div>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={saving || !nickname || !wcFlair || !hasChanges}
-                        className="w-full group h-14 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
-                    >
-                        {saving ? "Saving..." : hasChanges ? "Save Changes" : "No Changes"}
-                        {hasChanges && !saving && <Send className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
-                    </button>
-                </form>
-
-                <div className="mt-8 pt-8 border-t border-white/5">
-                    <PasswordSettings />
-                </div>
-
-                <div className="mt-8 pt-8 border-t border-white/5 text-center">
-                    <button
-                        onClick={() => {
-                            signOut();
-                            navigate('/'); // REPLACE setView WITH navigate
-                        }}
-                        className="flex items-center gap-2 text-xs text-red-500/80 hover:text-red-400 uppercase tracking-widest font-bold transition-colors mx-auto"
-                    >
-                        <LogOut size={16} /> Log Out
-                    </button>
-                </div>
-            </GlassPanel>
-
-            <GlassPanel className="p-8 sm:p-10 relative z-10 border border-white/10 bg-black/60 backdrop-blur-2xl">
-                <MyPlayerCard />
-            </GlassPanel>
+        <div className="flex flex-wrap gap-2">
+          {divisions.filter((d) => savedFlairs[d.id]).map((d) => <Pill key={d.id}>{savedFlairs[d.id]}</Pill>)}
+          {profile?.wc_team_flair && <Pill>{profile.wc_team_flair}</Pill>}
         </div>
-    );
+
+        <div className="border-t border-line pt-6">
+          <PasswordSettings />
+        </div>
+
+        <div className="flex justify-start border-t border-line pt-6">
+          <Button variant="secondary" onClick={() => { signOut(); navigate('/'); }}>
+            <LogOut size={16} aria-hidden="true" /> Sign out
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="p-5 sm:p-6">
+        <MyPlayerCard />
+      </Card>
+    </main>
+  );
 }
