@@ -5,19 +5,19 @@
   "site": "http://127.0.0.1:8790",
   "release": {
     "site": {
-      "commit": "84a5c6a5c9e9540a311288f3e88be06ff1faf9d8",
+      "commit": "89e2568d455750e026038903f18e63f50b4775ad",
       "branch": null,
-      "builtAt": "2026-11-26T13:04:43.194Z"
+      "builtAt": "2026-11-26T13:54:17.325Z"
     },
     "worker": {
       "ok": true,
       "service": "super-league-api",
       "environment": "local",
       "commit": null,
-      "version": "b4c66edc-2108-4a03-ad0f-953b0e2c50ca"
+      "version": "08306f9f-bb05-4466-a914-f6b97fd01b5e"
     }
   },
-  "recordedAt": "2026-11-26T13:04:48.087Z",
+  "recordedAt": "2026-11-26T13:54:22.447Z",
   "passed": true,
   "groups": {
     "G1": {
@@ -109,7 +109,7 @@
         "service": "super-league-api",
         "environment": "local",
         "commit": null,
-        "version": "b4c66edc-2108-4a03-ad0f-953b0e2c50ca"
+        "version": "08306f9f-bb05-4466-a914-f6b97fd01b5e"
       }
     },
     {
@@ -363,7 +363,8 @@
       "pass": true,
       "observed": {
         "normal": 403,
-        "dictator": 200
+        "dictator": 200,
+        "restored": 481
       }
     },
     {

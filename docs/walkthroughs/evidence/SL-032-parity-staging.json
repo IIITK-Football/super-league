@@ -5,9 +5,9 @@
   "site": "https://develop.super-league.pages.dev",
   "release": {
     "site": {
-      "commit": "ef641649d6a97741c6a8aaa634d32be66373ce4a",
+      "commit": "fc4804d3c2982f5751f7c97acb2ceb48d5b7cbee",
       "branch": "develop",
-      "builtAt": "2026-11-26T12:59:46.873Z"
+      "builtAt": "2026-11-26T13:48:25.250Z"
     },
     "worker": {
       "ok": true,
@@ -17,7 +17,7 @@
       "version": "3b95f42b-a3c8-4af4-979a-b8d3930c64e5"
     }
   },
-  "recordedAt": "2026-11-26T13:09:00.049Z",
+  "recordedAt": "2026-11-26T13:56:56.140Z",
   "passed": true,
   "groups": {
     "G1": {
@@ -363,7 +363,8 @@
       "pass": true,
       "observed": {
         "normal": 403,
-        "dictator": 200
+        "dictator": 200,
+        "restored": 481
       }
     },
     {
