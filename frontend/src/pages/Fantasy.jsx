@@ -234,7 +234,7 @@ export function Fantasy() {
         if (hasPredicted) return <EmptyState title="Prediction locked">You have predicted this match. Points come after the final whistle.</EmptyState>;
         return (
             <div className="flex flex-col gap-6">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field label="Home score">
                         {(p) => <NumberField {...p} size="lg" min={0} max={20} placeholder="0" value={homeScore === '' ? null : Number(homeScore)} onChange={(n) => setHomeScore(String(n))} />}
                     </Field>
