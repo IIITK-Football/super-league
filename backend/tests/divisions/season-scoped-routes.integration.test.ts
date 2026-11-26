@@ -127,6 +127,23 @@ describe('home dashboard', () => {
   });
 });
 
+// D-04: the season and its division are read in one Data API round; only a miss reads again, to say what is missing.
+// RLS hides hidden seasons from the public client exactly as before.
+describe('scope resolution', () => {
+  it('resolves a division and season in one round, and names what is missing', async () => {
+    const { resolveScope } = await import('../../lib/scope');
+    const { publicClient, withTiming } = await import('../../lib/supabase/clients');
+    const hit = withTiming(() => resolveScope(publicClient(), { division: 'wsl', season: `${tag}-2027` }));
+    expect(await hit.result).toMatchObject({ division: { slug: 'wsl' }, season: { slug: `${tag}-2027`, name: '2027' } });
+    expect(hit.timing.rounds).toBe(1);
+
+    expect(await call('home/dashboard', 'division=no-such-division')).toEqual({ status: 404, body: { success: false, message: 'Division "no-such-division" not found' } });
+    const hidden = await call('standings', `division=wsl&season=${tag}-hidden`);
+    expect(hidden.status).toBe(404);
+    expect(hidden.body.message).toMatch(/^Season ".*-hidden" not found in /);
+  });
+});
+
 describe('standings, teams and statistics', () => {
   it('standings are the season\'s own table and schedule', async () => {
     const { status, body } = await call('standings', `division=wsl&season=${tag}-2027`);
