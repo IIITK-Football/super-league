@@ -67,6 +67,12 @@ Every active group passed, locally and on staging (`develop.super-league.pages.d
 - **Grading** (`20261205000002`): grading and regrading made one Data API call per prediction and per match with the secret key. That exceeded the Worker's subrequest limit on staging (a full regrade answered 500). Both now run in the database, in one call each, as the dictator.
 - **Prediction submission** (`POST /predictions`): it dropped the caller's token (SL-030).
 
+**Release pair and rollback** (owner decision, 2026-11-26):
+- **Current pair:** Worker `ef64164` (version `3b95f42b-a3c8-4af4-979a-b8d3930c64e5`) and site `c7ab2c0` or later. It passed both parity runs above.
+- **Previous compatible pair:** Worker `cd810a6` (version `458dbc77-ca6f-41e0-b596-4224492c6f39`) with a site from `cd810a6` onwards. The `/api` contract is unchanged between them. Rolling back to it reintroduces the regrade-all failure fixed in `20261205000002`: the old route exceeds the Worker's subrequest limit.
+- **Procedure:** restoring a pair follows [the rollback procedure](../rollback/pages-worker-pair.md). That procedure was exercised on staging in SL-031 ([restored](../walkthroughs/evidence/SL-031-staging-rollback.json), [rolled forward](../walkthroughs/evidence/SL-031-staging-rollforward.json)), so it is not repeated here.
+- **Database:** the grading migration is additive (new functions only), so the previous Worker still runs against the current database.
+
 **Outside the gate, by decision:**
 - The World Cup archive's feature fidelity, including the saved-bracket rendering (D-02).
 - HLS playback through `/media/*` (SL-106).

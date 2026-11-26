@@ -7,9 +7,11 @@ handoff steps.
 ## Status
 
 - **Updated:** 2026-11-26 by Claude.
-- **SL-030:** done (`91d8cc9`).
-- **Active item:** SL-031 (Phase 3), same-origin `/api` routing; started in the `feat:` commit after `91d8cc9`.
-- **Owner decisions (2026-11-26):** no standing release PR (PR #192 closed); the release PR comes after `pnpm work phase 3`.
+- **Done:** SL-030 (`91d8cc9`) and SL-031 (`e6cfab3`).
+- **Active item:** SL-032 (Phase 3, the last item of the phase). It is waiting for the owner's C1 attestation.
+- **Owner decisions (2026-11-26):**
+  - no standing release PR;
+  - SL-032 records the rollback pair without a new rollback.
 
 ## Done (all pushed to `develop`)
 
@@ -26,16 +28,15 @@ handoff steps.
 
 ## Exact next step
 
-SL-031 evidence so far:
-- **Local:** `node scripts/verify-local-routing.mjs` passed 8 of 8 checks at `72929c0` (`docs/walkthroughs/evidence/SL-031-local-routing.json`). It goes through `wrangler pages dev` with the real Pages function bound to `wrangler dev`, plus the Vite proxy and the missing-binding case.
-- **Staging:** `node scripts/staging-routing-check.mjs` passed 6 of 6 with both the site and the Worker at `cd810a6`, Worker version `458dbc77-ca6f-41e0-b596-4224492c6f39` (`docs/walkthroughs/evidence/SL-031-staging-routing.json`).
-- **Changes:** `/api` answers now default to `Cache-Control: no-store`, and the frontend build writes `/version.json`. The rollback procedure is `docs/rollback/pages-worker-pair.md`.
+SL-032 evidence is complete. The parity status, release pair and rollback note are in `docs/contracts/worker-compatibility.md`.
+- **API runner:** `node scripts/parity/verify-parity.mjs --target local|staging` gives 37 checks per target. All 8 groups pass locally and on staging (`docs/walkthroughs/evidence/SL-032-parity-*.json`).
+- **Browser:** `node scripts/ui-walkthrough/parity.mjs --target local|staging` gives 11 steps per target. All pass at `77fc356` (`SL-032-ui-*.json`). Screenshots are in `~/repos/sl-parity-shots-{local,staging}` (outside the repo).
+- **Grading fix:** grading moved into the database (`20261205000002`) after staging regrade-all returned 500 from the Worker's subrequest limit.
 
 Remaining:
-1. The owner rolls staging back to the `cd810a6` pair, following `docs/rollback/pages-worker-pair.md`. Run `node scripts/staging-routing-check.mjs` and save the output as `docs/walkthroughs/evidence/SL-031-staging-rollback.json`. Then restore the newest pair by pushing `develop` again, or by rolling forward in the dashboard.
-2. The owner attests C1: `pnpm work attest SL-031 C1`.
-3. `pnpm work done SL-031`: fill in the walkthrough, then run it again.
-4. Next: SL-032 (Worker parity for the active flows).
+1. The owner attests C1: `pnpm work attest SL-032 C1`.
+2. `pnpm work done SL-032`, then fill in the walkthrough.
+3. Phase gate: `pnpm work phase 3 --base <commit before Phase 3>` (`53f8e80`, the commit before SL-030 started). Then the owner opens or approves the release PR from `develop` into `main`.
 
 ## In flight
 
