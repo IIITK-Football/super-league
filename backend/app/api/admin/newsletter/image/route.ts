@@ -1,11 +1,9 @@
+import { requestClient } from '@/lib/supabase/clients';
 // News image upload through the API Worker (replaces the browser-direct presigned S3 upload). An editor or dictator
 // posts the image as multipart form data (`image`); the Worker checks the type and size, stores it in the news bucket
 // through the R2_NEWS binding under a server-generated key, and returns the public URL the article stores.
 // The browser then loads the image straight from the bucket's public URL, never through the API.
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
 import { hasAnyRole, myRoles } from '@/lib/auth/roles';
-import { noCookies } from '@/lib/http';
 import { IMAGE_EXTENSIONS, keys, StorageError, storageFor } from '@/lib/storage';
 
 export const MAX_NEWS_IMAGE_SIZE = 10 * 1024 * 1024;
@@ -20,10 +18,7 @@ const SIGNATURES: Record<string, (b: Uint8Array) => boolean> = {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
-      cookies: { getAll() { return noCookies.getAll(); }, setAll() {} },
-      global: { headers: { Authorization: request.headers.get('Authorization') || '' } },
-    });
+    const supabase = requestClient(request);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     if (!hasAnyRole(await myRoles(supabase), ['editor', 'dictator'])) {

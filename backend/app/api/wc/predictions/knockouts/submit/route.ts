@@ -1,11 +1,6 @@
-import { secretKey } from '@/lib/supabase/keys';
-import { createClient } from '@supabase/supabase-js';
+import { jobClient } from '@/lib/supabase/clients';
 
 export const dynamic = 'force-dynamic';
-
-const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseKey = secretKey();
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Set the global deadline (Midnight IST entering June 21st)
 const PREDICTION_DEADLINE = new Date('2026-06-22T00:00:00+05:30');
@@ -21,6 +16,7 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: Request) {
+  const supabase = jobClient();
     try {
         // 1. DEADLINE CHECK: Blocks any submissions after June 20th 11:59:59 PM IST
         if (new Date() > PREDICTION_DEADLINE) {

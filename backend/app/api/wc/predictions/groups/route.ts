@@ -1,16 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
-import { secretKey } from '@/lib/supabase/keys';
+import { jobClient } from '@/lib/supabase/clients';
 
 export const dynamic = 'force-dynamic';
-
-const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseServiceKey = secretKey(); 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Set the global deadline
 const PREDICTION_DEADLINE = new Date('2026-06-22T00:00:00Z');
 
 export async function POST(request: Request) {
+  const supabase = jobClient();
   console.log("GROUP POST HIT");
   try {
     // 1. DEADLINE CHECK
@@ -68,6 +64,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const supabase = jobClient();
   try {
     // Grab the user_id from the URL query
     const { searchParams } = new URL(request.url);

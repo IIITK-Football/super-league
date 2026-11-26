@@ -1,23 +1,11 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
+import { requestClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 import { hasAnyRole, myRoles, type Role } from '../../../../lib/auth/roles';
-import { noCookies } from '@/lib/http';
 // Note: Zod is removed here to keep it simple, but you can add it back if you have it installed!
 
-// 1. THE MAGIC FIX: Teach the client to read the Auth Header!
+// The caller's client (D-04): publishable key plus their token, so RLS and the audit actor are theirs.
 async function getSupabaseClient(request: Request) {
-  const cookieStore = noCookies;
-  const authHeader = request.headers.get('Authorization'); // Grab the VIP Pass from the frontend!
-
-  return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
-    cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-    global: {
-      headers: {
-        Authorization: authHeader || '', // Force Supabase to use the token!
-      },
-    },
-  });
+  return requestClient(request);
 }
 
 async function requireRole(request: Request, allowedRoles: string[]) {

@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { jobClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../../lib/errorHandler';
 import { callerClient } from '@/lib/roster/access';
 import { gradeMatch } from '@/lib/grading';
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const { data: isDictator } = await supabase.rpc('is_dictator');
     if (!isDictator) throw { status: 403, message: 'Only a dictator can regrade predictions.' };
 
-    const admin = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_SECRET_KEY as string, { auth: { autoRefreshToken: false, persistSession: false } });
+    const admin = jobClient();
     const { data: matches, error } = await admin.from('matches').select('id').eq('status', 'completed');
     if (error) throw error;
     if (!matches?.length) return Response.json({ success: true, message: 'No completed matches found to regrade.' });

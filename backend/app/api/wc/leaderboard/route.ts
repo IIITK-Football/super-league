@@ -1,11 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
-import { secretKey } from '@/lib/supabase/keys';
-
-const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseKey = secretKey();
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { jobClient } from '@/lib/supabase/clients';
 
 export async function GET() {
+  const supabase = jobClient();
   try {
     // This query pulls the fantasy points and joins it with the user's profile info
     const { data, error } = await supabase

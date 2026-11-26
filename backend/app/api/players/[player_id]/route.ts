@@ -1,11 +1,7 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createClient } from '@supabase/supabase-js';
+import { publicClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 
 export const dynamic = 'force-dynamic';
-
-// Public data only (RLS): the player's card, roster places and season statistics. Private details are never read here.
-const supabase = createClient(process.env.SUPABASE_URL!, publishableKey());
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -16,6 +12,8 @@ type SeasonRef = { id: string; slug: string; name: string; starts_on: string | n
 // season. The top-level position, jersey, team, goals and assists are those of one season: ?season_id=<uuid> when
 // given, otherwise the player's most recent season.
 export async function GET(request: Request, { params }: { params: Promise<{ player_id: string }> }) {
+  // Public data only (RLS): the player's card, roster places and season statistics. Private details are never read here.
+  const supabase = publicClient();
   try {
     const { player_id } = await params;
     if (!UUID.test(player_id)) return Response.json({ success: false, error: 'Player not found' }, { status: 404 });

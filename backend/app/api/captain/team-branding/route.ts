@@ -1,9 +1,7 @@
 import { keys, StorageError, storageFor, type Storage } from '@/lib/storage';
-import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
+import { jobClient, requestClient } from '@/lib/supabase/clients';
 import { myRoles } from '@/lib/auth/roles';
 import { UUID } from '@/lib/roster/access';
-import { noCookies } from '@/lib/http';
 
 export const runtime = 'nodejs';
 
@@ -46,12 +44,7 @@ export async function POST(request: Request) {
         throw error;
       }
     };
-    const authHeader = request.headers.get('Authorization') || '';
-    const cookieStore = noCookies;
-    const authClient = createServerClient(supabaseUrl, publishable, {
-      cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} },
-      global: { headers: authHeader ? { Authorization: authHeader } : {} },
-    });
+    const authClient = requestClient(request);
     const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user) {
       return Response.json({ error: 'Please sign in again.' }, { status: 401 });
@@ -88,7 +81,7 @@ export async function POST(request: Request) {
     if (writable.length > 1) {
       return Response.json({ error: 'Choose which of your teams to change.' }, { status: 400 });
     }
-    const adminClient = createClient(supabaseUrl, secret);
+    const adminClient = jobClient();
     const { data: entryRow, error: entryError } = await adminClient
       .from('team_entries')
       .select('id, team_id, season:seasons!inner(slug, division:divisions!inner(slug)), teams!inner(id, name, short_name, logo_url, team_color)')

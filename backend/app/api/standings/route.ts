@@ -1,15 +1,11 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createClient } from '@supabase/supabase-js';
+import { publicClient } from '@/lib/supabase/clients';
 import { scopeFromUrl, seasonTeamIds } from '@/lib/scope';
 import { handleError } from '@/lib/errorHandler';
 
 export const revalidate = 0; 
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = publishableKey();
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 export async function GET(request: Request) {
+  const supabase = publicClient();
   try {
     // ?division=<slug>&season=<slug or id>; without a season, the division's current season.
     const scope = await scopeFromUrl(supabase, request);

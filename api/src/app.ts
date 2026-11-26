@@ -5,10 +5,10 @@
 //   per-account rate limit. PATCH is now included (the Next middleware missed it).
 // Same origin only: the browser reaches this through the Pages /api function, so no CORS policy is served.
 import { Hono } from 'hono';
-import { createClient } from '@supabase/supabase-js';
 import { routes, type RouteModule } from './routes';
 import { checkRateLimit } from '../../backend/lib/rate-limit';
 import { boundBucket, isMediaPurpose } from '../../backend/lib/storage';
+import { bearerToken, publicClient, serverTiming, withTiming } from '../../backend/lib/supabase/clients';
 
 const METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -16,13 +16,9 @@ const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const fail = (status: number, message: string) => Response.json({ success: false, message }, { status });
 
 async function sessionUserId(authorization: string | undefined): Promise<string | null> {
-  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+  const token = bearerToken(authorization);
   if (!token) return null;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error('Missing required environment variable: SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY');
-  const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-  const { data, error } = await supabase.auth.getClaims(token);
+  const { data, error } = await publicClient().auth.getClaims(token);
   if (error || !data?.claims?.sub) return null;
   return data.claims.sub;
 }
@@ -50,6 +46,21 @@ export function createApp() {
       return fail(503, 'The API is not configured correctly.');
     }
     return next();
+  });
+
+  // Server-Timing on every response (D-04): total time, Data API time and its sequential rounds. Counts and durations
+  // only, never a query, key or token.
+  app.use('*', async (c, next) => {
+    const started = performance.now();
+    const { result, timing } = withTiming(() => next());
+    await result;
+    const header = serverTiming(timing, performance.now() - started);
+    try {
+      c.res.headers.set('Server-Timing', header);
+    } catch {
+      c.res = new Response(c.res.body, c.res);
+      c.res.headers.set('Server-Timing', header);
+    }
   });
 
   app.get('/health', (c) => c.json({ ok: true, service: 'super-league-api', environment: process.env.SL_ENVIRONMENT ?? 'unknown' }));

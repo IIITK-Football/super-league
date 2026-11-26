@@ -1,17 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
-import { secretKey } from '@/lib/supabase/keys';
+import { jobClient } from '@/lib/supabase/clients';
 
 export const dynamic = 'force-dynamic';
-
-const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseServiceKey = secretKey(); 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Set the global deadline
 const PREDICTION_DEADLINE = new Date('2026-06-22T00:00:00Z');
 
 // GET: Retrieve a user's award predictions
 export async function GET(request: Request) {
+  const supabase = jobClient();
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('user_id');
@@ -55,6 +51,7 @@ export async function GET(request: Request) {
 
 // POST: Save or update a user's award predictions (Secured)
 export async function POST(request: Request) {
+  const supabase = jobClient();
   console.log("AWARDS POST HIT");
 
   try {

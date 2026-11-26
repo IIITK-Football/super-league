@@ -1,14 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
-import { secretKey } from '@/lib/supabase/keys';
+import { jobClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseKey = secretKey();
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 export async function GET() {
+  const supabase = jobClient();
   try {
     const { data: teams, error } = await supabase
       .from('wc_teams')

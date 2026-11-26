@@ -1,21 +1,9 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
+import { requestClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler'; 
-import { noCookies } from '@/lib/http';
 
-// 1. THE MAGIC FIX: Helper to read the Auth Header from the frontend!
+// The caller's client (D-04): publishable key plus their token, so RLS decides.
 async function getSupabaseClient(request: Request) {
-  const cookieStore = noCookies;
-  const authHeader = request.headers.get('Authorization'); 
-
-  return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
-    cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-    global: {
-      headers: {
-        Authorization: authHeader || '', 
-      },
-    },
-  });
+  return requestClient(request);
 }
 
 // ==========================================

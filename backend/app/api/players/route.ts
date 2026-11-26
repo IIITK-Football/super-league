@@ -1,13 +1,8 @@
-import { publishableKey } from '@/lib/supabase/keys';
+import { publicClient } from '@/lib/supabase/clients';
 import { resolveScope } from '@/lib/scope';
-import { createClient } from '@supabase/supabase-js';
 import { handleError } from '../../../lib/errorHandler';
 
 export const dynamic = 'force-dynamic';
-
-// Public data only: player cards, season rosters and season statistics are readable by anyone (RLS), and a hidden
-// or archived season cannot be resolved with the public key.
-const supabase = createClient(process.env.SUPABASE_URL!, publishableKey());
 
 type Membership = {
   id: string;
@@ -20,6 +15,9 @@ type Membership = {
 // The season roster (?division=<slug>&season=<slug or id>; default the division's current season), optionally one
 // team (?team_id=). Each player appears once, with that season's jersey, position, goals and assists.
 export async function GET(request: Request) {
+  // Public data only: player cards, season rosters and season statistics are readable by anyone (RLS), and a hidden
+  // or archived season cannot be resolved with the public key.
+  const supabase = publicClient();
   try {
     const { searchParams } = new URL(request.url);
     const teamId = searchParams.get('team_id');

@@ -1,6 +1,4 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
-import { noCookies } from '@/lib/http';
+import { requestClient } from '@/lib/supabase/clients';
 
 export async function GET(request: Request) {
   try {
@@ -11,20 +9,7 @@ export async function GET(request: Request) {
 
     const from = (page - 1) * limit;
     const to = from + limit - 1;
-
-    const cookieStore = noCookies;
-    const supabase = createServerClient(
-      process.env.SUPABASE_URL!,
-      publishableKey(),
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-          },
-        },
-      }
-    );
+    const supabase = requestClient(request);
 
     // 2. Build the query dynamically
     let query = supabase.from('newsletter').select('*', { count: 'exact' });

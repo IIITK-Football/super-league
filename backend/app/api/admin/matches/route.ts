@@ -1,25 +1,13 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
+import { requestClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
-import { noCookies } from '@/lib/http';
 
 // Turn off caching so the admin sees live updates instantly!
 export const revalidate = 0;
 
-// 1. THE MAGIC FIX: Teach the client to read the Auth Header!
+// The caller's client (D-04): publishable key plus their token, so RLS and the audit actor are theirs.
 async function getSupabaseClient(request: Request) {
-  const cookieStore = noCookies;
-  const authHeader = request.headers.get('Authorization'); 
-
-  return createServerClient(process.env.SUPABASE_URL!, publishableKey(), {
-    cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-    global: {
-      headers: {
-        Authorization: authHeader || '', 
-      },
-    },
-  });
+  return requestClient(request);
 }
 
 // 2. PASS `request` INTO THE GET ROUTE

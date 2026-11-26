@@ -1,22 +1,13 @@
+import { requestClient } from '@/lib/supabase/clients';
 export const dynamic = 'force-dynamic';
 
-import { publishableKey } from '@/lib/supabase/keys';
-import { createServerClient } from '@supabase/ssr';
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
-import { noCookies } from '@/lib/http';
 
 export async function GET(request: Request) {
   try {
-    const cookieStore = noCookies;
     
-    const supabase = createServerClient(
-      process.env.SUPABASE_URL!,
-      publishableKey(),
-      {
-        cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-      }
-    );
+    const supabase = requestClient(request);
 
     // The division whose flair is shown (?division=<slug>; default Super League).
     const { searchParams } = new URL(request.url);

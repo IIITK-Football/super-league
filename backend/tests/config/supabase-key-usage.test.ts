@@ -19,10 +19,12 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 const serverSources = [...walk(join(backend, 'app')), ...walk(join(backend, 'lib')), join(backend, 'middleware.ts')].filter(
-  (p) => !/lib\/(supabase\/keys|env)\.ts$/.test(p),
+  (p) => !/lib\/(supabase\/keys|supabase\/clients|env)\.ts$/.test(p),
 );
 const rel = (p: string) => relative(backend, p).split('\\').join('/');
 const read = (p: string) => readFileSync(p, 'utf8');
+// A file is elevated when it builds the secret-key client (jobClient) or reads the secret key itself.
+const ELEVATED_USE = /jobClient\b|secretKey\(\)|SUPABASE_SECRET_KEY/;
 
 // Files that genuinely use the secret key, with why. Reasons are summarised in docs/supabase-key-usage.md.
 const ELEVATED: Record<string, string> = {
@@ -48,7 +50,7 @@ describe('Supabase key usage (backend)', () => {
   });
 
   it('only the listed files use the secret key', () => {
-    const users = serverSources.filter((p) => /secretKey\(\)|SUPABASE_SECRET_KEY/.test(read(p))).map(rel).sort();
+    const users = serverSources.filter((p) => ELEVATED_USE.test(read(p))).map(rel).sort();
     const listed = Object.keys(ELEVATED).sort();
     const unlisted = users.filter((f) => !listed.includes(f));
     const stale = listed.filter((f) => !users.includes(f));
@@ -58,8 +60,26 @@ describe('Supabase key usage (backend)', () => {
 
   it('middleware and shared lib code never use the secret key', () => {
     const offenders = serverSources.filter((p) => /middleware\.ts$|\/lib\//.test(rel(p)) || rel(p) === 'middleware.ts')
-      .filter((p) => /secretKey\(\)|SUPABASE_SECRET_KEY/.test(read(p))).map(rel);
+      .filter((p) => ELEVATED_USE.test(read(p))).map(rel);
     expect(offenders).toEqual([]);
+  });
+
+  // D-04: the factories in lib/supabase/clients.ts are the only place a client is built and the only reader of the
+  // secret key, so every Data API call has the transport timeouts and Server-Timing accounting.
+  it('only the client factories read the secret key', () => {
+    const offenders = serverSources.filter((p) => /secretKey\(\)/.test(read(p))).map(rel);
+    expect(offenders).toEqual([]);
+    expect(read(join(backend, 'lib/supabase/clients.ts'))).toMatch(/secretKey\(\)/);
+  });
+
+  it('handlers served by the Worker build every client through the factories', () => {
+    const routeTable = read(join(repo, 'api/src/routes.ts'));
+    const served = [...routeTable.matchAll(/'\.\.\/\.\.\/backend\/(app\/api\/[^']+)'/g)].map((m) => `${m[1]}.ts`);
+    expect(served.length).toBeGreaterThan(20);
+    const direct = [...served, 'lib/roster/access.ts', 'lib/scope.ts']
+      .filter((f) => /\bcreate(Server)?Client\(/.test(read(join(backend, f))));
+    expect(direct).toEqual([]);
+    expect(read(join(repo, 'api/src/app.ts'))).not.toMatch(/\bcreateClient\(/);
   });
 
   it('nothing exposes a Supabase key through a NEXT_PUBLIC_ name', () => {

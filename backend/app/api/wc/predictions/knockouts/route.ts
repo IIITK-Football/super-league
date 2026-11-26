@@ -1,12 +1,6 @@
-import { secretKey } from '@/lib/supabase/keys';
-import { createClient } from '@supabase/supabase-js';
+import { jobClient } from '@/lib/supabase/clients';
 
 export const dynamic = 'force-dynamic';
-
-const supabaseUrl = process.env.SUPABASE_URL as string;
-// Safely fall back to anon key if service key isn't set, combining both approaches
-const supabaseServiceKey = secretKey();
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -19,6 +13,7 @@ export async function OPTIONS() {
 }
 
 export async function GET(req: Request) {
+  const supabase = jobClient();
     try {
         const { searchParams } = new URL(req.url);
         const user_id = searchParams.get('user_id');

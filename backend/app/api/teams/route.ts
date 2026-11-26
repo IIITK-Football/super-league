@@ -1,16 +1,11 @@
-import { publishableKey } from '@/lib/supabase/keys';
-import { createClient } from '@supabase/supabase-js';
+import { publicClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../lib/errorHandler';
 import { resolveScope, seasonTeamIds } from '@/lib/scope';
 
 export const revalidate = 0; 
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  publishableKey()
-);
-
 export async function GET(request: Request) {
+  const supabase = publicClient();
   try {
     const { searchParams } = new URL(request.url);
 
