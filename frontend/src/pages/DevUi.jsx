@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Button, Card, Crest, EmptyState, ErrorState, Field, Notice, Pill, Scoreline, Sheet, Skeleton, Table, Tabs } from '../components/ui';
+import { Button, Card, ConfirmDialog, Crest, EmptyState, ErrorState, Field, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, Notice, Pill, Popover, PopoverContent, PopoverTrigger, Scoreline, Sheet, Skeleton, Table, Tabs, useConfirm } from '../components/ui';
 
 // Developer-only: every UI primitive in both themes. Mounted at /dev/ui in development builds only.
 function Specimens() {
   const [tab, setTab] = useState('matches');
   const [sheet, setSheet] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
+  const confirm = useConfirm();
   return (
     <div className="space-y-8">
       <section className="space-y-3">
@@ -73,6 +75,28 @@ function Specimens() {
         <Sheet open={sheet} title="More" onClose={() => setSheet(false)}>
           <p className="text-ink">Sheet content. Escape closes it.</p>
         </Sheet>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl font-bold text-ink">Confirm, menu and popover</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="danger" onClick={() => confirm({ title: 'Remove this team?', description: 'Its fixtures stay in the record.', confirmLabel: 'Remove', tone: 'danger' })}>Ask with useConfirm</Button>
+          <Button variant="secondary" onClick={() => setAskDelete(true)}>Open dialog</Button>
+          <ConfirmDialog open={askDelete} onOpenChange={setAskDelete} title="Delete this season?" description="Matches move to the archive." confirmLabel="Delete" tone="danger" onConfirm={() => new Promise((_, reject) => setTimeout(() => reject(new Error('Could not delete. Try again.')), 600))} />
+          <Menu>
+            <MenuTrigger>Actions</MenuTrigger>
+            <MenuContent aria-label="Actions">
+              <MenuItem>Edit details</MenuItem>
+              <MenuItem>Copy link</MenuItem>
+              <MenuSeparator />
+              <MenuItem tone="danger">Remove</MenuItem>
+            </MenuContent>
+          </Menu>
+          <Popover>
+            <PopoverTrigger>Info</PopoverTrigger>
+            <PopoverContent>Popovers hold short, non-critical detail. Escape closes them.</PopoverContent>
+          </Popover>
+        </div>
       </section>
     </div>
   );
