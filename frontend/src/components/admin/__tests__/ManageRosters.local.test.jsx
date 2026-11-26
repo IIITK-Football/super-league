@@ -181,7 +181,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     await screen.findByText(/no players on this roster yet/i, {}, { timeout: 15000 });
 
     // Gamma played only last season: add it to this season.
-    type('Existing team', made.teams.Gamma);
+    await choose('Existing team', `${tag} Gamma`);
     fireEvent.click(screen.getByRole('button', { name: /add team/i }));
     await statusText(/Gamma added to/);
     expect(must(await admin.from('team_entries').select('id').eq('team_id', made.teams.Gamma).eq('season_id', made.seasons.now))).toHaveLength(1);
@@ -194,7 +194,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     type('New first name', `${tag}Ada`);
     type('New last name', 'Striker');
     type('New jersey', '9');
-    type('New position', 'ST');
+    await choose('New position', 'ST');
     type('New rating', '74');
     fireEvent.click(within(form).getByRole('button', { name: /create player/i }));
     await statusText(/Ada Striker added to .*linked to/);
@@ -225,7 +225,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
 
     // Move Ada to Beta within the season.
     fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Ada Finisher$/ }));
-    type('Move to team', made.entries.Beta);
+    await choose('Move to team', `${tag} Beta`);
     fireEvent.click(screen.getByRole('button', { name: /^move$/i }));
     await statusText(/Moved to/);
     expect(must(await admin.from('roster_memberships').select('team_entry_id').eq('id', ada.roster_memberships[0].id).single()).team_entry_id).toBe(made.entries.Beta);
@@ -250,10 +250,10 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     await statusText(new RegExp(`${tag} Delta created and added to ${tag} 2026`));
     const delta = must(await admin.from('teams').select('id, team_entries(id, season_id)').eq('name', `${tag} Delta`).single());
     expect(delta.team_entries).toEqual([expect.objectContaining({ season_id: made.seasons.now })]);
-    await waitFor(() => expect(within(screen.getByLabelText('Team')).getByRole('option', { name: `${tag} Delta` })).toBeTruthy(), { timeout: 15000 });
+    await waitFor(async () => expect(await optionsOf('Team')).toContain(`${tag} Delta`), { timeout: 15000 });
 
     // Give Delta a player who never plays, then delete them for good (delete_unplayed_player).
-    type('Team', delta.team_entries[0].id);
+    await choose('Team', `${tag} Delta`);
     await screen.findByText(/no players on this roster yet/i, {}, { timeout: 15000 });
     openAddPlayer();
     await chooseNewAccount((await verifiedAccount('temp')).email);
