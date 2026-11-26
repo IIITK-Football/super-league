@@ -13,7 +13,6 @@ const schedule = [
 ];
 
 const fx = { prediction: {}, history: { ok: true, body: { success: true, data: [] } } };
-const deferred = {};
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' }, profile: { nickname: 'Ace', wc_team_flair: 'Brazil' } }) }));
 vi.mock('../../context/LeagueContext', () => ({
   scopeQuery: () => 'division=super-league',

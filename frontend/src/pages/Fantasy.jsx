@@ -76,7 +76,6 @@ export function Fantasy() {
 
     const pendingPredictions = predictions.filter((p) => p.status === 'pending');
     const gradedPredictions = predictions.filter((p) => p.status === 'graded');
-    const totalPredPoints = gradedPredictions.reduce((sum, p) => sum + (p.points_awarded || 0), 0);
     const filteredPredictions = activeTab === 'pending' ? pendingPredictions : activeTab === 'history' ? gradedPredictions : [];
     const displayedPredictions = showAll ? filteredPredictions : filteredPredictions.slice(0, 5);
 
@@ -101,7 +100,7 @@ export function Fantasy() {
         })),
         [scheduleResp]);
 
-    const allPlayers = playersResp?.data || [];
+    const allPlayers = useMemo(() => playersResp?.data || [], [playersResp]);
     const selectedMatch = upcomingMatches.find((m) => m.id === selectedMatchId);
 
     // Choosing a match starts a clean form. Answers for the match chosen before are ignored (see the effect below).
