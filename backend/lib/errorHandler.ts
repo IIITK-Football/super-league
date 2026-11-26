@@ -15,26 +15,27 @@ const DATABASE_STATUS: Record<string, [number, string | null]> = {
 };
 
 export function handleError(error: any, context: string) {
-  // 1. VERCEL LOGGING: Log the raw, highly-detailed error to the server console.
-  // Vercel automatically captures `console.error` and stores it in your deployment logs!
+  // The raw error (database messages included) is logged for the operator and never sent to the client.
   console.error(`[SERVER ERROR] - ${context}:`, error);
 
-  // 2. DATA SANITIZATION: Strip sensitive data for the client
-  let safeMessage = error.message || "An unexpected internal server error occurred.";
+  let safeMessage = "An unexpected internal server error occurred.";
   let statusCode = 500;
 
-  // We can safely pass 400 (Bad Request) or 401 (Unauthorized) messages to the client
   if (error instanceof ScopeError) {
     // An unknown or malformed division/season: the message names only what the caller asked for.
     statusCode = error.status;
     safeMessage = error.message;
-  } else if (error.name === 'ZodError' || error.status === 400) {
+  } else if (error.name === 'ZodError') {
     statusCode = 400;
-    safeMessage = "Bad Request: Invalid payload.";
+    safeMessage = error.issues?.[0]?.message ?? 'Bad Request: Invalid payload.';
+  } else if (error.status === 400) {
+    // Routes throw 400s with a reason the caller can act on ("Predictions are closed for this match.").
+    statusCode = 400;
+    safeMessage = error.message || 'Bad Request: Invalid payload.';
   } else if (error.status === 401) {
     statusCode = 401;
     safeMessage = "Unauthorized.";
-  } else if (error.status === 403 || error.status === 404) {
+  } else if (error.status === 403 || error.status === 404 || error.status === 409) {
     // Thrown by the routes themselves with a fixed message ("not assigned to score this match"), never a database error.
     statusCode = error.status;
   } else if (typeof error.code === 'string' && DATABASE_STATUS[error.code]) {
@@ -47,12 +48,8 @@ export function handleError(error: any, context: string) {
     safeMessage = "An unexpected internal server error occurred.";
   }
 
-  // 3. UNIFIED RESPONSE FORMAT: The client NEVER sees raw database details or tokens
   return Response.json(
-    { 
-      success: false, 
-      message: safeMessage 
-    },
+    { success: false, message: safeMessage },
     { status: statusCode }
   );
 }
