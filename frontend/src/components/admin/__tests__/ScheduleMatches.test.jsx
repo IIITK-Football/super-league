@@ -24,6 +24,8 @@ vi.mock('../DivisionSwitch', () => ({ DivisionSwitch: () => null }));
 vi.mock('../../../pages/Standings', () => ({ WomensBracket: () => null, FreshersBracket: () => null }));
 vi.mock('../../../lib/api', () => ({ API_BASE_URL: 'http://api.test' }));
 const { default: ScheduleMatches } = await import('../ScheduleMatches');
+const { pick, trigger } = await import('./listbox');
+const { readToasts } = await import('../../ui/toastStore');
 
 let requests;
 beforeEach(() => {
@@ -37,9 +39,9 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 async function fillFixture() {
-  await waitFor(() => expect(screen.getByLabelText('Season').value).toBe('s1'));
-  fireEvent.change(screen.getByLabelText('Home team'), { target: { value: 't1' } });
-  fireEvent.change(screen.getByLabelText('Away team'), { target: { value: 't2' } });
+  await waitFor(() => expect(trigger('Season').textContent).toBe('2026 season (current)'));
+  await pick('Home team', 'Alpha');
+  await pick('Away team', 'Beta');
   fireEvent.change(screen.getByLabelText('Kickoff'), { target: { value: '2026-12-01T16:00' } });
   fireEvent.change(screen.getByLabelText('Venue'), { target: { value: 'Main Turf' } });
 }
@@ -48,8 +50,8 @@ describe('ScheduleMatches walkovers and feedback', () => {
   it('asks for a reason before a walkover can be registered, and shows the gap inline', async () => {
     render(<ScheduleMatches />);
     await fillFixture();
-    fireEvent.click(screen.getByLabelText(/Register as walkover/));
-    fireEvent.change(screen.getByLabelText('Awarded to'), { target: { value: 'home' } });
+    fireEvent.click(screen.getByRole('switch', { name: /Register as walkover/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Home team' }));
     fireEvent.click(screen.getByRole('button', { name: 'Register walkover' }));
     expect((await screen.findByText('Give a reason for the walkover.')).textContent).toBeTruthy();
     expect(requests).toHaveLength(0);
@@ -59,18 +61,18 @@ describe('ScheduleMatches walkovers and feedback', () => {
   it('sends the reason and the awarded team with the walkover', async () => {
     render(<ScheduleMatches />);
     await fillFixture();
-    fireEvent.click(screen.getByLabelText(/Register as walkover/));
-    fireEvent.change(screen.getByLabelText('Awarded to'), { target: { value: 'away' } });
+    fireEvent.click(screen.getByRole('switch', { name: /Register as walkover/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Away team' }));
     fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Beta did not field a side' } });
     fireEvent.click(screen.getByRole('button', { name: 'Register walkover' }));
-    expect(await screen.findByText(/Walkover registered/)).toBeTruthy();
+    await waitFor(() => expect(readToasts().at(-1)?.title).toMatch(/Walkover registered/));
     expect(requests[0].body).toMatchObject({ is_walkover: true, walkover_winner: 'away', walkover_reason: 'Beta did not field a side', division: 'super-league', season: 's1' });
   });
 
   it('refuses a team against itself inline', async () => {
     render(<ScheduleMatches />);
     await fillFixture();
-    fireEvent.change(screen.getByLabelText('Away team'), { target: { value: 't1' } });
+    await pick('Away team', 'Alpha');
     fireEvent.click(screen.getByRole('button', { name: 'Schedule match' }));
     expect(await screen.findByText(/cannot play against itself/)).toBeTruthy();
     expect(requests).toHaveLength(0);
@@ -80,7 +82,7 @@ describe('ScheduleMatches walkovers and feedback', () => {
 describe('ScheduleMatches fixtures and seasons', () => {
   it('shows each fixture with its kickoff and venue, and the edit sheet starts from the stored venue', async () => {
     render(<ScheduleMatches />);
-    const row = (await screen.findByText('Alpha vs Beta')).closest('tr');
+    const row = (await screen.findByText('Alpha vs Beta')).closest('li');
     expect(within(row).getByText('Main Turf')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Edit Alpha vs Beta' }));
     expect(within(await screen.findByRole('dialog')).getByLabelText('Venue').value).toBe('Main Turf');

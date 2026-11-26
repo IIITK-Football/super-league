@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { CalendarPlus, MapPin, Pencil, X } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
 import { useDivisions } from '../../hooks/useDivisions';
 import { API_BASE_URL } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import { WomensBracket, FreshersBracket } from '../../pages/Standings';
 import { DivisionSwitch } from './DivisionSwitch';
-import { Button, Card, ConfirmDialog, Field, Notice, Pill, Sheet, Table } from '../ui';
+import { Button, Combobox, ConfirmDialog, Crest, DateTimeField, Field, Notice, Pill, SegmentedControl, Select, Sheet, Switch, TextInput, toast } from '../ui';
 import { formatKickoff } from './adminFormat';
 
 const EMPTY = { home_team_id: '', away_team_id: '', date: '', venue: '', is_walkover: false, walkover_winner: '', walkover_reason: '' };
@@ -86,7 +87,7 @@ export default function ScheduleMatches() {
     setLoading(true);
     try {
       await matchesApi('POST', '', { ...form, division, season });
-      setNotice({ tone: 'success', text: form.is_walkover ? 'Walkover registered.' : 'Match scheduled.' });
+      toast({ tone: 'success', title: form.is_walkover ? 'Walkover registered.' : 'Match scheduled.' });
       setForm(EMPTY);
       refetchFixtures();
     } catch (err) {
@@ -115,7 +116,7 @@ export default function ScheduleMatches() {
         venue: editing.venue.trim() || undefined,
       });
       setEditing(null);
-      setNotice({ tone: 'success', text: 'Fixture updated.' });
+      toast({ tone: 'success', title: 'Fixture updated.' });
       refetchFixtures();
     } catch (err) {
       setEditError(`Could not save the fixture: ${err.message}`);
@@ -125,110 +126,103 @@ export default function ScheduleMatches() {
   const cancelFixture = async () => {
     try {
       await matchesApi('DELETE', `?id=${cancelTarget.id}`);
-      setNotice({ tone: 'success', text: 'Fixture cancelled.' });
+      toast({ tone: 'success', title: 'Fixture cancelled.' });
       refetchFixtures();
     } catch (err) {
       throw new Error(`Could not cancel the fixture: ${err.message}`);
     }
   };
 
-  const teamOptions = teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>);
+  const crestOf = (id) => { const t = teams.find((x) => x.id === id); return t ? <Crest name={t.name} src={t.logo_url} color={t.team_color} size="sm" /> : null; };
+  const teamOptions = teams.map((t) => ({ value: t.id, label: t.name, icon: crestOf(t.id) }));
   const bracketDivision = division === 'wsl' || division === 'freshers';
+  const teamPicker = (label, value, onChange, extra = {}) => (
+    <Field label={label} error={extra.error}>{(p) => <Combobox {...p} aria-label={label} value={value} onChange={onChange}
+      placeholder={extra.placeholder ?? 'Choose a team'} searchPlaceholder="Search teams" options={teamOptions} />}</Field>
+  );
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <DivisionSwitch value={division} onChange={(next) => { setDivision(next); setSeason(''); }} />
-        <Field as="select" label="Season" value={season} onChange={(e) => setSeason(e.target.value)} className="sm:w-64">
-          {seasons.length === 0 && <option value="">No seasons yet</option>}
-          {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>)}
-        </Field>
+        <Field label="Season" className="lg:w-64">{(p) => <Select {...p} aria-label="Season" value={season} onChange={setSeason}
+          placeholder="No seasons yet" options={seasons.map((x) => ({ value: x.id, label: `${x.name}${x.is_current ? ' (current)' : ''}` }))} />}</Field>
       </div>
 
-      <Card className="max-w-2xl space-y-5">
-        <div>
-          <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Schedule a match</h2>
-          <p className="text-sm text-mut">Matches are created at 0-0. Results are entered on the live page.</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field as="select" label="Home team" required value={form.home_team_id} onChange={(e) => set({ home_team_id: e.target.value })}>
-              <option value="">Select home team</option>
-              {teamOptions}
-            </Field>
-            <Field as="select" label="Away team" required value={form.away_team_id} onChange={(e) => set({ away_team_id: e.target.value })} error={errors.teams}>
-              <option value="">Select away team</option>
-              {teamOptions}
-            </Field>
-            <Field type="datetime-local" label="Kickoff" required value={form.date} onChange={(e) => set({ date: e.target.value })} />
-            <Field label="Venue" required placeholder="e.g. Main turf" value={form.venue} onChange={(e) => set({ venue: e.target.value })} />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:items-start">
+        <section id="add-fixture" aria-labelledby="add-fixture-heading" className="glass scroll-mt-28 space-y-5 rounded-card p-5">
+          <div className="space-y-1">
+            <h2 id="add-fixture-heading" className="font-display text-2xl text-ink">Schedule a match</h2>
+            <p className="text-sm text-mut">Matches start at 0-0. Results are entered on the live desk.</p>
           </div>
 
-          <div className="space-y-4 rounded-card border border-line p-4">
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold text-ink">
-              <input type="checkbox" checked={form.is_walkover} onChange={(e) => set({ is_walkover: e.target.checked, walkover_winner: e.target.checked ? form.walkover_winner : '' })} className="size-5 accent-acc" />
-              Register as walkover (3-0 win)
-            </label>
-            {form.is_walkover && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field as="select" label="Awarded to" required value={form.walkover_winner} error={errors.winner} onChange={(e) => set({ walkover_winner: e.target.value })}>
-                  <option value="">Select the winner</option>
-                  <option value="home">Home team</option>
-                  <option value="away">Away team</option>
-                </Field>
-                <Field label="Reason" required hint="Shown on the result, for example no-show or ineligible player." error={errors.reason} value={form.walkover_reason} onChange={(e) => set({ walkover_reason: e.target.value })} />
-              </div>
-            )}
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
+              {teamPicker('Home team', form.home_team_id, (id) => set({ home_team_id: id }), { placeholder: 'Select home team' })}
+              {teamPicker('Away team', form.away_team_id, (id) => set({ away_team_id: id }), { placeholder: 'Select away team', error: errors.teams })}
+              <Field label="Kickoff">{(p) => <DateTimeField {...p} type="datetime-local" required value={form.date} onChange={(e) => set({ date: e.target.value })} />}</Field>
+              <Field label="Venue">{(p) => <TextInput {...p} icon={MapPin} required placeholder="e.g. Main turf" value={form.venue} onChange={(e) => set({ venue: e.target.value })} />}</Field>
+            </div>
 
-          {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
+            <div className="space-y-4 rounded-ctl border border-line p-4">
+              <Switch label="Register as walkover (3-0 win)" checked={form.is_walkover} onChange={(on) => set({ is_walkover: on, walkover_winner: on ? form.walkover_winner : '' })} />
+              {form.is_walkover && (
+                <div className="grid grid-cols-1 gap-4">
+                  <Field label="Awarded to" error={errors.winner}>{(p) => <SegmentedControl aria-labelledby={p['aria-labelledby']} value={form.walkover_winner} onChange={(v) => set({ walkover_winner: v })}
+                    options={[{ value: 'home', label: 'Home team' }, { value: 'away', label: 'Away team' }]} />}</Field>
+                  <Field label="Reason" required hint="Shown on the result, for example no-show or ineligible player." error={errors.reason} value={form.walkover_reason} onChange={(e) => set({ walkover_reason: e.target.value })} />
+                </div>
+              )}
+            </div>
 
-          <Button type="submit" disabled={loading || !season} size="lg" className="w-full sm:w-auto">
-            {loading ? 'Saving...' : form.is_walkover ? 'Register walkover' : 'Schedule match'}
-          </Button>
-        </form>
-      </Card>
+            {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
 
-      <section className="space-y-3" aria-labelledby="fixtures-heading">
-        <h2 id="fixtures-heading" className="font-display text-2xl font-black uppercase tracking-tight text-ink">Fixtures</h2>
-        {fixtures.length === 0 && <p className="text-sm text-mut">No fixtures in this season yet. Schedule the first match above.</p>}
-        {fixtures.length > 0 && (
-          <Table caption="Fixtures in this season">
-            <thead>
-              <tr><th scope="col">Kickoff</th><th scope="col">Fixture</th><th scope="col">Venue</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Actions</span></th></tr>
-            </thead>
-            <tbody>
+            <Button type="submit" disabled={loading || !season} size="lg" className="w-full">
+              <CalendarPlus size={17} aria-hidden="true" />{loading ? 'Saving...' : form.is_walkover ? 'Register walkover' : 'Schedule match'}
+            </Button>
+          </form>
+        </section>
+
+        <section className="space-y-3" aria-labelledby="fixtures-heading">
+          <h2 id="fixtures-heading" className="eyebrow">Fixtures in this season</h2>
+          {fixtures.length === 0 && <div className="flex flex-col items-start gap-2 rounded-card border border-dashed border-line p-6 text-sm text-mut">
+            <CalendarPlus size={26} aria-hidden="true" />
+            <p className="font-semibold text-ink">No fixtures in this season yet</p>
+            Schedule the first match with the form.
+          </div>}
+          {fixtures.length > 0 && (
+            <ul aria-label="Fixtures" className="glass divide-y divide-line/70 rounded-card px-2">
               {fixtures.map((m) => (
-                <tr key={m.id}>
-                  <td className="text-mut">{formatKickoff(m.date) || 'Not set'}</td>
-                  <td className="font-semibold">{m.home_team_name} vs {m.away_team_name}</td>
-                  <td className="text-mut">{m.venue || 'No venue'}</td>
-                  <td><Pill>{m.status}</Pill></td>
-                  <td>
-                    <div className="flex justify-end gap-1">
-                      <Button variant="quiet" size="sm" aria-label={`Edit ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => openEdit(m)}>Edit</Button>
-                      <Button variant="quiet" size="sm" aria-label={`Cancel ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => setCancelTarget(m)} className="text-live">Cancel</Button>
-                    </div>
-                  </td>
-                </tr>
+                <li key={m.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap">
+                  <div className="w-24 shrink-0 text-xs tabular-nums text-mut">{formatKickoff(m.date) || 'Not set'}</div>
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    {crestOf(m.home_team_id)}
+                    <span className="min-w-0 truncate text-sm font-black uppercase tracking-tight text-ink">{m.home_team_name} vs {m.away_team_name}</span>
+                    {crestOf(m.away_team_id)}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-mut">
+                    {m.status === 'live' && <Pill tone="live">Live</Pill>}
+                    {m.status === 'completed' && <span className="font-display text-sm tabular-nums text-ink">{m.home_score} - {m.away_score}</span>}
+                    <span className="hidden items-center gap-1 md:inline-flex"><MapPin size={13} aria-hidden="true" />{m.venue || 'No venue'}</span>
+                  </div>
+                  <div className="ml-auto flex shrink-0">
+                    <Button variant="quiet" size="sm" className="px-3" aria-label={`Edit ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => openEdit(m)}><Pencil size={15} aria-hidden="true" /></Button>
+                    <Button variant="quiet" size="sm" className="px-3 text-live" aria-label={`Cancel ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => setCancelTarget(m)}><X size={16} aria-hidden="true" /></Button>
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </Table>
-        )}
-      </section>
+            </ul>
+          )}
+        </section>
+      </div>
 
       <Sheet open={Boolean(editing)} onClose={() => setEditing(null)} title="Edit fixture">
         {editing && (
           <form onSubmit={saveEdit} className="space-y-4">
-            <Field as="select" label="Home team" value={editing.home_team_id} onChange={(e) => setEditing({ ...editing, home_team_id: e.target.value })}>
-              {teamOptions}
-            </Field>
-            <Field as="select" label="Away team" value={editing.away_team_id} onChange={(e) => setEditing({ ...editing, away_team_id: e.target.value })} error={editError.startsWith('A team') ? editError : undefined}>
-              {teamOptions}
-            </Field>
-            <Field type="datetime-local" label="Kickoff" hint={`Now: ${formatKickoff(editing.kickoff) || 'not set'}. Leave blank to keep it.`} value={editing.date} onChange={(e) => setEditing({ ...editing, date: e.target.value })} />
-            <Field label="Venue" value={editing.venue} onChange={(e) => setEditing({ ...editing, venue: e.target.value })} />
+            {teamPicker('Home team', editing.home_team_id, (id) => setEditing({ ...editing, home_team_id: id }))}
+            {teamPicker('Away team', editing.away_team_id, (id) => setEditing({ ...editing, away_team_id: id }), { error: editError.startsWith('A team') ? editError : undefined })}
+            <Field label="Kickoff" hint={`Now: ${formatKickoff(editing.kickoff) || 'not set'}. Leave blank to keep it.`}>{(p) => <DateTimeField {...p} type="datetime-local" value={editing.date} onChange={(e) => setEditing({ ...editing, date: e.target.value })} />}</Field>
+            <Field label="Venue">{(p) => <TextInput {...p} icon={MapPin} value={editing.venue} onChange={(e) => setEditing({ ...editing, venue: e.target.value })} />}</Field>
             {editError && !editError.startsWith('A team') && <Notice tone="error">{editError}</Notice>}
             <Button type="submit" size="lg" className="w-full">Save fixture</Button>
           </form>
