@@ -768,7 +768,7 @@ export function LeagueLanding() {
                         </ul>
                     )}
                     {status === 'error' && (
-                        <ErrorState message="The divisions could not load. Check your connection and try again." onRetry={retry} />
+                        <ErrorState title="Divisions could not load" message="Check your connection and try again." onRetry={retry} />
                     )}
                     {status === 'ready' && cards.length === 0 && (
                         <EmptyState title="No divisions yet">
