@@ -71,6 +71,12 @@ export function mediaProblems(staging) {
   return problems;
 }
 
+// The deploy command, with the commit Workers Builds is building passed in as SL_COMMIT so /api/health names the release.
+export function deployArgs(env) {
+  const sha = env.WORKERS_CI_COMMIT_SHA ?? '';
+  return ['exec', 'wrangler', 'deploy', '--env', 'staging', ...(/^[0-9a-f]{7,40}$/.test(sha) ? ['--var', `SL_COMMIT:${sha}`] : [])];
+}
+
 function run(cmd, args) {
   const r = spawnSync(cmd, args, { cwd: apiDir, stdio: 'inherit' });
   if (r.status !== 0) process.exit(r.status ?? 1);
@@ -87,5 +93,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(0);
   }
   run('pnpm', ['exec', 'tsc', '--noEmit']);
-  run('pnpm', ['exec', 'wrangler', 'deploy', '--env', 'staging']);
+  run('pnpm', deployArgs(process.env));
 }

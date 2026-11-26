@@ -41,6 +41,13 @@ export function configProblem(env: Record<string, string | undefined> = process.
   return null;
 }
 
+// The deployed release, for /api/health: the Worker version (from the version metadata binding) and the commit the
+// deploy command passed as SL_COMMIT. Both are null locally.
+let release: { id?: string; tag?: string } | undefined;
+export function setRelease(metadata: { id?: string; tag?: string } | undefined) {
+  release = metadata;
+}
+
 export function createApp() {
   const app = new Hono().basePath('/api');
 
@@ -68,7 +75,13 @@ export function createApp() {
     }
   });
 
-  app.get('/health', (c) => c.json({ ok: true, service: 'super-league-api', environment: process.env.SL_ENVIRONMENT ?? 'unknown' }));
+  app.get('/health', (c) => c.json({
+    ok: true,
+    service: 'super-league-api',
+    environment: process.env.SL_ENVIRONMENT ?? 'unknown',
+    commit: process.env.SL_COMMIT ?? null,
+    version: release?.id ?? null,
+  }));
 
   app.use('*', async (c, next) => {
     const method = c.req.method;
