@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Trash2, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
-import { useConfirm } from '../ui';
+import { Button, Card, Field, Notice, useConfirm } from '../ui';
 
 // Captains. The dictator chooses division -> season -> team (as in Teams & Rosters) and sees only that team entry's
 // captain for that season: labelled by the dictator-only account directory (verified email, name as context; never an
@@ -11,9 +10,6 @@ import { useConfirm } from '../ui';
 // A team entry has one captain; one person may captain several entries. The captain shown afterwards is always
 // reloaded from the database. Every load is numbered: a late answer for an earlier choice is ignored, and choosing
 // again clears what belonged to the previous choice.
-const inputClass = 'w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-[#d9ff4a]/60';
-const labelClass = 'text-[10px] font-black uppercase tracking-widest text-zinc-500';
-
 export default function ManageCaptains() {
   const confirm = useConfirm();
   const [divisions, setDivisions] = useState([]);
@@ -122,73 +118,62 @@ export default function ManageCaptains() {
     loadAssignment(seasonId, teamId);
   };
 
-  return <div className="space-y-6 p-6">
-    <div><h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><Users size={20} /> Captains</h2><p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Choose a division, season and team, then assign, change or revoke its captain</p></div>
-    {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
-    {message && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</p>}
-
-    <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-5 md:grid-cols-3">
-      <label className={labelClass}>Division
-        <select aria-label="Division" value={divisionId} onChange={(e) => chooseDivision(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">{loading.divisions ? 'Loading divisions...' : divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
-          {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-      </label>
-      <label className={labelClass}>Season
-        <select aria-label="Season" value={seasonId} disabled={!divisionId || loading.seasons} onChange={(e) => chooseSeason(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">{loading.seasons ? 'Loading seasons...' : divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}</option>
-          {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>)}
-        </select>
-      </label>
-      <label className={labelClass}>Team
-        <select aria-label="Team" value={teamId} disabled={!seasonId || loading.teams} onChange={(e) => chooseTeam(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-          <option value="">{loading.teams ? 'Loading teams...' : seasonId && !teams.length ? 'No teams in this season' : 'Choose a team'}</option>
-          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-      </label>
+  return <div className="space-y-6">
+    <div className="space-y-1">
+      <h2 className="font-display text-2xl font-bold text-ink">Captains</h2>
+      <p className="text-sm text-mut">Choose a division, season and team, then assign, change or revoke its captain.</p>
     </div>
+    {error && <Notice tone="error" role="alert">{error}</Notice>}
+    {message && <Notice tone="success" role="status">{message}</Notice>}
 
-    {teamId && <section aria-label="Captain" className="space-y-4 rounded-2xl border border-white/10 bg-white/[.03] p-5">
-      {loading.registration ? <p className="flex items-center gap-2 text-zinc-500"><Loader2 size={14} className="animate-spin" /> Loading the captain...</p> : <>
-        <p className="text-sm text-zinc-300">
-          {current ? <>Captain of {team?.name} in this season: <strong className="text-white">{captainLabel}</strong></> : <>{team?.name} has no captain in this season.</>}
+    <Card className="grid gap-4 md:grid-cols-3">
+      <Field as="select" label="Division" aria-label="Division" value={divisionId} onChange={(e) => chooseDivision(e.target.value)}>
+        <option value="">{loading.divisions ? 'Loading divisions...' : divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
+        {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+      </Field>
+      <Field as="select" label="Season" aria-label="Season" value={seasonId} disabled={!divisionId || loading.seasons} onChange={(e) => chooseSeason(e.target.value)}>
+        <option value="">{loading.seasons ? 'Loading seasons...' : divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}</option>
+        {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>)}
+      </Field>
+      <Field as="select" label="Team" aria-label="Team" value={teamId} disabled={!seasonId || loading.teams} onChange={(e) => chooseTeam(e.target.value)}>
+        <option value="">{loading.teams ? 'Loading teams...' : seasonId && !teams.length ? 'No teams in this season' : 'Choose a team'}</option>
+        {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+      </Field>
+    </Card>
+
+    {teamId && <Card as="section" aria-label="Captain" className="space-y-5">
+      {loading.registration ? <p className="text-sm text-mut">Loading the captain...</p> : <>
+        <p className="text-ink">
+          {current ? <>Captain of {team?.name} in this season: <strong className="font-semibold">{captainLabel}</strong></> : <>{team?.name} has no captain in this season.</>}
         </p>
         <CaptainField picked={picked} onPick={setPicked} currentCaptainId={current?.user_id} teamName={team?.name} />
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={saveCaptain} disabled={busy !== '' || !picked.id} className="flex items-center gap-2 rounded-lg bg-[#d9ff4a] px-3 py-2 text-xs font-black uppercase text-black disabled:opacity-40">
-            {busy === 'save' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {current ? 'Change captain' : 'Assign captain'}
-          </button>
-          {current && <button type="button" onClick={revokeCaptain} disabled={busy !== ''} className="flex items-center gap-1 rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-400 disabled:opacity-40"><Trash2 size={13} /> Revoke captain</button>}
+          <Button onClick={saveCaptain} disabled={busy !== '' || !picked.id}>{busy === 'save' ? 'Saving...' : current ? 'Change captain' : 'Assign captain'}</Button>
+          {current && <Button variant="quiet" onClick={revokeCaptain} disabled={busy !== ''} className="text-live">Revoke captain</Button>}
         </div>
-        <p className="text-xs text-zinc-600">Players for this team are managed in Teams &amp; Rosters.</p>
+        <p className="text-sm text-mut">Players for this team are managed in Teams and rosters.</p>
       </>}
-    </section>}
+    </Card>}
   </div>;
 }
 
 // Finds the captain's account: every word of a name or college email must match. A person may captain several team
 // entries, so every account is offered; results are labelled by the account directory.
-/* eslint-disable react/prop-types -- this codebase does not use prop-types */
 function CaptainField({ picked, onPick, currentCaptainId, teamName }) {
   const [query, setQuery] = useState('');
   const search = useLatestSearch((text) => supabase.rpc('account_directory', { p_query: text, p_limit: 20 }), query, { minLength: 2 });
   const options = search.results.filter((a) => a.user_id !== currentCaptainId);
-  return <div className="grid gap-3 md:grid-cols-2">
-    <label className={labelClass}>Find an account
-      <input type="search" aria-label={`Find captain for ${teamName}`} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" className={`${inputClass} mt-1 normal-case tracking-normal`} />
-    </label>
-    <label className={labelClass}>New captain
-      <select aria-label={`New captain for ${teamName}`} value={picked.id} onChange={(e) => onPick({ id: e.target.value, label: options.find((a) => a.user_id === e.target.value)?.label || '' })} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-        <option value="">{options.length ? 'Choose from the search results' : 'Search to choose an account'}</option>
-        {options.map((a) => <option key={a.user_id} value={a.user_id}>{a.label}</option>)}
-      </select>
-    </label>
-    <p aria-live="polite" className="text-xs text-zinc-500 md:col-span-2">
+  return <div className="grid gap-4 md:grid-cols-2">
+    <Field type="search" label="Find an account" aria-label={`Find captain for ${teamName}`} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" />
+    <Field as="select" label="New captain" aria-label={`New captain for ${teamName}`} value={picked.id} onChange={(e) => onPick({ id: e.target.value, label: options.find((a) => a.user_id === e.target.value)?.label || '' })}>
+      <option value="">{options.length ? 'Choose from the search results' : 'Search to choose an account'}</option>
+      {options.map((a) => <option key={a.user_id} value={a.user_id}>{a.label}</option>)}
+    </Field>
+    <p aria-live="polite" className="text-sm text-mut md:col-span-2">
       {search.status === 'idle' && query.trim() && 'Type at least two letters.'}
-      {search.status === 'loading' && <span className="inline-flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Searching...</span>}
+      {search.status === 'loading' && 'Searching...'}
       {search.status === 'ready' && (options.length ? `${options.length} account${options.length === 1 ? '' : 's'} found` : 'No account matches.')}
-      {search.status === 'error' && <span role="alert" className="text-red-300">Search failed ({search.error}). <button type="button" onClick={search.retry} className="underline">Try again</button></span>}
+      {search.status === 'error' && <span role="alert" className="text-live">Search failed ({search.error}). <Button variant="quiet" size="sm" onClick={search.retry}>Try again</Button></span>}
     </p>
   </div>;
 }
-/* eslint-enable react/prop-types */

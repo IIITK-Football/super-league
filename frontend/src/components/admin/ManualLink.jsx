@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Link2, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useRosterPicker } from '../../hooks/useRosterPicker';
 import AccountPicker from './AccountPicker';
-import { inputClass, labelClass, primaryButton, ghostButton } from './adminStyles';
+import { Button, Card, Field, Notice } from '../ui';
 import { linkErrorMessage } from './PlayerAccountLink';
 
 // Manual link, for a dictator: choose a verified account by its Auth email, then find the player through Division ->
@@ -30,22 +29,20 @@ export default function ManualLink({ onChanged }) {
     picker.reloadPlayers();
     onChanged?.();
   };
-  const select = (label, value, onChange, options, placeholder) => <label className={labelClass}>{label}
-    <select aria-label={`Link ${label.toLowerCase()}`} value={value} onChange={(e) => onChange(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-      <option value="">{placeholder}</option>{options}
-    </select>
-  </label>;
+  const select = (label, value, onChange, options, placeholder) => <Field as="select" label={label} aria-label={`Link ${label.toLowerCase()}`} value={value} onChange={(e) => onChange(e.target.value)}>
+    <option value="">{placeholder}</option>{options}
+  </Field>;
 
-  return <details className="rounded-2xl border border-white/10 bg-white/[.02] p-5">
-    <summary className="cursor-pointer text-sm font-black uppercase tracking-wider text-zinc-300">Link an account to a player</summary>
-    <div className="mt-3 space-y-3">
-      <p className="text-xs text-zinc-500">1. Choose the person&apos;s verified account. 2. Find their player through the rosters. The link applies to the player in every season.</p>
+  return <details className="group rounded-card border border-line bg-surf p-4">
+    <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-ink">Link an account to a player</summary>
+    <div className="mt-4 space-y-4">
+      <p className="text-sm text-mut">1. Choose the person&apos;s verified account. 2. Find their player through the rosters. The link applies to the player in every season.</p>
       {account
-        ? <p className="flex flex-wrap items-center gap-2 text-sm text-white">Account: <span className="font-bold">{account.email}</span>
-          <button type="button" onClick={() => setAccount(null)} className={ghostButton}>Change</button></p>
+        ? <p className="flex flex-wrap items-center gap-2 text-ink">Account: <span className="font-semibold">{account.email}</span>
+          <Button variant="quiet" size="sm" onClick={() => setAccount(null)}>Change</Button></p>
         : <AccountPicker label="1. Verified account" idPrefix="Manual" onPick={(a) => { setAccount(a); setMessage(''); setError(''); }}
           canPick={(a) => !a.linked_player_id} />}
-      {account && <div className="grid gap-3 md:grid-cols-4">
+      {account && <Card className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-4">
         {select('Division', choice.divisionId, picker.chooseDivision, picker.divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>),
           picker.loading === 'divisions' ? 'Loading divisions...' : 'Choose a division')}
         {select('Season', choice.seasonId, picker.chooseSeason, picker.seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>),
@@ -54,12 +51,11 @@ export default function ManualLink({ onChanged }) {
           picker.loading === 'entries' ? 'Loading teams...' : !choice.seasonId ? 'Choose a season first' : picker.entries.length ? 'Choose a team' : 'No teams in this season')}
         {select('Player', choice.playerId, picker.choosePlayer, eligible.map((p) => <option key={p.id} value={p.id}>{p.jersey_number ?? '–'} · {p.first_name} {p.last_name}</option>),
           picker.loading === 'players' ? 'Loading players...' : !choice.entryId ? 'Choose a team first' : eligible.length ? `Choose a player without an account (${eligible.length})` : 'Every player on this team has an account')}
-      </div>}
-      {picker.error && <p role="alert" className="text-xs text-red-300">{picker.error}</p>}
-      {account && <button type="button" onClick={link} disabled={!chosen || busy} className={primaryButton}>
-        {busy ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Link {chosen ? `${chosen.first_name} ${chosen.last_name}` : 'player'}</button>}
-      {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
-      {message && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</p>}
+      </Card>}
+      {picker.error && <Notice tone="error" role="alert">{picker.error}</Notice>}
+      {account && <Button onClick={link} disabled={!chosen || busy}>{busy ? 'Linking...' : `Link ${chosen ? `${chosen.first_name} ${chosen.last_name}` : 'player'}`}</Button>}
+      {error && <Notice tone="error" role="alert">{error}</Notice>}
+      {message && <Notice tone="success" role="status">{message}</Notice>}
     </div>
   </details>;
 }

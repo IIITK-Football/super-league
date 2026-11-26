@@ -21,9 +21,9 @@ const DICTATOR_SECTIONS = [
   { id: 'scorers', label: 'Scorers' },
   { id: 'roles', label: 'Access control' },
   { id: 'grading', label: 'Grade fantasy' },
-  { id: 'news', label: 'Newsletter' },
-  { id: 'divisions', label: 'Divisions & seasons' },
-  { id: 'rosters', label: 'Teams & rosters' },
+  { id: 'news', label: 'News' },
+  { id: 'divisions', label: 'Divisions and seasons' },
+  { id: 'rosters', label: 'Teams and rosters' },
   { id: 'audit', label: 'Audit history' },
 ];
 
@@ -74,7 +74,7 @@ export function AdminDashboard() {
           })}
         </nav>
 
-        <Card as="section" aria-label={sections.find((s) => s.id === activeTab)?.label} className="min-h-96 p-0 sm:p-0">
+        <Card as="section" aria-label={sections.find((s) => s.id === activeTab)?.label} className="min-h-96 p-4 sm:p-6">
           {activeTab === 'live' && <LiveController />}
           {isDictator && activeTab === 'schedule' && <ScheduleMatches />}
           {isDictator && activeTab === 'captains' && <ManageCaptains />}
