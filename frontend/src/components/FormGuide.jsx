@@ -10,11 +10,11 @@ const MARK = {
 export function FormGuide({ form = [] }) {
   if (!form.length) return <span className="text-mut">-</span>;
   return (
-    <ol aria-label={`Form: ${form.join(', ')}`} className="flex items-center gap-1">
+    <ol aria-label={`Form: ${form.join(', ')}`} className="flex items-center gap-0.5 sm:gap-1">
       {form.map((result, i) => (
         <li
           key={`${result}-${i}`}
-          className={cn('flex size-6 items-center justify-center rounded-full font-display text-[11px] font-black', MARK[result] ?? MARK.L)}
+          className={cn('flex size-5 items-center justify-center rounded-full font-display text-[10px] font-black sm:size-6 sm:text-[11px]', MARK[result] ?? MARK.L)}
         >
           {result}
         </li>
