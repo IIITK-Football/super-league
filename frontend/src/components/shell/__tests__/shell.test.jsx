@@ -44,6 +44,17 @@ describe('World Cup navigation stays frozen', () => {
   });
 });
 
+describe('division paths', () => {
+  it('links the sections to the division in view', () => {
+    shellAt('/super-league');
+    const hrefs = [...document.querySelectorAll('nav[aria-label="Main"] a')].map((a) => a.getAttribute('href'));
+    expect(hrefs).toContain('/super-league/matches');
+    expect(hrefs).toContain('/super-league/news');
+    expect(hrefs).toContain('/standings/super-league');
+    expect(hrefs.some((h) => h === '/vault' || h === '/matches')).toBe(false);
+  });
+});
+
 describe('DivisionSwitcher label', () => {
   it('shows a skeleton, not the slug, while divisions load', () => {
     const { container } = render(

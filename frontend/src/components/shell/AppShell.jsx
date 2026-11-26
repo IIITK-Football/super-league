@@ -19,17 +19,21 @@ function Mark() {
 // Links shown in the primary bar. More holds the rest and opens a sheet.
 function primaryLinks(division) {
   return [
-    { to: '/matches', label: 'Matches', icon: CalendarDays },
+    { to: `/${division}/matches`, label: 'Matches', icon: CalendarDays },
     { to: `/standings/${division}`, label: 'Table', icon: Table2 },
-    { to: '/vault', label: 'News', icon: Newspaper },
+    { to: `/${division}/news`, label: 'News', icon: Newspaper },
   ];
 }
 
-const MORE_LINKS = [
-  { to: '/teams', label: 'Clubs' },
-  { to: '/leaderboard', label: 'Player stats' },
-  { to: '/rules', label: 'Rules' },
-];
+// League predictions (/fantasy). The World Cup page is reached from the home page only.
+function moreLinks(division) {
+  return [
+    { to: `/${division}/teams`, label: 'Clubs' },
+    { to: '/leaderboard', label: 'Player stats' },
+    { to: '/fantasy', label: 'Predictions' },
+    { to: `/${division}/rules`, label: 'Rules' },
+  ];
+}
 
 // The app frame: a top bar (laptop and tablet) and bottom tabs (phone) around the page. The division in view sets
 // --div, the accent every page may use. The World Cup page (frozen) keeps its own legacy navigation.
@@ -120,7 +124,7 @@ export function AppShell({ children }) {
 
       <Sheet open={moreOpen} title="More" onClose={() => setMoreOpen(false)}>
         <ul className="flex flex-col">
-          {MORE_LINKS.map(({ to, label }) => (
+          {moreLinks(division).map(({ to, label }) => (
             <li key={to}>
               <Link to={to} onClick={() => setMoreOpen(false)} className="flex min-h-12 items-center rounded-ctl px-3 text-lg font-semibold text-ink hover:bg-raise">
                 {label}

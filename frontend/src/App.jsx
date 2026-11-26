@@ -1,10 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Navigate, Outlet, Route, RouterProvider, createBrowserRouter, createRoutesFromElements, useLocation, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LeagueProvider } from './context/LeagueContext';
 import { ConfirmProvider } from './components/ui';
 import { AppShell } from './components/shell/AppShell';
 import { Loader } from './components/Loader';
-import { useLocation } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { ResetPassword } from './pages/ResetPassword';
 import { GlobalAuthRedirect } from './components/GlobalAuthRedirect';
@@ -59,6 +58,26 @@ function PublicRoute({ children }) {
 // The developer-only page that renders every UI primitive in both themes (not in production builds).
 const DevUi = import.meta.env.DEV ? lazy(() => import('./pages/DevUi')) : null;
 
+// A division in the address (/<division>/matches and so on) sets the division the page reads. It renders nothing for
+// the one render before the division is set, so a page never fetches another division's data.
+function DivisionScope({ children }) {
+  const { division: urlDivision } = useParams();
+  const { division, setDivision } = useLeague();
+
+  useEffect(() => {
+    setDivision(urlDivision);
+  }, [urlDivision, setDivision]);
+
+  return urlDivision === division ? children : null;
+}
+
+// Old division-less addresses (/matches, /vault, /rules, /teams) open the same page in the division in view.
+function DivisionRedirect({ to }) {
+  const { division } = useLeague();
+  const { search } = useLocation();
+  return <Navigate to={`/${division}/${to}${search}`} replace />;
+}
+
 function WcRoute() {
   const { setFantasySection } = useLeague();
   
@@ -73,52 +92,60 @@ function LeagueDashboardRoute() {
   return <PublicRoute><DivisionHomeRoute><Home /></DivisionHomeRoute></PublicRoute>;
 }
 
+// Routes live in one data router so useBlocker (for unsaved edits) works anywhere in the tree.
+const routes = createRoutesFromElements(
+  <Route element={<><GlobalAuthRedirect /><Outlet /></>}>
+    {/* Admin Routes (No Standard Navbar) */}
+    <Route path="/login" element={<Login />} />
+    <Route path="/reset-password" element={<ResetPassword />} />
+    <Route path="/hq-login" element={<AdminLogin />} />
+    {LEGACY_REDIRECTS.map(({ from, to }) => <Route key={from} path={from} element={<LegacyRedirect to={to} />} />)}
+
+    {/* Public App Routes */}
+    <Route path="/" element={<LeagueLanding />} />
+    <Route path="/:division" element={<LeagueDashboardRoute />} />
+    <Route path="/:division/:season" element={<LeagueDashboardRoute />} />
+    <Route path="/team-builder" element={<AppShell><RoleWorkspace requiredRole="captain" /></AppShell>} />
+    <Route path="/editor" element={<AppShell><RoleWorkspace requiredRole="editor" /></AppShell>} />
+    <Route path="/dictator" element={<AppShell><RoleWorkspace requiredRole="dictator" /></AppShell>} />
+    {DevUi && <Route path="/dev/ui" element={<Suspense fallback={null}><DevUi /></Suspense>} />}
+    <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
+    <Route path="/standings/:division" element={<PublicRoute><SectionGate section="standings"><Standings /></SectionGate></PublicRoute>} />
+
+    {/* Division sections: the division is in the address */}
+    <Route path="/:division/matches" element={<DivisionScope><PublicRoute><SectionGate section="fixtures"><Matches /></SectionGate></PublicRoute></DivisionScope>} />
+    <Route path="/:division/teams" element={<DivisionScope><PublicRoute><SectionGate section="teams"><Teams /></SectionGate></PublicRoute></DivisionScope>} />
+    <Route path="/:division/teams/:teamId" element={<DivisionScope><PublicRoute><SectionGate section="teams"><Teams /></SectionGate></PublicRoute></DivisionScope>} />
+    <Route path="/:division/news" element={<DivisionScope><PublicRoute><SectionGate section="news"><Vault /></SectionGate></PublicRoute></DivisionScope>} />
+    <Route path="/:division/rules" element={<DivisionScope><PublicRoute><SectionGate section="rules"><Rules /></SectionGate></PublicRoute></DivisionScope>} />
+    <Route path="/matches" element={<DivisionRedirect to="matches" />} />
+    <Route path="/teams" element={<DivisionRedirect to="teams" />} />
+    <Route path="/vault" element={<DivisionRedirect to="news" />} />
+    <Route path="/rules" element={<DivisionRedirect to="rules" />} />
+    <Route path="/matches/:id" element={<PublicRoute><MatchTimeline /></PublicRoute>} />
+
+    {/* Note the :id syntax! This catches /article/12345 */}
+    <Route path="/article/:id" element={<PublicRoute><SectionGate section="news"><ArticleView /></SectionGate></PublicRoute>} />
+
+    <Route path="/wc" element={<PublicRoute><WcRoute /></PublicRoute>} />
+
+    {/* Protected Routes (Require Login/Profile) */}
+    <Route path="/fantasy" element={<ProtectedRoute><SectionGate section="fantasy"><Fantasy /></SectionGate></ProtectedRoute>} />
+    <Route path="/leaderboard" element={<PublicRoute><SectionGate section="stats"><Leaderboard /></SectionGate></PublicRoute>} />
+    <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+
+    {/* Catch-all for bad URLs */}
+    <Route path="*" element={<PublicRoute><NotFound /></PublicRoute>} />
+  </Route>,
+);
+const router = createBrowserRouter(routes);
+
 function App() {
   return (
     <AuthProvider>
       <LeagueProvider>
         <ConfirmProvider>
-        <BrowserRouter>
-        <GlobalAuthRedirect />
-          <Routes>
-            {/* Admin Routes (No Standard Navbar) */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/hq-login" element={<AdminLogin />} />
-            {LEGACY_REDIRECTS.map(({ from, to }) => <Route key={from} path={from} element={<LegacyRedirect to={to} />} />)}
-
-            {/* Public App Routes */}
-            <Route path="/" element={<LeagueLanding />} />
-            <Route path="/:division" element={<LeagueDashboardRoute />} />
-            <Route path="/:division/:season" element={<LeagueDashboardRoute />} />
-            <Route path="/team-builder" element={<AppShell><RoleWorkspace requiredRole="captain" /></AppShell>} />
-            <Route path="/editor" element={<AppShell><RoleWorkspace requiredRole="editor" /></AppShell>} />
-            <Route path="/dictator" element={<AppShell><RoleWorkspace requiredRole="dictator" /></AppShell>} />
-            {DevUi && <Route path="/dev/ui" element={<Suspense fallback={null}><DevUi /></Suspense>} />}
-            <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
-            <Route path="/standings/:division" element={<PublicRoute><SectionGate section="standings"><Standings /></SectionGate></PublicRoute>} />
-            <Route path="/teams" element={<PublicRoute><SectionGate section="teams"><Teams /></SectionGate></PublicRoute>} />
-            
-            {/* Navigation Sections */}
-            <Route path="/matches" element={<PublicRoute><SectionGate section="fixtures"><Matches /></SectionGate></PublicRoute>} />
-            <Route path="/matches/:id" element={<PublicRoute><MatchTimeline /></PublicRoute>} />
-            <Route path="/vault" element={<PublicRoute><SectionGate section="news"><Vault /></SectionGate></PublicRoute>} />
-            <Route path="/rules" element={<PublicRoute><SectionGate section="rules"><Rules /></SectionGate></PublicRoute>} />
-            
-            {/* Note the :id syntax! This catches /article/12345 */}
-            <Route path="/article/:id" element={<PublicRoute><SectionGate section="news"><ArticleView /></SectionGate></PublicRoute>} />
-
-            <Route path="/wc" element={<PublicRoute><WcRoute /></PublicRoute>} />
-            
-            {/* Protected Routes (Require Login/Profile) */}
-            <Route path="/fantasy" element={<ProtectedRoute><SectionGate section="fantasy"><Fantasy /></SectionGate></ProtectedRoute>} />
-            <Route path="/leaderboard" element={<ProtectedRoute><SectionGate section="stats"><Leaderboard /></SectionGate></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
-            
-            {/* Catch-all for bad URLs */}
-            <Route path="*" element={<PublicRoute><NotFound /></PublicRoute>} />
-          </Routes>
-        </BrowserRouter>
+          <RouterProvider router={router} />
         </ConfirmProvider>
       </LeagueProvider>
     </AuthProvider>

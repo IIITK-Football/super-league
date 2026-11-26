@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { Card, Crest, EmptyState, ErrorState, Skeleton, Tabs } from '../components/ui';
@@ -39,7 +39,7 @@ export function groupSquad(players) {
   return ordered.map(([key, list]) => ({ key, label: POSITION_LABELS[key] || key, players: list.sort(byPhotoThenName) }));
 }
 
-function SquadList({ team, players }) {
+function SquadList({ players }) {
   const groups = useMemo(() => groupSquad(players), [players]);
   if (players.length === 0) {
     return <EmptyState title="No players yet">Players appear here once they are added to this club&apos;s squad.</EmptyState>;
@@ -53,7 +53,7 @@ function SquadList({ team, players }) {
             {group.players.map((player) => (
               <li key={player.id}>
                 <Link
-                  to={`/teams?club=${team.id}&player=${player.id}`}
+                  to={`?player=${player.id}`}
                   className="flex min-h-11 items-center gap-3 px-4 py-2.5 hover:bg-raise"
                 >
                   <span className="size-10 shrink-0 overflow-hidden rounded-full bg-raise">
@@ -73,6 +73,7 @@ function SquadList({ team, players }) {
 
 // One club: its matches this season and its squad. The club and tab are in the address.
 function ClubPage({ team, teams, allPlayers, tab, setParams }) {
+  const { seasonScope } = useLeague();
   const matchesApi = useApi(`/teams/${team.id}/matches`);
   const logos = new Map(teams.map((t) => [t.id, t.logo_url]));
   const matches = (matchesApi.data?.data ?? []).map((m) => ({
@@ -87,7 +88,7 @@ function ClubPage({ team, teams, allPlayers, tab, setParams }) {
       <header className="flex flex-wrap items-center gap-4">
         <Crest name={team.name} src={team.logo_url} color={team.team_color} size="lg" />
         <h1 className="min-w-0 flex-1 font-display text-4xl font-bold text-ink sm:text-5xl">{team.name}</h1>
-        <Link to="/teams" className="inline-flex min-h-11 items-center text-sm font-semibold text-mut hover:text-ink">All clubs</Link>
+        <Link to={`/${seasonScope.division}/teams`} className="inline-flex min-h-11 items-center text-sm font-semibold text-mut hover:text-ink">All clubs</Link>
       </header>
 
       <Tabs
@@ -97,7 +98,7 @@ function ClubPage({ team, teams, allPlayers, tab, setParams }) {
         onChange={(next) => setParams(next === 'squad' ? { club: team.id, tab: 'squad' } : { club: team.id })}
       />
 
-      {tab === 'squad' ? <SquadList team={team} players={players} />
+      {tab === 'squad' ? <SquadList players={players} />
         : matchesApi.loading ? <Skeleton className="h-28 w-full" />
           : matchesApi.error ? <ErrorState message={matchesApi.error.message} onRetry={matchesApi.retry} />
             : matches.length === 0 ? <EmptyState title={`No matches for ${team.name} yet`}>Fixtures appear here once they are scheduled.</EmptyState>
@@ -110,8 +111,9 @@ function ClubPage({ team, teams, allPlayers, tab, setParams }) {
 // opens a player from that squad. The address holds all of it, so back and shared links work.
 export function Teams() {
   const { seasonScope } = useLeague();
+  const { teamId } = useParams();
   const [params, setParams] = useSearchParams();
-  const clubId = params.get('club');
+  const clubId = teamId ?? params.get('club');
   const playerId = params.get('player');
   const tab = params.get('tab') === 'squad' ? 'squad' : 'matches';
 
@@ -172,7 +174,7 @@ export function Teams() {
           const playerCount = allPlayers.filter((p) => p.team_id === team.id).length;
           return (
             <li key={team.id}>
-              <Link to={`/teams?club=${team.id}`} className="block h-full">
+              <Link to={`/${seasonScope.division}/teams/${team.id}`} className="block h-full">
                 <Card
                   className="flex h-full flex-col items-center gap-3 border-t-4 text-center transition-colors hover:border-mut"
                   style={team.team_color ? { borderTopColor: team.team_color } : undefined}
