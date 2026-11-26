@@ -91,7 +91,7 @@ describe('season choice on the division homepage', () => {
     const select = await screen.findByLabelText('Season');
     expect(select.value).toBe('2026');
     expect([...select.options].map((o) => o.textContent)).toEqual(['2026 (current)', '2027']);
-    expect(lastQuery().get('season')).toBe('2026');
+    await waitFor(() => expect(lastQuery().get('season')).toBe('2026'));
   });
 
   it('changing the season updates the address and the content request', async () => {
