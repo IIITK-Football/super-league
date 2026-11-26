@@ -82,9 +82,18 @@ async function main() {
     assert.ok(sl, 'The seeded Super League division is available');
 
     browser = await chromium.launch();
+    const pageErrors = [];
     const open = async (account) => {
       const context = await browser.newContext();
-      if (Object.keys(access).length) {
+      if (local) {
+        await context.route('**/*', (route) => {
+          const url = new URL(route.request().url());
+          if (url.origin === keys.API_URL || (url.origin === site && !url.pathname.startsWith('/api/media/'))) {
+            return route.continue();
+          }
+          return route.abort();
+        });
+      } else if (Object.keys(access).length) {
         await context.route(`${site}/**`, (route) => route.continue({ headers: { ...route.request().headers(), ...access } }));
       }
       if (account) {
@@ -92,6 +101,7 @@ async function main() {
       }
       const page = await context.newPage();
       page.setDefaultTimeout(12000);
+      page.on('pageerror', (error) => pageErrors.push(error.message));
       return page;
     };
     const admin = await open(dictator);
@@ -119,7 +129,13 @@ async function main() {
     await go(visitor, '/');
     await visitor.getByRole('button', { name: 'Open menu' }).click();
     await visitor.getByRole('button', { name: 'Lifecycle walkthrough', exact: true }).click();
-    await visitor.getByText('No public seasons yet.').waitFor();
+    try {
+      await visitor.waitForURL(`${site}/${tag}`);
+      await visitor.getByText('No public seasons yet.').waitFor();
+    } catch (error) {
+      const body = await visitor.locator('body').innerText({ timeout: 1000 }).catch(() => '');
+      throw new Error(`Published division did not show its empty state at ${new URL(visitor.url()).pathname}. ${body.slice(0, 240)} ${pageErrors.join('; ')}`, { cause: error });
+    }
 
     async function addSeason(name, slug) {
       const form = admin.getByRole('form', { name: 'New season' });
@@ -202,6 +218,7 @@ async function main() {
     const [unchanged] = await db.select('seasons', `id=eq.${two}&select=name`);
     assert.equal(unchanged.name, 'Walkthrough Second');
     steps.push({ scenario: 'validate and audit', outcomes: ['Normal user refused', 'Invalid update leaves the row unchanged', 'Dictator recorded as audit actor'] });
+    assert.deepEqual(pageErrors, [], 'The browser reported no uncaught errors');
     console.log(JSON.stringify({ item: 'SL-040', target, servedCommit: version.commit, steps }, null, 2));
   } finally {
     try {

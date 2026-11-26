@@ -333,7 +333,8 @@ export function LeagueLanding() {
 
     // Create both HLS instances once and keep them alive through carousel changes.
     useEffect(() => {
-        const videos = videoRefs.current;
+        // React clears the refs before passive cleanup on navigation.
+        const videos = [...videoRefs.current];
         if (!videos[0] || !videos[1]) return undefined;
 
         const supportsHlsJs = Hls.isSupported();
