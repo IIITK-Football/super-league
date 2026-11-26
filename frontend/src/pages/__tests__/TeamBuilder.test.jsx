@@ -249,6 +249,16 @@ describe('TeamBuilder checks before and after saving', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it('treats a legacy position name the server refuses as not set', async () => {
+    db.tables.roster_memberships[0].position = 'Forward';
+    renderBuilder();
+    await screen.findByRole('button', { name: /01 Ada Striker/ });
+    setNumber(/jersey number/i, 10);
+    fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
+    expect(await screen.findByText('Choose a position for Ada Striker before saving.')).toBeTruthy();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it('keeps earlier players saved and says how many saved before a failure', async () => {
     renderBuilder();
     await screen.findByRole('button', { name: /01 Ada Striker/ });

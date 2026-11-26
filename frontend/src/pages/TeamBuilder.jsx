@@ -23,7 +23,8 @@ export const fromMember = (member) => {
     const player = {
         id: member.id,
         fullName: member.name || [member.first_name, member.last_name].filter(Boolean).join(' '),
-        position: member.position || '',
+        // Legacy rows hold names like "Forward"; the server takes only codes, so the captain picks one.
+        position: positions.includes(member.position) ? member.position : '',
         jerseyNumber: member.jersey_number ?? '',
         imageUrl: member.image_url || '',
         preferredFoot: card.preferredFoot,
@@ -693,7 +694,7 @@ export function TeamBuilder() {
                 error={positionMissingFor === currentPlayer.id && !currentPlayer.position ? 'Choose a position. It is required before saving.' : undefined}>
                 {(p) => <Select {...p} value={currentPlayer.position} placeholder="Choose a position"
                     onChange={(value) => { updatePlayer('position', value); setPositionMissingFor(null); }}
-                    options={[...positions, ...(currentPlayer.position && !positions.includes(currentPlayer.position) ? [currentPlayer.position] : [])].map((position) => ({ value: position, label: position }))} />}
+                    options={positions.map((position) => ({ value: position, label: position }))} />}
             </Field>
             <Field label="Jersey number">
                 {(p) => <NumberField {...p} min={0} max={99} placeholder="None" value={numOrNull(currentPlayer.jerseyNumber)} onChange={(n) => updatePlayer('jerseyNumber', n)} />}
