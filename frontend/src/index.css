@@ -1,21 +1,24 @@
 @import "tailwindcss";
 
 /*
- * Monsoon tokens. Dark is the default; light follows the device unless the reader picks dark, and a
- * toggle sets data-theme on <html>. Utilities (bg-bg, text-ink, border-line, ...) read these variables.
- * Division accent: --div is set by the app shell from divisions.primary_color; it falls back to --color-acc.
+ * Tokens. Neutrals come from the theme (light or dark); the accent comes from the palette (data-palette on <html>).
+ * Palettes are deliberately restrained: neutral greys, at most one accent, green only for wins, red only for live.
+ *   mono      accent is the ink colour itself; colour comes only from club crests and live states (default)
+ *   division  accent is the current division's colour from data (--div, set by the app shell)
+ *   pitch     one deep pitch green accent
+ * Dark is the fallback; light follows the device unless the reader picks dark, and the toggle sets data-theme.
  */
 @theme static {
-  --color-bg: #0E1716;
-  --color-surf: #152120;
-  --color-raise: #1D2C2A;
-  --color-ink: #E5EEEB;
-  --color-mut: #8FA19C;
-  --color-line: #273735;
-  --color-acc: #E07A4C;
-  --color-accink: #0E1716;
-  --color-acc2: #7DBA92;
-  --color-live: #FF5A4E;
+  --color-bg: #0D0D0E;
+  --color-surf: #161618;
+  --color-raise: #202023;
+  --color-ink: #F0F0ED;
+  --color-mut: #9B9B96;
+  --color-line: #2A2A2E;
+  --color-acc: #F0F0ED;
+  --color-accink: #0D0D0E;
+  --color-acc2: #4CBF85;
+  --color-live: #FF5449;
 
   --font-display: "Big Shoulders Display", "Arial Narrow", sans-serif;
   --font-body: "Public Sans", system-ui, sans-serif;
@@ -58,56 +61,73 @@
 }
 
 :root {
-  --div: var(--color-acc);
+  --div: #1F7A4D;
+  --color-bg: #0D0D0E;
+  --color-surf: #161618;
+  --color-raise: #202023;
+  --color-ink: #F0F0ED;
+  --color-mut: #9B9B96;
+  --color-line: #2A2A2E;
+  --color-acc2: #4CBF85;
+  --color-live: #FF5449;
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --color-bg: #EEF3F1;
-    --color-surf: #FFFFFF;
-    --color-raise: #E2EAE7;
-    --color-ink: #11201E;
-    --color-mut: #566A65;
-    --color-line: #CBD8D4;
-    --color-acc: #B8532A;
-    --color-accink: #FFFFFF;
-    --color-acc2: #2F7A52;
-    --color-live: #D6332A;
-    --div: var(--color-acc);
-    color-scheme: light;
+  --color-bg: #F6F6F4;
+  --color-surf: #FFFFFF;
+  --color-raise: #EDEDEA;
+  --color-ink: #141414;
+  --color-mut: #66665F;
+  --color-line: #E0E0DB;
+  --color-acc2: #1E7B4A;
+  --color-live: #D2302A;
+  color-scheme: light;
   }
 }
 
-[data-theme="light"] {
-  --color-bg: #EEF3F1;
+:root[data-theme="light"] {
+  --color-bg: #F6F6F4;
   --color-surf: #FFFFFF;
-  --color-raise: #E2EAE7;
-  --color-ink: #11201E;
-  --color-mut: #566A65;
-  --color-line: #CBD8D4;
-  --color-acc: #B8532A;
-  --color-accink: #FFFFFF;
-  --color-acc2: #2F7A52;
-  --color-live: #D6332A;
-  --div: var(--color-acc);
+  --color-raise: #EDEDEA;
+  --color-ink: #141414;
+  --color-mut: #66665F;
+  --color-line: #E0E0DB;
+  --color-acc2: #1E7B4A;
+  --color-live: #D2302A;
   color-scheme: light;
 }
 
-[data-theme="dark"] {
-  --color-bg: #0E1716;
-  --color-surf: #152120;
-  --color-raise: #1D2C2A;
-  --color-ink: #E5EEEB;
-  --color-mut: #8FA19C;
-  --color-line: #273735;
-  --color-acc: #E07A4C;
-  --color-accink: #0E1716;
-  --color-acc2: #7DBA92;
-  --color-live: #FF5A4E;
-  --div: var(--color-acc);
+:root[data-theme="dark"] {
+  --color-bg: #0D0D0E;
+  --color-surf: #161618;
+  --color-raise: #202023;
+  --color-ink: #F0F0ED;
+  --color-mut: #9B9B96;
+  --color-line: #2A2A2E;
+  --color-acc2: #4CBF85;
+  --color-live: #FF5449;
   color-scheme: dark;
 }
+
+/* Accent per palette. Mono and pitch flip with the theme; division follows the data colour. */
+:root, :root[data-palette="mono"] {
+  --color-acc: var(--color-ink);
+  --color-accink: var(--color-bg);
+}
+:root[data-palette="pitch"] {
+  --color-acc: #4CC38A;
+  --color-accink: #0D0D0E;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-palette="pitch"]:not([data-theme="dark"]) { --color-acc: #136B3E; --color-accink: #FFFFFF; }
+}
+:root[data-palette="pitch"][data-theme="light"] { --color-acc: #136B3E; --color-accink: #FFFFFF; }
+:root[data-palette="pitch"][data-theme="dark"] { --color-acc: #4CC38A; --color-accink: #0D0D0E; }
+:root[data-palette="division"] { --color-acc: var(--div); --color-accink: #FFFFFF; }
+/* The shell sets --div on its wrapper; re-declare the accent there so it resolves to the division colour. */
+:root[data-palette="division"] [data-div] { --color-acc: var(--div); }
 
 @layer base {
   body {

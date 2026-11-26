@@ -1,3 +1,4 @@
+import { PaletteSwitcher } from './PaletteSwitcher';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CalendarDays, Ellipsis, Newspaper, Table2 } from 'lucide-react';
@@ -85,7 +86,8 @@ export function AppShell({ children }) {
   );
 
   return (
-    <div className="min-h-screen bg-bg" style={style}>
+    <div className="min-h-screen bg-bg" style={style} data-div={accent ? "" : undefined}>
+      {import.meta.env.DEV && <PaletteSwitcher />}
       {bar}
       <main className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 md:pb-12 md:pt-8">{children}</main>
 

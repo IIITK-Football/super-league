@@ -15,3 +15,21 @@ export function setTheme(theme) {
     // Storage can be blocked (private windows); the choice then lasts for this visit only.
   }
 }
+
+// Palette preview (dev only for now): mono, division or pitch, stored like the theme.
+const PALETTE_KEY = 'sl-palette';
+export const PALETTES = ['mono', 'division', 'pitch'];
+
+export function currentPalette() {
+  const p = document.documentElement.dataset.palette;
+  return PALETTES.includes(p) ? p : 'mono';
+}
+
+export function setPalette(palette) {
+  document.documentElement.dataset.palette = palette;
+  try {
+    localStorage.setItem(PALETTE_KEY, palette);
+  } catch {
+    // Storage can be blocked; the choice then lasts for this visit only.
+  }
+}
