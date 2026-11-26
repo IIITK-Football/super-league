@@ -8,7 +8,9 @@ import { API_BASE_URL } from '../lib/api';
 import { Login } from './Login';
 import { Onboarding } from './Onboarding';
 import { supabase } from '../lib/supabase';
-import { Button, Card, EmptyState, ErrorState, Field, Notice, Pill, Skeleton, Tabs } from '../components/ui';
+import { Button, EmptyState, ErrorState, Field, Notice, Pill, Skeleton, Tabs } from '../components/ui';
+
+const PILL = 'inline-flex min-h-11 w-full items-center justify-center rounded-pill bg-ink px-6 text-sm font-black uppercase tracking-[0.2em] text-bg transition hover:opacity-85 disabled:pointer-events-none disabled:opacity-40';
 
 // A match has kicked off when its status says so or its kickoff time has passed. Such matches take no predictions.
 const kickedOff = (m) => m.status === 'live' || m.status === 'completed' || (m.date && new Date(m.date).getTime() <= Date.now());
@@ -255,9 +257,9 @@ export function Fantasy() {
                     </div>
                 ))}
                 {submitError && <Notice tone="error" role="alert">{submitError}</Notice>}
-                <Button type="submit" variant="primary" size="lg" disabled={submitting} className="w-full">
+                <button type="submit" disabled={submitting} className={PILL}>
                     {submitting ? 'Saving...' : 'Lock in prediction'}
-                </Button>
+                </button>
             </div>
         );
     };
@@ -268,7 +270,7 @@ export function Fantasy() {
         const isGraded = pred.status === 'graded';
         const pts = pred.points_awarded || 0;
         return (
-            <Card key={pred.id} className="flex flex-col gap-3">
+            <div key={pred.id} className="glass flex flex-col gap-3 rounded-card p-5">
                 <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-mut">{new Date(match.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
                     {isGraded ? <p className="font-display text-2xl font-bold tabular-nums">{pts > 0 ? '+' : ''}{pts} <span className="text-sm font-semibold text-mut">pts</span></p> : <Pill>Pending</Pill>}
@@ -288,7 +290,7 @@ export function Fantasy() {
                         ))}
                     </ul>
                 )}
-            </Card>
+            </div>
         );
     };
 
@@ -315,20 +317,20 @@ export function Fantasy() {
         if (lbError) return <ErrorState title="Could not load the prediction table" message={lbError.message} onRetry={refetchLb} />;
         if (leaderboard.length === 0) return <EmptyState title="No points yet">The table fills in once predictions are graded.</EmptyState>;
         return (
-            <ol className="flex flex-col divide-y divide-line overflow-hidden rounded-card border border-line bg-surf">
+            <ol className="glass flex flex-col divide-y divide-line/70 overflow-hidden rounded-card">
                 {leaderboard.map((entry, index) => {
                     const isMe = entry.user_id === user?.id;
                     return (
-                        <li key={entry.user_id} className="flex items-center gap-4 px-4 py-3">
-                            <span className="w-8 font-display text-xl font-bold tabular-nums text-mut">{index + 1}</span>
+                        <li key={entry.user_id} className={`flex items-center gap-4 px-4 py-4 sm:px-6 ${isMe ? 'bg-raise' : ''}`}>
+                            <span className="w-8 font-display text-2xl tabular-nums text-mut">{index + 1}</span>
                             <span className="flex min-w-0 flex-1 flex-col gap-1">
-                                <span className="flex items-center gap-2 font-semibold text-ink">
+                                <span className="flex items-center gap-2 font-black uppercase tracking-tight text-ink">
                                     <span className="truncate">{isMe ? myName : entry.username}</span>
                                     {isMe && <Pill tone="acc">You</Pill>}
                                 </span>
                                 {entry.flair && <span><Pill>{entry.flair}</Pill></span>}
                             </span>
-                            <span className="font-display text-2xl font-bold tabular-nums text-ink">{entry.total_points.toLocaleString()}</span>
+                            <span className="font-display text-3xl tabular-nums text-ink">{entry.total_points.toLocaleString()}</span>
                         </li>
                     );
                 })}
@@ -337,7 +339,7 @@ export function Fantasy() {
     };
 
     return (
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 bg-bg px-4 py-8 text-ink">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-12 bg-bg px-4 py-8 pb-12 text-ink">
             <div className="flex flex-col items-start gap-4">
                 <Tabs
                     label="Predictions"
@@ -345,27 +347,27 @@ export function Fantasy() {
                     tabs={[{ id: 'season1', label: 'Season 1' }, { id: 'fifa', label: 'FIFA' }]}
                     onChange={(id) => setFantasySection(id)}
                 />
-                <div className="flex flex-col gap-1">
-                    <h1 className="font-display text-3xl font-bold">Predictions</h1>
-                    <p className="text-mut">Predict the score and the goalscorers. Points go on the prediction table.</p>
+                <div className="flex flex-col gap-3">
+                    <h1 className="font-display text-4xl text-ink sm:text-6xl">Predictions</h1>
+                    <p className="text-lg text-mut">Predict the score and the goalscorers. Points go on the prediction table.</p>
                 </div>
             </div>
 
             {user && (
-                <Card className="flex items-center justify-between gap-4 bg-blk text-blkink">
-                    <div className="flex flex-col gap-1">
-                        <p className="text-sm opacity-80">{myName}{myActiveFlair ? ` · ${myActiveFlair}` : ''}</p>
-                        <p className="font-display text-3xl font-bold tabular-nums">{myRank ? `#${myRank}` : '-'}</p>
+                <div className="flex items-center justify-between gap-4 rounded-card bg-blk p-5 text-blkink sm:p-8">
+                    <div className="flex flex-col gap-2">
+                        <p className="eyebrow text-blkink/70">{myName}{myActiveFlair ? ` · ${myActiveFlair}` : ''}</p>
+                        <p className="font-display text-6xl leading-none tabular-nums">{myRank ? `#${myRank}` : '-'}</p>
                     </div>
                     <div className="text-right">
-                        <p className="font-display text-3xl font-bold tabular-nums">{(myEntry?.total_points ?? 0).toLocaleString()}</p>
-                        <p className="text-sm opacity-80">points</p>
+                        <p className="font-display text-6xl leading-none tabular-nums">{(myEntry?.total_points ?? 0).toLocaleString()}</p>
+                        <p className="eyebrow mt-2 text-blkink/70">points</p>
                     </div>
-                </Card>
+                </div>
             )}
 
             <section aria-labelledby="scoring-heading" className="flex flex-col gap-3">
-                <h2 id="scoring-heading" className="font-display text-xl font-bold">How scoring works</h2>
+                <h2 id="scoring-heading" className="font-display text-3xl text-ink sm:text-4xl">How scoring works</h2>
                 <ul className="flex list-disc flex-col gap-1 pl-5 text-mut">
                     <li>300 points for the exact final score.</li>
                     <li>100 points for the right result (win, draw or loss).</li>
@@ -376,14 +378,14 @@ export function Fantasy() {
             </section>
 
             <section aria-labelledby="predict-heading" className="flex flex-col gap-4">
-                <h2 id="predict-heading" className="font-display text-xl font-bold">Make a prediction</h2>
+                <h2 id="predict-heading" className="font-display text-3xl text-ink sm:text-4xl">Make a prediction</h2>
                 {submitted ? (
-                    <Card className="flex flex-col items-start gap-4">
+                    <div className="glass flex flex-col items-start gap-4 rounded-card p-5 sm:p-8">
                         <Notice tone="success">Prediction saved. Points come once the match is graded.</Notice>
                         <Button variant="secondary" onClick={() => selectMatch('')}>Predict another match</Button>
-                    </Card>
+                    </div>
                 ) : (
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+                    <form onSubmit={handleSubmit} className="glass flex flex-col gap-6 rounded-card p-5 sm:p-8">
                         {scheduleLoading ? <Skeleton className="h-11 w-full" /> : upcomingMatches.length === 0 ? (
                             <EmptyState title="No upcoming matches">Matches appear here once they are scheduled.</EmptyState>
                         ) : (
