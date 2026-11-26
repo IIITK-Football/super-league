@@ -85,7 +85,9 @@ describe('schema inventory on the local database', () => {
   it('reports what the migrations create in the public schema', () => {
     expect(by('table')).toHaveLength(31);
     expect(by('view')).toHaveLength(2);
-    expect(by('function')).toHaveLength(63);
+    // 63 + 7 from Phase 3 (team_details_for_edit, captain_update_team_details, create_awarded_match, grade_match,
+    // regrade_all_predictions, prediction_points, prediction_player_hits).
+    expect(by('function')).toHaveLength(70);
     expect(by('policy')).toHaveLength(51);
     // the division and season model (20261119000000_divisions_and_seasons.sql)
     for (const t of ['divisions', 'seasons', 'section_types', 'season_sections', 'team_entries', 'division_flairs']) {
