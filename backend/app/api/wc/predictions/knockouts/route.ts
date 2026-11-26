@@ -1,4 +1,4 @@
-import { jobClient } from '@/lib/supabase/clients';
+import { publicClient } from '@/lib/supabase/clients';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export async function OPTIONS() {
 }
 
 export async function GET(req: Request) {
-  const supabase = jobClient();
+  const supabase = publicClient();
     try {
         const { searchParams } = new URL(req.url);
         const user_id = searchParams.get('user_id');

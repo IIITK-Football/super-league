@@ -96,7 +96,39 @@ describe('World Cup archive reads', () => {
   });
 });
 
+// D-04 downscope (2026-11-26): these reads moved from the secret key to the publishable key. Their response must equal
+// what the secret key reads for the same query, so the archive is unchanged.
+describe('World Cup reads without the secret key', () => {
+  it('/wc/teams returns exactly the rows the secret key reads', async () => {
+    const expected = await admin.from('wc_teams').select('id, name, logo_url, group_name').not('group_name', 'is', null)
+      .order('group_name', { ascending: true }).order('name', { ascending: true });
+    expect(expected.error).toBeNull();
+    const body = await (await get('/wc/teams')).json();
+    expect(body.data).toEqual(expected.data);
+  });
+
+  // The route then rebuilds the bracket by calling its own URL over HTTP, which has no server under app.request (an
+  // archive bracket-rendering bug outside the parity gate, D-02); its saved-bracket read is compared directly.
+  it('the saved-bracket read returns the same rows with the publishable key', async () => {
+    const full = await admin.from('wc_knockout_predictions').select('*').order('user_id');
+    const pub = await clients(keys).anonWithoutCaptcha().from('wc_knockout_predictions').select('*').order('user_id');
+    expect(full.error).toBeNull();
+    expect(pub.error).toBeNull();
+    expect(pub.data).toEqual(full.data);
+  });
+});
+
 describe('World Cup archive writes', () => {
+  it('a refused submission changes nothing, whatever user_id it names', async () => {
+    const counts = async () => Promise.all(['wc_group_predictions', 'wc_award_predictions', 'wc_knockout_predictions']
+      .map(async (t) => (await admin.from(t).select('*', { count: 'exact', head: true })).count));
+    const before = await counts();
+    await post('/wc/predictions/groups', { user_id: userId, predictions: [{ group_name: 'A', first: 1, second: 2 }] });
+    await post('/wc/predictions/awards', { user_id: userId, golden_boot_id: 1 });
+    await post('/wc/predictions/knockouts/submit', { user_id: userId, predictions: { champion_id: 1 } });
+    expect(await counts()).toEqual(before);
+  });
+
   it.each([
     ['/wc/predictions/groups', { user_id: 'x', predictions: [] }],
     ['/wc/predictions/awards', { user_id: 'x' }],

@@ -1,10 +1,10 @@
-import { jobClient } from '@/lib/supabase/clients';
+import { publicClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const supabase = jobClient();
+  const supabase = publicClient();
   try {
     const { data: teams, error } = await supabase
       .from('wc_teams')

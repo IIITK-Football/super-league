@@ -31,14 +31,12 @@ const ELEVATED: Record<string, string> = {
   // Admin grading writes other users' rows
   'app/api/admin/predictions/grade/route.ts': 'admin grading',
   'app/api/admin/predictions/regrade-all/route.ts': 'admin grading',
-  // World Cup archive routes (frozen, D-02): reads, and submissions that refuse every write since the deadline
-  'app/api/wc/leaderboard/route.ts': 'to downscope',
-  'app/api/wc/teams/route.ts': 'to downscope',
-  'app/api/wc/players/route.ts': 'to downscope',
-  'app/api/wc/predictions/awards/route.ts': 'to downscope',
-  'app/api/wc/predictions/groups/route.ts': 'to downscope; trusts a client user_id',
-  'app/api/wc/predictions/knockouts/route.ts': 'to downscope',
-  'app/api/wc/predictions/knockouts/submit/route.ts': 'to downscope; trusts a client user_id',
+  // World Cup archive reads (frozen, D-02) of tables with no public read policy: owner-approved exceptions to the D-04
+  // allowlist (2026-11-26). Read-only; their submissions are closed and no longer write.
+  'app/api/wc/leaderboard/route.ts': 'archive read, no public policy on wc_leaderboard',
+  'app/api/wc/players/route.ts': 'archive read, no public policy on wc_players',
+  'app/api/wc/predictions/awards/route.ts': 'archive read, no public policy on wc_award_predictions',
+  'app/api/wc/predictions/groups/route.ts': 'archive read, no public policy on wc_group_predictions',
 };
 
 describe('Supabase key usage (backend)', () => {

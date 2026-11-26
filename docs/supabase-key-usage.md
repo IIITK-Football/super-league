@@ -12,8 +12,9 @@ Where each Supabase API key is used and why. The list of files using the **secre
 | Routes | Authorization and reason |
 |---|---|
 | `admin/predictions/{grade,regrade-all}` | The caller must be a dictator before a privileged client grades other users' predictions. |
-| `wc/{leaderboard,teams,players}` | Read-only World Cup archive data with existing response contracts. |
-| `wc/predictions/{awards,groups,knockouts,knockouts/submit}` | Frozen archive reads and submission handlers. The Worker requires a valid session for mutations, and the submission deadlines keep writes locked. |
+| `wc/{leaderboard,players}`, `wc/predictions/{awards,groups}` (GET) | Owner-approved D-04 exception (2026-11-26): read-only World Cup archive data from tables with no public read policy (`wc_leaderboard`, `wc_players`, `wc_award_predictions`, `wc_group_predictions`). Example: `GET /api/wc/leaderboard` with the publishable key would return an empty list. |
+
+`wc/teams` and the saved-bracket read of `wc/predictions/knockouts` use the publishable key (their tables are publicly readable; parity is tested). The World Cup submission handlers (`wc/predictions/{groups,awards,knockouts/submit}` POST) no longer touch the database: the deadline passed, so they serve only the refusal, and the old secret-key write that trusted a body `user_id` is gone.
 
 `captain/team-branding` no longer uses the secret key (2026-11-26): it reads and writes through `team_details_for_edit` and `captain_update_team_details` as the caller, which check for a dictator or a writable captain assignment, so the audit history names the person.
 
