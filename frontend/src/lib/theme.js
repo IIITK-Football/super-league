@@ -4,7 +4,7 @@ const KEY = 'sl-theme';
 export function currentTheme() {
   const saved = document.documentElement.dataset.theme;
   if (saved === 'light' || saved === 'dark') return saved;
-  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  return 'dark';
 }
 
 export function setTheme(theme) {
@@ -16,20 +16,3 @@ export function setTheme(theme) {
   }
 }
 
-// Palette preview (dev only for now): cobalt, pitch or signal, stored like the theme.
-const PALETTE_KEY = 'sl-palette';
-export const PALETTES = ['cobalt', 'pitch', 'signal'];
-
-export function currentPalette() {
-  const p = document.documentElement.dataset.palette;
-  return PALETTES.includes(p) ? p : 'pitch';
-}
-
-export function setPalette(palette) {
-  document.documentElement.dataset.palette = palette;
-  try {
-    localStorage.setItem(PALETTE_KEY, palette);
-  } catch {
-    // Storage can be blocked; the choice then lasts for this visit only.
-  }
-}

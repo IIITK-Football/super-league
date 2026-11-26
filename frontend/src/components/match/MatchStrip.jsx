@@ -18,10 +18,10 @@ const FEATURED_PILL = 'bg-blkink/15 text-blkink';
 
 function Side({ name, logo, home, featured }) {
   return (
-    <div className={cn('flex min-w-0 flex-1 flex-col items-center gap-2 text-center sm:flex-row sm:gap-3',
-      home ? 'sm:flex-row-reverse sm:text-right' : 'sm:text-left')}>
+    <div className={cn('flex min-w-0 flex-1 flex-col items-center gap-2 text-center',
+      featured && (home ? 'sm:flex-row-reverse sm:gap-3 sm:text-right' : 'sm:flex-row sm:gap-3 sm:text-left'))}>
       <Crest name={name} src={logo} size="md" />
-      <span className={cn('line-clamp-2 min-w-0 break-words font-semibold leading-tight sm:text-base', featured ? 'text-base text-blkink sm:text-2xl' : 'text-sm text-ink')}>{name}</span>
+      <span className={cn('line-clamp-2 min-w-0 break-words font-semibold leading-tight sm:text-base', featured ? 'text-base text-blkink sm:text-2xl' : 'text-sm font-black uppercase tracking-tight text-ink')}>{name}</span>
     </div>
   );
 }
@@ -36,26 +36,26 @@ export function MatchStrip({ match, className, featured = false }) {
   const status = STATUS[match.status] ?? { label: match.status || 'Unknown', tone: 'neutral' };
   const statusLabel = live && match.minute != null ? `Live ${match.minute}'` : status.label;
   const when = match.date ? new Date(match.date) : null;
-  const detail = [when && !isUpcoming(match) && when.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+  const detail = [when && when.toLocaleDateString(undefined, isUpcoming(match) ? { weekday: 'short', day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short' }),
     match.venue].filter(Boolean).join(' · ');
 
   return (
     <Link
       to={`/matches/${match.id}`}
-      className={cn('block rounded-card border p-4 transition-colors duration-200 sm:p-5',
-        featured ? 'border-blk bg-blk text-blkink sm:p-8' : 'border-line bg-surf hover:border-mut', className)}
+      className={cn('block rounded-card p-4 transition-colors duration-200 sm:p-5',
+        featured ? 'border-blk bg-blk text-blkink sm:p-8' : 'glass lift', className)}
     >
       <div className="flex items-center gap-3">
         <Side name={home.name || 'To be confirmed'} logo={home.logo_url} home featured={featured} />
         <div className="shrink-0 text-center">
           {isUpcoming(match)
-            ? <span className={cn('font-display font-bold tabular-nums leading-none', featured ? 'text-6xl text-blkink sm:text-8xl' : 'text-3xl text-ink')}>{timeLabel(when) || '-'}</span>
+            ? <span className={cn('font-display font-bold tabular-nums leading-none', featured ? 'text-6xl text-blkink sm:text-8xl' : 'text-2xl text-ink')}>{timeLabel(when) || '-'}</span>
             : <Scoreline home={match.home_score ?? null} away={match.away_score ?? null} live={live} size={featured ? 'lg' : 'md'} className={featured ? 'text-blkink' : undefined} />}
         </div>
         <Side name={away.name || 'To be confirmed'} logo={away.logo_url} featured={featured} />
       </div>
       <div className={cn('mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm', featured ? 'text-blkink' : 'text-mut')}>
-        <Pill tone={status.tone} className={featured ? FEATURED_PILL : undefined}>{statusLabel}</Pill>
+        {!isUpcoming(match) && <Pill tone={status.tone} className={featured ? FEATURED_PILL : undefined}>{statusLabel}</Pill>}
         {detail && <span className={featured ? 'text-blkink/80' : undefined}>{detail}</span>}
       </div>
     </Link>

@@ -43,7 +43,7 @@ function setData(overrides = {}) {
 }
 
 const findCard = (href) => waitFor(() => {
-  const link = document.querySelector(`a[href="${href}"]`);
+  const link = document.querySelector(`section[aria-label="Divisions"] a[href="${href}"]`);
   if (!link) throw new Error(`no card ${href}`);
   return link;
 });

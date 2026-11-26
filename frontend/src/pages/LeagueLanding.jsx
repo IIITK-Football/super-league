@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { cn } from '../utils/cn';
-import { Crest, EmptyState, ErrorState, Skeleton, buttonClasses } from '../components/ui';
+import { Crest, EmptyState, ErrorState, Skeleton } from '../components/ui';
 
 const STREAM_BASE_URL = 'https://pub-b7d837d92cb644838cb24feef9b3329e.r2.dev';
 const STREAM_POSTERS = {
@@ -31,18 +31,14 @@ const CLIP_SETS = Object.values(STREAMS);
 
 const CLIP_COUNT = CLIP_SETS.length * 3;
 const masterUrlFor = (name) => `${API_BASE_URL}/media/${name}/master.m3u8`;
+// hls.js reports absolute URLs while ours may be relative (/api/...), so compare them resolved.
+const sameUrl = (a, b) => { try { return new URL(a, window.location.href).href === new URL(b, window.location.href).href; } catch { return a === b; } };
 
 // Carousel order: first clip of each set, then the second clips, etc.
 function streamNameAt(index) {
     const safeIndex = ((index % CLIP_COUNT) + CLIP_COUNT) % CLIP_COUNT;
     return CLIP_SETS[safeIndex % CLIP_SETS.length][Math.floor(safeIndex / CLIP_SETS.length)];
 }
-
-// The hero stays dark in both themes. color-scheme follows the theme tokens, so light-dark() picks the dark token
-// (ink in light, bg in dark) for the scrim and the light token (bg in light, ink in dark) for the text and mark.
-const HERO_TEXT = { color: 'light-dark(var(--color-bg), var(--color-ink))' };
-const HERO_MARK = { backgroundColor: 'light-dark(var(--color-bg), var(--color-ink))' };
-const HERO_SCRIM = { backgroundColor: 'color-mix(in oklab, light-dark(var(--color-ink), var(--color-bg)) 85%, transparent)' };
 
 const MARK_MASK = {
     maskImage: 'url(/slklogo3.png)', WebkitMaskImage: 'url(/slklogo3.png)', maskSize: 'contain', WebkitMaskSize: 'contain',
@@ -108,41 +104,46 @@ function useDivisionCards() {
     return { ...state, retry: () => { setState({ status: 'loading', cards: [] }); setAttempt((n) => n + 1); } };
 }
 
-function MatchLine({ match, label, featured }) {
+// The live score or next kick-off of a division, one line.
+function MatchLine({ match }) {
     const home = match.home?.name;
     const away = match.away?.name;
     if (!home || !away) return null;
     const live = match.status === 'live';
-    const when = match.date ? new Date(match.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+    const when = match.date ? new Date(match.date).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
     return (
-        <span className={cn('block text-sm', featured ? 'text-blkink' : 'text-ink')}>
-            <span className="font-semibold">{label}: </span>
-            {home} {live ? <span className="font-display font-bold tabular-nums">{match.home_score ?? 0} - {match.away_score ?? 0}</span> : 'vs'} {away}
-            {!live && when ? `, ${when}` : ''}
+        <span className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-wider">
+            {live && <span aria-hidden="true" className="size-1.5 shrink-0 animate-pulse-dot rounded-full bg-live" />}
+            <span className="truncate">{home}</span>{' '}
+            <span className="shrink-0 font-display tabular-nums">{live ? `${match.home_score ?? 0} - ${match.away_score ?? 0}` : 'vs'}</span>{' '}
+            <span className="truncate">{away}</span>
+            {!live && when && <span className="shrink-0 opacity-60">{when}</span>}
         </span>
     );
 }
 
-function DivisionCard({ card, featured }) {
+// A division as a glass panel along the bottom of the hero. The division whose clip is playing is lit.
+function DivisionCard({ card, active }) {
     const { division, season, live, next } = card;
     const match = live || next;
-    const sub = featured ? 'text-blkink/80' : 'text-mut';
     return (
         <Link
             to={`/${division.slug}`}
-            style={!featured && division.primary_color ? { borderLeftColor: division.primary_color } : undefined}
+            aria-current={active ? 'true' : undefined}
             className={cn(
-                'flex min-h-24 items-center gap-4 rounded-card border border-l-4 p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc sm:p-5',
-                featured ? 'border-blk bg-blk text-blkink' : 'border-line bg-surf text-ink hover:border-mut',
+                'lift group flex min-h-24 items-center gap-4 rounded-card border p-4 backdrop-blur-xl transition-colors duration-500 sm:p-5',
+                active ? 'border-white bg-white text-black' : 'border-white/15 bg-black/40 text-white hover:bg-black/55',
             )}
         >
-            <Crest name={division.name} src={division.logo_url} color={division.primary_color} size="lg" />
-            <span className="min-w-0 flex-1 space-y-1">
-                <span className="block font-display text-2xl font-bold leading-none">{division.name}</span>
-                {season && <span className={cn('block text-sm', sub)}>{season.name}</span>}
-                {match && <MatchLine match={match} label={live ? 'Live now' : 'Next'} featured={featured} />}
+            <Crest name={division.name} src={division.logo_url} color={division.primary_color} size="md" />
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="flex items-baseline gap-2">
+                    <span className="truncate font-display text-xl uppercase leading-none tracking-tight sm:text-2xl">{division.name}</span>
+                    {season && <span className={cn('eyebrow shrink-0', active ? 'text-black/50' : 'text-white/50')}>{season.name}</span>}
+                </span>
+                {match && <span className={active ? 'text-black/75' : 'text-white/75'}><MatchLine match={match} /></span>}
             </span>
-            <ArrowRight aria-hidden="true" size={20} className="shrink-0" />
+            <ArrowRight aria-hidden="true" size={18} className="shrink-0 transition-transform group-hover:translate-x-1" />
         </Link>
     );
 }
@@ -302,7 +303,7 @@ export function LeagueLanding() {
 
         if (hls) {
             if (!manifestReadyRef.current[slot] || !firstFragmentBufferedRef.current[slot]) return;
-            if (hls.url && hls.url !== expectedUrl) return;
+            if (hls.url && !sameUrl(hls.url, expectedUrl)) return;
         } else if (video.src !== expectedUrl && video.currentSrc !== expectedUrl) {
             return;
         }
@@ -475,7 +476,7 @@ export function LeagueLanding() {
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
                     if (hlsRefs.current[slot] !== hls) return;
                     const expected = expectedUrlsRef.current[slot];
-                    if (expected && hls.url && hls.url !== expected) return;
+                    if (expected && hls.url && !sameUrl(hls.url, expected)) return;
 
                     manifestReadyRef.current[slot] = true;
                     const assignedName = assignedStreamsRef.current[slot];
@@ -526,7 +527,7 @@ export function LeagueLanding() {
 
                 hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
                     if (hlsRefs.current[slot] !== hls) return;
-                    if (expectedUrlsRef.current[slot] && hls.url !== expectedUrlsRef.current[slot]) return;
+                    if (expectedUrlsRef.current[slot] && !sameUrl(hls.url, expectedUrlsRef.current[slot])) return;
                     if (!data?.frag || data.frag.sn === 'initSegment') return;
 
                     if (slot === activeSlotRef.current) {
@@ -536,7 +537,7 @@ export function LeagueLanding() {
 
                 hls.on(Hls.Events.FRAG_BUFFERED, (_event, data) => {
                     if (hlsRefs.current[slot] !== hls) return;
-                    if (expectedUrlsRef.current[slot] && hls.url !== expectedUrlsRef.current[slot]) return;
+                    if (expectedUrlsRef.current[slot] && !sameUrl(hls.url, expectedUrlsRef.current[slot])) return;
                     if (!data?.frag || data.frag.sn === 'initSegment') return;
 
                     firstFragmentBufferedRef.current[slot] = true;
@@ -566,7 +567,7 @@ export function LeagueLanding() {
 
                 hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
                     if (hlsRefs.current[slot] !== hls) return;
-                    if (expectedUrlsRef.current[slot] && hls.url !== expectedUrlsRef.current[slot]) return;
+                    if (expectedUrlsRef.current[slot] && !sameUrl(hls.url, expectedUrlsRef.current[slot])) return;
                     const level = hls.levels[data.level];
                     if (!level) return;
 
@@ -582,7 +583,7 @@ export function LeagueLanding() {
 
                 hls.on(Hls.Events.ERROR, (_event, data) => {
                     if (!data.fatal || hlsRefs.current[slot] !== hls) return;
-                    if (expectedUrlsRef.current[slot] && hls.url && hls.url !== expectedUrlsRef.current[slot]) return;
+                    if (expectedUrlsRef.current[slot] && hls.url && !sameUrl(hls.url, expectedUrlsRef.current[slot])) return;
 
                     const assignedName = assignedStreamsRef.current[slot];
                     const isCurrent = slot === activeSlotRef.current && assignedName === currentStreamRef.current;
@@ -720,8 +721,11 @@ export function LeagueLanding() {
 
 
 
-    const featuredIndex = Math.max(0, cards.findIndex((card) => card.live));
-    const heroSeason = cards[0]?.season?.name ? `${cards[0].season.name} season` : '';
+    // The division whose clip is playing leads the hero; its name and button follow the video.
+    const clipDivision = Object.keys(STREAMS).find((slug) => STREAMS[slug].includes(streamName));
+    const leadCard = cards.find((card) => card.division.slug === clipDivision) || cards[0];
+    const leadName = leadCard?.division.name || 'Super League';
+    const [firstWord, ...restWords] = leadName.split(/\s+/);
     const activeFrameReady = motion
         && slotStreamNames[activeSlot] === streamName
         && assignedStreamsRef.current[activeSlot] === streamName
@@ -730,8 +734,8 @@ export function LeagueLanding() {
         && !videoFailed;
 
     return (
-        <main className="relative isolate min-h-svh overflow-hidden bg-bg text-ink">
-            {/* Decorative background: the clip when motion is allowed, otherwise the still. The scrim keeps text readable. */}
+        <main className="relative isolate flex min-h-svh flex-col overflow-hidden bg-black text-white">
+            {/* Decorative background: the clip when motion is allowed, otherwise the still. */}
             <div aria-hidden="true" className="absolute inset-0 -z-10 overflow-hidden">
                 {motion && [0, 1].map((slot) => (
                     <video
@@ -747,67 +751,75 @@ export function LeagueLanding() {
                             display: slot === activeSlot ? 'block' : 'none',
                             opacity: slot === activeSlot && activeFrameReady ? 1 : 0,
                             visibility: slot === activeSlot && activeFrameReady ? 'visible' : 'hidden',
+                            transition: 'opacity 600ms ease',
                             pointerEvents: 'none',
                         }}
                         onEnded={() => advanceWhenClipEnds(slot)}
                     />
                 ))}
                 {!activeFrameReady && <img src={posterSrc} alt="" className="absolute inset-0 size-full object-cover" />}
-                <span className="absolute inset-0" style={HERO_SCRIM} />
+                {/* Dark at the top and bottom where the text sits, clear in the middle so the football shows. */}
+                <span className="absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.7)_0%,rgb(0_0_0/0.15)_30%,rgb(0_0_0/0.25)_55%,rgb(0_0_0/0.9)_100%)]" />
             </div>
 
-            <header className="relative z-10 flex h-16 items-center justify-end px-4 sm:px-6">
-                <Link to="/login" className={buttonClasses('secondary', 'sm')}>Sign in</Link>
+            <header className="relative z-10 flex h-16 items-center justify-between px-4 sm:h-20 sm:px-8">
+                <span role="img" aria-label="Super League, IIIT Kottayam" className="block size-12 bg-white sm:size-14" style={MARK_MASK} />
+                <div className="flex items-center gap-2">
+                    {motion && (
+                        <button
+                            type="button"
+                            onClick={() => setIsPaused((paused) => !paused)}
+                            aria-label={isPaused ? 'Play background video' : 'Pause background video'}
+                            className="flex size-10 items-center justify-center rounded-full border border-white/20 bg-black/40 backdrop-blur-xl transition-colors hover:bg-white/15"
+                        >
+                            {isPaused ? <Play size={14} fill="currentColor" aria-hidden="true" /> : <Pause size={14} fill="currentColor" aria-hidden="true" />}
+                        </button>
+                    )}
+                    <Link to="/login" className="flex min-h-10 items-center rounded-pill border border-white/20 bg-black/40 px-4 text-sm font-semibold backdrop-blur-xl transition-colors hover:bg-white/15">Sign in</Link>
+                </div>
             </header>
 
-            <div className="relative z-10 mx-auto flex max-w-5xl flex-col px-4 pb-20 pt-6 sm:px-6 sm:pt-16">
-                <span role="img" aria-label="Super League" className="block size-24 sm:size-36" style={{ ...MARK_MASK, ...HERO_MARK }} />
-                <h1 className="mt-6 font-display text-6xl font-bold leading-[0.9] sm:text-8xl" style={HERO_TEXT}>Super League</h1>
-                {heroSeason && <p className="mt-2 font-display text-2xl font-semibold sm:text-3xl" style={HERO_TEXT}>{heroSeason}</p>}
-                <p className="mt-6 max-w-[40ch] text-lg sm:text-xl" style={HERO_TEXT}>
-                    Football for IIIT Kottayam. Choose a division to see its fixtures, table and news.
-                </p>
+            <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col justify-end px-4 pb-6 sm:px-8 sm:pb-10">
+                <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
+                    <p className="eyebrow text-white/70">IIIT Kottayam{leadCard?.season?.name ? ` · ${leadCard.season.name}` : ''}</p>
+                    <h1 key={leadName} className="mt-4 flex flex-col text-6xl font-black uppercase italic leading-[0.82] tracking-tighter drop-shadow-[0_8px_30px_rgb(0_0_0/0.5)] motion-safe:animate-fade-up sm:text-8xl lg:text-[9.5rem]">
+                        <span>{firstWord}</span>
+                        {restWords.length > 0 && <span>{restWords.join(' ')}</span>}
+                    </h1>
+                    {leadCard && (
+                        <Link
+                            to={`/${leadCard.division.slug}`}
+                            className="lift mt-8 inline-flex min-h-12 items-center gap-2 rounded-pill bg-white px-7 text-sm font-black uppercase tracking-[0.2em] text-black shadow-[0_10px_40px_-10px_rgb(255_255_255/0.5)]"
+                        >
+                            Enter {leadName}
+                            <ArrowRight size={16} aria-hidden="true" />
+                        </Link>
+                    )}
+                </div>
 
-                <section aria-labelledby="divisions-heading" className="mt-10 space-y-4">
-                    <h2 id="divisions-heading" className="font-display text-2xl font-bold" style={HERO_TEXT}>Divisions</h2>
+                <section aria-label="Divisions">
                     {status === 'loading' && (
-                        <ul aria-busy="true" aria-label="Loading divisions" className="grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
-                            {[0, 1, 2].map((i) => <li key={i}><Skeleton className="h-24 rounded-card" /></li>)}
+                        <ul aria-busy="true" aria-label="Loading divisions" className="grid list-none gap-3 p-0 md:grid-cols-3">
+                            {[0, 1, 2].map((i) => <li key={i}><Skeleton className="h-24 rounded-card bg-white/10" /></li>)}
                         </ul>
                     )}
                     {status === 'error' && (
                         <ErrorState title="Divisions could not load" message="Check your connection and try again." onRetry={retry} />
                     )}
                     {status === 'ready' && cards.length === 0 && (
-                        <EmptyState title="No divisions yet">
-                            Checked the division list. Divisions appear here once they are set up.
-                        </EmptyState>
+                        <EmptyState title="No divisions yet">Divisions appear here once they are set up.</EmptyState>
                     )}
                     {status === 'ready' && cards.length > 0 && (
-                        <ul className="grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
-                            {cards.map((card, index) => (
+                        <ul className="grid list-none gap-3 p-0 md:grid-cols-3">
+                            {cards.map((card) => (
                                 <li key={card.division.id}>
-                                    <DivisionCard card={card} featured={index === featuredIndex} />
+                                    <DivisionCard card={card} active={card === leadCard} />
                                 </li>
                             ))}
                         </ul>
                     )}
                 </section>
             </div>
-
-            {motion && (
-                <div className="absolute bottom-4 right-4 z-10 sm:bottom-6 sm:right-6">
-                    <button
-                        type="button"
-                        onClick={() => setIsPaused((paused) => !paused)}
-                        aria-label={isPaused ? 'Play background video' : 'Pause background video'}
-                        className={buttonClasses('secondary', 'sm')}
-                    >
-                        {isPaused ? <Play size={15} fill="currentColor" aria-hidden="true" /> : <Pause size={15} fill="currentColor" aria-hidden="true" />}
-                        {isPaused ? 'Play' : 'Pause'}
-                    </button>
-                </div>
-            )}
         </main>
     );
 }

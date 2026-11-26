@@ -1,47 +1,111 @@
-import { PaletteSwitcher } from './PaletteSwitcher';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { CalendarDays, Ellipsis, Newspaper, Table2 } from 'lucide-react';
+import { Menu as MenuIcon, X } from 'lucide-react';
 import { useLeague } from '../../context/LeagueContext';
 import { useDivisions } from '../../hooks/useDivisions';
-import { Sheet } from '../ui/Sheet';
+import { cn } from '../../utils/cn';
 import { AccountMenu } from './AccountMenu';
 import { DivisionSwitcher } from './DivisionSwitcher';
+import { LiveTicker } from './LiveTicker';
 import { ThemeToggle } from './ThemeToggle';
 import { TopNavbar } from '../TopNavbar';
 
-// The Super League mark, tinted with the ink colour through a CSS mask.
-function Mark() {
-  const mask = { maskImage: 'url(/slklogo3.png)', WebkitMaskImage: 'url(/slklogo3.png)', maskSize: 'contain', WebkitMaskSize: 'contain', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat', maskPosition: 'center', WebkitMaskPosition: 'center' };
-  return <span aria-hidden="true" className="block size-10 bg-ink sm:size-11" style={mask} />;
-}
-
-// Links shown in the primary bar. More holds the rest and opens a sheet.
-function primaryLinks(division) {
+// Every section of a division, in menu order. The World Cup page is reached from the home page only.
+function sections(division) {
   return [
-    { to: `/${division}/matches`, label: 'Matches', icon: CalendarDays },
-    { to: `/standings/${division}`, label: 'Table', icon: Table2 },
-    { to: `/${division}/news`, label: 'News', icon: Newspaper },
-  ];
-}
-
-// League predictions (/fantasy). The World Cup page is reached from the home page only.
-function moreLinks(division) {
-  return [
+    { to: `/${division}`, label: 'Home', exact: true },
+    { to: `/${division}/matches`, label: 'Matches' },
+    { to: `/standings/${division}`, label: 'Table' },
     { to: `/${division}/teams`, label: 'Clubs' },
     { to: '/leaderboard', label: 'Player stats' },
     { to: '/fantasy', label: 'Predictions' },
+    { to: `/${division}/news`, label: 'News' },
     { to: `/${division}/rules`, label: 'Rules' },
   ];
 }
 
-// The app frame: a top bar (laptop and tablet) and bottom tabs (phone) around the page. The division in view sets
-// --div, the accent every page may use. The World Cup page (frozen) keeps its own legacy navigation.
+// The division's wordmark: its crest when it has one, and its name set in Inter Black Italic, stacked like the
+// original "SUPER / LEAGUE" mark.
+function Wordmark({ record }) {
+  const name = record?.name ?? 'Super League';
+  const [first, ...rest] = name.split(/\s+/);
+  return (
+    <span className="flex items-center gap-2.5">
+      {record?.logo_url && <img src={record.logo_url} alt="" className="size-10 object-contain sm:size-12" />}
+      <span className="flex flex-col text-lg font-black uppercase italic leading-[0.82] tracking-tighter text-ink sm:text-xl">
+        <span>{first}</span>
+        {rest.length > 0 && <span>{rest.join(' ')}</span>}
+      </span>
+    </span>
+  );
+}
+
+// Full-screen menu: big type, one tap to any section. Escape or the close button shuts it; while closed it is inert.
+function MenuOverlay({ open, onClose, division, divisions, loading, current, isActive }) {
+  const firstLink = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (event) => { if (event.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    firstLink.current?.focus();
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; };
+  }, [open, onClose]);
+
+  return (
+    <div
+      id="site-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menu"
+      inert={open ? undefined : ''}
+      className={cn('fixed inset-0 z-50 flex flex-col overflow-y-auto bg-bg/90 px-6 pb-8 pt-32 backdrop-blur-2xl transition-opacity duration-300 sm:px-10',
+        open ? 'opacity-100' : 'pointer-events-none opacity-0')}
+    >
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10">
+        <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} onPick={onClose} />
+        <nav aria-label="Sections" className="flex-1">
+          <ul className="grid gap-x-10 gap-y-1 sm:grid-cols-2">
+            {sections(division).map(({ to, label, exact }, index) => {
+              const active = isActive(to, exact);
+              return (
+                <li key={to} className={open ? 'motion-safe:animate-fade-up' : undefined} style={{ animationDelay: `${index * 35}ms` }}>
+                  <Link
+                    ref={index === 0 ? firstLink : undefined}
+                    to={to}
+                    onClick={onClose}
+                    aria-current={active ? 'page' : undefined}
+                    className={cn('group flex min-h-14 items-baseline gap-4 py-1 font-display text-4xl font-black uppercase tracking-tighter transition-colors sm:text-5xl',
+                      active ? 'text-ink' : 'text-mut/60 hover:text-ink')}
+                  >
+                    <span className="eyebrow w-6 tabular-nums">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="transition-transform duration-300 group-hover:translate-x-1.5">{label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+        <div className="flex items-center justify-between border-t border-line pt-5">
+          <span className="eyebrow">Super League · IIIT Kottayam</span>
+          <ThemeToggle />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The app frame: a live ticker, a glass header with the division wordmark and switcher, and a full-screen menu.
+// The division in view sets --div. The World Cup page (frozen) keeps its own legacy navigation.
 export function AppShell({ children }) {
   const location = useLocation();
   const { division } = useLeague();
   const { divisions, loading } = useDivisions();
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Close the menu whenever the page changes.
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
   // The World Cup page is frozen: it keeps the navigation it always had, menu included.
   if (location.pathname === '/wc') {
@@ -55,84 +119,48 @@ export function AppShell({ children }) {
   const current = divisions.find((item) => item.slug === division);
   const accent = current?.primary_color;
   const style = accent ? { '--div': accent } : undefined;
-  const home = `/${division}`;
-  const links = primaryLinks(division);
-  const isActive = (to) => location.pathname === to || location.pathname.startsWith(`${to}/`);
-
-  const bar = (
-    <header className="sticky top-0 z-40 border-b border-line bg-bg">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:h-16 sm:gap-4 sm:px-6">
-        <Link to={home} aria-label="Super League home" className="flex shrink-0 items-center rounded-ctl">
-          <Mark />
-        </Link>
-        <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} />
-        <nav aria-label="Main" className="ml-2 hidden items-center gap-1 md:flex">
-          {links.map(({ to, label }) => (
-            <Link
-              key={to}
-              to={to}
-              aria-current={isActive(to) ? 'page' : undefined}
-              className={`flex min-h-11 items-center rounded-ctl px-3 text-sm font-semibold ${isActive(to) ? 'text-ink' : 'text-mut hover:text-ink'}`}
-            >
-              {label}
-            </Link>
-          ))}
-          <button type="button" onClick={() => setMoreOpen(true)} aria-haspopup="dialog" className="flex min-h-11 items-center rounded-ctl px-3 text-sm font-semibold text-mut hover:text-ink">
-            More
-          </button>
-        </nav>
-        <div className="ml-auto flex items-center gap-1 sm:gap-2">
-          <ThemeToggle />
-          <AccountMenu />
-        </div>
-      </div>
-    </header>
-  );
+  const isActive = (to, exact) => location.pathname === to || (!exact && location.pathname.startsWith(`${to}/`));
 
   return (
-    <div className="min-h-screen bg-bg" style={style} data-div={accent ? "" : undefined}>
-      {import.meta.env.DEV && <PaletteSwitcher />}
-      {bar}
-      <main className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 md:pb-12 md:pt-8">{children}</main>
-
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surf pb-[env(safe-area-inset-bottom)] md:hidden">
-          <ul className="mx-auto grid max-w-md grid-cols-4">
-            {links.map(({ to, label, icon: Icon }) => {
-              const active = isActive(to);
-              return (
-                <li key={to}>
-                  <Link
-                    to={to}
-                    aria-current={active ? 'page' : undefined}
-                    className={`relative flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-semibold ${active ? 'text-ink' : 'text-mut'}`}
-                  >
-                    {active && <span aria-hidden="true" className="absolute inset-x-6 top-0 h-0.5 rounded-full" style={{ backgroundColor: 'var(--div)' }} />}
-                    <Icon size={20} aria-hidden="true" />
-                    {label}
-                  </Link>
-                </li>
-              );
-            })}
-            <li>
-              <button type="button" onClick={() => setMoreOpen(true)} aria-haspopup="dialog" className="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-xs font-semibold text-mut">
-                <Ellipsis size={20} aria-hidden="true" />
-                More
+    <div className="min-h-screen bg-bg" style={style}>
+      <div className="sticky top-0 z-[55]">
+        <LiveTicker divisions={divisions} />
+        <header className="border-b border-line bg-bg/70 backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:h-[72px] sm:gap-6 sm:px-6">
+            <Link to={`/${division}`} aria-label={`${current?.name ?? 'Super League'} home`} className="shrink-0 rounded-ctl transition-opacity hover:opacity-80">
+              <Wordmark record={current} />
+            </Link>
+            <div className="hidden min-w-0 md:block">
+              <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} compact />
+            </div>
+            <div className="ml-auto flex items-center gap-2 sm:gap-3">
+              <AccountMenu />
+              <button
+                type="button"
+                onClick={() => setMenuOpen((value) => !value)}
+                aria-expanded={menuOpen}
+                aria-controls="site-menu"
+                aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+                className="relative flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-ink/10"
+              >
+                {menuOpen ? <X size={24} aria-hidden="true" /> : <MenuIcon size={24} aria-hidden="true" />}
               </button>
-            </li>
-          </ul>
-        </nav>
+            </div>
+          </div>
+        </header>
+      </div>
 
-      <Sheet open={moreOpen} title="More" onClose={() => setMoreOpen(false)}>
-        <ul className="flex flex-col">
-          {moreLinks(division).map(({ to, label }) => (
-            <li key={to}>
-              <Link to={to} onClick={() => setMoreOpen(false)} className="flex min-h-12 items-center rounded-ctl px-3 text-lg font-semibold text-ink hover:bg-raise">
-                {label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </Sheet>
+      <MenuOverlay
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        division={division}
+        divisions={divisions}
+        loading={loading}
+        current={current}
+        isActive={isActive}
+      />
+
+      <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 md:pt-8">{children}</main>
     </div>
   );
 }

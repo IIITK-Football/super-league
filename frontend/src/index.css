@@ -1,40 +1,44 @@
 @import "tailwindcss";
 
 /*
- * Tokens. Each palette (data-palette on <html>: cobalt default, pitch, signal) sets tinted neutrals and one loud
- * signature colour. Theme (data-theme, or the device) picks light or dark. --div is the division colour from data.
- * Use: acc for actions, blk/blkink for the one loud block per screen, acc2 for wins, live for live and danger.
+ * Night tokens. Built on the original site's character: true black, white type, Inter Black, letter-spaced labels.
+ * Dark always, like the original; light only when the reader picks it (the toggle sets data-theme).
+ *   acc/accink   actions (white on black, like the original buttons)
+ *   blk/blkink   the one loud block (inverted)
+ *   acc2         wins and positive numbers;  live  live and danger
+ *   --div        the division colour from data, used sparingly (crest fallbacks, a thin rule)
  */
 @theme static {
-  --color-bg: #0D0D0E;
-  --color-surf: #161618;
-  --color-raise: #202023;
-  --color-ink: #F0F0ED;
-  --color-mut: #9B9B96;
-  --color-line: #2A2A2E;
-  --color-acc: #F0F0ED;
-  --color-accink: #0D0D0E;
-  --color-blk: #2F5BFF;
-  --color-blkink: #FFFFFF;
-  --color-acc2: #4CBF85;
-  --color-live: #FF5449;
+  --color-bg: #050505;
+  --color-surf: #0E0E10;
+  --color-raise: #18181B;
+  --color-ink: #FAFAFA;
+  --color-mut: #8B8B94;
+  --color-line: #222226;
+  --color-acc: #FAFAFA;
+  --color-accink: #050505;
+  --color-blk: #FAFAFA;
+  --color-blkink: #050505;
+  --color-acc2: #5FC48C;
+  --color-live: #EF4444;
 
-  --font-display: "Big Shoulders Display", "Arial Narrow", sans-serif;
-  --font-body: "Public Sans", system-ui, sans-serif;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
 
-  --radius-card: 10px;
-  --radius-ctl: 8px;
+  --radius-card: 18px;
+  --radius-ctl: 12px;
   --radius-pill: 999px;
 
-  --animate-fade-up: fade-up 0.25s ease-out both;
+  --animate-fade-up: fade-up 0.35s cubic-bezier(.2,.7,.2,1) both;
   --animate-fade-in: fade-in 0.25s ease-out both;
-  --animate-sheet-up: sheet-up 0.22s ease-out both;
-  --animate-sheet-in: sheet-in 0.22s ease-out both;
-  --animate-tick: tick 0.4s ease-out both;
+  --animate-sheet-up: sheet-up 0.25s cubic-bezier(.2,.7,.2,1) both;
+  --animate-sheet-in: sheet-in 0.25s cubic-bezier(.2,.7,.2,1) both;
+  --animate-tick: tick 0.45s cubic-bezier(.2,.7,.2,1) both;
   --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  --animate-marquee: marquee 40s linear infinite;
 
   @keyframes fade-up {
-    0% { opacity: 0; transform: translateY(8px); }
+    0% { opacity: 0; transform: translateY(10px); }
     100% { opacity: 1; transform: translateY(0); }
   }
   @keyframes fade-in {
@@ -50,208 +54,38 @@
     100% { transform: translateX(0); }
   }
   @keyframes tick {
-    0% { transform: translateY(-40%); opacity: 0.2; color: var(--color-acc2); }
+    0% { transform: translateY(-45%); opacity: 0.1; }
     100% { transform: translateY(0); opacity: 1; }
   }
   @keyframes pulse-dot {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.35; }
   }
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
 }
 
 :root {
-  --div: var(--color-acc);
-}
-
-/* Palette x theme. Neutrals are tinted toward the palette hue (never flat grey); acc is the action colour,
- * blk/blkink the loud signature block (featured match, active tab, hero band), acc2 wins, live live/danger. */
-:root, :root[data-palette="cobalt"] {
-  --color-bg: #0C0E14;
-  --color-surf: #141824;
-  --color-raise: #1C2131;
-  --color-ink: #EEF1F8;
-  --color-mut: #98A0B3;
-  --color-line: #262C3D;
-  --color-acc: #4A74FF;
-  --color-accink: #FFFFFF;
-  --color-blk: #2F5BFF;
-  --color-blkink: #FFFFFF;
-  --color-acc2: #3FD08A;
-  --color-live: #FF4D4D;
-  color-scheme: dark;
-}
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]):not([data-palette]), :root[data-palette="cobalt"]:not([data-theme="dark"]) {
-    --color-bg: #F4F6FB;
-    --color-surf: #FFFFFF;
-    --color-raise: #E9EDF6;
-    --color-ink: #0E1220;
-    --color-mut: #5F677A;
-    --color-line: #DCE1EC;
-    --color-acc: #1F4BFF;
-    --color-accink: #FFFFFF;
-    --color-blk: #1F4BFF;
-    --color-blkink: #FFFFFF;
-    --color-acc2: #11864D;
-    --color-live: #D92D2D;
-    color-scheme: light;
-  }
-}
-:root[data-theme="light"]:not([data-palette]), :root[data-palette="cobalt"][data-theme="light"] {
-  --color-bg: #F4F6FB;
-  --color-surf: #FFFFFF;
-  --color-raise: #E9EDF6;
-  --color-ink: #0E1220;
-  --color-mut: #5F677A;
-  --color-line: #DCE1EC;
-  --color-acc: #1F4BFF;
-  --color-accink: #FFFFFF;
-  --color-blk: #1F4BFF;
-  --color-blkink: #FFFFFF;
-  --color-acc2: #11864D;
-  --color-live: #D92D2D;
-  color-scheme: light;
-}
-:root[data-theme="dark"]:not([data-palette]), :root[data-palette="cobalt"][data-theme="dark"] {
-  --color-bg: #0C0E14;
-  --color-surf: #141824;
-  --color-raise: #1C2131;
-  --color-ink: #EEF1F8;
-  --color-mut: #98A0B3;
-  --color-line: #262C3D;
-  --color-acc: #4A74FF;
-  --color-accink: #FFFFFF;
-  --color-blk: #2F5BFF;
-  --color-blkink: #FFFFFF;
-  --color-acc2: #3FD08A;
-  --color-live: #FF4D4D;
+  --div: var(--color-ink);
   color-scheme: dark;
 }
 
-:root[data-palette="pitch"] {
-  --color-bg: #0B110D;
-  --color-surf: #121A15;
-  --color-raise: #1A241D;
-  --color-ink: #ECF3EE;
-  --color-mut: #93A399;
-  --color-line: #233029;
-  --color-acc: #2FD06F;
-  --color-accink: #06120A;
-  --color-blk: #19B35C;
-  --color-blkink: #06120A;
-  --color-acc2: #2FD06F;
-  --color-live: #FF4D4D;
-  color-scheme: dark;
-}
-@media (prefers-color-scheme: light) {
-  :root[data-palette="pitch"]:not([data-theme="dark"]) {
-    --color-bg: #F3F7F4;
-    --color-surf: #FFFFFF;
-    --color-raise: #E6EEE8;
-    --color-ink: #0D1A12;
-    --color-mut: #5B6B61;
-    --color-line: #D7E2DA;
-    --color-acc: #0E8C45;
-    --color-accink: #FFFFFF;
-    --color-blk: #19B35C;
-    --color-blkink: #06120A;
-    --color-acc2: #0E8C45;
-    --color-live: #D92D2D;
-    color-scheme: light;
-  }
-}
-:root[data-palette="pitch"][data-theme="light"] {
-  --color-bg: #F3F7F4;
+:root[data-theme="light"] {
+  --color-bg: #F4F4F2;
   --color-surf: #FFFFFF;
-  --color-raise: #E6EEE8;
-  --color-ink: #0D1A12;
-  --color-mut: #5B6B61;
-  --color-line: #D7E2DA;
-  --color-acc: #0E8C45;
+  --color-raise: #ECECE9;
+  --color-ink: #0A0A0B;
+  --color-mut: #66666E;
+  --color-line: #DFDFDB;
+  --color-acc: #0A0A0B;
   --color-accink: #FFFFFF;
-  --color-blk: #19B35C;
-  --color-blkink: #06120A;
-  --color-acc2: #0E8C45;
-  --color-live: #D92D2D;
+  --color-blk: #0A0A0B;
+  --color-blkink: #FFFFFF;
+  --color-acc2: #1F7A4A;
+  --color-live: #D42A2A;
   color-scheme: light;
-}
-:root[data-palette="pitch"][data-theme="dark"] {
-  --color-bg: #0B110D;
-  --color-surf: #121A15;
-  --color-raise: #1A241D;
-  --color-ink: #ECF3EE;
-  --color-mut: #93A399;
-  --color-line: #233029;
-  --color-acc: #2FD06F;
-  --color-accink: #06120A;
-  --color-blk: #19B35C;
-  --color-blkink: #06120A;
-  --color-acc2: #2FD06F;
-  --color-live: #FF4D4D;
-  color-scheme: dark;
-}
-
-:root[data-palette="signal"] {
-  --color-bg: #120F0D;
-  --color-surf: #1B1714;
-  --color-raise: #25201C;
-  --color-ink: #F5F0EC;
-  --color-mut: #A79C93;
-  --color-line: #2F2924;
-  --color-acc: #FF6A2B;
-  --color-accink: #160B05;
-  --color-blk: #FF5A1F;
-  --color-blkink: #160B05;
-  --color-acc2: #3FD08A;
-  --color-live: #FF4D6A;
-  color-scheme: dark;
-}
-@media (prefers-color-scheme: light) {
-  :root[data-palette="signal"]:not([data-theme="dark"]) {
-    --color-bg: #F7F5F3;
-    --color-surf: #FFFFFF;
-    --color-raise: #EFEBE7;
-    --color-ink: #1A1411;
-    --color-mut: #6B625B;
-    --color-line: #E4DED8;
-    --color-acc: #E2470F;
-    --color-accink: #FFFFFF;
-    --color-blk: #FF5A1F;
-    --color-blkink: #160B05;
-    --color-acc2: #11864D;
-    --color-live: #D4234A;
-    color-scheme: light;
-  }
-}
-:root[data-palette="signal"][data-theme="light"] {
-  --color-bg: #F7F5F3;
-  --color-surf: #FFFFFF;
-  --color-raise: #EFEBE7;
-  --color-ink: #1A1411;
-  --color-mut: #6B625B;
-  --color-line: #E4DED8;
-  --color-acc: #E2470F;
-  --color-accink: #FFFFFF;
-  --color-blk: #FF5A1F;
-  --color-blkink: #160B05;
-  --color-acc2: #11864D;
-  --color-live: #D4234A;
-  color-scheme: light;
-}
-:root[data-palette="signal"][data-theme="dark"] {
-  --color-bg: #120F0D;
-  --color-surf: #1B1714;
-  --color-raise: #25201C;
-  --color-ink: #F5F0EC;
-  --color-mut: #A79C93;
-  --color-line: #2F2924;
-  --color-acc: #FF6A2B;
-  --color-accink: #160B05;
-  --color-blk: #FF5A1F;
-  --color-blkink: #160B05;
-  --color-acc2: #3FD08A;
-  --color-live: #FF4D6A;
-  color-scheme: dark;
 }
 
 @layer base {
@@ -261,15 +95,140 @@
     font-family: var(--font-body);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  /* Fine film grain over the whole page: depth without colour. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 60;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 }
 
-/* Stagger Delays for Entrance Animations */
-.stagger-1 { animation-delay: 100ms; }
-.stagger-2 { animation-delay: 200ms; }
-.stagger-3 { animation-delay: 300ms; }
-.stagger-4 { animation-delay: 400ms; }
-.stagger-5 { animation-delay: 500ms; }
+/* Display type: Inter Black, tight, like the original headings. Headings in the display face are set in capitals. */
+.font-display {
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+:is(h1, h2, h3).font-display {
+  text-transform: uppercase;
+  line-height: 0.95;
+}
+
+/* Small letter-spaced label, the original site's signature. */
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-mut);
+}
+
+/* A tile: subtle frosted glass with a hairline highlight on its top edge. */
+.glass {
+  background: color-mix(in srgb, var(--color-surf) 72%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-ink) 7%, transparent),
+    0 18px 40px -24px rgb(0 0 0 / 0.75);
+}
+
+/* Lifts a tile toward the reader on hover or keyboard focus. */
+.lift {
+  transition: transform 0.28s cubic-bezier(.2,.7,.2,1), box-shadow 0.28s, border-color 0.28s;
+}
+.lift:hover,
+.lift:focus-visible {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-ink) 18%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-ink) 10%, transparent),
+    0 28px 50px -24px rgb(0 0 0 / 0.85);
+}
+
+/* A soft light that follows the pointer (Spotlight writes --mx and --my). */
+.spotlight {
+  position: relative;
+  isolation: isolate;
+}
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--color-ink) 8%, transparent), transparent 45%);
+}
+.spotlight:hover::before {
+  opacity: 1;
+}
+
+/* A short streak of light that travels around the border of a live element. */
+@property --beam {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.beam {
+  position: relative;
+}
+.beam::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(from var(--beam), transparent 0 78%, color-mix(in srgb, var(--color-live) 90%, white) 88%, transparent 96%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: beam-spin 4s linear infinite;
+}
+@keyframes beam-spin {
+  to { --beam: 360deg; }
+}
+
+/* A top-down football pitch at night: mown stripes and chalk lines, softened. Used behind the featured match. */
+.pitch {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #0b1a10;
+}
+.pitch::before {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  z-index: -2;
+  filter: blur(3px) saturate(0.8);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1050 680' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.55' stroke-width='3'%3E%3Crect x='25' y='25' width='1000' height='630'/%3E%3Cline x1='525' y1='25' x2='525' y2='655'/%3E%3Ccircle cx='525' cy='340' r='92'/%3E%3Crect x='25' y='178' width='165' height='324'/%3E%3Crect x='860' y='178' width='165' height='324'/%3E%3Crect x='25' y='258' width='55' height='164'/%3E%3Crect x='970' y='258' width='55' height='164'/%3E%3Cpath d='M190 270a92 92 0 0 1 0 140M860 270a92 92 0 0 0 0 140'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.6'%3E%3Ccircle cx='525' cy='340' r='5'/%3E%3Ccircle cx='135' cy='340' r='4'/%3E%3Ccircle cx='915' cy='340' r='4'/%3E%3C/g%3E%3C/svg%3E") center / 100% 100% no-repeat,
+    repeating-linear-gradient(90deg, #1c3a24 0 6.25%, #20422a 6.25% 12.5%),
+    #1c3a24;
+}
+.pitch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgb(255 255 255 / 0.10), transparent 55%),
+    linear-gradient(180deg, rgb(5 5 5 / 0.35), rgb(5 5 5 / 0.82));
+}
+
+/* Hides a horizontal scroll row's scrollbar while keeping it scrollable. */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -278,4 +237,5 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  .lift:hover, .lift:focus-visible { transform: none; }
 }

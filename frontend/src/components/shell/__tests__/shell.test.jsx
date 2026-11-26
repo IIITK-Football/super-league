@@ -28,26 +28,29 @@ const shellAt = (path) => render(
 );
 
 describe('World Cup navigation stays frozen', () => {
-  it('keeps the legacy menu on /wc, not the new bottom tabs', () => {
+  it('keeps the legacy menu on /wc, not the new menu', () => {
     shellAt('/wc');
     // The legacy menu lists these entries (in the DOM, opened from its hamburger).
     expect(screen.getByText('FANTASY')).toBeTruthy();
     expect(screen.getByText('LEGENDS')).toBeTruthy();
     expect(screen.getByText('page body')).toBeTruthy();
-    expect(document.querySelector('nav[aria-label="Main"].md\\:hidden')).toBeNull();
+    expect(document.querySelector('#site-menu')).toBeNull();
   });
 
-  it('uses the new shell elsewhere', () => {
+  it('uses the new shell elsewhere, with its menu closed and inert', () => {
     shellAt('/super-league');
     expect(screen.queryByText('LEGENDS')).toBeNull();
-    expect(document.querySelector('nav[aria-label="Main"].md\\:hidden')).not.toBeNull();
+    const menu = document.querySelector('#site-menu');
+    expect(menu).not.toBeNull();
+    expect(menu.hasAttribute('inert')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Open menu' }).getAttribute('aria-expanded')).toBe('false');
   });
 });
 
 describe('division paths', () => {
   it('links the sections to the division in view', () => {
     shellAt('/super-league');
-    const hrefs = [...document.querySelectorAll('nav[aria-label="Main"] a')].map((a) => a.getAttribute('href'));
+    const hrefs = [...document.querySelectorAll('nav[aria-label="Sections"] a')].map((a) => a.getAttribute('href'));
     expect(hrefs).toContain('/super-league/matches');
     expect(hrefs).toContain('/super-league/news');
     expect(hrefs).toContain('/standings/super-league');

@@ -1,48 +1,77 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { SeasonSelect } from '../components/SeasonSelect';
 import { MatchStrip } from '../components/match/MatchStrip';
-import { pickHeroMatch } from '../components/match/matchState';
+import { HeroMatch } from '../components/match/HeroMatch';
+import { isFinal, isLive, isUpcoming, pickHeroMatch } from '../components/match/matchState';
 import { StandingsTable } from '../components/standings/StandingsTable';
-import { Card, EmptyState, ErrorState, Pill, Skeleton } from '../components/ui';
-
-const HERO_LABEL = { live: 'Live now', next: 'Next match', result: 'Latest result' };
+import { NewsArticle } from '../components/NewsArticle';
+import { EmptyState, ErrorState, NumberTicker, Skeleton, Spotlight } from '../components/ui';
 
 // The team object of a match, with its crest taken from the table (the schedule does not carry logos).
 const withLogo = (team, teamId, logos) => ({ ...(Array.isArray(team) ? team[0] : team), logo_url: logos.get(teamId) ?? null });
+const HERO_LABEL = { live: 'Live now', next: 'Next match', result: 'Latest result' };
+const time = (m) => (m.date ? new Date(m.date).getTime() : 0);
 
 function SectionHead({ title, to, action }) {
   return (
-    <div className="flex items-baseline justify-between gap-4">
-      <h2 className="font-display text-2xl font-bold text-ink">{title}</h2>
-      {to && <Link to={to} className="inline-flex min-h-11 items-center text-sm font-semibold text-mut hover:text-ink">{action}</Link>}
+    <div className="flex items-end justify-between gap-4">
+      <h2 className="font-display text-3xl text-ink sm:text-4xl">{title}</h2>
+      {to && (
+        <Link to={to} className="eyebrow group inline-flex min-h-11 items-center gap-1.5 hover:text-ink">
+          {action}
+          <ArrowRight size={13} aria-hidden="true" className="transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      )}
     </div>
   );
 }
 
 function HomeSkeleton() {
   return (
-    <div aria-busy="true" aria-label="Loading this division" className="space-y-10">
-      <Skeleton className="h-12 w-72" />
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-        <div className="space-y-6">
-          <Skeleton className="h-44 w-full" />
-          <div className="space-y-2">
-            {Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-          </div>
-        </div>
-        <div className="space-y-6">
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-28 w-full" />
-        </div>
+    <div aria-busy="true" aria-label="Loading this division" className="space-y-12">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+        <Skeleton className="h-72 w-full rounded-card sm:h-96" />
+        <Skeleton className="h-72 w-full rounded-card sm:h-96" />
+      </div>
+      <div className="flex gap-4 overflow-hidden">
+        {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-32 w-80 shrink-0 rounded-card" />)}
       </div>
     </div>
   );
 }
 
-// The division's front page. Opens on the live match, else the next one, else the latest result. Every module
-// hides when it has no data; nothing here is a placeholder.
+// The matches around today, for the rail under the hero: live first, then the next fixtures, then recent results.
+function railMatches(matches, hero) {
+  const rest = matches.filter((m) => m.id !== hero?.match.id);
+  const live = rest.filter(isLive);
+  const next = rest.filter(isUpcoming).sort((a, b) => time(a) - time(b));
+  const done = rest.filter(isFinal).sort((a, b) => time(b) - time(a));
+  return [...live, ...next.slice(0, 4), ...done.slice(0, 6)].slice(0, 8);
+}
+
+// A leader tile: the number counts up, the name links to the player.
+function Leader({ label, unit, player }) {
+  const name = <span className="block font-display text-2xl leading-none text-ink sm:text-3xl">{player.name}</span>;
+  return (
+    <Spotlight className="glass lift flex flex-col justify-between gap-6 rounded-card p-5 sm:p-6">
+      <div className="space-y-3">
+        <p className="eyebrow">{label}</p>
+        {player.playerId ? <Link to={`/teams?player=${player.playerId}`} className="block hover:opacity-80">{name}</Link> : name}
+        {player.club && <p className="text-sm font-semibold uppercase tracking-wider text-mut">{player.club}</p>}
+      </div>
+      <p className="flex items-baseline gap-2">
+        <NumberTicker value={player.stat} className="font-display text-7xl leading-none tabular-nums text-ink" />
+        <span className="eyebrow">{unit}</span>
+      </p>
+    </Spotlight>
+  );
+}
+
+// The division's front page. Above the fold: the live (else next, else latest) match on a night pitch, with the
+// table beside it. Then the matches around today, the leaders and the news. Modules with no data are left out.
 export function Home() {
   const { division, seasonScope } = useLeague();
   const navigate = useNavigate();
@@ -59,7 +88,7 @@ export function Home() {
   if (seasonScope.seasonMissing) {
     return (
       <div className="flex min-h-[50vh] flex-col items-start justify-center gap-3">
-        <h1 className="font-display text-3xl font-bold text-ink">Season not found</h1>
+        <h1 className="font-display text-4xl text-ink">Season not found</h1>
         <p className="text-mut">There is no season &quot;{seasonScope.requestedSeasonSlug}&quot; in {seasonScope.divisionRecord?.name || 'this division'}.</p>
         <Link to={`/${division}`} className="inline-flex min-h-11 items-center font-semibold text-ink underline underline-offset-4">
           Go to the current season
@@ -71,11 +100,11 @@ export function Home() {
   const divisionName = seasonScope.divisionRecord?.name;
   const season = seasonScope.season;
   const header = (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div className="space-y-1">
-        <h1 className="font-display text-4xl font-bold text-ink sm:text-5xl">{divisionName || ' '}</h1>
-        {season && <p className="text-mut">{season.name} season</p>}
-      </div>
+    <div className="flex min-h-11 flex-wrap items-center justify-between gap-3">
+      <h1 className="eyebrow">
+        <span className="text-ink">{divisionName}</span>
+        {season && <span> · {season.name} season</span>}
+      </h1>
       {seasonScope.seasons.length > 1 && (
         <SeasonSelect seasons={seasonScope.seasons} value={season?.slug} onChange={chooseSeason} />
       )}
@@ -83,14 +112,14 @@ export function Home() {
   );
 
   if (!seasonScope.ready || board.loading) {
-    return <div className="space-y-10 pb-12">{header}<HomeSkeleton /></div>;
+    return <div className="pb-12">{header}<div className="mt-5"><HomeSkeleton /></div></div>;
   }
 
   if (board.error) {
     return (
-      <div className="space-y-10 pb-12">
+      <div className="pb-12">
         {header}
-        <ErrorState message={board.error.message} onRetry={board.retry} />
+        <div className="mt-5"><ErrorState message={board.error.message} onRetry={board.retry} /></div>
       </div>
     );
   }
@@ -104,114 +133,106 @@ export function Home() {
     away: withLogo(m.away, m.away_team_id, logos),
   }));
   const hero = pickHeroMatch(matches);
+  const rail = railMatches(matches, hero);
 
   const extraData = extras.data?.data ?? {};
+  // The dashboard's live match carries form and scorers; use it only when it is the same fixture as the hero.
+  const liveDetail = extraData.liveMatch;
+  const heroHome = hero && (Array.isArray(hero.match.home) ? hero.match.home[0] : hero.match.home)?.name;
+  const detail = liveDetail && heroHome && liveDetail.homeTeam === heroHome ? liveDetail : null;
   const news = (extraData.news ?? []).slice(0, 3);
   const leaders = [
-    extraData.topScorer && { key: 'scorer', label: 'Top scorer', unit: 'goals', player: extraData.topScorer },
-    extraData.topAssist && { key: 'assist', label: 'Top assists', unit: 'assists', player: extraData.topAssist },
+    extraData.topScorer && { key: 'scorer', label: 'Golden boot', unit: 'goals', player: extraData.topScorer },
+    extraData.topAssist && { key: 'assist', label: 'Playmaker', unit: 'assists', player: extraData.topAssist },
   ].filter(Boolean);
-  const predictions = extraData.fantasyTop ?? [];
+  const predictions = (extraData.fantasyTop ?? []).slice(0, 5);
 
   const nothingYet = !hero && table.length === 0 && !extras.loading && !extras.error
     && news.length === 0 && leaders.length === 0 && predictions.length === 0;
 
   return (
-    <div className="space-y-10 pb-12">
+    <div className="pb-12">
       {header}
+      <div className="mt-5 space-y-14">
+      <div className="space-y-5">
+        {nothingYet && (
+          <EmptyState title="Nothing published for this season yet">
+            Matches, the table, news and predictions appear here as they are added.
+          </EmptyState>
+        )}
 
-      {nothingYet && (
-        <EmptyState title="Nothing published for this season yet">
-          Matches, the table, news and predictions appear here as they are added.
-        </EmptyState>
+        {(hero || table.length > 0) && (
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+            {hero ? <section aria-label={HERO_LABEL[hero.kind]}><HeroMatch match={hero.match} detail={detail} /></section> : <div className="hidden lg:block" />}
+            {table.length > 0 && (
+              <section className="space-y-3">
+                <SectionHead title="Table" to={`/standings/${division}`} action="Full table" />
+                <StandingsTable rows={table.slice(0, 6)} caption="Top of the table" compact />
+              </section>
+            )}
+          </div>
+        )}
+      </div>
+
+      {rail.length > 0 && (
+        <section className="space-y-4">
+          <SectionHead title="Matches" to={`/${division}/matches`} action="All matches" />
+          <ul className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
+            {rail.map((m) => (
+              <li key={m.id} className="w-[19rem] shrink-0 snap-start sm:w-[22rem]">
+                <MatchStrip match={m} className="h-full" />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-        <div className="min-w-0 space-y-10">
-          {hero && (
-            <section aria-label={HERO_LABEL[hero.kind]} className="space-y-3">
-              <p className="text-sm font-semibold text-mut">{HERO_LABEL[hero.kind]}</p>
-              <MatchStrip match={hero.match} featured />
-            </section>
-          )}
+      {extras.error && (
+        <ErrorState title="News, stats and predictions did not load" message={extras.error.message} onRetry={extras.retry} />
+      )}
 
-          {table.length > 0 && (
-            <section className="space-y-3">
-              <SectionHead title="Table" to={`/standings/${division}`} action="Full table" />
-              <StandingsTable rows={table.slice(0, 5)} caption="Top of the table" />
-            </section>
-          )}
-        </div>
-
-        <div className="min-w-0 space-y-10">
-          {extras.error && (
-            <ErrorState
-              title="News, stats and predictions did not load"
-              message={extras.error.message}
-              onRetry={extras.retry}
-            />
-          )}
-
-          {leaders.length > 0 && (
-            <section className="space-y-3">
-              <SectionHead title="Player stats" to="/leaderboard" action="All player stats" />
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                {leaders.map(({ key, label, unit, player }) => (
-                  <Card key={key} className="space-y-3">
-                    <p className="text-sm font-semibold text-mut">{label}</p>
-                    {player.playerId
-                      ? <Link to={`/teams?player=${player.playerId}`} className="block min-h-11 rounded-ctl hover:text-mut"><span className="font-display text-2xl font-bold text-ink">{player.name}</span></Link>
-                      : <span className="font-display text-2xl font-bold text-ink">{player.name}</span>}
-                    <p className="flex items-baseline gap-2">
-                      <span className="font-display text-5xl font-bold tabular-nums text-ink">{player.stat}</span>
-                      <span className="text-sm text-mut">{unit}{player.club ? ` · ${player.club}` : ''}</span>
-                    </p>
-                  </Card>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {news.length > 0 && (
-            <section className="space-y-3">
-              <SectionHead title="News" to={`/${division}/news`} action="All news" />
-              <ul className="divide-y divide-line rounded-card border border-line bg-surf">
-                {news.map((article) => (
-                  <li key={article.id}>
-                    <Link to={`/article/${article.id}`} className="block min-h-11 px-4 py-3 hover:bg-raise sm:px-5">
-                      <span className="line-clamp-2 font-semibold leading-snug text-ink">{article.headline || article.title}</span>
-                      {article.date && (
-                        <span className="mt-1 block text-sm text-mut">
-                          {new Date(article.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {predictions.length > 0 && (
-            <section className="space-y-3">
-              <SectionHead title="Predictions" to="/fantasy" action="Prediction table" />
-              <ol className="divide-y divide-line rounded-card border border-line bg-surf">
-                {predictions.map((user, index) => (
-                  <li key={user.id} className="flex min-h-11 items-center justify-between gap-3 px-4 py-3 sm:px-5">
-                    <span className="flex min-w-0 items-center gap-3">
-                      <span className="w-5 shrink-0 font-display text-lg font-bold tabular-nums text-mut">{index + 1}</span>
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold text-ink">{user.name}</span>
-                        {user.flair && <Pill className="mt-1">{user.flair}</Pill>}
+      {(leaders.length > 0 || predictions.length > 0) && (
+        <section className="space-y-4">
+          <SectionHead title="Leaders" to="/leaderboard" action="Player stats" />
+          <div className="grid gap-4 md:grid-cols-3">
+            {leaders.map(({ key, ...rest }) => <Leader key={key} {...rest} />)}
+            {predictions.length > 0 && (
+              <Spotlight className="glass rounded-card p-5 sm:p-6">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="eyebrow">Predictions</p>
+                  <Link to="/fantasy" className="eyebrow hover:text-ink">Table</Link>
+                </div>
+                <ol className="divide-y divide-line/70">
+                  {predictions.map((user, index) => (
+                    <li key={user.id} className="flex min-h-11 items-center justify-between gap-3 py-2">
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className="w-4 shrink-0 font-display text-mut tabular-nums">{index + 1}</span>
+                        <span className="truncate font-bold uppercase tracking-tight text-ink">{user.name}</span>
                       </span>
-                    </span>
-                    <span className="shrink-0 font-display text-2xl font-bold tabular-nums text-ink">{user.points.toLocaleString()}</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-        </div>
+                      <span className="shrink-0 font-display text-xl tabular-nums text-ink">{user.points.toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ol>
+              </Spotlight>
+            )}
+          </div>
+        </section>
+      )}
+
+      {news.length > 0 && (
+        <section className="space-y-4">
+          <SectionHead title="News" to={`/${division}/news`} action="All news" />
+          <ul className="grid gap-4 md:grid-cols-3">
+            {news.map((article) => (
+              <li key={article.id}>
+                <Link to={`/article/${article.id}`} className="block h-full rounded-card">
+                  <NewsArticle article={article} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       </div>
     </div>
   );

@@ -17,3 +17,5 @@ export { Field } from './Field';
 export { Table } from './Table';
 export { Crest } from './Crest';
 export { Scoreline } from './Scoreline';
+export { Spotlight } from './Spotlight';
+export { NumberTicker } from './NumberTicker';
