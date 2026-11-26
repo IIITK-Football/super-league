@@ -45,11 +45,11 @@ export function ArticleView() {
 
   if (status === 'loading') {
     return (
-      <div aria-busy="true" aria-label="Loading article" className="mx-auto max-w-3xl space-y-5">
+      <div aria-busy="true" aria-label="Loading article" className="mx-auto max-w-3xl space-y-6">
         {back}
-        <Skeleton className="aspect-[16/9] w-full rounded-card" />
-        <Skeleton className="h-10 w-3/4" />
+        <Skeleton className="h-16 w-3/4" />
         <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="aspect-[16/9] w-full rounded-card" />
         <Skeleton className="h-40 w-full" />
       </div>
     );
@@ -88,7 +88,7 @@ export function ArticleView() {
   };
 
   return (
-    <article className="mx-auto max-w-3xl space-y-6 pb-12">
+    <article className="mx-auto max-w-3xl space-y-10 pb-12">
       <div className="flex items-center justify-between gap-4">
         {back}
         <Button variant="secondary" size="sm" onClick={share}>
@@ -97,32 +97,32 @@ export function ArticleView() {
         </Button>
       </div>
 
-      {article.image_url && (
-        <img src={article.image_url} alt="" className="aspect-[16/9] w-full rounded-card border border-line object-cover" />
-      )}
-
-      <header className="space-y-3">
-        {meta.length > 0 && <p className="text-sm text-mut">{meta.join(' · ')}</p>}
-        <h1 className="font-display text-4xl font-bold leading-tight text-ink sm:text-5xl">{title}</h1>
-        {article.summary && <p className="text-lg text-mut">{article.summary}</p>}
+      <header className="space-y-5">
+        {meta.length > 0 && <p className="eyebrow">{meta.join(' · ')}</p>}
+        <h1 className="font-display text-4xl leading-none text-ink sm:text-6xl">{title}</h1>
+        {article.summary && <p className="text-xl leading-relaxed text-mut">{article.summary}</p>}
       </header>
 
-      <div className="max-w-[65ch] space-y-5 text-lg leading-relaxed text-ink">
+      {article.image_url && (
+        <img src={article.image_url} alt="" className="aspect-[16/9] w-full rounded-card object-cover grayscale" />
+      )}
+
+      <div className="mx-auto max-w-[65ch] space-y-6 text-lg leading-relaxed text-ink">
         {blocks.map((block, i) => {
           if (block.type === 'paragraph') return <p key={i}>{block.value}</p>;
           if (block.type === 'image') {
             return (
-              <figure key={i} className="my-8 space-y-2">
-                <img src={block.url} alt={block.alt || ''} className="w-full rounded-card border border-line" />
-                {block.alt && <figcaption className="text-center text-sm text-mut">{block.alt}</figcaption>}
+              <figure key={i} className="my-10 space-y-3">
+                <img src={block.url} alt={block.alt || ''} className="w-full rounded-card" />
+                {block.alt && <figcaption className="eyebrow text-center">{block.alt}</figcaption>}
               </figure>
             );
           }
           if (block.type === 'quote') {
             return (
-              <blockquote key={i} className="border-l-4 border-acc pl-5">
-                <p className="font-display text-2xl font-bold leading-snug">{block.value}</p>
-                {block.author && <footer className="mt-2 text-sm text-mut">{block.author}</footer>}
+              <blockquote key={i} className="my-10 border-l-2 border-ink pl-6">
+                <p className="font-display text-3xl leading-tight text-ink">{block.value}</p>
+                {block.author && <footer className="eyebrow mt-3">{block.author}</footer>}
               </blockquote>
             );
           }

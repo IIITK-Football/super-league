@@ -105,7 +105,7 @@ describe('rules', () => {
 describe('not found', () => {
   it('says the page does not exist and links home', () => {
     wrap(<NotFound />);
-    expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Not found' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Back to home' }).getAttribute('href')).toBe('/');
   });
 });
