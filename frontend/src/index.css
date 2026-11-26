@@ -305,8 +305,14 @@
   box-shadow: 0 24px 50px -24px rgb(0 0 0 / 0.25);
 }
 
-/* Native date and time pickers: a quiet calendar glyph that follows the ink colour. */
+/* Native date and time pickers: our own icon is drawn, so the native indicator is invisible but stays clickable over it. */
 .well input::-webkit-calendar-picker-indicator {
-  opacity: 0.55;
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2.75rem;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
   cursor: pointer;
 }
