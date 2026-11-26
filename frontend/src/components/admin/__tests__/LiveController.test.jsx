@@ -34,15 +34,28 @@ vi.mock('../../../lib/supabase', () => ({
     },
   },
 }));
-const { ConfirmProvider } = await import('../../ui');
+const { ConfirmProvider, Toaster, dismissToast } = await import('../../ui');
+const { readToasts } = await import('../../ui/toastStore');
 const { default: LiveController } = await import('../LiveController');
-const renderLive = () => render(<ConfirmProvider><LiveController /></ConfirmProvider>);
+const renderLive = () => render(<ConfirmProvider><LiveController /><Toaster /></ConfirmProvider>);
+
+// Opens a searchable picker by its label and chooses the option whose label matches.
+async function choose(label, option) {
+  fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(await screen.findByRole('option', { name: option }));
+}
+// A NumberField commits a typed value when it loses focus.
+function typeNumber(field, value) {
+  fireEvent.change(field, { target: { value } });
+  fireEvent.blur(field);
+}
 
 const goal = (over) => ({ id: 'e1', team_id: 't1', kind: 'goal', player_id: null, assist_player_id: null, minute: 20, added_minute: null, version: 1, ...over });
 
 beforeEach(() => {
   match.home_score = 1; match.away_score = 0; db.format = 'league';
   db.events = [goal({})]; db.eventsError = null; db.requests = []; db.responses = []; db.selects = 0;
+  readToasts().forEach((t) => dismissToast(t.id));
   vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
     db.requests.push(JSON.parse(init.body));
     const next = db.responses.shift() ?? { status: 200, body: { success: true, message: 'Done.', match: { home_score: 2, away_score: 0 } } };
@@ -105,9 +118,9 @@ describe('LiveController on match events', () => {
     await openMatch();
     fireEvent.click(screen.getByRole('button', { name: 'Attribute' }));
     expect(screen.getByText('Correct goal')).toBeTruthy();
-    expect(screen.getByDisplayValue('Alpha (Home)')).toBeTruthy(); // the goal's team is preselected
-    fireEvent.change(screen.getByLabelText('Goalscorer'), { target: { value: 'p1' } });
-    fireEvent.change(screen.getByLabelText('Minute'), { target: { value: '22' } });
+    expect(screen.getByRole('radio', { name: 'Alpha (Home)' }).getAttribute('aria-checked')).toBe('true'); // the goal's team is preselected
+    await choose('Goalscorer', /Ada Striker/);
+    typeNumber(screen.getByLabelText('Minute'), '22');
     fireEvent.click(screen.getByRole('button', { name: 'Save correction' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
     expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'edit_event', event_id: 'e1', version: 1, changes: { kind: 'goal', team_id: 't1', player_id: 'p1', assist_player_id: null, minute: '22' } });
@@ -118,7 +131,7 @@ describe('LiveController on match events', () => {
     await openMatch();
     const loadsBefore = db.selects;
     fireEvent.click(screen.getByRole('button', { name: 'Attribute' }));
-    fireEvent.change(screen.getByLabelText('Goalscorer'), { target: { value: 'p1' } });
+    await choose('Goalscorer', /Ada Striker/);
     fireEvent.click(screen.getByRole('button', { name: 'Save correction' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/changed since you loaded it/);
     expect(db.requests).toHaveLength(1);
@@ -155,10 +168,11 @@ describe('LiveController on match events', () => {
 
   it('adds a card with a player, as one add_event request', async () => {
     await openMatch();
-    fireEvent.click(screen.getByRole('button', { name: 'Add card' }));
-    fireEvent.change(screen.getByLabelText('Card team'), { target: { value: 't2' } });
-    fireEvent.change(screen.getByLabelText('Carded player'), { target: { value: 'p3' } });
-    fireEvent.change(screen.getByLabelText('Card minute'), { target: { value: '55' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yellow' }));
+    expect(screen.getByRole('button', { name: 'Confirm card' }).disabled).toBe(true); // a card needs a player
+    fireEvent.click(screen.getByRole('radio', { name: 'Beta (Away)' }));
+    await choose('Player', /Cy Keeper/);
+    typeNumber(screen.getByLabelText('Minute'), '55');
     fireEvent.click(screen.getByRole('button', { name: 'Confirm card' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
     expect(db.requests[0]).toMatchObject({ action: 'add_event', event: { kind: 'yellow', team_id: 't2', player_id: 'p3', minute: '55' } });
@@ -166,8 +180,8 @@ describe('LiveController on match events', () => {
 
   it('half time keeps the minutes played, as Pause does, and the second half resumes from them', async () => {
     await openMatch();
-    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '30' } });
-    fireEvent.click(screen.getByRole('button', { name: /set/i }));
+    typeNumber(screen.getByRole('spinbutton'), '30');
+    fireEvent.click(screen.getByRole('button', { name: 'Set' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
     fireEvent.click(screen.getByRole('button', { name: /start/i }));
     await waitFor(() => expect(db.requests).toHaveLength(2));
@@ -203,7 +217,7 @@ describe('LiveController on match events', () => {
   it('takes a tied knockout to penalties: both scores are required, and only then is the match closed', async () => {
     match.away_score = 1; db.format = 'knockout';
     await openMatch();
-    fireEvent.click(screen.getByRole('button', { name: 'Final whistle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Full time' }));
     const dialog = await screen.findByRole('alertdialog');
     fireEvent.change(within(dialog).getByLabelText('Home penalties'), { target: { value: '4' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'End match' }));
@@ -218,7 +232,7 @@ describe('LiveController on match events', () => {
   it('asks for no penalties in a league match, even a draw', async () => {
     match.away_score = 1;
     await openMatch();
-    fireEvent.click(screen.getByRole('button', { name: 'Final whistle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Full time' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).queryByLabelText('Home penalties')).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'End match' }));
@@ -234,7 +248,21 @@ describe('LiveController on match events', () => {
     expect(db.requests).toHaveLength(0);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Reopen match' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
-    expect(db.requests[0]).toEqual({ match_id: 'm2', action: 'update_time', minute: "20'" });
+    // The clock comes back stopped at that minute, never running from the old start time.
+    expect(db.requests[0]).toEqual({ match_id: 'm2', action: 'update_time', minute: "20'", timer_start_time: null, timer_calibration: 20 });
+  });
+
+  it('warns when the clock was left running past 130 minutes, and one tap stops it at 90', async () => {
+    match.timer_start_time = new Date(Date.now() - 269 * 60000).toISOString(); match.timer_calibration = 20;
+    try {
+      await openMatch();
+      const warning = screen.getByRole('alert');
+      expect(warning.textContent).toMatch(/left running \(289 minutes\)/);
+      fireEvent.click(within(warning).getByRole('button', { name: /Stop at 90/ }));
+      await waitFor(() => expect(db.requests).toHaveLength(1));
+      expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'update_time', minute: "90'", timer_start_time: null, timer_calibration: 90 });
+      await waitFor(() => expect(screen.queryByText(/left running/)).toBeNull());
+    } finally { delete match.timer_start_time; delete match.timer_calibration; }
   });
 
   it('shows a server refusal inline', async () => {
