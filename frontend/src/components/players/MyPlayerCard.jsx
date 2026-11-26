@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
 import { FEET } from '../../lib/playerCard';
 import FutCard from './FutCard';
+import { buttonClasses } from '../ui/buttonClasses';
 
 // "Your player card" on /profile: the player identity a dictator linked to the signed-in account (my_player). The
 // player changes only their portrait and preferred foot (update_my_player); name, rating, stats and play style are
@@ -117,7 +118,7 @@ export default function MyPlayerCard() {
             <option value="">Not set</option>{FEET.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
         </label>
-        <label className="flex cursor-pointer items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-zinc-300 hover:bg-white/5 focus-within:ring-2 focus-within:ring-white/70">
+        <label className={buttonClasses('secondary', 'md', 'cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-acc')}>
           <ImagePlus size={13} /> {portrait ? 'Choose another picture' : 'New portrait (500 × 500 PNG)'}
           <input type="file" accept="image/png" className="sr-only" aria-label="Portrait file" onChange={(e) => { choose(e.target.files?.[0]); e.target.value = ''; }} />
         </label>
