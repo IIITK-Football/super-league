@@ -197,7 +197,9 @@ async function main() {
   }
 
   // Wrangler instances share local state, so the guard Worker starts only after the first one stopped.
+  // Its own name, so it can never stand in for super-league-api in the local dev registry (a Pages binding).
   const guard = startWorker(GUARD_PORT, [
+    '--name', 'super-league-api-guard',
     '--var', 'SL_ENVIRONMENT:staging',
     '--var', `SL_PRODUCTION_SUPABASE_REF:${PRODUCTION_REF}`,
     '--var', `SUPABASE_URL:https://${PRODUCTION_REF}.supabase.co`,
