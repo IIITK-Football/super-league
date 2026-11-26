@@ -171,7 +171,7 @@ export async function createFixtures(db, tag, made) {
   for (const [label, roles] of [['dictator', ['dictator']], ['editor', ['editor']], ['captain', ['captain']], ['scorer', ['scorer']], ['loose', ['scorer']], ['normal', []], ['player', []], ['away', []]]) {
     who[label] = await db.account(`sl-check-${tag}-${label}@iiitkottayam.ac.in`);
     made.users.push(who[label].id);
-    await db.call('/rest/v1/user_profiles', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ id: who[label].id, email: who[label].email, nickname: `${label}-${tag}`.slice(0, 20) }) });
+    await db.call('/rest/v1/user_profiles', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ id: who[label].id, email: who[label].email, nickname: `${label}-${tag}`.slice(0, 20), wc_team_flair: 'Spain' }) });
     for (const role of roles) await db.insert('user_roles', [{ user_id: who[label].id, role }]);
   }
   const teams = await db.insert('teams', [
