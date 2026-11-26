@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { affectedGroups, globToRegExp, loadGroups, needsLocalDatabase, validateGroups } from '../../../scripts/test-groups.mjs';
+import { affectedGroups, checkStrict, globToRegExp, loadGroups, needsLocalDatabase, validateGroups } from '../../../scripts/test-groups.mjs';
 
 const root = join(__dirname, '../../..');
 const config = loadGroups(join(root, 'tests/groups.json'));
@@ -22,6 +22,13 @@ describe('affectedGroups', () => {
     const g = affectedGroups(['backend/supabase/seed.sql'], config);
     expect(g).toContain('database');
     expect(g).not.toContain('frontend-components');
+  });
+
+  it('runs the config group for the frontend build scripts, whose tests live in frontend/src/lib', () => {
+    for (const file of ['frontend/scripts/build-version.js', 'frontend/scripts/check-bundle.mjs']) {
+      expect(affectedGroups([file], config), file).toContain('config');
+    }
+    expect(checkStrict(['frontend/scripts/build-version.js', 'frontend/src/lib/__tests__/buildVersion.test.js'], config)).toEqual({ errors: [] });
   });
 
   it('maps frontend source to frontend-components', () => {
