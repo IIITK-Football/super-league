@@ -7,11 +7,9 @@ handoff steps.
 ## Status
 
 - **Updated:** 2026-11-26 by Claude.
-- **Active item:** SL-030 (Phase 3), started with `pnpm work start` in `5e89361`.
-- **Plan:** `docs/plans/SL-030.md` and the approved session plan summarized below. Decisions D-04 and D-05.
-- **Owner answers (2026-11-26):**
-  - World Cup secret-key reads: downscope where row-level security gives the same response; list any that cannot as owner exceptions.
-  - Staging: Claude makes the read-only GETs on staging; the owner switches Smart Placement on or off when asked and attests C3.
+- **SL-030:** done (`91d8cc9`).
+- **Active item:** SL-031 (Phase 3), same-origin `/api` routing; started in the `feat:` commit after `91d8cc9`.
+- **Owner decisions (2026-11-26):** no standing release PR (PR #192 closed); the release PR comes after `pnpm work phase 3`.
 
 ## Done (all pushed to `develop`)
 
@@ -28,14 +26,16 @@ handoff steps.
 
 ## Exact next step
 
-Staging evidence and the placement decision are recorded in `docs/plans/SL-030.md` ("Staging evidence (2026-11-26)").
-- Placement off: standings Worker median 462 ms; Smart Placement brought no gain, so it was reverted in `418deb9`.
-- PR #192 was closed by the owner's decision: the release PR is opened only after the phase gate.
-- Strict test rules pass locally against `main` (`5033fd0`).
+SL-031 evidence so far:
+- **Local:** `node scripts/verify-local-routing.mjs` passed 8 of 8 checks at `72929c0` (`docs/walkthroughs/evidence/SL-031-local-routing.json`). It goes through `wrangler pages dev` with the real Pages function bound to `wrangler dev`, plus the Vite proxy and the missing-binding case.
+- **Staging:** `node scripts/staging-routing-check.mjs` passed 6 of 6 with both the site and the Worker at `cd810a6`, Worker version `458dbc77-ca6f-41e0-b596-4224492c6f39` (`docs/walkthroughs/evidence/SL-031-staging-routing.json`).
+- **Changes:** `/api` answers now default to `Cache-Control: no-store`, and the frontend build writes `/version.json`. The rollback procedure is `docs/rollback/pages-worker-pair.md`.
 
-1. The owner attests C3: `pnpm work attest SL-030 C3`.
-2. `pnpm work done SL-030` runs the groups and writes the walkthrough skeleton. Fill in the walkthrough (summary, local evidence, staging evidence, open discrepancies from the plan) and run it again.
-3. Then start SL-031 (same-origin `/api` routing evidence through Pages; rollback pair).
+Remaining:
+1. The owner rolls staging back to the `cd810a6` pair, following `docs/rollback/pages-worker-pair.md`. Run `node scripts/staging-routing-check.mjs` and save the output as `docs/walkthroughs/evidence/SL-031-staging-rollback.json`. Then restore the newest pair by pushing `develop` again, or by rolling forward in the dashboard.
+2. The owner attests C1: `pnpm work attest SL-031 C1`.
+3. `pnpm work done SL-031`: fill in the walkthrough, then run it again.
+4. Next: SL-032 (Worker parity for the active flows).
 
 ## In flight
 
