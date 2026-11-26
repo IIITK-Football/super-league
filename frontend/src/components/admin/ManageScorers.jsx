@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Activity, Loader2, Save, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
+import { useConfirm } from '../ui';
 
 // Scorers. A scorer holds the scorer grant and an assignment scoped to one season (every match of it) or one match, with
 // an optional expiry. The dictator assigns and revokes here through the dictator-only database functions
@@ -14,7 +15,8 @@ const labelClass = 'text-[10px] font-black uppercase tracking-widest text-zinc-5
 const when = (iso) => (iso ? new Date(iso).toLocaleString() : 'No expiry');
 const named = (m) => `${m.home?.name ?? 'Home'} vs ${m.away?.name ?? 'Away'}`;
 
-export default function ManageScorers() {
+export default function ManageScorers({ person }) { // eslint-disable-line react/prop-types
+  // person: the account chosen in Access control, so the one scorer flow starts from it.
   const [state, setState] = useState({ status: 'loading', rows: [], labels: {}, error: '' });
   const [divisions, setDivisions] = useState([]);
   const [divisionId, setDivisionId] = useState('');
@@ -30,6 +32,8 @@ export default function ManageScorers() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const latest = useRef({ list: 0, seasons: 0, matches: 0, warning: 0 });
+  const confirm = useConfirm();
+  useEffect(() => { if (person) setPicked({ id: person.user_id, label: person.label }); }, [person]);
   const search = useLatestSearch((text) => supabase.rpc('account_directory', { p_query: text, p_limit: 20 }), query, { minLength: 2 });
 
   const load = async () => {
@@ -109,7 +113,8 @@ export default function ManageScorers() {
 
   const revoke = async (row) => {
     const who = state.labels[row.user_id] || 'this scorer';
-    if (!window.confirm(`Revoke ${who}? Matches already scored keep their data.`)) return;
+    const ok = await confirm({ title: `Revoke ${who}?`, description: 'Matches already scored keep their data.', confirmLabel: 'Revoke', tone: 'danger' });
+    if (!ok) return;
     setBusy(row.id); setError(''); setMessage('');
     const { error: err } = await supabase.rpc('revoke_scorer', { p_assignment: row.id });
     setBusy('');
@@ -118,7 +123,9 @@ export default function ManageScorers() {
     load();
   };
 
-  const options = search.results;
+  // The chosen person stays in the list even when a search has not returned them.
+  const found = search.results;
+  const options = picked.id && !found.some((a) => a.user_id === picked.id) ? [{ user_id: picked.id, label: picked.label }, ...found] : found;
   return <div className="space-y-6 p-6">
     <div><h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><Activity size={20} /> Scorers</h2><p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Assign a scorer to a season or to one match. Scorers use Live Matches only; they cannot change fixtures, teams, rosters, roles or news.</p></div>
     {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
@@ -149,7 +156,7 @@ export default function ManageScorers() {
           <input type="search" aria-label="Find scorer" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" className={`${inputClass} mt-1 normal-case tracking-normal`} />
         </label>
         <label className={labelClass}>Scorer
-          <select aria-label="Scorer" value={picked.id} onChange={(e) => setPicked({ id: e.target.value, label: options.find((a) => a.user_id === e.target.value)?.label || '' })} className={`${inputClass} mt-1 normal-case tracking-normal`}>
+          <select aria-label="Scorer" value={picked.id} onChange={(e) => setPicked({ id: e.target.value, label: found.find((a) => a.user_id === e.target.value)?.label || picked.label })} className={`${inputClass} mt-1 normal-case tracking-normal`}>
             <option value="">{options.length ? 'Choose from the search results' : 'Search to choose an account'}</option>
             {options.map((a) => <option key={a.user_id} value={a.user_id}>{a.label}</option>)}
           </select>

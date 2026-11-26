@@ -4,12 +4,11 @@ import { supabase } from '../../lib/supabase';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
 import { useConfirm } from '../ui';
 
-// Roles are independent grants: no role implies another and a normal user holds none. A captain or scorer grant only
-// acts together with an assignment (a team entry, or a season or match), which the dictator makes under Teams & Rosters
-// and Scorers; the hint below each account says when a grant has none.
+// Roles are independent grants: no role implies another and a normal user holds none. A captain grant only acts together
+// with a team assignment, made under Teams & Rosters; the hint below each account says when it has none. A scorer is
+// granted only through an assignment in Scorers, so the one scorer flow lives there.
 const roleOptions = [
   { value: 'captain', label: 'Captain', assignment: 'captain' },
-  { value: 'scorer', label: 'Scorer', assignment: 'scorer' },
   { value: 'editor', label: 'Editor' },
   { value: 'dictator', label: 'Dictator' },
 ];
@@ -20,7 +19,7 @@ const countBy = (rows) => (rows ?? []).reduce((acc, r) => ({ ...acc, [r.user_id]
 // Access control. Accounts come from the dictator-only account directory: each is labelled by the verified sign-in
 // email from Supabase Auth with the profile name as context, never by the self-editable profile email or a raw id.
 // Searching matches every word of the name or email; grants are written to user_roles (row level security decides).
-export default function ManageRoles({ currentUserId }) { // eslint-disable-line react/prop-types
+export default function ManageRoles({ currentUserId, onAssignScorer }) { // eslint-disable-line react/prop-types
   const [query, setQuery] = useState('');
   const [changed, setChanged] = useState({});
   const [savingUserId, setSavingUserId] = useState('');
@@ -106,7 +105,10 @@ export default function ManageRoles({ currentUserId }) { // eslint-disable-line 
         </label>)}
       </fieldset>
       {roleOptions.filter((o) => o.assignment && account.roles.includes(o.value) && !assignments[o.assignment][account.user_id]).map((o) =>
-        <p key={o.value} className="text-xs text-amber-300">{o.label} role without an assignment: it cannot act until a dictator assigns {o.value === 'captain' ? 'a team' : 'a season or match'}.</p>)}
+        <p key={o.value} className="text-xs text-amber-300">{o.label} role without an assignment: it cannot act until a dictator assigns a team.</p>)}
+      <button type="button" onClick={() => onAssignScorer?.(account)} className="min-h-11 text-xs font-black uppercase tracking-widest text-zinc-300 hover:text-white">
+        {account.roles.includes('scorer') ? 'Scorer assignments' : 'Assign as scorer'}
+      </button>
     </li>)}</ul>}
   </div>;
 }

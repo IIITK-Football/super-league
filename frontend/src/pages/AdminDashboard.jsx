@@ -16,6 +16,8 @@ export function AdminDashboard() {
   const { user, hasRole, roles, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('live');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // NEW: Mobile menu state
+  // The account picked in Access control, which opens the Scorers tab on it (the one scorer flow).
+  const [scorerPerson, setScorerPerson] = useState(null);
 
   // The grants held now (my_roles), never a UI label. A dictator gets every tab; a scorer only Live Matches (the match
   // workspace); nobody else gets in. Row level security and the API enforce the same rules.
@@ -131,8 +133,8 @@ export function AdminDashboard() {
           {activeTab === 'live' && <LiveController />}
           {isDictator && activeTab === 'schedule' && <ScheduleMatches />}
           {isDictator && activeTab === 'captains' && <ManageCaptains />}
-          {isDictator && activeTab === 'scorers' && <ManageScorers />}
-          {isDictator && activeTab === 'roles' && <ManageRoles currentUserId={user.id} />}
+          {isDictator && activeTab === 'scorers' && <ManageScorers person={scorerPerson} />}
+          {isDictator && activeTab === 'roles' && <ManageRoles currentUserId={user.id} onAssignScorer={(account) => { setScorerPerson(account); setActiveTab('scorers'); }} />}
           {isDictator && activeTab === 'grading' && <GradePredictions />}
           {isDictator && activeTab === 'news' && <ManageNews />}
           {isDictator && activeTab === 'divisions' && <ManageDivisions />}

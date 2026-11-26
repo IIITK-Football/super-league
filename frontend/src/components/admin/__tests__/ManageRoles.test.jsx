@@ -46,9 +46,9 @@ describe('ManageRoles', () => {
     renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(screen.getByText('3 accounts')).toBeTruthy();
-    const boxes = (label) => ['Captain', 'Scorer', 'Editor', 'Dictator'].map((r) => screen.getByLabelText(`${r} for ${label}`).checked);
-    expect(boxes('Ada Lane (ada.l@iiitkottayam.ac.in)')).toEqual([true, false, true, false]); // several grants at once
-    expect(boxes('Ada Lane (ada@iiitkottayam.ac.in)')).toEqual([false, false, false, false]); // a normal user holds none
+    const boxes = (label) => ['Captain', 'Editor', 'Dictator'].map((r) => screen.getByLabelText(`${r} for ${label}`).checked);
+    expect(boxes('Ada Lane (ada.l@iiitkottayam.ac.in)')).toEqual([true, true, false]); // several grants at once
+    expect(boxes('Ada Lane (ada@iiitkottayam.ac.in)')).toEqual([false, false, false]); // a normal user holds none
     expect(document.body.textContent).not.toMatch(/\bu1\b|\bu2\b/);
   });
 
@@ -100,22 +100,24 @@ describe('ManageRoles', () => {
     expect(db.removed).toHaveLength(1);
   });
 
-  it('shows the database message when a grant is refused, and does not change the box', async () => {
-    db.writeError = { message: 'new row violates row-level security policy for table "user_roles"' };
+  it('says when a captain grant has no team assignment, and not when it has one', async () => {
     renderRoles();
-    await waitFor(() => expect(rows()).toHaveLength(3));
-    fireEvent.click(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)'));
-    expect(await screen.findByText(/row-level security/)).toBeTruthy();
-    expect(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)').checked).toBe(false);
-  });
-
-  it('says when a captain or scorer grant has no assignment, and not when it has one', async () => {
+    expect(await screen.findByText(/Captain role without an assignment/)).toBeTruthy();
+    cleanup();
     db.assignments.captain_assignments = [{ user_id: 'u2' }];
     renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(screen.queryByText(/Captain role without an assignment/)).toBeNull();
-    fireEvent.click(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)'));
-    expect(await screen.findByText(/Scorer role without an assignment/)).toBeTruthy();
+  });
+
+  it('sends a scorer to the Scorers flow instead of granting the role here', async () => {
+    const onAssignScorer = vi.fn();
+    render(<ConfirmProvider><ManageRoles currentUserId="me" onAssignScorer={onAssignScorer} /></ConfirmProvider>);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(screen.queryByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)')).toBeNull();
+    fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Assign as scorer' }));
+    expect(onAssignScorer).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'u1', label: 'Ada Lane (ada@iiitkottayam.ac.in)' }));
+    expect(db.writes).toEqual([]);
   });
 
   it('asks before making someone a dictator, naming them, and writes only on confirm', async () => {
