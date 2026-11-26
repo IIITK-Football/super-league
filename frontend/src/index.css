@@ -119,6 +119,22 @@
   line-height: 0.95;
 }
 
+/*
+ * Chrome type, like the original site's big headings: the text colour fading from full to about 55% top to bottom,
+ * which reads white to grey on the night ground (and near black to grey in light). Built on currentColor, so it
+ * follows the text colour of an inverted block or a photo overlay. Each descendant carries its own copy, so digits
+ * that animate on their own layer (Scoreline, NumberTicker) still paint. Only white to grey: never a colour gradient.
+ */
+.chrome,
+.chrome *,
+:is(h1, h2).font-display,
+:is(h1, h2).font-display * {
+  background-image: linear-gradient(180deg, currentColor 15%, color-mix(in srgb, currentColor 55%, transparent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 /* Small letter-spaced label, the original site's signature. */
 .eyebrow {
   font-size: 0.6875rem;

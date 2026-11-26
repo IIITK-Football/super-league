@@ -18,7 +18,7 @@ function Podium({ rows, label, unit }) {
           {first.club && <p className="eyebrow">{first.club}</p>}
         </div>
         <p className="flex items-baseline gap-3">
-          <NumberTicker value={first.stat} className="font-display text-8xl leading-none tabular-nums text-ink" />
+          <NumberTicker value={first.stat} className="chrome font-display text-8xl leading-none tabular-nums text-ink" />
           <span className="eyebrow">{unit}</span>
         </p>
       </div>
@@ -31,7 +31,7 @@ function Podium({ rows, label, unit }) {
                 <p className="font-display text-xl leading-none text-ink sm:text-2xl">{player.name}</p>
                 {player.club && <p className="eyebrow truncate">{player.club}</p>}
               </div>
-              <NumberTicker value={player.stat} className="font-display text-5xl leading-none tabular-nums text-ink" />
+              <NumberTicker value={player.stat} className="chrome font-display text-5xl leading-none tabular-nums text-ink" />
             </div>
           ))}
         </div>

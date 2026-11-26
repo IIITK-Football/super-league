@@ -63,7 +63,7 @@ function Leader({ label, unit, player }) {
         {player.club && <p className="text-sm font-semibold uppercase tracking-wider text-mut">{player.club}</p>}
       </div>
       <p className="flex items-baseline gap-2">
-        <NumberTicker value={player.stat} className="font-display text-7xl leading-none tabular-nums text-ink" />
+        <NumberTicker value={player.stat} className="chrome font-display text-7xl leading-none tabular-nums text-ink" />
         <span className="eyebrow">{unit}</span>
       </p>
     </Spotlight>

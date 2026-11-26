@@ -69,7 +69,7 @@ export function HeroMatch({ match, detail, className }) {
         <div className="flex shrink-0 flex-col items-center pt-3 sm:pt-4">
           {upcoming
             ? <span className="font-display text-4xl font-black uppercase tracking-tighter text-white/80 sm:text-7xl">vs</span>
-            : <Scoreline home={match.home_score ?? null} away={match.away_score ?? null} live={live} size="lg" className="text-white drop-shadow-[0_6px_24px_rgb(0_0_0/0.6)]" />}
+            : <Scoreline home={match.home_score ?? null} away={match.away_score ?? null} live={live} size="lg" className="chrome text-white drop-shadow-[0_6px_24px_rgb(0_0_0/0.6)]" />}
         </div>
         <Side name={away.name || 'To be confirmed'} logo={away.logo_url} form={detail?.awayForm} scorers={detail?.awayScorers} away />
       </div>
