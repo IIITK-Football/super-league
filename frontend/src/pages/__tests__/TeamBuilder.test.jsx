@@ -68,11 +68,12 @@ vi.mock('../../lib/supabase', () => ({ supabase: { from: (t) => from(t), rpc: (.
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'c1' }, roles: auth.roles, hasRole: (r) => auth.roles.includes(r) }) }));
 
 import { TeamBuilder, attributesForSave, fromMember } from '../TeamBuilder';
+import { ConfirmProvider } from '../../components/ui/ConfirmProvider';
 
 beforeEach(() => { seed(); rpc.mockClear(); });
 afterEach(cleanup);
 
-const renderBuilder = () => render(<MemoryRouter><TeamBuilder /></MemoryRouter>);
+const renderBuilder = () => render(<ConfirmProvider><MemoryRouter><TeamBuilder /></MemoryRouter></ConfirmProvider>);
 
 describe('TeamBuilder on season rosters', () => {
   it('shows the captain\'s season roster from roster places, without any private email', async () => {
@@ -98,7 +99,7 @@ describe('TeamBuilder on season rosters', () => {
     fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '10' } });
     fireEvent.change(screen.getByLabelText(/overall rating/i), { target: { value: '81' } });
     fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
-    await waitFor(() => expect(screen.getByText(/saved successfully/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Saved \d players?\./)).toBeTruthy());
     expect(rpc).toHaveBeenCalledTimes(1); // only the changed player is saved; the unedited one is not rewritten
     const [name, args] = rpc.mock.calls[0];
     expect(name).toBe('captain_update_roster_player');
@@ -113,7 +114,7 @@ describe('TeamBuilder on season rosters', () => {
     fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
     await waitFor(() => expect(screen.getByText(/not part of your assigned roster/)).toBeTruthy());
-    expect(screen.queryByText(/saved successfully/i)).toBeNull();
+    expect(screen.queryByText(/Saved \d players?\./)).toBeNull();
   });
 
   it('shows a pending roster when the team has no players this season', async () => {
@@ -125,17 +126,17 @@ describe('TeamBuilder on season rosters', () => {
   it('keeps empty card values empty after loading and saving, and keeps the values that exist', async () => {
     renderBuilder();
     await screen.findByRole('button', { name: /01 Ada Striker/ });
-    fireEvent.click(screen.getByRole('button', { name: 'Attributes' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Attributes' }));
     for (const stat of ['Pace', 'Shooting', 'Passing', 'Dribbling', 'Defending', 'Physicality']) expect(screen.getByLabelText(stat).value).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: /bio & playstyle/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /play style/i }));
     expect(screen.getByLabelText(/preferred foot/i).value).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: /position & details/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /details/i }));
     fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '11' } });
     fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
-    await waitFor(() => expect(screen.getByText(/saved successfully/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Saved \d players?\./)).toBeTruthy());
     expect(rpc.mock.calls[0][1].p_attributes).toEqual({}); // still no stats, foot or play style
     expect(rpc.mock.calls[0][1].p_overall_rating).toBe(70);
-    fireEvent.click(screen.getByRole('button', { name: 'Attributes' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Attributes' }));
     expect(screen.getByLabelText('Pace').value).toBe('');
   });
 
@@ -157,7 +158,7 @@ describe('TeamBuilder on season rosters', () => {
     expect(screen.getByLabelText(/overall rating/i).value).toBe('');
     fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '12' } });
     fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
-    await waitFor(() => expect(screen.getByText(/saved successfully/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Saved \d players?\./)).toBeTruthy());
     expect(rpc.mock.calls[0][1]).toMatchObject({ p_membership_id: 'm1', p_jersey_number: 12, p_overall_rating: null });
   });
 
@@ -186,7 +187,7 @@ describe('TeamBuilder on season rosters', () => {
     expect(screen.getByText(/Dictator workspace/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '15' } });
     fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
-    await waitFor(() => expect(screen.getByText(/saved successfully/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Saved \d players?\./)).toBeTruthy());
     expect(rpc.mock.calls[0][1]).toMatchObject({ p_membership_id: 'm1', p_jersey_number: 15 });
   });
 
@@ -208,7 +209,7 @@ describe('TeamBuilder on season rosters', () => {
     expect(screen.queryByRole('button', { name: /change logo/i })).toBeNull(); // branding stays with the team's captain
     fireEvent.change(screen.getByLabelText(/jersey number/i), { target: { value: '8' } });
     fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
-    await waitFor(() => expect(screen.getByText(/saved successfully/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Saved \d players?\./)).toBeTruthy());
     expect(rpc.mock.calls[0][1]).toMatchObject({ p_membership_id: 'm-other-team', p_jersey_number: 8 });
   });
 
