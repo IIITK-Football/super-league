@@ -1,12 +1,9 @@
 @import "tailwindcss";
 
 /*
- * Tokens. Neutrals come from the theme (light or dark); the accent comes from the palette (data-palette on <html>).
- * Palettes are deliberately restrained: neutral greys, at most one accent, green only for wins, red only for live.
- *   mono      accent is the ink colour itself; colour comes only from club crests and live states (default)
- *   division  accent is the current division's colour from data (--div, set by the app shell)
- *   pitch     one deep pitch green accent
- * Dark is the fallback; light follows the device unless the reader picks dark, and the toggle sets data-theme.
+ * Tokens. Each palette (data-palette on <html>: cobalt default, pitch, signal) sets tinted neutrals and one loud
+ * signature colour. Theme (data-theme, or the device) picks light or dark. --div is the division colour from data.
+ * Use: acc for actions, blk/blkink for the one loud block per screen, acc2 for wins, live for live and danger.
  */
 @theme static {
   --color-bg: #0D0D0E;
@@ -17,6 +14,8 @@
   --color-line: #2A2A2E;
   --color-acc: #F0F0ED;
   --color-accink: #0D0D0E;
+  --color-blk: #2F5BFF;
+  --color-blkink: #FFFFFF;
   --color-acc2: #4CBF85;
   --color-live: #FF5449;
 
@@ -61,73 +60,199 @@
 }
 
 :root {
-  --div: #1F7A4D;
-  --color-bg: #0D0D0E;
-  --color-surf: #161618;
-  --color-raise: #202023;
-  --color-ink: #F0F0ED;
-  --color-mut: #9B9B96;
-  --color-line: #2A2A2E;
-  --color-acc2: #4CBF85;
-  --color-live: #FF5449;
-  color-scheme: dark;
+  --div: var(--color-acc);
 }
 
+/* Palette x theme. Neutrals are tinted toward the palette hue (never flat grey); acc is the action colour,
+ * blk/blkink the loud signature block (featured match, active tab, hero band), acc2 wins, live live/danger. */
+:root, :root[data-palette="cobalt"] {
+  --color-bg: #0C0E14;
+  --color-surf: #141824;
+  --color-raise: #1C2131;
+  --color-ink: #EEF1F8;
+  --color-mut: #98A0B3;
+  --color-line: #262C3D;
+  --color-acc: #4A74FF;
+  --color-accink: #FFFFFF;
+  --color-blk: #2F5BFF;
+  --color-blkink: #FFFFFF;
+  --color-acc2: #3FD08A;
+  --color-live: #FF4D4D;
+  color-scheme: dark;
+}
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-  --color-bg: #F6F6F4;
-  --color-surf: #FFFFFF;
-  --color-raise: #EDEDEA;
-  --color-ink: #141414;
-  --color-mut: #66665F;
-  --color-line: #E0E0DB;
-  --color-acc2: #1E7B4A;
-  --color-live: #D2302A;
-  color-scheme: light;
+  :root:not([data-theme="dark"]):not([data-palette]), :root[data-palette="cobalt"]:not([data-theme="dark"]) {
+    --color-bg: #F4F6FB;
+    --color-surf: #FFFFFF;
+    --color-raise: #E9EDF6;
+    --color-ink: #0E1220;
+    --color-mut: #5F677A;
+    --color-line: #DCE1EC;
+    --color-acc: #1F4BFF;
+    --color-accink: #FFFFFF;
+    --color-blk: #1F4BFF;
+    --color-blkink: #FFFFFF;
+    --color-acc2: #11864D;
+    --color-live: #D92D2D;
+    color-scheme: light;
   }
 }
-
-:root[data-theme="light"] {
-  --color-bg: #F6F6F4;
+:root[data-theme="light"]:not([data-palette]), :root[data-palette="cobalt"][data-theme="light"] {
+  --color-bg: #F4F6FB;
   --color-surf: #FFFFFF;
-  --color-raise: #EDEDEA;
-  --color-ink: #141414;
-  --color-mut: #66665F;
-  --color-line: #E0E0DB;
-  --color-acc2: #1E7B4A;
-  --color-live: #D2302A;
+  --color-raise: #E9EDF6;
+  --color-ink: #0E1220;
+  --color-mut: #5F677A;
+  --color-line: #DCE1EC;
+  --color-acc: #1F4BFF;
+  --color-accink: #FFFFFF;
+  --color-blk: #1F4BFF;
+  --color-blkink: #FFFFFF;
+  --color-acc2: #11864D;
+  --color-live: #D92D2D;
   color-scheme: light;
 }
-
-:root[data-theme="dark"] {
-  --color-bg: #0D0D0E;
-  --color-surf: #161618;
-  --color-raise: #202023;
-  --color-ink: #F0F0ED;
-  --color-mut: #9B9B96;
-  --color-line: #2A2A2E;
-  --color-acc2: #4CBF85;
-  --color-live: #FF5449;
+:root[data-theme="dark"]:not([data-palette]), :root[data-palette="cobalt"][data-theme="dark"] {
+  --color-bg: #0C0E14;
+  --color-surf: #141824;
+  --color-raise: #1C2131;
+  --color-ink: #EEF1F8;
+  --color-mut: #98A0B3;
+  --color-line: #262C3D;
+  --color-acc: #4A74FF;
+  --color-accink: #FFFFFF;
+  --color-blk: #2F5BFF;
+  --color-blkink: #FFFFFF;
+  --color-acc2: #3FD08A;
+  --color-live: #FF4D4D;
   color-scheme: dark;
 }
 
-/* Accent per palette. Mono and pitch flip with the theme; division follows the data colour. */
-:root, :root[data-palette="mono"] {
-  --color-acc: var(--color-ink);
-  --color-accink: var(--color-bg);
-}
 :root[data-palette="pitch"] {
-  --color-acc: #4CC38A;
-  --color-accink: #0D0D0E;
+  --color-bg: #0B110D;
+  --color-surf: #121A15;
+  --color-raise: #1A241D;
+  --color-ink: #ECF3EE;
+  --color-mut: #93A399;
+  --color-line: #233029;
+  --color-acc: #2FD06F;
+  --color-accink: #06120A;
+  --color-blk: #19B35C;
+  --color-blkink: #06120A;
+  --color-acc2: #2FD06F;
+  --color-live: #FF4D4D;
+  color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
-  :root[data-palette="pitch"]:not([data-theme="dark"]) { --color-acc: #136B3E; --color-accink: #FFFFFF; }
+  :root[data-palette="pitch"]:not([data-theme="dark"]) {
+    --color-bg: #F3F7F4;
+    --color-surf: #FFFFFF;
+    --color-raise: #E6EEE8;
+    --color-ink: #0D1A12;
+    --color-mut: #5B6B61;
+    --color-line: #D7E2DA;
+    --color-acc: #0E8C45;
+    --color-accink: #FFFFFF;
+    --color-blk: #19B35C;
+    --color-blkink: #06120A;
+    --color-acc2: #0E8C45;
+    --color-live: #D92D2D;
+    color-scheme: light;
+  }
 }
-:root[data-palette="pitch"][data-theme="light"] { --color-acc: #136B3E; --color-accink: #FFFFFF; }
-:root[data-palette="pitch"][data-theme="dark"] { --color-acc: #4CC38A; --color-accink: #0D0D0E; }
-:root[data-palette="division"] { --color-acc: var(--div); --color-accink: #FFFFFF; }
-/* The shell sets --div on its wrapper; re-declare the accent there so it resolves to the division colour. */
-:root[data-palette="division"] [data-div] { --color-acc: var(--div); }
+:root[data-palette="pitch"][data-theme="light"] {
+  --color-bg: #F3F7F4;
+  --color-surf: #FFFFFF;
+  --color-raise: #E6EEE8;
+  --color-ink: #0D1A12;
+  --color-mut: #5B6B61;
+  --color-line: #D7E2DA;
+  --color-acc: #0E8C45;
+  --color-accink: #FFFFFF;
+  --color-blk: #19B35C;
+  --color-blkink: #06120A;
+  --color-acc2: #0E8C45;
+  --color-live: #D92D2D;
+  color-scheme: light;
+}
+:root[data-palette="pitch"][data-theme="dark"] {
+  --color-bg: #0B110D;
+  --color-surf: #121A15;
+  --color-raise: #1A241D;
+  --color-ink: #ECF3EE;
+  --color-mut: #93A399;
+  --color-line: #233029;
+  --color-acc: #2FD06F;
+  --color-accink: #06120A;
+  --color-blk: #19B35C;
+  --color-blkink: #06120A;
+  --color-acc2: #2FD06F;
+  --color-live: #FF4D4D;
+  color-scheme: dark;
+}
+
+:root[data-palette="signal"] {
+  --color-bg: #120F0D;
+  --color-surf: #1B1714;
+  --color-raise: #25201C;
+  --color-ink: #F5F0EC;
+  --color-mut: #A79C93;
+  --color-line: #2F2924;
+  --color-acc: #FF6A2B;
+  --color-accink: #160B05;
+  --color-blk: #FF5A1F;
+  --color-blkink: #160B05;
+  --color-acc2: #3FD08A;
+  --color-live: #FF4D6A;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-palette="signal"]:not([data-theme="dark"]) {
+    --color-bg: #F7F5F3;
+    --color-surf: #FFFFFF;
+    --color-raise: #EFEBE7;
+    --color-ink: #1A1411;
+    --color-mut: #6B625B;
+    --color-line: #E4DED8;
+    --color-acc: #E2470F;
+    --color-accink: #FFFFFF;
+    --color-blk: #FF5A1F;
+    --color-blkink: #160B05;
+    --color-acc2: #11864D;
+    --color-live: #D4234A;
+    color-scheme: light;
+  }
+}
+:root[data-palette="signal"][data-theme="light"] {
+  --color-bg: #F7F5F3;
+  --color-surf: #FFFFFF;
+  --color-raise: #EFEBE7;
+  --color-ink: #1A1411;
+  --color-mut: #6B625B;
+  --color-line: #E4DED8;
+  --color-acc: #E2470F;
+  --color-accink: #FFFFFF;
+  --color-blk: #FF5A1F;
+  --color-blkink: #160B05;
+  --color-acc2: #11864D;
+  --color-live: #D4234A;
+  color-scheme: light;
+}
+:root[data-palette="signal"][data-theme="dark"] {
+  --color-bg: #120F0D;
+  --color-surf: #1B1714;
+  --color-raise: #25201C;
+  --color-ink: #F5F0EC;
+  --color-mut: #A79C93;
+  --color-line: #2F2924;
+  --color-acc: #FF6A2B;
+  --color-accink: #160B05;
+  --color-blk: #FF5A1F;
+  --color-blkink: #160B05;
+  --color-acc2: #3FD08A;
+  --color-live: #FF4D6A;
+  color-scheme: dark;
+}
 
 @layer base {
   body {

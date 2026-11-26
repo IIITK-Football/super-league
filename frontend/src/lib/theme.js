@@ -16,13 +16,13 @@ export function setTheme(theme) {
   }
 }
 
-// Palette preview (dev only for now): mono, division or pitch, stored like the theme.
+// Palette preview (dev only for now): cobalt, pitch or signal, stored like the theme.
 const PALETTE_KEY = 'sl-palette';
-export const PALETTES = ['mono', 'division', 'pitch'];
+export const PALETTES = ['cobalt', 'pitch', 'signal'];
 
 export function currentPalette() {
   const p = document.documentElement.dataset.palette;
-  return PALETTES.includes(p) ? p : 'mono';
+  return PALETTES.includes(p) ? p : 'cobalt';
 }
 
 export function setPalette(palette) {
