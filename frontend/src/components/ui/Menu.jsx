@@ -17,7 +17,7 @@ export function MenuContent({ align = 'end', className, ...props }) {
       <DropdownMenu.Content
         align={align}
         sideOffset={6}
-        className={cn('z-50 min-w-48 rounded-ctl border border-line bg-surf p-1 motion-safe:animate-fade-in', className)}
+        className={cn('z-[80] min-w-48 rounded-ctl border border-line bg-surf p-1 motion-safe:animate-fade-in', className)}
         {...props}
       />
     </DropdownMenu.Portal>

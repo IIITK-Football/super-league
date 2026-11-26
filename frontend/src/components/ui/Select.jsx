@@ -141,7 +141,7 @@ export function Select({
                   exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.12 } }}
                   transition={SPRING}
                   style={{ minWidth: 'var(--radix-popover-trigger-width)', transformOrigin: 'var(--radix-popover-content-transform-origin)' }}
-                  className="float-glass z-50 flex max-h-[min(22rem,var(--radix-popover-content-available-height))] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-ctl"
+                  className="float-glass z-[80] flex max-h-[min(22rem,var(--radix-popover-content-available-height))] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-ctl"
                 >
                   {searchable && (
                     <div className="flex items-center gap-2 border-b border-line px-3.5">

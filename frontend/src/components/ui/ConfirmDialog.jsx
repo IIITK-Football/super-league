@@ -45,10 +45,10 @@ export function ConfirmDialog({
   return (
     <AlertDialog.Root open={open} onOpenChange={close}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-50 bg-bg/70 motion-safe:animate-fade-in" />
+        <AlertDialog.Overlay className="fixed inset-0 z-[80] bg-bg/70 motion-safe:animate-fade-in" />
         <AlertDialog.Content
           className={cn(
-            'fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col gap-4 overflow-y-auto rounded-t-card border-t border-line bg-surf p-5 motion-safe:animate-sheet-up',
+            'fixed inset-x-0 bottom-0 z-[80] flex max-h-[85dvh] flex-col gap-4 overflow-y-auto rounded-t-card border-t border-line bg-surf p-5 motion-safe:animate-sheet-up',
             'md:inset-x-auto md:bottom-auto md:left-1/2 md:top-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-card md:border md:motion-safe:animate-fade-in',
           )}
         >
