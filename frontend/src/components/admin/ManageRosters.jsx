@@ -9,7 +9,8 @@ import PlayerAccountLink from './PlayerAccountLink';
 import AccountMatches from './AccountMatches';
 import ManualLink from './ManualLink';
 import AccountPicker from './AccountPicker';
-import { Button, Card, Crest, EmptyState, Field, Notice, Sheet, useConfirm } from '../ui';
+import { Pencil, Plus, Shield, UserPlus, Users } from 'lucide-react';
+import { Button, Card, Combobox, Crest, Field, Notice, Select, Sheet, TextInput, useConfirm } from '../ui';
 
 export const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'CF', 'ST'];
 
@@ -481,53 +482,48 @@ export default function ManageRosters() {
     {message && <Notice tone="success" role="status">{message}</Notice>}
   </div>;
 
+  const crest = (name) => <Crest name={name} size="sm" />;
   return <div className="space-y-8">
-    <div className="space-y-1">
-      <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Teams and rosters</h2>
-      <p className="text-sm text-mut">Choose a division, season and team. A player keeps one card across seasons; a roster place belongs to one season.</p>
-    </div>
-
     {!sheetOpen && notices}
 
-    <div className="grid gap-4 md:grid-cols-3">
-      <Field as="select" label="Division" aria-label="Division" value={divisionId} onChange={(e) => chooseDivision(e.target.value)} disabled={loading.divisions}>
-        <option value="">{loading.divisions ? 'Loading divisions...' : divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
-        {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-      </Field>
-      <Field as="select" label="Season" aria-label="Season" value={seasonId} onChange={(e) => chooseSeason(e.target.value)} disabled={!divisionId || loading.seasons}>
-        <option value="">{loading.seasons ? 'Loading seasons...' : !divisionId ? 'Choose a division first' : seasons.length ? 'Choose a season' : 'This division has no seasons'}</option>
-        {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>)}
-      </Field>
-      <Field as="select" label="Team" aria-label="Team" value={entryId} onChange={(e) => chooseEntry(e.target.value)} disabled={!seasonId || loading.entries}>
-        <option value="">{loading.entries ? 'Loading teams...' : !seasonId ? 'Choose a season first' : entries.length ? 'Choose a team' : 'No teams in this season yet'}</option>
-        {entries.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-      </Field>
+    <div className="glass grid gap-4 rounded-card p-5 md:grid-cols-3">
+      <Field label="Division">{(p) => <Select {...p} aria-label="Division" value={divisionId} onChange={chooseDivision} disabled={loading.divisions}
+        placeholder={loading.divisions ? 'Loading divisions...' : divisions.length ? 'Choose a division' : 'No divisions yet'}
+        options={divisions.map((d) => ({ value: d.id, label: d.name }))} />}</Field>
+      <Field label="Season">{(p) => <Select {...p} aria-label="Season" value={seasonId} onChange={chooseSeason} disabled={!divisionId || loading.seasons}
+        placeholder={loading.seasons ? 'Loading seasons...' : !divisionId ? 'Choose a division first' : seasons.length ? 'Choose a season' : 'This division has no seasons'}
+        options={seasons.map((x) => ({ value: x.id, label: `${x.name}${x.is_current ? ' (current)' : ''}` }))} />}</Field>
+      <Field label="Team">{(p) => <Combobox {...p} aria-label="Team" value={entryId} onChange={chooseEntry} disabled={!seasonId || loading.entries}
+        placeholder={loading.entries ? 'Loading teams...' : !seasonId ? 'Choose a season first' : entries.length ? 'Choose a team' : 'No teams in this season yet'}
+        searchPlaceholder="Search teams" options={entries.map((e) => ({ value: e.id, label: e.name, icon: crest(e.name) }))} />}</Field>
     </div>
 
-    {seasonId && !loading.entries && <Card className="grid gap-5 md:grid-cols-2">
-      <div className="flex items-end gap-2">
-        <Field as="select" label={`Add an existing team to ${season?.name ?? 'the season'}`} aria-label="Existing team" value={teamToAdd} onChange={(e) => setTeamToAdd(e.target.value)} className="min-w-0 flex-1">
-          <option value="">{teamsNotInSeason.length ? 'Choose a team' : 'Every team of this division is already in the season'}</option>
-          {teamsNotInSeason.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </Field>
-        <Button variant="secondary" onClick={addExistingTeam} disabled={busy === 'add-team' || !teamsNotInSeason.length}>Add team</Button>
+    {seasonId && !loading.entries && <div className="grid gap-4 md:grid-cols-2">
+      <div className="glass flex items-end gap-2 rounded-card p-4">
+        <Field label={`Add an existing team to ${season?.name ?? 'the season'}`} className="min-w-0 flex-1">{(p) => <Combobox {...p} aria-label="Existing team" value={teamToAdd} onChange={setTeamToAdd}
+          placeholder={teamsNotInSeason.length ? 'Choose a team' : 'Every team of this division is already in the season'} disabled={!teamsNotInSeason.length}
+          searchPlaceholder="Search teams" options={teamsNotInSeason.map((t) => ({ value: t.id, label: t.name, icon: crest(t.name) }))} />}</Field>
+        <Button variant="secondary" onClick={addExistingTeam} disabled={busy === 'add-team' || !teamsNotInSeason.length}><Plus size={15} aria-hidden="true" />Add team</Button>
       </div>
-      <div className="flex items-end gap-2">
-        <Field label="Or create a new team" aria-label="New team name" value={newTeamName} onChange={(e) => setNewTeamName(e.target.value)} placeholder="Team name" className="min-w-0 flex-1" />
+      <div className="glass flex items-end gap-2 rounded-card p-4">
+        <Field label="Or create a new team" className="min-w-0 flex-1">{(p) => <TextInput {...p} icon={Shield} aria-label="New team name" value={newTeamName} onChange={(e) => setNewTeamName(e.target.value)} placeholder="Team name" />}</Field>
         <Button variant="secondary" onClick={createTeam} disabled={busy === 'new-team'}>Create team</Button>
       </div>
-    </Card>}
+    </div>}
 
     {entryId && <section aria-label={`Roster of ${entry?.name}`} className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">{entry?.name}</h3>
-          <p className="text-sm text-mut">{season?.name} · {loading.roster ? 'Loading players...' : `${roster.length} on the roster`}</p>
+        <div className="flex min-w-0 items-center gap-4">
+          <Crest name={entry?.name} size="lg" />
+          <div className="min-w-0">
+            <h2 className="font-display text-3xl text-ink">{entry?.name}</h2>
+            <p className="text-sm text-mut">{season?.name} · {loading.roster ? 'Loading players...' : `${roster.length} on the roster`}</p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setRenameText(entry?.name ?? '')} disabled={renameText !== null}>Rename team</Button>
+          <Button variant="secondary" size="sm" onClick={() => setRenameText(entry?.name ?? '')} disabled={renameText !== null}><Pencil size={15} aria-hidden="true" />Rename team</Button>
           <Button variant="quiet" size="sm" onClick={removeFromSeason} disabled={busy === 'remove-team'} className="text-live">Remove from season</Button>
-          <Button size="sm" onClick={() => { setSearch(''); setAdding(true); }}>Add player</Button>
+          <Button size="sm" onClick={() => { setSearch(''); setAdding(true); }}><UserPlus size={15} aria-hidden="true" />Add player</Button>
         </div>
       </div>
 
@@ -540,19 +536,24 @@ export default function ManageRosters() {
       {linksError && <Notice tone="error" role="alert">The account links could not be loaded ({linksError}).</Notice>}
 
       {loading.roster ? <p className="text-sm text-mut">Loading players...</p>
-        : !roster.length ? <EmptyState title="No players on this roster yet" action={<Button size="sm" onClick={() => setAdding(true)}>Add player</Button>}>Add a player who already exists, or create one with a verified account.</EmptyState>
-          : <ul aria-label="Squad" className="rounded-card border border-line bg-surf px-4">
+        : !roster.length ? <div className="flex flex-col items-start gap-3 rounded-card border border-dashed border-line p-6 text-sm text-mut">
+            <Users size={26} aria-hidden="true" />
+            <p className="font-display text-xl font-bold text-ink">No players on this roster yet</p>
+            Add a player who already exists, or create one with a verified account.
+            <Button size="sm" onClick={() => setAdding(true)}><UserPlus size={15} aria-hidden="true" />Add player</Button>
+          </div>
+          : <ul aria-label="Squad" className="glass divide-y divide-line/70 rounded-card px-3">
             {roster.map((r) => {
               const name = r.player ? `${r.player.first_name} ${r.player.last_name}` : 'Unknown player';
               const linked = links[r.player_id]?.linked === true;
-              return <li key={r.id} className="flex items-center gap-3 border-b border-line py-1 last:border-0">
-                <button type="button" onClick={() => choosePlace(r.id)} aria-label={`Edit ${name}`} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-ctl py-2 text-left transition-colors duration-200 ease-out hover:bg-raise">
+              return <li key={r.id} className="flex items-center gap-3 py-1">
+                <button type="button" onClick={() => choosePlace(r.id)} aria-label={`Edit ${name}`} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-ctl px-2 py-2 text-left transition-colors duration-200 ease-out hover:bg-ink/[0.05]">
                   <Crest name={name} src={r.player?.image_url} size="md" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-ink">{name}</span>
+                    <span className="block truncate font-black uppercase tracking-tight text-ink">{name}</span>
                     <span className="block truncate text-sm text-mut">{r.jersey_number != null ? `#${r.jersey_number}` : 'No jersey'} · {r.position || 'No position'} · {linked ? 'Linked' : 'No account'}</span>
                   </span>
-                  <span className="font-display text-2xl font-black uppercase tracking-tight tabular-nums text-ink" aria-label="Overall rating">{r.player?.overall_rating ?? '-'}</span>
+                  <span className="chrome font-display text-2xl font-black uppercase tracking-tight tabular-nums text-ink" aria-label="Overall rating">{r.player?.overall_rating ?? '-'}</span>
                 </button>
                 <Button variant="quiet" size="sm" onClick={() => setLinkPlaceId(r.id)} aria-label={`${linked ? 'Account for' : 'Link account for'} ${name}`}>{linked ? 'Account' : 'Link account'}</Button>
               </li>;

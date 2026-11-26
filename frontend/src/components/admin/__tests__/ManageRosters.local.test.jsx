@@ -37,6 +37,7 @@ vi.mock('../../../lib/supabase', () => ({
 }));
 
 import ManageRosters from '../ManageRosters';
+import { optionsOf, pick as choose, trigger } from './listbox';
 // Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
 vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
 globalThis.confirmAnswer = vi.fn(async () => true);
@@ -127,7 +128,6 @@ async function removeFixtures() {
 const type = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 // The open sheet repeats the page's notices, so look at every status region.
 const statusText = async (re) => waitFor(() => expect(screen.getAllByRole('status').map((n) => n.textContent).join(' ')).toMatch(re), { timeout: 15000 });
-const option = (name) => waitFor(() => expect(screen.getByRole('option', { name })).toBeTruthy(), { timeout: 15000 });
 
 // The new player's account comes first: searched by email and chosen in the form.
 // The creator lives in the "Add player" sheet, so open it first. The team header button comes before the empty-state one.
@@ -139,12 +139,14 @@ async function chooseNewAccount(email) {
 }
 
 async function openTeam(team) {
-  await option(`SL Check ${tag}`);
-  type('Division', made.division);
-  await option(`${tag} 2026 (current)`);
-  type('Season', made.seasons.now);
-  await option(`${tag} Alpha`);
-  type('Team', made.entries[team]);
+  const ready = (label) => waitFor(() => expect(trigger(label).disabled).toBe(false), { timeout: 15000 });
+  await ready('Division');
+  await waitFor(async () => expect(await optionsOf('Division')).toContain(`SL Check ${tag}`), { timeout: 15000 });
+  await choose('Division', `SL Check ${tag}`);
+  await ready('Season');
+  await choose('Season', `${tag} 2026 (current)`);
+  await ready('Team');
+  await choose('Team', `${tag} ${team}`);
 }
 
 describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? 'skipped'})`, () => {

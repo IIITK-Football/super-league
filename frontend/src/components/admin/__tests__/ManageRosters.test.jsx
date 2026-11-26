@@ -162,12 +162,13 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 const READS = new Set(['search_players', 'player_link_status', 'verified_accounts_for_linking', 'account_link_matches']);
 const writes = () => db.calls.filter((c) => (c.rpc && !READS.has(c.rpc)) || ['insert', 'update', 'delete', 'upsert'].includes(c.op));
-const pick = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+const pick = (label, value) => fireEvent.change(screen.getAllByLabelText(label)[0], { target: { value } });
+const { pick: choose, optionsOf, trigger } = await import('./listbox');
 
 // The new player's account comes first: search verified accounts by email and choose one.
 // Opens the add-player sheet from the squad, then searches verified accounts by email and chooses one.
 async function openAdd() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Add player' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Add player' }))[0]); // the header's, or the empty roster's
   return screen.findByRole('dialog');
 }
 async function chooseNewAccount(text, action = 'Choose') {
@@ -185,14 +186,14 @@ async function openPlayer(name = 'Ada Striker') {
   return screen.findByRole('dialog');
 }
 
-async function openTeam(team = 'e1') {
+async function openTeam(team = 'Alpha') {
   render(<ManageRosters />);
-  await waitFor(() => expect(screen.getByRole('option', { name: 'WSL' })).toBeTruthy());
-  pick('Division', 'd1');
-  await waitFor(() => expect(screen.getByRole('option', { name: '2026 (current)' })).toBeTruthy());
-  pick('Season', 's1');
-  await waitFor(() => expect(screen.getByRole('option', { name: 'Alpha' })).toBeTruthy());
-  pick('Team', team);
+  await waitFor(() => expect(trigger('Division').disabled).toBe(false));
+  await choose('Division', 'WSL');
+  await waitFor(() => expect(trigger('Season').disabled).toBe(false));
+  await choose('Season', '2026 (current)');
+  await waitFor(() => expect(trigger('Team').disabled).toBe(false));
+  await choose('Team', team);
 }
 
 describe('validation and messages', () => {
@@ -227,20 +228,19 @@ describe('validation and messages', () => {
 describe('choosing a division, season and team', () => {
   it('shows loading, then each level only after the previous choice, with empty states', async () => {
     render(<ManageRosters />);
-    expect(screen.getByRole('option', { name: /loading divisions/i })).toBeTruthy();
-    await waitFor(() => expect(screen.getByRole('option', { name: 'WSL' })).toBeTruthy());
-    expect(screen.getByLabelText('Season').disabled).toBe(true);
-    pick('Division', 'd2');
-    await waitFor(() => expect(screen.getByRole('option', { name: /this division has no seasons/i })).toBeTruthy());
-    pick('Division', 'd1');
-    await waitFor(() => expect(screen.getByRole('option', { name: '2026 (current)' })).toBeTruthy());
-    pick('Season', 's1');
-    await waitFor(() => expect(screen.getByRole('option', { name: 'Alpha' })).toBeTruthy());
+    expect(trigger('Division').textContent).toMatch(/loading divisions/i);
+    await waitFor(() => expect(trigger('Division').disabled).toBe(false));
+    expect(trigger('Season').disabled).toBe(true);
+    await choose('Division', 'Empty');
+    await waitFor(() => expect(trigger('Season').textContent).toMatch(/this division has no seasons/i));
+    await choose('Division', 'WSL');
+    await waitFor(() => expect(trigger('Season').disabled).toBe(false));
+    await choose('Season', '2026 (current)');
+    await waitFor(() => expect(trigger('Team').disabled).toBe(false));
     // Only the chosen season's teams; Gamma plays only 2025 and is offered as an existing team to add.
-    const teamSelect = screen.getByLabelText('Team');
-    expect(within(teamSelect).queryByRole('option', { name: 'Gamma' })).toBeNull();
-    expect(within(screen.getByLabelText('Existing team')).getByRole('option', { name: 'Gamma' })).toBeTruthy();
-    pick('Team', 'e2');
+    expect(await optionsOf('Team')).not.toContain('Gamma');
+    expect(await optionsOf('Existing team')).toContain('Gamma');
+    await choose('Team', 'Beta');
     await waitFor(() => expect(screen.getByText(/no players on this roster yet/i)).toBeTruthy());
   });
 
@@ -274,8 +274,8 @@ describe('choosing a division, season and team', () => {
   });
   it('shows the roster of the team chosen last, even when an earlier team answers later', async () => {
     db.slow = 'e1';
-    await openTeam('e1');
-    pick('Team', 'e2');
+    await openTeam('Alpha');
+    await choose('Team', 'Beta');
     await new Promise((r) => setTimeout(r, 120));
     expect(screen.getByText(/no players on this roster yet/i)).toBeTruthy();
     expect(screen.queryByRole('option', { name: /Ada Striker/ })).toBeNull();
@@ -285,7 +285,7 @@ describe('choosing a division, season and team', () => {
 describe('teams in the season', () => {
   it('adds an existing team of the division to the season', async () => {
     await openTeam();
-    pick('Existing team', 't3');
+    await choose('Existing team', 'Gamma');
     fireEvent.click(screen.getByRole('button', { name: /add team/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Gamma added to 2026/));
     expect(writes()).toEqual([{ table: 'team_entries', op: 'insert', payload: { team_id: 't3', season_id: 's1' }, filters: [], opts: {} }]);
@@ -302,7 +302,7 @@ describe('teams in the season', () => {
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Delta Rovers created and added to 2026/));
     // One database call creates the team and its season entry together.
     expect(writes()).toEqual([{ rpc: 'create_team_in_season', args: { p_season_id: 's1', p_name: 'Delta Rovers' } }]);
-    await waitFor(() => expect(within(screen.getByLabelText('Team')).getByRole('option', { name: 'Delta Rovers' })).toBeTruthy());
+    await waitFor(async () => expect(await optionsOf('Team')).toContain('Delta Rovers'));
   });
 });
 
@@ -341,7 +341,7 @@ describe('players', () => {
   });
 
   it('offers the existing player of an account that already has one, instead of a duplicate', async () => {
-    await openTeam('e2');
+    await openTeam('Beta');
     await chooseNewAccount('ada@', 'Use their player');
     const offer = screen.getByRole('group', { name: 'Existing player for this account' });
     expect(offer.textContent).toMatch(/already has a player: Ada Striker/);
@@ -616,7 +616,7 @@ describe('the FUT card in the player forms', () => {
 
 describe('team actions in a season', () => {
   it('renames the team through its one team record, after a name check', async () => {
-    await openTeam('e2');
+    await openTeam('Beta');
     fireEvent.click(await screen.findByRole('button', { name: 'Rename team' }));
     pick('Rename team', 'B');
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
@@ -630,7 +630,7 @@ describe('team actions in a season', () => {
   });
 
   it('refuses to remove a team that still has players on the roster, and says what to do', async () => {
-    await openTeam('e1');
+    await openTeam('Alpha');
     fireEvent.click(await screen.findByRole('button', { name: 'Remove from season' }));
     expect(await screen.findByText(/still has 1 player on this roster/)).toBeTruthy();
     expect(writes()).toEqual([]);
@@ -639,7 +639,7 @@ describe('team actions in a season', () => {
   it('removes an empty team from this season only, after a confirm that names it', async () => {
     const asked = vi.fn(async () => true);
     globalThis.confirmAnswer = asked;
-    await openTeam('e2');
+    await openTeam('Beta');
     fireEvent.click(await screen.findByRole('button', { name: 'Remove from season' }));
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(asked.mock.calls[0][0]).toMatchObject({ title: 'Remove Beta from 2026?', tone: 'danger' });
