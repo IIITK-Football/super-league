@@ -103,3 +103,17 @@ describe('Supabase key usage (frontend bundle and Pages Functions)', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('Supabase keys in the Worker configuration (D-04)', () => {
+  // wrangler.jsonc is committed and deployed as plain vars; the URL and keys are Worker secrets (or .dev.vars locally).
+  const config = read(join(repo, 'api/wrangler.jsonc')).replace(/^\s*\/\/.*$/gm, '');
+  it('declares no Supabase key or URL as a committed variable, in any environment', () => {
+    expect(config).not.toMatch(/"SUPABASE_(SECRET_KEY|PUBLISHABLE_KEY|URL)"\s*:/);
+    expect(config).not.toMatch(/sb_secret_|sb_publishable_/);
+  });
+
+  it('keeps the local Worker secrets file out of git', () => {
+    expect(read(join(repo, 'api/.gitignore'))).toMatch(/^\.dev\.vars$/m);
+  });
+});
+
