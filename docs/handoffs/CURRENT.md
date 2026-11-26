@@ -26,7 +26,7 @@ handoff steps.
 
 ## Exact next step
 
-1. **Release PR, on the owner's go-ahead:** `develop` → `main`, merged with a merge commit by the owner. Production migrations then wait for a fresh verified backup (Actions → Database backup) and the owner's approval of `Database Production`. Five migrations go to production after `20261130000007`; they are listed in the release notes.
+1. **Release PR, on the owner's go-ahead:** `develop` → `main`, merged with a merge commit by the owner. Production migrations then wait for a fresh verified backup (Actions → Database backup) and the owner's approval of `Database Production`. This release adds four migrations beyond `main`: `20261205000000` (captain team details), `20261205000001` (awarded match), `20261205000002` (grading in the database) and `20261205000003` (newsletter bylines). All are additive except the byline scrub, which rewrites email bylines only. `main` already carries the migrations through `20261204000000`.
 2. **Optional, owner:** restore staging's seeded fantasy points with `~/sl-owner-sql/1-…DRYRUN.sql`, then `2-…sql`, after confirming the address shows `yecozsiccsfwphlmxozt`. Two early SL-032 runs regraded them.
 3. **Next phase (4):** SL-040, division and season configuration, then SL-044.
 
