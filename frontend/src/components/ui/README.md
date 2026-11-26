@@ -31,3 +31,27 @@ Rules:
 - Touch targets are at least 44px. Do not shrink them.
 - Motion is 150 to 250ms and always `motion-safe:`.
 - No em dashes in UI copy. Sentence case headings.
+
+## The look (night, built on the original site)
+
+Reference implementations: `pages/Home.jsx`, `pages/LeagueLanding.jsx`, `components/match/HeroMatch.jsx`,
+`components/standings/StandingsTable.jsx`, `components/NewsArticle.jsx`, `components/shell/AppShell.jsx`.
+
+- Ground is true black (`bg-bg`), type is white (`text-ink`), secondary text `text-mut`. Dark always; light only by choice.
+- Headings: `<h1|h2|h3 className="font-display ...">` render in Inter Black, uppercase, tight. Page titles
+  `text-4xl sm:text-6xl`, section titles `text-3xl sm:text-4xl`. Never recolour a word inside a heading.
+- Labels: `eyebrow` (tiny, letter-spaced, uppercase, muted). Use it for column heads, kickers, meta lines and "see all"
+  links (with an arrow icon). Do not add labels that repeat what the design already shows.
+- Tiles: `glass rounded-card` (subtle frosted surface with a top highlight). Clickable tiles add `lift` (rises on hover);
+  feature tiles may use `<Spotlight>` (cursor light). Never stack glass inside glass; inner rows use dividers
+  (`divide-y divide-line/70`).
+- Names of clubs and players in lists: `font-black uppercase tracking-tight`. Numbers that matter (points, goals, scores):
+  `font-display tabular-nums`, large. `<NumberTicker>` for a headline stat.
+- Live: red ping dot (`bg-live animate-ping`) plus "Live · 67′". `beam` on the one live tile. Photos are black and white
+  at rest and colour on hover (see NewsArticle).
+- Buttons: primary is a white pill (`bg-ink text-bg rounded-pill font-black uppercase tracking-[0.2em] text-sm`), secondary
+  is a glass pill. 44px targets.
+- Spacing: sections `space-y-14`, inside a section `space-y-4`. Laptop content uses the width (grids), nothing floats in
+  empty space; phones stack.
+- Banned: neon colours, gradients on text, italics except the wordmark, pills that state the obvious ("Upcoming" on a
+  future fixture), em dashes, filler copy.

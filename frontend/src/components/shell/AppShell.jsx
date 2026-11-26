@@ -76,10 +76,9 @@ function MenuOverlay({ open, onClose, division, divisions, loading, current, isA
                     to={to}
                     onClick={onClose}
                     aria-current={active ? 'page' : undefined}
-                    className={cn('group flex min-h-14 items-baseline gap-4 py-1 font-display text-4xl font-black uppercase tracking-tighter transition-colors sm:text-5xl',
+                    className={cn('group flex min-h-14 items-baseline py-1 font-display text-4xl font-black uppercase tracking-tighter transition-colors sm:text-5xl',
                       active ? 'text-ink' : 'text-mut/60 hover:text-ink')}
                   >
-                    <span className="eyebrow w-6 tabular-nums">{String(index + 1).padStart(2, '0')}</span>
                     <span className="transition-transform duration-300 group-hover:translate-x-1.5">{label}</span>
                   </Link>
                 </li>

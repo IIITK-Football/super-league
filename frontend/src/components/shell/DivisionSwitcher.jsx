@@ -21,7 +21,7 @@ export function DivisionSwitcher({ divisions, loading, division, current, compac
             onClick={onPick}
             aria-current={active ? 'page' : undefined}
             className={cn('flex shrink-0 items-center justify-center whitespace-nowrap rounded-pill font-bold uppercase tracking-wider transition-colors duration-300',
-              compact ? 'min-h-9 px-4 text-xs' : 'min-h-11 flex-1 px-5 text-sm',
+              compact ? 'min-h-9 px-4 text-xs' : 'min-h-11 flex-1 px-3 text-xs sm:px-5 sm:text-sm',
               active ? 'bg-ink text-bg' : 'text-mut hover:text-ink')}
           >
             <span className={active ? 'truncate' : 'truncate'}>{item.name}</span>
