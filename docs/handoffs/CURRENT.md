@@ -7,11 +7,9 @@ handoff steps.
 ## Status
 
 - **Updated:** 2026-11-26 by Claude.
-- **Done:** SL-030 (`91d8cc9`) and SL-031 (`e6cfab3`).
-- **Active item:** SL-032 (Phase 3, the last item of the phase). It is waiting for the owner's C1 attestation.
-- **Owner decisions (2026-11-26):**
-  - no standing release PR;
-  - SL-032 records the rollback pair without a new rollback.
+- **Phase 3 complete:** SL-030 (`91d8cc9`), SL-031 (`e6cfab3`) and SL-032 (`e68f080`) are done.
+- **Release readiness:** the strict rules pass against `main` (168 files) and every test group passes locally.
+- **Release PR:** not opened. Opening a PR into `main` needs the owner's explicit go-ahead; the owner merges it.
 
 ## Done (all pushed to `develop`)
 
@@ -28,15 +26,14 @@ handoff steps.
 
 ## Exact next step
 
-SL-032 evidence is complete. The parity status, release pair and rollback note are in `docs/contracts/worker-compatibility.md`.
-- **API runner:** `node scripts/parity/verify-parity.mjs --target local|staging` gives 37 checks per target. All 8 groups pass locally and on staging (`docs/walkthroughs/evidence/SL-032-parity-*.json`).
-- **Browser:** `node scripts/ui-walkthrough/parity.mjs --target local|staging` gives 11 steps per target. All pass at `77fc356` (`SL-032-ui-*.json`). Screenshots are in `~/repos/sl-parity-shots-{local,staging}` (outside the repo).
-- **Grading fix:** grading moved into the database (`20261205000002`) after staging regrade-all returned 500 from the Worker's subrequest limit.
+1. **Release PR, on the owner's go-ahead:** `develop` → `main`, merged with a merge commit by the owner. Production migrations then wait for a fresh verified backup (Actions → Database backup) and the owner's approval of `Database Production`. Five migrations go to production after `20261130000007`; they are listed in the release notes.
+2. **Optional, owner:** restore staging's seeded fantasy points with `~/sl-owner-sql/1-…DRYRUN.sql`, then `2-…sql`, after confirming the address shows `yecozsiccsfwphlmxozt`. Two early SL-032 runs regraded them.
+3. **Next phase (4):** SL-040, division and season configuration, then SL-044.
 
-Remaining:
-1. The owner attests C1: `pnpm work attest SL-032 C1`.
-2. `pnpm work done SL-032`, then fill in the walkthrough.
-3. Phase gate: `pnpm work phase 3 --base <commit before Phase 3>` (`53f8e80`, the commit before SL-030 started). Then the owner opens or approves the release PR from `develop` into `main`.
+**Found in the final full run and fixed (`fix(api): never publish an editor's email…`):**
+- Article bylines stored the publisher's email. The route now uses the display name.
+- Migration `20261205000003` scrubs existing email bylines with the audit trigger paused, and adds a check constraint.
+- Staging's append-only audit history keeps the synthetic `sl-check-…` addresses from the earlier parity runs. They are test accounts, not people.
 
 ## In flight
 
