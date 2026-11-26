@@ -12,7 +12,7 @@ export function friendly(error) {
   if (/provider is not enabled|unsupported provider/i.test(msg)) {
     return 'Google sign-in is unavailable right now. Use your college email and password instead.';
   }
-  return 'Something went wrong. Please try again.';
+  return 'The request did not complete. Try again.';
 }
 
 // Where each role's workspace lives. A person with no staff role goes to the home page.

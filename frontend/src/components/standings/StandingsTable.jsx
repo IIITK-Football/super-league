@@ -3,7 +3,7 @@ import { cn } from '../../utils/cn';
 import { FormGuide } from '../FormGuide';
 
 // A missing number shows a dash, never a zero.
-const shown = (value) => (value === null || value === undefined ? '–' : value);
+const shown = (value) => (value === null || value === undefined ? '-' : value);
 const signed = (value) => (typeof value === 'number' && value > 0 ? `+${value}` : shown(value));
 
 // Phones: position, club, played, goal difference, points and form. Tap a club to see the rest of its line.

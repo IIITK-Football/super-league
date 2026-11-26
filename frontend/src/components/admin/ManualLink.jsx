@@ -49,7 +49,7 @@ export default function ManualLink({ onChanged }) {
           picker.loading === 'seasons' ? 'Loading seasons...' : !choice.divisionId ? 'Choose a division first' : 'Choose a season')}
         {select('Team', choice.entryId, picker.chooseEntry, picker.entries.map((e) => <option key={e.id} value={e.id}>{e.name}</option>),
           picker.loading === 'entries' ? 'Loading teams...' : !choice.seasonId ? 'Choose a season first' : picker.entries.length ? 'Choose a team' : 'No teams in this season')}
-        {select('Player', choice.playerId, picker.choosePlayer, eligible.map((p) => <option key={p.id} value={p.id}>{p.jersey_number ?? '–'} · {p.first_name} {p.last_name}</option>),
+        {select('Player', choice.playerId, picker.choosePlayer, eligible.map((p) => <option key={p.id} value={p.id}>{p.jersey_number ?? '-'} · {p.first_name} {p.last_name}</option>),
           picker.loading === 'players' ? 'Loading players...' : !choice.entryId ? 'Choose a team first' : eligible.length ? `Choose a player without an account (${eligible.length})` : 'Every player on this team has an account')}
       </Card>}
       {picker.error && <Notice tone="error" role="alert">{picker.error}</Notice>}

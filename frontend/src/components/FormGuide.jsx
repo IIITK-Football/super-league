@@ -8,7 +8,7 @@ const MARK = {
 };
 
 export function FormGuide({ form = [] }) {
-  if (!form.length) return <span className="text-mut">–</span>;
+  if (!form.length) return <span className="text-mut">-</span>;
   return (
     <ol aria-label={`Form: ${form.join(', ')}`} className="flex items-center gap-1">
       {form.map((result, i) => (

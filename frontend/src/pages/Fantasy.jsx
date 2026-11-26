@@ -340,7 +340,7 @@ export function Fantasy() {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 bg-bg px-4 py-8 text-ink">
             <div className="flex flex-col items-start gap-4">
                 <Tabs
-                    label="Prediction game"
+                    label="Predictions"
                     value="season1"
                     tabs={[{ id: 'season1', label: 'Season 1' }, { id: 'fifa', label: 'FIFA' }]}
                     onChange={(id) => setFantasySection(id)}

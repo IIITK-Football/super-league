@@ -109,7 +109,7 @@ export default function DevUi() {
       <div className="grid gap-6 lg:grid-cols-2">
         {['dark', 'light'].map((theme) => (
           <div key={theme} data-theme={theme} className="rounded-card border border-line bg-bg p-4 sm:p-6">
-            <p className="mb-6 text-sm font-semibold uppercase tracking-wide text-mut">{theme} theme</p>
+            <p className="mb-6 text-sm font-semibold text-mut">{theme} theme</p>
             <Specimens />
           </div>
         ))}

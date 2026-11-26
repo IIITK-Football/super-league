@@ -114,11 +114,11 @@ export default function PlayerProfile({ onBack }) {
 
                     <dl className={`w-max rounded-card border border-line bg-surf p-4 ${styles.bioGrid}`}>
                         <div>
-                            <dt className="text-xs uppercase tracking-wider text-mut">Position</dt>
+                            <dt className="text-xs text-mut">Position</dt>
                             <dd className="mt-1 font-semibold text-ink">{player.position || '-'}</dd>
                         </div>
                         <div>
-                            <dt className="text-xs uppercase tracking-wider text-mut">Preferred foot</dt>
+                            <dt className="text-xs text-mut">Preferred foot</dt>
                             <dd className="mt-1 font-semibold text-ink">{bio.preferredFoot || '-'}</dd>
                         </div>
                     </dl>
@@ -191,7 +191,7 @@ export function SeasonHistory({ player }) {
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="text-left text-xs uppercase tracking-wider text-mut">
+                            <tr className="text-left text-xs text-mut">
                                 <th scope="col" className="py-2 pr-4 font-semibold">Season</th>
                                 <th scope="col" className="py-2 pr-4 font-semibold">Team</th>
                                 <th scope="col" className="py-2 pr-4 font-semibold">No.</th>

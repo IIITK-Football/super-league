@@ -3,9 +3,9 @@ import { cn } from '../../utils/cn';
 // A score in display numerals. A missing score shows a dash, never 0. A changed score ticks over once (motion off
 // under reduced motion): the value is the React key, so the element is recreated on every change.
 function Score({ value, live }) {
-  const shown = value === null || value === undefined || value === '' ? '–' : value;
+  const shown = value === null || value === undefined || value === '' ? '-' : value;
   return (
-    <span className={cn('inline-block min-w-[1ch] text-center', live && shown !== '–' && 'motion-safe:animate-tick')}>
+    <span className={cn('inline-block min-w-[1ch] text-center', live && shown !== '-' && 'motion-safe:animate-tick')}>
       {shown}
     </span>
   );

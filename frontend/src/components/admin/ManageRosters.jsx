@@ -46,7 +46,7 @@ export function describeError(error) {
   if (error.code === '23503' && /goals or assists/.test(text)) return 'This player has goals or assists this season, so their place on the roster is kept.';
   if (error.code === '23503' && /player is kept/.test(text)) return error.message;
   if (error.code === '23503') return 'This player still has a roster place or match history, so the player is kept.';
-  return error.message || 'Something went wrong. Try again.';
+  return error.message || 'The request did not complete. Try again.';
 }
 
 
@@ -552,7 +552,7 @@ export default function ManageRosters() {
                     <span className="block truncate font-semibold text-ink">{name}</span>
                     <span className="block truncate text-sm text-mut">{r.jersey_number != null ? `#${r.jersey_number}` : 'No jersey'} · {r.position || 'No position'} · {linked ? 'Linked' : 'No account'}</span>
                   </span>
-                  <span className="font-display text-2xl font-bold tabular-nums text-ink" aria-label="Overall rating">{r.player?.overall_rating ?? '–'}</span>
+                  <span className="font-display text-2xl font-bold tabular-nums text-ink" aria-label="Overall rating">{r.player?.overall_rating ?? '-'}</span>
                 </button>
                 <Button variant="quiet" size="sm" onClick={() => setLinkPlaceId(r.id)} aria-label={`${linked ? 'Account for' : 'Link account for'} ${name}`}>{linked ? 'Account' : 'Link account'}</Button>
               </li>;
@@ -626,7 +626,7 @@ export default function ManageRosters() {
             const name = `${p.first_name} ${p.last_name}`.trim();
             const context = p.last_team ? `${p.last_team} · ${p.last_season} (${p.last_division})${p.last_jersey != null ? ` · #${p.last_jersey}` : ''}` : 'Not on a roster yet';
             return <li key={p.player_id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-              <span className="min-w-0"><span className="font-semibold text-ink">{name}</span> <span className="font-display tabular-nums text-mut">OVR {p.overall_rating ?? '–'}</span>
+              <span className="min-w-0"><span className="font-semibold text-ink">{name}</span> <span className="font-display tabular-nums text-mut">OVR {p.overall_rating ?? '-'}</span>
                 <span className="block text-sm text-mut">Latest: {context}</span></span>
               {p.in_season
                 ? <span className="text-sm text-mut">Already in this season</span>

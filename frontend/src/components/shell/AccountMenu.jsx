@@ -10,7 +10,7 @@ import { usePopover } from './usePopover';
 // so a dictator never gets a second link for the same place.
 const WORKSPACES = [
   { role: 'captain', to: '/team-builder', label: 'Team builder' },
-  { role: 'editor', to: '/editor', label: 'Newsletter' },
+  { role: 'editor', to: '/editor', label: 'News' },
   { role: 'dictator', to: '/dictator', label: 'Dictator dashboard' },
   { role: 'scorer', to: '/dictator', label: 'Match scoring', unlessRole: 'dictator' },
 ];

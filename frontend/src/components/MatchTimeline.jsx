@@ -150,7 +150,7 @@ export default function MatchTimeline() {
           </div>
           <div className="text-center">
             {isUpcoming(match)
-              ? <span className="font-display text-5xl font-bold tabular-nums text-ink">{timeLabel(kickoff) || '–'}</span>
+              ? <span className="font-display text-5xl font-bold tabular-nums text-ink">{timeLabel(kickoff) || '-'}</span>
               : <Scoreline home={match.home_score ?? null} away={match.away_score ?? null} live={isLive(match)} size="lg" />}
           </div>
           <div className="flex min-w-0 flex-col items-center gap-2 text-center">

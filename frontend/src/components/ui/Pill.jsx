@@ -12,7 +12,7 @@ export function Pill({ tone = 'neutral', className, children, ...props }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-pill px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
+        'inline-flex items-center gap-1.5 rounded-pill px-2.5 py-0.5 text-xs font-semibold tracking-wide',
         TONES[tone] ?? TONES.neutral,
         className,
       )}

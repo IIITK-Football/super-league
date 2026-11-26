@@ -72,7 +72,6 @@
 .player-country {
   font-size: 12px;
   color: #aaa;
-  text-transform: uppercase;
 }
 
 .autocomplete-item.loading,
@@ -80,7 +79,6 @@
   cursor: default;
   color: #888;
   justify-content: center;
-  font-style: italic;
 }
 .autocomplete-item.loading:hover,
 .autocomplete-item.empty:hover {

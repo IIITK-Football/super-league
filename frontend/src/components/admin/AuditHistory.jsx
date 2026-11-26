@@ -27,7 +27,7 @@ export const PAGE_SIZE = 50;
 const tableLabel = (name) => AUDITED_TABLES.find((t) => t.value === name)?.label ?? name;
 
 const show = (value) => {
-  if (value === null || value === undefined) return '–';
+  if (value === null || value === undefined) return '-';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 };

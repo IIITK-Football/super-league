@@ -50,7 +50,7 @@ describe('Scoreline', () => {
   it('shows a dash for a missing score, never zero', () => {
     render(<Scoreline home={2} away={null} />);
     expect(screen.getByText('2')).toBeTruthy();
-    expect(screen.getByText('–')).toBeTruthy();
+    expect(screen.getByText('-', { selector: 'span.inline-block' })).toBeTruthy();
     expect(screen.queryByText('0')).toBeNull();
   });
 

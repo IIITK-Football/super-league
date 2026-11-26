@@ -49,7 +49,7 @@ export function MatchStrip({ match, className, featured = false }) {
         <Side name={home.name || 'To be confirmed'} logo={home.logo_url} home featured={featured} />
         <div className="shrink-0 text-center">
           {isUpcoming(match)
-            ? <span className={cn('font-display font-bold tabular-nums leading-none', featured ? 'text-6xl text-blkink sm:text-8xl' : 'text-3xl text-ink')}>{timeLabel(when) || '–'}</span>
+            ? <span className={cn('font-display font-bold tabular-nums leading-none', featured ? 'text-6xl text-blkink sm:text-8xl' : 'text-3xl text-ink')}>{timeLabel(when) || '-'}</span>
             : <Scoreline home={match.home_score ?? null} away={match.away_score ?? null} live={live} size={featured ? 'lg' : 'md'} className={featured ? 'text-blkink' : undefined} />}
         </div>
         <Side name={away.name || 'To be confirmed'} logo={away.logo_url} featured={featured} />

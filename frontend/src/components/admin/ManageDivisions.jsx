@@ -50,7 +50,7 @@ export function describeError(error) {
   if (error.code === '42501' || error.status === 403) return 'Only a dictator can change divisions, seasons and sections.';
   if (error.code === '23505') return 'That slug is already used here. Choose another one.';
   if (error.code === '23503') return 'This record already has data, so it cannot be deleted. Archive it instead.';
-  return error.message || 'Something went wrong. Try again.';
+  return error.message || 'The request did not complete. Try again.';
 }
 
 const inputClass = 'w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-[#d9ff4a]/60';

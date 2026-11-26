@@ -16,7 +16,7 @@ describe('StandingsTable', () => {
   it('shows a dash for a missing value', () => {
     render(<MemoryRouter><StandingsTable rows={rows} /></MemoryRouter>);
     const kfc = screen.getByRole('row', { name: /KFC/ });
-    expect(kfc.textContent).toContain('–');
+    expect(kfc.textContent).toContain('-');
   });
 
   it('a club button opens and closes its full line', () => {
