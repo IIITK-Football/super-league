@@ -25,6 +25,7 @@ import { Matches } from './pages/Matches';
 import { Vault } from './pages/Vault';
 import { Rules } from './pages/Rules';
 import { LeagueLanding } from './pages/LeagueLanding';
+import { NotFound } from './pages/NotFound';
 import { RoleWorkspace } from './pages/RoleWorkspace';
 import { LEGACY_REDIRECTS, LegacyRedirect } from './routes/legacyRedirects';
 import { DivisionHomeRoute } from './pages/DivisionHomeRoute';
@@ -111,7 +112,7 @@ function App() {
             <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
             
             {/* Catch-all for bad URLs */}
-            <Route path="*" element={<Navigate to="/" />} />
+            <Route path="*" element={<PublicRoute><NotFound /></PublicRoute>} />
           </Routes>
         </BrowserRouter>
         </ConfirmProvider>
