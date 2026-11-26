@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { motion, useReducedMotion } from 'motion/react';
 import { Menu as MenuIcon, X } from 'lucide-react';
 import { useLeague } from '../../context/LeagueContext';
 import { useDivisions } from '../../hooks/useDivisions';
@@ -10,38 +11,89 @@ import { LiveTicker } from './LiveTicker';
 import { ThemeToggle } from './ThemeToggle';
 import { TopNavbar } from '../TopNavbar';
 
-// Every section of a division, in menu order. The World Cup page is reached from the home page only.
+const EASE = [0.2, 0.7, 0.2, 1];
+const SPRING = { type: 'spring', bounce: 0.18, duration: 0.35 };
+
+// Every section of a division, in menu order. primary sections also sit in the header bar under their short name.
+// The World Cup page is reached from the home page only.
 function sections(division) {
   return [
-    { to: `/${division}`, label: 'Home', exact: true },
-    { to: `/${division}/matches`, label: 'Matches' },
-    { to: `/standings/${division}`, label: 'Table' },
+    { to: `/${division}`, label: 'Home', exact: true, primary: true },
+    { to: `/${division}/matches`, label: 'Matches', primary: true },
+    { to: `/standings/${division}`, label: 'Table', primary: true },
     { to: `/${division}/teams`, label: 'Clubs' },
-    { to: '/leaderboard', label: 'Player stats' },
+    { to: '/leaderboard', label: 'Player stats', short: 'Stats', primary: true },
     { to: '/fantasy', label: 'Predictions' },
-    { to: `/${division}/news`, label: 'News' },
+    { to: `/${division}/news`, label: 'News', primary: true },
     { to: `/${division}/rules`, label: 'Rules' },
   ];
 }
 
-// The division's wordmark: its crest when it has one, and its name set in Inter Black Italic, stacked like the
-// original "SUPER / LEAGUE" mark.
-function Wordmark({ record }) {
-  const name = record?.name ?? 'Super League';
-  const [first, ...rest] = name.split(/\s+/);
+// The site wordmark, stacked like the original "SUPER / LEAGUE" mark, in a box of one fixed size. The division in
+// view shows beside it as a small label that truncates, so the bar never changes width between divisions or while
+// they load.
+function Wordmark({ label }) {
   return (
-    <span className="flex items-center gap-2.5">
-      {record?.logo_url && <img src={record.logo_url} alt="" className="size-10 object-contain sm:size-12" />}
-      <span className="flex flex-col text-lg font-black uppercase italic leading-[0.82] tracking-tighter text-ink sm:text-xl">
-        <span>{first}</span>
-        {rest.length > 0 && <span>{rest.join(' ')}</span>}
+    <span className="flex w-44 items-center gap-3 sm:w-52">
+      <span className="flex shrink-0 flex-col text-lg font-black uppercase italic leading-[0.82] tracking-tighter text-ink sm:text-xl">
+        <span>Super</span>
+        <span>League</span>
       </span>
+      <span aria-hidden="true" className="h-7 w-px shrink-0 bg-line" />
+      <span className="eyebrow min-w-0 truncate">{label || ' '}</span>
     </span>
   );
 }
 
-// Full-screen menu: big type, one tap to any section. Escape or the close button shuts it; while closed it is inert.
-function MenuOverlay({ open, onClose, division, divisions, loading, current, isActive }) {
+// The main sections as one floating glass pill. The lit section has a white pill that slides between links.
+function PillNav({ division, isActive, reduced }) {
+  return (
+    <nav aria-label="Main" className="glass hidden rounded-pill p-1 lg:block">
+      <ul className="flex items-center">
+        {sections(division).filter((s) => s.primary).map(({ to, label, short, exact }) => {
+          const active = isActive(to, exact);
+          return (
+            <li key={label}>
+              <Link
+                to={to}
+                aria-current={active ? 'page' : undefined}
+                className={cn('relative flex min-h-10 items-center rounded-pill px-4 text-xs font-bold uppercase tracking-[0.16em] transition-colors duration-300 lg:px-5',
+                  active ? 'text-bg' : 'text-mut hover:text-ink')}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="nav-active"
+                    transition={reduced ? { duration: 0 } : SPRING}
+                    className="absolute inset-0 rounded-pill bg-ink shadow-[0_6px_20px_-8px_rgb(0_0_0/0.6)]"
+                  />
+                )}
+                <span className="relative">{short ?? label}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+const overlay = {
+  closed: { opacity: 0, transition: { duration: 0.22, ease: EASE, when: 'afterChildren' } },
+  open: { opacity: 1, transition: { duration: 0.25, ease: EASE, when: 'beforeChildren', staggerChildren: 0.03 } },
+};
+const panel = {
+  closed: { opacity: 0, scale: 0.985, filter: 'blur(6px)', transition: { duration: 0.18, ease: EASE } },
+  open: { opacity: 1, scale: 1, filter: 'blur(0px)', transition: { duration: 0.3, ease: EASE, staggerChildren: 0.035, delayChildren: 0.04 } },
+};
+const rise = {
+  closed: { opacity: 0, y: 14, transition: { duration: 0.15 } },
+  open: { opacity: 1, y: 0, transition: { duration: 0.32, ease: EASE } },
+};
+const still = { closed: { opacity: 0 }, open: { opacity: 1 } };
+
+// Full-screen menu: the division switcher and every section in big type. It stays mounted (inert while closed) so the
+// menu button can point at it; Escape or the close button shuts it.
+function MenuOverlay({ open, onClose, division, divisions, loading, current, isActive, reduced }) {
   const firstLink = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
@@ -53,58 +105,73 @@ function MenuOverlay({ open, onClose, division, divisions, loading, current, isA
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; };
   }, [open, onClose]);
 
+  const item = reduced ? still : rise;
   return (
-    <div
+    <motion.div
       id="site-menu"
       role="dialog"
       aria-modal="true"
       aria-label="Menu"
       inert={open ? undefined : ''}
-      className={cn('fixed inset-0 z-50 flex flex-col overflow-y-auto bg-bg/90 px-6 pb-8 pt-32 backdrop-blur-2xl transition-opacity duration-300 sm:px-10',
-        open ? 'opacity-100' : 'pointer-events-none opacity-0')}
+      initial={false}
+      animate={open ? 'open' : 'closed'}
+      variants={reduced ? still : overlay}
+      className={cn('fixed inset-0 z-50 flex flex-col overflow-y-auto bg-bg/80 px-6 pb-8 pt-32 backdrop-blur-2xl sm:px-10', !open && 'pointer-events-none')}
     >
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10">
-        <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} onPick={onClose} />
+      <motion.div variants={reduced ? still : panel} className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10">
+        <motion.div variants={item}>
+          <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} onPick={onClose} />
+        </motion.div>
         <nav aria-label="Sections" className="flex-1">
           <ul className="grid gap-x-10 gap-y-1 sm:grid-cols-2">
             {sections(division).map(({ to, label, exact }, index) => {
               const active = isActive(to, exact);
               return (
-                <li key={to} className={open ? 'motion-safe:animate-fade-up' : undefined} style={{ animationDelay: `${index * 35}ms` }}>
+                <motion.li key={to} variants={item}>
                   <Link
                     ref={index === 0 ? firstLink : undefined}
                     to={to}
                     onClick={onClose}
                     aria-current={active ? 'page' : undefined}
                     className={cn('group flex min-h-14 items-baseline py-1 font-display text-4xl font-black uppercase tracking-tighter transition-colors sm:text-5xl',
-                      active ? 'text-ink' : 'text-mut/60 hover:text-ink')}
+                      active ? 'chrome text-ink' : 'text-mut/60 hover:text-ink')}
                   >
                     <span className="transition-transform duration-300 group-hover:translate-x-1.5">{label}</span>
                   </Link>
-                </li>
+                </motion.li>
               );
             })}
           </ul>
         </nav>
-        <div className="flex items-center justify-between border-t border-line pt-5">
+        <motion.div variants={item} className="flex items-center justify-between border-t border-line pt-5">
           <span className="eyebrow">Super League · IIIT Kottayam</span>
           <ThemeToggle />
-        </div>
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }
 
-// The app frame: a live ticker, a glass header with the division wordmark and switcher, and a full-screen menu.
-// The division in view sets --div. The World Cup page (frozen) keeps its own legacy navigation.
+// The app frame, mounted once for every page: a live ticker, a glass bar with the wordmark, the main sections in a
+// floating pill and the account and menu buttons, and a full-screen menu. The division in view sets --div. The World
+// Cup page (frozen) keeps its own legacy navigation.
 export function AppShell({ children }) {
   const location = useLocation();
   const { division } = useLeague();
   const { divisions, loading } = useDivisions();
+  const reduced = useReducedMotion();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   // Close the menu whenever the page changes.
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // The World Cup page is frozen: it keeps the navigation it always had, menu included.
   if (location.pathname === '/wc') {
@@ -124,15 +191,14 @@ export function AppShell({ children }) {
     <div className="min-h-screen bg-bg" style={style}>
       <div className="sticky top-0 z-[55]">
         <LiveTicker divisions={divisions} />
-        <header className="border-b border-line bg-bg/70 backdrop-blur-xl">
-          <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:h-[72px] sm:gap-6 sm:px-6">
-            <Link to={`/${division}`} aria-label={`${current?.name ?? 'Super League'} home`} className="shrink-0 rounded-ctl transition-opacity hover:opacity-80">
-              <Wordmark record={current} />
+        <header className={cn('border-b transition-[background-color,border-color,backdrop-filter] duration-300',
+          scrolled ? 'border-line/80 bg-bg/65 backdrop-blur-2xl backdrop-saturate-150' : 'border-transparent bg-bg/30 backdrop-blur-md')}>
+          <div className="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto] items-center gap-3 px-4 sm:h-[72px] sm:px-6 lg:grid-cols-[1fr_auto_1fr]">
+            <Link to={`/${division}`} aria-label={`${current?.name ?? 'Super League'} home`} className="justify-self-start rounded-ctl transition-opacity hover:opacity-80">
+              <Wordmark label={current?.short_name || current?.name} />
             </Link>
-            <div className="hidden min-w-0 md:block">
-              <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} compact />
-            </div>
-            <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <PillNav division={division} isActive={isActive} reduced={reduced} />
+            <div className="flex items-center justify-self-end gap-2 sm:gap-3">
               <AccountMenu />
               <button
                 type="button"
@@ -140,9 +206,9 @@ export function AppShell({ children }) {
                 aria-expanded={menuOpen}
                 aria-controls="site-menu"
                 aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-                className="relative flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-ink/10"
+                className="glass relative flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-ink/10"
               >
-                {menuOpen ? <X size={24} aria-hidden="true" /> : <MenuIcon size={24} aria-hidden="true" />}
+                {menuOpen ? <X size={20} aria-hidden="true" /> : <MenuIcon size={20} aria-hidden="true" />}
               </button>
             </div>
           </div>
@@ -157,9 +223,20 @@ export function AppShell({ children }) {
         loading={loading}
         current={current}
         isActive={isActive}
+        reduced={reduced}
       />
 
-      <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 md:pt-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 md:pt-8">
+        {/* Keyed on the address: the page rises in, the shell around it stays put. No exit, so nothing waits. */}
+        <motion.div
+          key={location.pathname}
+          initial={reduced ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: EASE }}
+        >
+          {children}
+        </motion.div>
+      </main>
     </div>
   );
 }

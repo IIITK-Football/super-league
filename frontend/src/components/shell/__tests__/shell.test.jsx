@@ -58,6 +58,23 @@ describe('division paths', () => {
   });
 });
 
+describe('header bar', () => {
+  it('puts the five main sections in the bar and lights the one in view', () => {
+    shellAt('/super-league/matches');
+    const links = [...document.querySelectorAll('nav[aria-label="Main"] a')];
+    expect(links.map((a) => a.textContent)).toEqual(['Home', 'Matches', 'Table', 'Stats', 'News']);
+    expect(links.filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.textContent)).toEqual(['Matches']);
+  });
+
+  it('keeps the division switcher in the menu, not the bar', () => {
+    divisionsState.divisions = [{ slug: 'super-league', name: 'Super League', short_name: 'SL' }, { slug: 'wsl', name: 'WSL' }];
+    divisionsState.loading = false;
+    shellAt('/super-league');
+    expect(document.querySelector('#site-menu nav[aria-label="Divisions"]')).not.toBeNull();
+    expect(document.querySelector('header nav[aria-label="Divisions"]')).toBeNull();
+  });
+});
+
 describe('DivisionSwitcher label', () => {
   it('shows a skeleton, not the slug, while divisions load', () => {
     const { container } = render(

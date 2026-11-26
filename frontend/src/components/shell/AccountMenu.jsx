@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { Skeleton } from '../ui/Skeleton';
 import { usePopover } from './usePopover';
 
 // Workspaces for the roles this person holds. A scorer reaches the dictator dashboard, which shows only match tools,
@@ -20,12 +19,12 @@ export function AccountMenu() {
   const navigate = useNavigate();
   const ref = usePopover(open, () => setOpen(false));
 
-  // Until the session is known, show a placeholder of the same size. Never "Sign in" for a signed-in person.
-  if (loading) return <span aria-busy="true"><Skeleton className="size-11 rounded-full" /></span>;
+  // Until the session is known, hold the space with a quiet glass circle. Never "Sign in" for a signed-in person.
+  if (loading) return <span aria-busy="true" className="glass block size-11 rounded-full" />;
 
   if (!user) {
     return (
-      <Link to="/login" className="glass flex min-h-10 items-center gap-2 rounded-pill px-3 text-sm font-semibold text-ink transition-colors hover:bg-ink/10 sm:px-4">
+      <Link to="/login" className="glass flex min-h-11 items-center gap-2 rounded-pill px-3 text-sm font-semibold text-ink transition-colors hover:bg-ink/10 sm:px-4">
         <User size={16} aria-hidden="true" />
         <span className="hidden sm:inline">Sign in</span>
         <span className="sr-only sm:hidden">Sign in</span>
@@ -56,7 +55,7 @@ export function AccountMenu() {
         <User size={18} aria-hidden="true" />
       </button>
       {open && (
-        <div className="glass absolute right-0 top-full z-50 mt-2 w-64 rounded-card p-2">
+        <div className="glass absolute right-0 top-full z-50 mt-2 w-64 origin-top-right rounded-card p-2 motion-safe:animate-fade-in">
           <p className="truncate px-3 py-2 text-sm text-mut">{name}</p>
           <ul className="flex flex-col">
             <li><Link to="/profile" onClick={close} className="flex min-h-11 items-center rounded-ctl px-3 text-ink hover:bg-raise">Your profile</Link></li>
