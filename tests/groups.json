@@ -578,7 +578,8 @@
       ],
       "testPaths": [
         "backend/tests/match-operations/**",
-        "frontend/src/components/admin/__tests__/LiveController*.test.jsx"
+        "frontend/src/components/admin/__tests__/LiveController*.test.jsx",
+        "frontend/src/components/admin/live/__tests__/**"
       ]
     },
     "fantasy": {
