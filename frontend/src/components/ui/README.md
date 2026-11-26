@@ -1,7 +1,7 @@
 # UI primitives
 
 Import from the barrel: `import { Button, Card, Sheet } from '../components/ui'`.
-Live examples in both themes: `/dev/ui` (dev builds only).
+Live examples in both themes: `/dev/ui` and, for every input control with its states, `/ui-gallery` (dev builds only).
 
 | Primitive | Use for |
 |---|---|
@@ -13,8 +13,17 @@ Live examples in both themes: `/dev/ui` (dev builds only).
 | `ErrorState` (`message`, `onRetry`) | A failed load, with a retry. |
 | `Notice` (`tone` info, success, error, warning) | Inline status next to a form or action. |
 | `Sheet` (`open`, `onClose`, `title`) | Bottom sheet on phones, side panel from md up. Escape closes, focus is trapped. |
-| `Tabs` (`tabs`, `value`, `onChange`, `label`) | Switching views within one page. |
-| `Field` (`label`, `error`, `hint`, `as`) | Any labelled input, select or textarea. |
+| `Tabs` (`tabs`, `value`, `onChange`, `label`) | Switching views within one page. The underline slides to the selected tab. |
+| `Field` (`label`, `error`, `hint`, `as`) | Any labelled control. Eyebrow label; hint and error are linked by `aria-describedby`. Native: `as="select"` or `"textarea"`. Custom: pass a function child, `{(p) => <Select {...p} ... />}`; `p` holds `id`, `aria-labelledby`, `aria-describedby`, `aria-invalid`. |
+| `TextInput` (`icon`, `size` md or lg), `TextArea` (`rows`) | Text in a glass well with a soft white focus glow. `icon` is a lucide component. Refs forward to the field. |
+| `Select` (`value`, `onChange(value)`, `options` `[{ value, label, icon?, description?, disabled? }]`, `placeholder`, `name`, `disabled`, `id`) | Picking one of a short list. Arrows, Home, End, Enter, Escape, type-ahead. `name` adds a hidden input for forms. `icon` is a node (a `Crest`). |
+| `Combobox` (as `Select`, plus `searchPlaceholder`, `emptyText`) | Long lists (players, teams): a search box filters by label and description. |
+| `SegmentedControl` (`options` `[{ value, label, icon?, disabled? }]`, `value`, `onChange`, `aria-label` or `aria-labelledby`) | Two to five exclusive choices (card colour, home or away). A radio group; arrows move and choose. |
+| `NumberField` (`value`, `onChange(number)`, `min`, `max`, `step`, `size` md or lg) | Counts, minutes, scores. Hold - or + to repeat; Up, Down, Page Up, Page Down, Home, End; typed values clamp on Enter or blur. `lg` gives big digits. |
+| `Switch` (`checked`, `onChange(bool)`, `label`, `description`) | An instant on or off setting. |
+| `Checkbox` (`checked`, `onChange(bool)`, `label`, `description`) | A choice that is saved with a form. Native input underneath. |
+| `DateTimeField` (`type` date, time or datetime-local, input props) | Dates and times. Native pickers (reliable on phones) in the well, with an icon. |
+| `Toaster` + `toast({ title, description, tone, duration })` / `useToast()` | Brief confirmation after an action (`success`, `error`, `info`). `Toaster` is mounted once in `App.jsx`. Inline problems next to a form still use `Notice` or the field error. |
 | `Table` (`caption`) | Data tables. First column stays put; scrolls sideways on phones. |
 | `Crest` (`name`, `src`, `color`, `size`) | Team or division logo. Initials when there is no image. |
 | `Scoreline` (`home`, `away`, `live`) | Scores. Missing values show a dash. `live` animates changes. |
@@ -29,7 +38,8 @@ Rules:
 - The division accent is `var(--div)`, set by the app shell. Never hardcode a division colour.
 - Numbers (scores, points, ratings) use `font-display` and `tabular-nums`.
 - Touch targets are at least 44px. Do not shrink them.
-- Motion is 150 to 250ms and always `motion-safe:`.
+- Motion is 150 to 250ms and always `motion-safe:`. `motion/react` animations use the shared `SPRING` (`springs.js`) inside `<MotionConfig reducedMotion="user">`.
+- Controls wear the `well` utility (index.css); floating panels wear `float-glass`. Prefer `Select`, `NumberField` and `DateTimeField` over bare native inputs.
 - No em dashes in UI copy. Sentence case headings.
 
 ## The look (night, built on the original site)
