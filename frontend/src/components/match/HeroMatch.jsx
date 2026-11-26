@@ -38,7 +38,7 @@ export function HeroMatch({ match, detail, className }) {
   const live = isLive(match);
   const upcoming = isUpcoming(match);
   const when = match.date ? new Date(match.date) : null;
-  const minute = detail?.minute ?? match.minute;
+  const minute = String(detail?.minute ?? match.minute ?? '').replace(/['′]+$/, ''); // stored as 67 or 67'
   const status = live
     ? (minute === 'HT' ? 'Half time' : `Live${minute && minute !== 'LIVE' ? ` · ${minute}′` : ''}`)
     : upcoming
