@@ -6,7 +6,6 @@ import { CARD_STATS, FEET, applyCardDraft, cardDraft } from '../lib/playerCard';
 import { API_BASE_URL } from '../lib/api';
 import { rosterPlayerRpcArgs } from '../lib/rosterPlayerUpdate';
 import { cardBackground } from '../components/players/FutCard';
-import '../components/admin/workspace.css';
 import { Button, Card, EmptyState, ErrorState, Crest, Field, Notice, Sheet, Skeleton, Tabs, useConfirm } from '../components/ui';
 
 const API_URL = API_BASE_URL;

@@ -12,7 +12,6 @@ import ManageRoles from '../components/admin/ManageRoles';
 import ManageDivisions from '../components/admin/ManageDivisions';
 import ManageRosters from '../components/admin/ManageRosters';
 import AuditHistory from '../components/admin/AuditHistory';
-import '../components/admin/workspace.css';
 
 // The dictator workspace. Sections are buttons in one row (it scrolls sideways on phones). A scorer sees Live matches
 // only. Row level security and the API enforce the same rules; the hidden sections are not the authorization.

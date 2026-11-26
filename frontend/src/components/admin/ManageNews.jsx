@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, EmptyState, Field, Notice, Skeleton, useConfirm } from '../ui';
-import './workspace.css';
 
 const API_URL = API_BASE_URL;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // Mirrors the API cap in app/api/admin/newsletter/image.
