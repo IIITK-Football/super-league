@@ -48,3 +48,14 @@ describe('GET /api/admin/matches', () => {
     expect((await res.json()).data).toHaveLength(1);
   });
 });
+
+describe('GET /api/admin/matches fields', () => {
+  it('selects the date, venue and clock fields the dashboard needs to edit and resume a match', async () => {
+    db.user = { id: 'dictator' };
+    await call();
+    const select = db.calls.find((c) => c.target === 'matches' && c.method === 'select')!.args[0] as string;
+    for (const field of ['date', 'venue', 'timer_start_time', 'timer_calibration', 'minute']) {
+      expect(select).toMatch(new RegExp(`\\b${field}\\b`));
+    }
+  });
+});
