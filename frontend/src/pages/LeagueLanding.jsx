@@ -38,6 +38,12 @@ function streamNameAt(index) {
     return CLIP_SETS[safeIndex % CLIP_SETS.length][Math.floor(safeIndex / CLIP_SETS.length)];
 }
 
+// The hero stays dark in both themes. color-scheme follows the theme tokens, so light-dark() picks the dark token
+// (ink in light, bg in dark) for the scrim and the light token (bg in light, ink in dark) for the text and mark.
+const HERO_TEXT = { color: 'light-dark(var(--color-bg), var(--color-ink))' };
+const HERO_MARK = { backgroundColor: 'light-dark(var(--color-bg), var(--color-ink))' };
+const HERO_SCRIM = { backgroundColor: 'color-mix(in oklab, light-dark(var(--color-ink), var(--color-bg)) 85%, transparent)' };
+
 const MARK_MASK = {
     maskImage: 'url(/slklogo3.png)', WebkitMaskImage: 'url(/slklogo3.png)', maskSize: 'contain', WebkitMaskSize: 'contain',
     maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat', maskPosition: 'center', WebkitMaskPosition: 'center',
@@ -715,6 +721,7 @@ export function LeagueLanding() {
 
 
     const featuredIndex = Math.max(0, cards.findIndex((card) => card.live));
+    const heroSeason = cards[0]?.season?.name ? `${cards[0].season.name} season` : '';
     const activeFrameReady = motion
         && slotStreamNames[activeSlot] === streamName
         && assignedStreamsRef.current[activeSlot] === streamName
@@ -746,7 +753,7 @@ export function LeagueLanding() {
                     />
                 ))}
                 {!activeFrameReady && <img src={posterSrc} alt="" className="absolute inset-0 size-full object-cover" />}
-                <span className="absolute inset-0 bg-bg/80 sm:bg-bg/75" />
+                <span className="absolute inset-0" style={HERO_SCRIM} />
             </div>
 
             <header className="relative z-10 flex h-16 items-center justify-end px-4 sm:px-6">
@@ -754,14 +761,15 @@ export function LeagueLanding() {
             </header>
 
             <div className="relative z-10 mx-auto flex max-w-5xl flex-col px-4 pb-20 pt-6 sm:px-6 sm:pt-16">
-                <h1 className="sr-only">Super League</h1>
-                <span role="img" aria-label="Super League" className="block size-20 bg-ink sm:size-28" style={MARK_MASK} />
-                <p className="mt-6 max-w-[40ch] text-lg text-ink sm:text-xl">
+                <span role="img" aria-label="Super League" className="block size-24 sm:size-36" style={{ ...MARK_MASK, ...HERO_MARK }} />
+                <h1 className="mt-6 font-display text-6xl font-bold leading-[0.9] sm:text-8xl" style={HERO_TEXT}>Super League</h1>
+                {heroSeason && <p className="mt-2 font-display text-2xl font-semibold sm:text-3xl" style={HERO_TEXT}>{heroSeason}</p>}
+                <p className="mt-6 max-w-[40ch] text-lg sm:text-xl" style={HERO_TEXT}>
                     Football for IIIT Kottayam. Choose a division to see its fixtures, table and news.
                 </p>
 
                 <section aria-labelledby="divisions-heading" className="mt-10 space-y-4">
-                    <h2 id="divisions-heading" className="font-display text-2xl font-bold text-ink">Divisions</h2>
+                    <h2 id="divisions-heading" className="font-display text-2xl font-bold" style={HERO_TEXT}>Divisions</h2>
                     {status === 'loading' && (
                         <ul aria-busy="true" aria-label="Loading divisions" className="grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
                             {[0, 1, 2].map((i) => <li key={i}><Skeleton className="h-24 rounded-card" /></li>)}
