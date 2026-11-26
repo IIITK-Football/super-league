@@ -120,7 +120,7 @@ export default function AuditHistory() {
   return <div className="space-y-6">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="space-y-1">
-        <h2 className="font-display text-2xl font-bold text-ink">Audit history</h2>
+        <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Audit history</h2>
         <p className="text-sm text-mut">Who changed configuration, roles, captain and scorer assignments, matches and rosters, and when. The history cannot be edited.</p>
       </div>
       <Button variant="secondary" size="sm" onClick={() => load()} disabled={loading}>Refresh</Button>

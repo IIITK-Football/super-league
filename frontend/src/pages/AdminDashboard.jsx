@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Button, Card, buttonClasses } from '../components/ui';
+import { Button } from '../components/ui';
+import { cn } from '../utils/cn';
 import LiveController from '../components/admin/LiveController';
 import ScheduleMatches from '../components/admin/ScheduleMatches';
 import ManageNews from '../components/admin/ManageNews';
@@ -11,6 +12,7 @@ import ManageRoles from '../components/admin/ManageRoles';
 import ManageDivisions from '../components/admin/ManageDivisions';
 import ManageRosters from '../components/admin/ManageRosters';
 import AuditHistory from '../components/admin/AuditHistory';
+import '../components/admin/workspace.css';
 
 // The dictator workspace. Sections are buttons in one row (it scrolls sideways on phones). A scorer sees Live matches
 // only. Row level security and the API enforce the same rules; the hidden sections are not the authorization.
@@ -47,17 +49,18 @@ export function AdminDashboard() {
   const sections = isDictator ? DICTATOR_SECTIONS : [{ id: 'live', label: 'Live matches' }];
 
   return (
-    <div className="min-h-screen bg-bg pt-20 text-ink">
-      <div className="mx-auto max-w-6xl space-y-6 px-4 pb-16 pt-6 md:px-8">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-display text-3xl font-bold">Dictator workspace</h1>
+    <div className="workspace min-h-screen bg-bg pt-20 text-ink">
+      <div className="mx-auto max-w-6xl space-y-8 px-4 pb-16 pt-6 md:px-8">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-3">
+            <p className="eyebrow">{isDictator ? 'All divisions' : 'Assigned matches'}</p>
+            <h1 className="font-display text-5xl font-black uppercase leading-[0.9] tracking-tight sm:text-6xl">{isDictator ? 'Dictator' : 'Scorer'}</h1>
             <p className="text-sm text-mut">{isDictator ? 'Matches, fixtures, teams, access and news.' : 'Live matches you are assigned to score.'}</p>
           </div>
           <Button variant="secondary" size="sm" onClick={signOut}>Sign out</Button>
         </header>
 
-        <nav aria-label="Workspace sections" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
+        <nav aria-label="Workspace sections" className="glass no-scrollbar -mx-4 flex gap-1 overflow-x-auto rounded-pill p-1 px-4 md:mx-0 md:flex-wrap md:px-1">
           {sections.map((section) => {
             const selected = activeTab === section.id;
             return (
@@ -66,7 +69,10 @@ export function AdminDashboard() {
                 type="button"
                 aria-pressed={selected}
                 onClick={() => setActiveTab(section.id)}
-                className={buttonClasses(selected ? 'primary' : 'secondary', 'sm', 'shrink-0')}
+                className={cn(
+                  'min-h-11 shrink-0 rounded-pill px-4 text-xs font-bold uppercase tracking-wider transition-colors duration-200',
+                  selected ? 'bg-ink text-bg' : 'text-mut hover:text-ink',
+                )}
               >
                 {section.label}
               </button>
@@ -74,7 +80,7 @@ export function AdminDashboard() {
           })}
         </nav>
 
-        <Card as="section" aria-label={sections.find((s) => s.id === activeTab)?.label} className="min-h-96 p-4 sm:p-6">
+        <section aria-label={sections.find((s) => s.id === activeTab)?.label} className="glass min-h-96 rounded-card p-4 sm:p-6">
           {activeTab === 'live' && <LiveController />}
           {isDictator && activeTab === 'schedule' && <ScheduleMatches />}
           {isDictator && activeTab === 'captains' && <ManageCaptains />}
@@ -85,7 +91,7 @@ export function AdminDashboard() {
           {isDictator && activeTab === 'divisions' && <ManageDivisions />}
           {isDictator && activeTab === 'rosters' && <ManageRosters />}
           {isDictator && activeTab === 'audit' && <AuditHistory />}
-        </Card>
+        </section>
       </div>
     </div>
   );

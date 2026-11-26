@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, EmptyState, Field, Notice, Skeleton, useConfirm } from '../ui';
+import './workspace.css';
 
 const API_URL = API_BASE_URL;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // Mirrors the API cap in app/api/admin/newsletter/image.
@@ -183,15 +184,15 @@ export default function ManageNews() {
   const heroCurrent = heroFile ? null : editing?.image_url;
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-8 bg-bg px-4 py-6 text-ink sm:px-6">
+    <div className="workspace mx-auto w-full max-w-3xl space-y-8 bg-bg px-4 py-6 text-ink sm:px-6">
       <header className="space-y-1">
-        <h1 className="font-display text-3xl font-bold">News</h1>
+        <h1 className="font-display text-5xl font-black uppercase leading-[0.9] tracking-tight sm:text-6xl">News desk</h1>
         <p className="text-mut">Write, edit and publish articles. Each one appears in News as soon as it is saved.</p>
       </header>
 
       <Card as="form" onSubmit={handleSubmit} className="space-y-6">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-display text-xl font-bold">{editing ? `Edit "${editing.title}"` : 'New article'}</h2>
+          <h2 className="font-display text-xl font-black uppercase tracking-tight">{editing ? `Edit "${editing.title}"` : 'New article'}</h2>
           {editing && <Button variant="quiet" size="sm" onClick={resetForm}>Cancel editing</Button>}
         </div>
 
@@ -207,7 +208,7 @@ export default function ManageNews() {
         </div>
 
         <section className="space-y-4 border-t border-line pt-6">
-          <h3 className="font-display text-lg font-bold">Article content</h3>
+          <h3 className="font-display text-lg font-black uppercase tracking-tight">Article content</h3>
           {blocks.map((block, index) => (
             <div key={block.id} className="space-y-3 rounded-ctl border border-line p-4">
               <div className="flex items-center justify-between gap-3">
@@ -252,7 +253,7 @@ export default function ManageNews() {
       </Card>
 
       <section className="space-y-3">
-        <h2 className="font-display text-xl font-bold">Published articles</h2>
+        <h2 className="font-display text-xl font-black uppercase tracking-tight">Published articles</h2>
         {loadingNews && !newsResp && <Skeleton className="h-20 w-full" />}
         {newsError && <Notice tone="error">Could not load the articles. <Button variant="quiet" size="sm" onClick={refetchNews}>Try again</Button></Notice>}
         {!loadingNews && !newsError && articles.length === 0 && <EmptyState title="No articles yet">Write the first one above.</EmptyState>}

@@ -120,7 +120,7 @@ export default function ManageCaptains() {
 
   return <div className="space-y-6">
     <div className="space-y-1">
-      <h2 className="font-display text-2xl font-bold text-ink">Captains</h2>
+      <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Captains</h2>
       <p className="text-sm text-mut">Choose a division, season and team, then assign, change or revoke its captain.</p>
     </div>
     {error && <Notice tone="error" role="alert">{error}</Notice>}

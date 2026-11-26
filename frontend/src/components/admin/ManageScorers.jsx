@@ -125,7 +125,7 @@ export default function ManageScorers({ person }) { // eslint-disable-line react
   const options = picked.id && !found.some((a) => a.user_id === picked.id) ? [{ user_id: picked.id, label: picked.label }, ...found] : found;
   return <div className="space-y-6">
     <div className="space-y-1">
-      <h2 className="font-display text-2xl font-bold text-ink">Scorers</h2>
+      <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Scorers</h2>
       <p className="text-sm text-mut">Assign a scorer to a season or to one match. Scorers use Live matches only; they cannot change fixtures, teams, rosters, roles or news.</p>
     </div>
     {error && <Notice tone="error" role="alert">{error}</Notice>}
@@ -150,7 +150,7 @@ export default function ManageScorers({ person }) { // eslint-disable-line react
     </section>
 
     <Card as="section" aria-label="Assign a scorer" className="space-y-5">
-      <h3 className="font-display text-xl font-bold text-ink">Assign a scorer</h3>
+      <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">Assign a scorer</h3>
       <div className="grid gap-4 md:grid-cols-2">
         <Field type="search" label="Find an account" aria-label="Find scorer" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" />
         <Field as="select" label="Scorer" aria-label="Scorer" value={picked.id} onChange={(e) => setPicked({ id: e.target.value, label: found.find((a) => a.user_id === e.target.value)?.label || picked.label })}>

@@ -76,7 +76,7 @@ export default function ManageRoles({ currentUserId, onAssignScorer }) { // esli
 
   return <div className="space-y-6">
     <div className="space-y-1">
-      <h2 className="font-display text-2xl font-bold text-ink">Access control</h2>
+      <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Access control</h2>
       <p className="text-sm text-mut">Find an account by name or college email, then grant or remove roles. Roles are independent; a captain or scorer also needs an assignment.</p>
     </div>
     <Field type="search" label="Search accounts" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" />

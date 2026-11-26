@@ -114,7 +114,7 @@ export default function GradePredictions() {
       <section aria-labelledby="grading-heading" className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
-            <h2 id="grading-heading" className="font-display text-2xl font-bold text-ink">Grade fantasy predictions</h2>
+            <h2 id="grading-heading" className="font-display text-2xl font-black uppercase tracking-tight text-ink">Grade fantasy predictions</h2>
             <p className="text-sm text-mut">Work out points for completed matches. Grading uses the current season only.</p>
           </div>
           <Button variant="secondary" onClick={handleRegradeAll} disabled={isRegradingAll || !seasonId} className="text-live">
@@ -127,12 +127,12 @@ export default function GradePredictions() {
           : matches.length === 0 ? <EmptyState title="No completed matches yet">Matches appear here once they have a final result.</EmptyState>
             : <div className="space-y-8">
               <div className="space-y-3">
-                <h3 className="font-display text-xl font-bold text-ink">To grade ({pendingMatches.length})</h3>
+                <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">To grade ({pendingMatches.length})</h3>
                 {pendingMatches.length === 0 ? <p className="text-sm text-mut">Every completed match is graded.</p>
                   : <div className="space-y-3">{pendingMatches.map((m) => matchRow(m, false))}</div>}
               </div>
               {gradedMatches.length > 0 && <div className="space-y-3">
-                <h3 className="font-display text-xl font-bold text-ink">Graded ({gradedMatches.length})</h3>
+                <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">Graded ({gradedMatches.length})</h3>
                 <div className="space-y-3">{gradedMatches.map((m) => matchRow(m, true))}</div>
               </div>}
             </div>}

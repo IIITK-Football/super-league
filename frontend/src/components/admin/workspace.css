@@ -1,0 +1,12 @@
+/* Workspace tools share the public site's look, scoped here so the rest of the app keeps its buttons and tables. */
+.workspace button.rounded-ctl { border-radius: var(--radius-pill); }
+.workspace button.rounded-ctl.bg-raise {
+  background: color-mix(in srgb, var(--color-surf) 72%, transparent);
+  border-color: color-mix(in srgb, var(--color-ink) 12%, transparent);
+}
+.workspace table thead th {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}

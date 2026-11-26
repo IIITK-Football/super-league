@@ -483,7 +483,7 @@ export default function ManageRosters() {
 
   return <div className="space-y-8">
     <div className="space-y-1">
-      <h2 className="font-display text-2xl font-bold text-ink">Teams and rosters</h2>
+      <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Teams and rosters</h2>
       <p className="text-sm text-mut">Choose a division, season and team. A player keeps one card across seasons; a roster place belongs to one season.</p>
     </div>
 
@@ -521,7 +521,7 @@ export default function ManageRosters() {
     {entryId && <section aria-label={`Roster of ${entry?.name}`} className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="font-display text-xl font-bold text-ink">{entry?.name}</h3>
+          <h3 className="font-display text-xl font-black uppercase tracking-tight text-ink">{entry?.name}</h3>
           <p className="text-sm text-mut">{season?.name} · {loading.roster ? 'Loading players...' : `${roster.length} on the roster`}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -552,7 +552,7 @@ export default function ManageRosters() {
                     <span className="block truncate font-semibold text-ink">{name}</span>
                     <span className="block truncate text-sm text-mut">{r.jersey_number != null ? `#${r.jersey_number}` : 'No jersey'} · {r.position || 'No position'} · {linked ? 'Linked' : 'No account'}</span>
                   </span>
-                  <span className="font-display text-2xl font-bold tabular-nums text-ink" aria-label="Overall rating">{r.player?.overall_rating ?? '-'}</span>
+                  <span className="font-display text-2xl font-black uppercase tracking-tight tabular-nums text-ink" aria-label="Overall rating">{r.player?.overall_rating ?? '-'}</span>
                 </button>
                 <Button variant="quiet" size="sm" onClick={() => setLinkPlaceId(r.id)} aria-label={`${linked ? 'Account for' : 'Link account for'} ${name}`}>{linked ? 'Account' : 'Link account'}</Button>
               </li>;
@@ -638,7 +638,7 @@ export default function ManageRosters() {
         </div>
 
         <form noValidate onSubmit={createPlayer} aria-label="New player" className="space-y-4 border-t border-line pt-6">
-          <h4 className="font-display text-lg font-bold text-ink">Create a new player</h4>
+          <h4 className="font-display text-lg font-black uppercase tracking-tight text-ink">Create a new player</h4>
           {!newAccount
             ? <AccountPicker label="1. The new player's verified account" idPrefix="New player" onPick={(acc) => { setNewAccount(acc); setError(''); setMessage(''); }}
               pickLabel={(acc) => (acc.linked_player_id || acc.key_player_id ? 'Use their player' : 'Choose')} />

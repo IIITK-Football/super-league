@@ -147,7 +147,7 @@ export default function ScheduleMatches() {
 
       <Card className="max-w-2xl space-y-5">
         <div>
-          <h2 className="font-display text-2xl font-bold text-ink">Schedule a match</h2>
+          <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Schedule a match</h2>
           <p className="text-sm text-mut">Matches are created at 0-0. Results are entered on the live page.</p>
         </div>
 
@@ -191,7 +191,7 @@ export default function ScheduleMatches() {
       </Card>
 
       <section className="space-y-3" aria-labelledby="fixtures-heading">
-        <h2 id="fixtures-heading" className="font-display text-2xl font-bold text-ink">Fixtures</h2>
+        <h2 id="fixtures-heading" className="font-display text-2xl font-black uppercase tracking-tight text-ink">Fixtures</h2>
         {fixtures.length === 0 && <p className="text-sm text-mut">No fixtures in this season yet. Schedule the first match above.</p>}
         {fixtures.length > 0 && (
           <Table caption="Fixtures in this season">
@@ -249,7 +249,7 @@ export default function ScheduleMatches() {
       {bracketDivision && (
         <section className="space-y-3 border-t border-line pt-8">
           <div>
-            <h2 className="font-display text-2xl font-bold text-ink">Bracket preview</h2>
+            <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Bracket preview</h2>
             <p className="text-sm text-mut">How the public bracket looks, from the scheduled dates.</p>
           </div>
           {division === 'wsl' ? (
