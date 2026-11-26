@@ -1,10 +1,11 @@
 /* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useEffect, useState } from 'react';
+import { User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { API_BASE_URL } from '../lib/api';
 import { fetchWorldCupTeams, saveWorldCupFlair } from '../lib/authApi';
-import { Button, Field, Notice } from '../components/ui';
+import { Button, Field, Combobox, Notice, TextInput, toast } from '../components/ui';
 // The Super League mark, drawn in the ink colour through a mask of the logo file.
 const MARK_MASK = {
   maskImage: 'url(/slklogo3.png)', WebkitMaskImage: 'url(/slklogo3.png)', maskSize: 'contain', WebkitMaskSize: 'contain',
@@ -73,6 +74,7 @@ export function Onboarding({ requireWorldCup = false }) {
     }
     setProfile({ ...profile, id: user.id, email: user.email, nickname: name, wc_team_flair: wcFlair || profile?.wc_team_flair || null });
     setSaving(false);
+    toast({ title: 'Welcome in', tone: 'success' });
   };
 
   return (
@@ -85,25 +87,28 @@ export function Onboarding({ requireWorldCup = false }) {
         <Field
           label="Nickname"
           hint="3 to 20 characters. Shown on the prediction table."
-          value={nickname}
-          onChange={(e) => setNickname(e.target.value)}
-          maxLength={20}
-          autoComplete="nickname"
-        />
+          error={name && name.length < 3 ? 'Use at least 3 characters.' : undefined}
+        >
+          {(p) => <TextInput {...p} icon={User} value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={20} autoComplete="nickname" />}
+        </Field>
 
         <Field
-          as="select"
           label={requireWorldCup ? 'World Cup champion' : 'World Cup champion (optional)'}
           hint={requireWorldCup
             ? 'Your World Cup predictor needs this pick.'
             : 'The World Cup pick belongs to the World Cup predictor, not the league. Skip it if you like.'}
-          value={wcFlair}
-          onChange={(e) => setWcFlair(e.target.value)}
-          disabled={!teams}
-          required={requireWorldCup}
         >
-          <option value="">{teams ? 'No pick for now' : 'Loading nations...'}</option>
-          {(teams || []).map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+          {(p) => (
+            <Combobox
+              {...p}
+              value={wcFlair}
+              onChange={setWcFlair}
+              disabled={!teams}
+              placeholder={teams ? 'No pick for now' : 'Loading nations...'}
+              searchPlaceholder="Search nations"
+              options={[{ value: '', label: 'No pick for now' }, ...(teams || []).map((t) => ({ value: t.name, label: t.name }))]}
+            />
+          )}
         </Field>
         {teamsError && (
           <div className="flex flex-col items-start gap-2">
