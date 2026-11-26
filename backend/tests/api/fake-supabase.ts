@@ -25,11 +25,17 @@ export const reset = () => {
 const OK: Result = { data: null, error: null };
 const FILTERS = ['select', 'eq', 'neq', 'gt', 'gte', 'lt', 'in', 'is', 'or', 'order', 'limit', 'range', 'match', 'maybeSingle', 'single'];
 
-function builder(result: Result, target: string) {
+function builder(initial: Result, target: string) {
+  let result = initial;
   const b: Record<string, unknown> = {};
   for (const method of FILTERS) b[method] = (...args: unknown[]) => { db.calls.push({ target, method, args }); return b; };
   b.insert = (row: unknown) => { db.calls.push({ target, method: 'insert', args: [row] }); db.inserts.push({ table: target, row }); return b; };
-  b.update = (row: unknown) => { db.calls.push({ target, method: 'update', args: [row] }); return b; };
+  // An update answers with db.tables['<table>.update'] when a test sets one (to fail a write, say), else the read result.
+  b.update = (row: unknown) => {
+    db.calls.push({ target, method: 'update', args: [row] });
+    result = db.tables[`${target}.update`] ?? result;
+    return b;
+  };
   b.delete = () => { db.calls.push({ target, method: 'delete', args: [] }); db.deletes.push(target); return b; };
   b.then = (resolve: (r: Result) => unknown, reject?: (e: unknown) => unknown) => Promise.resolve(result).then(resolve, reject);
   return b;
