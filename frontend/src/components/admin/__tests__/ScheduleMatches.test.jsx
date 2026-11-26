@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const teams = [{ id: 't1', name: 'Alpha' }, { id: 't2', name: 'Beta' }];
-const fixtures = [{ id: 'm1', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Alpha', away_team_name: 'Beta', home_score: 0, away_score: 0, status: 'scheduled' }];
+const fixtures = [{ id: 'm1', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Alpha', away_team_name: 'Beta', home_score: 0, away_score: 0, status: 'scheduled', date: '2026-12-01T16:00:00Z', venue: 'Main Turf' }];
 const seasons = [{ id: 's1', slug: '2026', name: '2026 season', is_current: true }, { id: 's0', slug: '2025', name: '2025 season', is_current: false }];
 vi.mock('../../../hooks/useApi', () => ({
   useApi: (endpoint) => ({
@@ -78,6 +78,14 @@ describe('ScheduleMatches walkovers and feedback', () => {
 });
 
 describe('ScheduleMatches fixtures and seasons', () => {
+  it('shows each fixture with its kickoff and venue, and the edit sheet starts from the stored venue', async () => {
+    render(<ScheduleMatches />);
+    const row = (await screen.findByText('Alpha vs Beta')).closest('tr');
+    expect(within(row).getByText('Main Turf')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Alpha vs Beta' }));
+    expect(within(await screen.findByRole('dialog')).getByLabelText('Venue').value).toBe('Main Turf');
+  });
+
   it('lists the season fixtures, and edits one in a sheet with its teams and optional date and venue', async () => {
     render(<ScheduleMatches />);
     expect(await screen.findByText('Alpha vs Beta')).toBeTruthy();
