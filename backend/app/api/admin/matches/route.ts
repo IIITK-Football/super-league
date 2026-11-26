@@ -110,31 +110,32 @@ export async function POST(request: Request) {
     const awardHome = Number.isInteger(body.awarded_home) ? body.awarded_home : winner === 'home' ? 3 : 0;
     const awardAway = Number.isInteger(body.awarded_away) ? body.awarded_away : winner === 'away' ? 3 : 0;
 
-    const { data, error } = await supabase
-      .from('matches')
-      .insert([{
-        home_team_id: body.home_team_id,
-        away_team_id: body.away_team_id,
-        date: body.date,
-        venue: body.venue,
-        season_id: scope.season.id,
-        status: 'scheduled',
-      }])
-      .select()
-      .single();
+    // An awarded match is created and awarded in one transaction (D-04): both or neither.
+    const { data, error } = isAward
+      ? await supabase.rpc('create_awarded_match', {
+          p_season: scope.season.id,
+          p_home_team: body.home_team_id,
+          p_away_team: body.away_team_id,
+          p_date: body.date ?? null,
+          p_venue: body.venue ?? null,
+          p_kind: kind,
+          p_home: awardHome,
+          p_away: awardAway,
+          p_reason: reason,
+        }).single()
+      : await supabase
+          .from('matches')
+          .insert([{
+            home_team_id: body.home_team_id,
+            away_team_id: body.away_team_id,
+            date: body.date,
+            venue: body.venue,
+            season_id: scope.season.id,
+            status: 'scheduled',
+          }])
+          .select()
+          .single();
 
-    if (!error && isAward) {
-      const { error: awardError } = await supabase.rpc('award_match_result', { p_match: data.id, p_kind: kind, p_home: awardHome, p_away: awardAway, p_reason: reason });
-      if (awardError) {
-        // Do not leave a half-made match behind: the match was created only to be awarded.
-        await supabase.from('matches').delete().eq('id', data.id);
-        throw awardError;
-      }
-      data.status = 'completed';
-      data.result_kind = kind;
-      data.home_score = awardHome;
-      data.away_score = awardAway;
-    }
     if (error) throw error;
     return Response.json({ success: true, message: "Match scheduled successfully", data });
   } catch (error) {
