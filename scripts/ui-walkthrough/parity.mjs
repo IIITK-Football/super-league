@@ -238,11 +238,10 @@ async function main() {
       // The page opens on the World Cup tab; the season's own fantasy is the other toggle.
       const fifa = fan.getByRole('button', { name: 'FIFA', exact: true });
       await fifa.waitFor({ timeout: 30000 });
-      const board = fan.waitForResponse((r) => r.url().includes('/api/predictions/leaderboard') && r.status() === 200, { timeout: 30000 });
       await fifa.locator('xpath=..').getByRole('button').first().click();
-      await board;
       const [pr] = await db.select('predictions', `select=points_awarded&match_id=eq.${match.id}`);
       await fan.getByText(String(pr.points_awarded), { exact: true }).first().waitFor({ timeout: 30000 });
+      if (!fan.api.some((a) => a.startsWith('GET /api/predictions/leaderboard 200'))) return false;
       return `${pr.points_awarded} points shown`;
     });
   } finally {
