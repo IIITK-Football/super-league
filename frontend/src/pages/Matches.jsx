@@ -45,6 +45,11 @@ export function Matches() {
     </header>
   );
 
+  // A failed season lookup is not an empty season.
+  if (seasonScope.ready && seasonScope.error) {
+    return <div className="space-y-6 pb-12">{header}<ErrorState message="The season could not be loaded." /></div>;
+  }
+
   if (state.loading) {
     return (
       <div aria-busy="true" aria-label="Loading matches" className="space-y-6 pb-12">
