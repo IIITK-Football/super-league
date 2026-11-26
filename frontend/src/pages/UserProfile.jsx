@@ -9,7 +9,9 @@ import { supabase } from '../lib/supabase';
 import { API_BASE_URL } from '../lib/api';
 import { fetchWorldCupTeams, saveWorldCupFlair } from '../lib/authApi';
 import MyPlayerCard from '../components/players/MyPlayerCard';
-import { Button, Card, Field, Notice, Pill, Skeleton } from '../components/ui';
+import { Button, Field, Notice, Pill, Skeleton } from '../components/ui';
+
+const PILL = 'inline-flex min-h-11 w-full items-center justify-center rounded-pill bg-ink px-6 text-sm font-black uppercase tracking-[0.2em] text-bg transition hover:opacity-85 disabled:pointer-events-none disabled:opacity-40';
 
 // Clubs of each division's current season, and the clubs this person supports.
 async function loadClubs() {
@@ -124,28 +126,28 @@ export function UserProfile() {
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 bg-bg px-4 py-8 text-ink">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold">Your profile</h1>
-        <p className="text-mut">{profile?.nickname || 'Choose a nickname'}</p>
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-8 pb-12 text-ink">
+      <header className="space-y-4">
+        <p className="eyebrow">Your profile</p>
+        <h1 className="font-display text-4xl break-words text-ink sm:text-6xl">{profile?.nickname || 'Choose a nickname'}</h1>
       </header>
 
-      <section aria-label="Your standing" className="grid grid-cols-2 gap-3">
-        <Card className="bg-blk text-blkink">
-          <p className="text-sm">Rank</p>
-          {lbLoading ? <Skeleton className="mt-1 h-8 w-16" /> : <p className="font-display text-3xl font-bold tabular-nums">{myRank ? `#${myRank}` : '-'}</p>}
-        </Card>
-        <Card>
-          <p className="text-sm text-mut">Prediction points</p>
-          {lbLoading ? <Skeleton className="mt-1 h-8 w-16" /> : <p className="font-display text-3xl font-bold tabular-nums">{(myEntry?.total_points ?? 0).toLocaleString()}</p>}
-        </Card>
+      <section aria-label="Your standing" className="grid grid-cols-2 gap-4">
+        <div className="rounded-card bg-blk p-5 text-blkink sm:p-6">
+          <p className="eyebrow text-blkink/70">Rank</p>
+          {lbLoading ? <Skeleton className="mt-3 h-14 w-24" /> : <p className="mt-2 font-display text-6xl leading-none tabular-nums">{myRank ? `#${myRank}` : '-'}</p>}
+        </div>
+        <div className="glass rounded-card p-5 sm:p-6">
+          <p className="eyebrow">Prediction points</p>
+          {lbLoading ? <Skeleton className="mt-3 h-14 w-24" /> : <p className="mt-2 font-display text-6xl leading-none tabular-nums text-ink">{(myEntry?.total_points ?? 0).toLocaleString()}</p>}
+        </div>
       </section>
 
-      <Card className="flex flex-col gap-6 p-5 sm:p-6">
+      <div className="glass flex flex-col gap-6 rounded-card p-5 sm:p-8">
         {error && <Notice tone="error" role="alert">{error}</Notice>}
         {success && <Notice tone="success">Profile saved.</Notice>}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
           <Field
             label="Nickname"
             hint="3 to 20 characters. Shown on the prediction table."
@@ -181,30 +183,27 @@ export function UserProfile() {
             </Field>
           )}
 
-          <Button type="submit" variant="primary" size="lg" disabled={!canSave} className="w-full">
+          <button type="submit" disabled={!canSave} className={PILL}>
             {saving ? 'Saving...' : hasChanges ? 'Save changes' : 'No changes'}
-          </Button>
+          </button>
         </form>
 
         <div className="flex flex-wrap gap-2">
           {divisions.filter((d) => savedFlairs[d.id]).map((d) => <Pill key={d.id}>{savedFlairs[d.id]}</Pill>)}
           {profile?.wc_team_flair && <Pill>{profile.wc_team_flair}</Pill>}
         </div>
+      </div>
 
-        <div className="border-t border-line pt-6">
-          <PasswordSettings />
-        </div>
-
-        <div className="flex justify-start border-t border-line pt-6">
+      <div className="glass flex flex-col gap-6 rounded-card p-5 sm:p-8">
+        <PasswordSettings />
+        <div className="flex justify-start border-t border-line/70 pt-6">
           <Button variant="secondary" onClick={() => { signOut(); navigate('/'); }}>
             <LogOut size={16} aria-hidden="true" /> Sign out
           </Button>
         </div>
-      </Card>
+      </div>
 
-      <Card className="p-5 sm:p-6">
-        <MyPlayerCard />
-      </Card>
+      <MyPlayerCard />
     </main>
   );
 }

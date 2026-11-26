@@ -56,8 +56,8 @@ export function PasswordSettings() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <div className="flex flex-col gap-1">
-        <h2 className="font-display text-xl font-bold text-ink">Website password</h2>
+      <div className="flex flex-col gap-2">
+        <h2 className="font-display text-2xl text-ink">Website password</h2>
         <p className="text-sm text-mut">Add a password to sign in with your college email as well as Google. It stays on this same account.</p>
       </div>
       <Field label="New password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} hint="At least 8 characters, and not your email address." required />
@@ -70,9 +70,9 @@ export function PasswordSettings() {
       )}
       {error && <Notice tone="error" role="alert">{error}</Notice>}
       {notice && <Notice tone="success">{notice}</Notice>}
-      <Button type="submit" variant="secondary" disabled={busy || !password} className="self-start">
+      <button type="submit" disabled={busy || !password} className="inline-flex min-h-11 items-center rounded-pill border border-line px-6 text-sm font-black uppercase tracking-[0.2em] text-ink transition hover:border-mut disabled:pointer-events-none disabled:opacity-40 self-start">
         {busy ? 'Saving...' : 'Save password'}
-      </Button>
+      </button>
     </form>
   );
 }

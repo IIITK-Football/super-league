@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
 import { FEET } from '../../lib/playerCard';
 import FutCard from './FutCard';
-import { buttonClasses } from '../ui/buttonClasses';
 import { Skeleton } from '../ui/Skeleton';
 
 // "Your player card" on /profile: the player identity a dictator linked to the signed-in account (my_player). The
@@ -54,15 +53,15 @@ export default function MyPlayerCard() {
   useEffect(() => { load(); }, [load]);
 
   if (state.status === 'loading') return <section aria-label="Your player card" aria-busy="true" className="space-y-3">
-    <h2 className="font-display text-2xl font-bold text-ink">Your player card</h2>
+    <h2 className="font-display text-3xl text-ink sm:text-4xl">Your player card</h2>
     <Skeleton className="h-[380px] w-[260px] rounded-card" />
   </section>;
   if (state.status === 'error') return <section aria-label="Your player card" className="space-y-3">
-    <h2 className="font-display text-2xl font-bold text-ink">Your player card</h2>
+    <h2 className="font-display text-3xl text-ink sm:text-4xl">Your player card</h2>
     <p role="alert" className="text-sm text-live">{state.error} <button type="button" onClick={load} className="underline">Try again</button></p>
   </section>;
   if (state.status === 'unlinked') return <section aria-label="Your player card" className="space-y-2">
-    <h2 className="font-display text-2xl font-bold text-ink">Your player card</h2>
+    <h2 className="font-display text-3xl text-ink sm:text-4xl">Your player card</h2>
     <p className="text-sm text-mut">No player is linked to your account. If you play in a division, ask a dictator to link your player to this account.</p>
   </section>;
 
@@ -107,7 +106,7 @@ export default function MyPlayerCard() {
   };
 
   return <section aria-label="Your player card" className="space-y-4">
-    <h2 className="font-display text-2xl font-bold text-ink">Your player card</h2>
+    <h2 className="font-display text-3xl text-ink sm:text-4xl">Your player card</h2>
     <p className="text-sm text-mut">You can change your portrait and preferred foot. Your name, rating, stats and play style are set by your captain or a dictator.</p>
     {player.email && <p className="text-sm text-mut">Email: <span className="font-bold text-ink">{player.email}</span> <span className="text-xs text-mut">(your sign-in email; it cannot be changed here)</span></p>}
     <div className="flex flex-wrap items-start gap-4">
@@ -119,7 +118,7 @@ export default function MyPlayerCard() {
             <option value="">Not set</option>{FEET.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
         </label>
-        <label className={buttonClasses('secondary', 'md', 'cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-acc')}>
+        <label className="glass inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-pill px-6 text-sm font-black uppercase tracking-[0.2em] text-ink focus-within:outline focus-within:outline-2 focus-within:outline-acc">
           <ImagePlus size={13} /> {portrait ? 'Choose another picture' : 'New portrait (500 × 500 PNG)'}
           <input type="file" accept="image/png" className="sr-only" aria-label="Portrait file" onChange={(e) => { choose(e.target.files?.[0]); e.target.value = ''; }} />
         </label>
@@ -127,7 +126,7 @@ export default function MyPlayerCard() {
         {!portrait && player.image_url && !removePortrait && <button type="button" onClick={() => setRemovePortrait(true)} className="block min-h-11 text-sm text-mut underline">Remove portrait</button>}
         {removePortrait && <button type="button" onClick={() => setRemovePortrait(false)} className="block min-h-11 text-sm text-mut underline">Keep portrait</button>}
         <button type="button" onClick={save} disabled={!changed || saving}
-          className={buttonClasses("primary", "md")}>
+          className="inline-flex min-h-11 items-center gap-2 rounded-pill bg-ink px-6 text-sm font-black uppercase tracking-[0.2em] text-bg transition hover:opacity-85 disabled:opacity-40">
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {saving ? 'Saving...' : portrait?.status === 'failed' ? 'Retry' : 'Save card'}
         </button>
       </div>
