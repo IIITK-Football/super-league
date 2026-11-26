@@ -12,7 +12,8 @@ vi.mock('../../lib/supabase', () => ({
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
       signOut: async () => {},
     },
-    rpc: async () => db.roles,
+    // Like the real query builder: thenable, with no .catch of its own.
+    rpc: () => ({ then: (resolve, reject) => Promise.resolve(db.roles).then(resolve, reject) }),
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => db.profile }) }) }),
   },
 }));

@@ -65,7 +65,7 @@ export function AuthProvider({ children }) {
     const profileResult = await fetchProfile(user.id).catch((error) => ({ error }));
     setProfile(profileResult.data ?? null);
     setProfileError(profileResult.error ?? null);
-    const { data: held, error: rolesLoadError } = await supabase.rpc('my_roles').catch((error) => ({ error }));
+    const { data: held, error: rolesLoadError } = await Promise.resolve(supabase.rpc('my_roles')).catch((error) => ({ error })); // the query builder is thenable only
     setRoles(rolesLoadError ? null : appRoles(held));
     setRolesError(rolesLoadError ?? null);
     setLoading(false);
