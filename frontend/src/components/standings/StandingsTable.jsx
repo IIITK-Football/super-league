@@ -28,7 +28,7 @@ export function StandingsTable({ rows, caption = 'League table' }) {
             <th scope="col" className={cn(extra, 'px-2 py-2.5 text-center font-semibold')}><abbr title="Goals against">GA</abbr></th>
             <th scope="col" className="px-2 py-2.5 text-center font-semibold"><abbr title="Goal difference">GD</abbr></th>
             <th scope="col" className="px-2 py-2.5 text-center font-semibold"><abbr title="Points">Pts</abbr></th>
-            <th scope="col" className="px-2 py-2.5 font-semibold"><span className="md:hidden">Form</span><span className="hidden md:inline">Last five</span></th>
+            <th scope="col" className="px-2 py-2.5 font-semibold"><span className="sm:hidden">Form</span><span className="hidden sm:inline">Last five</span></th>
           </tr>
         </thead>
         <tbody>
@@ -60,7 +60,10 @@ export function StandingsTable({ rows, caption = 'League table' }) {
                   <td className={cn(extra, 'px-2 py-3 text-center text-mut')}>{shown(s.goalsAgainst)}</td>
                   <td className="px-2 py-3 text-center text-ink">{signed(s.goalDifference)}</td>
                   <td className="px-2 py-3 text-center font-display text-2xl font-bold text-ink">{shown(s.points)}</td>
-                  <td className="px-2 py-3"><FormGuide form={(team.form || []).slice(-5)} /></td>
+                  <td className="px-2 py-3">
+                    <span className="sm:hidden"><FormGuide form={(team.form || []).slice(-3)} /></span>
+                    <span className="hidden sm:inline-flex"><FormGuide form={(team.form || []).slice(-5)} /></span>
+                  </td>
                 </tr>
                 <tr id={id} hidden={!expanded} className="border-b border-line bg-raise/40 md:hidden">
                   <td colSpan={5} className="px-3 py-3">

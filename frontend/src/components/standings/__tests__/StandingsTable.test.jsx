@@ -33,6 +33,7 @@ describe('StandingsTable', () => {
   it('shows the last five results and a signed goal difference', () => {
     render(<MemoryRouter><StandingsTable rows={rows} /></MemoryRouter>);
     expect(screen.getByRole('list', { name: 'Form: D, W, L, W, W' }).children).toHaveLength(5);
+    expect(screen.getByRole('list', { name: 'Form: L, W, W' }).children).toHaveLength(3);
     expect(screen.getByText('+5')).toBeTruthy();
   });
 });
