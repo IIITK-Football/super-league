@@ -16,6 +16,9 @@ export const SEASON_FORMATS = [
 
 const blankDivision = () => ({ slug: '', name: '', short_name: '', primary_color: '' });
 const blankSeason = () => ({ slug: '', name: '', starts_on: '', ends_on: '', format: 'league' });
+// The slug follows the name until someone types a slug of their own.
+const slugify = (text) => text.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-$/g, '');
+const followSlug = (current, name) => (!current.slug || current.slug === slugify(current.name) ? slugify(name) : current.slug);
 
 export function validateDivision(d) {
   if (!d.name.trim()) return 'Enter a division name.';
@@ -243,8 +246,10 @@ export default function ManageDivisions() {
     }, `Season "${season.name.trim()}" saved.`);
   };
 
-  const makeCurrent = (season) => write(`season-${season.id}`, `/admin/seasons/${season.id}/current`, 'POST', undefined,
-    `"${season.name}" is now the current season of ${selectedDivision.name}.`, reloadSeasons);
+  const makeCurrent = async (season) => {
+    const ok = await confirm({ title: `Make ${season.name} the current season?`, description: `The public site shows ${season.name} for ${selectedDivision.name} from now on.`, confirmLabel: 'Make current' });
+    if (ok) return write(`season-${season.id}`, `/admin/seasons/${season.id}/current`, 'POST', undefined, `"${season.name}" is now the current season of ${selectedDivision.name}.`, reloadSeasons);
+  };
 
   const move = (items, index, offset) => {
     const ordered = [...items];
@@ -304,7 +309,7 @@ export default function ManageDivisions() {
     {message && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</p>}
 
     <form onSubmit={createDivision} aria-label="New division" className="grid gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-5 lg:grid-cols-[1.3fr_1fr_1fr_140px_120px_auto] lg:items-end">
-      <label className={labelClass}>Division name<input value={newDivision.name} onChange={(e) => setNewDivision({ ...newDivision, name: e.target.value })} placeholder="Inter" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
+      <label className={labelClass}>Division name<input value={newDivision.name} onChange={(e) => setNewDivision((d) => ({ ...d, name: e.target.value, slug: followSlug(d, e.target.value) }))} placeholder="Inter" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
       <label className={labelClass}>Slug<input value={newDivision.slug} onChange={(e) => setNewDivision({ ...newDivision, slug: e.target.value.trim().toLowerCase() })} placeholder="inter" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
       <label className={labelClass}>Short name<input value={newDivision.short_name} onChange={(e) => setNewDivision({ ...newDivision, short_name: e.target.value })} placeholder="Optional" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
       <label className={labelClass}>Colour<input value={newDivision.primary_color} onChange={(e) => setNewDivision({ ...newDivision, primary_color: e.target.value })} placeholder="#d9ff4a" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
@@ -330,7 +335,7 @@ export default function ManageDivisions() {
     {selectedDivision && <section aria-label={`Seasons of ${selectedDivision.name}`} className="space-y-4 rounded-2xl border border-white/10 bg-white/[.02] p-5">
       <h3 className="text-sm font-black uppercase tracking-wider text-zinc-300">Seasons of {selectedDivision.name}</h3>
       <form onSubmit={createSeason} aria-label="New season" className="grid gap-3 lg:grid-cols-[1fr_1fr_150px_150px_140px_160px_auto] lg:items-end">
-        <label className={labelClass}>Season name<input value={newSeason.name} onChange={(e) => setNewSeason({ ...newSeason, name: e.target.value })} placeholder="2026–27" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
+        <label className={labelClass}>Season name<input value={newSeason.name} onChange={(e) => setNewSeason((x) => ({ ...x, name: e.target.value, slug: followSlug(x, e.target.value) }))} placeholder="2026–27" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
         <label className={labelClass}>Season slug<input value={newSeason.slug} onChange={(e) => setNewSeason({ ...newSeason, slug: e.target.value.trim().toLowerCase() })} placeholder="2026-27" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
         <label className={labelClass}>Starts<input type="date" value={newSeason.starts_on} onChange={(e) => setNewSeason({ ...newSeason, starts_on: e.target.value })} className={`${inputClass} mt-1`} /></label>
         <label className={labelClass}>Ends<input type="date" value={newSeason.ends_on} onChange={(e) => setNewSeason({ ...newSeason, ends_on: e.target.value })} className={`${inputClass} mt-1`} /></label>

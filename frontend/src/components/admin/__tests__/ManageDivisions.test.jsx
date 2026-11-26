@@ -170,6 +170,17 @@ describe('divisions', () => {
     expect(within(list).getByDisplayValue('Inter')).toBeTruthy();
   });
 
+  it('derives the slug from the name until the slug is typed by hand, and asks before making a season current', async () => {
+    render(<ManageDivisions />);
+    await screen.findByText(/no divisions yet/i);
+    const form = screen.getByRole('form', { name: 'New division' });
+    type(/division name/i, 'Pradhva Cup', within(form));
+    expect(within(form).getByLabelText(/^slug/i).value).toBe('pradhva-cup');
+    type(/^slug/i, 'pradhva', within(form));
+    type(/division name/i, 'Pradhva Trophy', within(form));
+    expect(within(form).getByLabelText(/^slug/i).value).toBe('pradhva');
+  });
+
   it('reports a refused write in words a dictator understands', async () => {
     worker.mockRejectedValueOnce({ status: 403 });
     render(<ManageDivisions />);
@@ -244,6 +255,7 @@ describe('seasons and sections', () => {
     const seasonList = await screen.findByRole('list', { name: 'Seasons' });
     fireEvent.click(within(seasonList).getByRole('button', { name: 'Publish' }));
     fireEvent.click(await screen.findByRole('button', { name: /make current/i }));
+    expect(globalThis.confirmAnswer).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringMatching(/Make .* current season/), confirmLabel: 'Make current' }));
     await screen.findByText(/is now the current season of Inter/);
     expect(worker).toHaveBeenCalledWith(`/admin/seasons/${db.tables.seasons[0].id}/current`, { method: 'POST' });
     expect(await screen.findByText('Current')).toBeTruthy();
