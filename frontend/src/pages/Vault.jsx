@@ -1,74 +1,57 @@
-import React, { useState } from 'react'; 
-import { useLeague } from '../context/LeagueContext';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { NewsArticle } from '../components/NewsArticle';
-import { Loader2 } from 'lucide-react';
-import { Loader } from '../components/Loader';
-import { Link } from 'react-router-dom'; // 1. IMPORT LINK HERE!
+import { EmptyState, ErrorState, Skeleton } from '../components/ui';
 
+const CATEGORIES = ['Latest News', 'Official Editorial', 'Match Reports', 'Satire', 'Features'];
+
+// The news list. Changing the category reloads only the list: the page header and the filter keep their place and focus.
 export function Vault() {
-  const { division } = useLeague();
-  const [selectedCategory, setSelectedCategory] = useState('Latest News');
-  
-  // 2. Extract 'error' here so the if(error) block works!
-  const { data: newsResp, loading, error } = useApi(`/news?category=${selectedCategory}`);
-  
-  // 3. Keep the naming consistent!
-  const newsList = newsResp?.data || [];  
-
-  if (loading) {
-    return <Loader text="Fetching Latest Stories..." />;
-  }
-  
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-red-500/80 space-y-4">
-        <span className="font-black tracking-[0.3em] uppercase text-sm">Publishing Server Offline</span>
-      </div>
-    );
-  }
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const { data, error, loading, retry } = useApi(`/news?category=${encodeURIComponent(category)}`);
+  const articles = data?.data || [];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between px-2 gap-4">
+    <div className="mx-auto max-w-6xl space-y-6 pb-12">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-3xl sm:text-4xl font-black tracking-tighter uppercase">Onion Newsletter</h2>
-          <p className="text-zinc-400 mt-1 font-medium">Satire, reports, and exclusive stories.</p>
+          <h1 className="font-display text-4xl font-bold text-ink sm:text-5xl">News</h1>
+          <p className="mt-1 text-mut">Match reports, features and official notices.</p>
         </div>
-        
-        <div className="flex gap-2">
-          {/* THE DROPDOWN */}
-          <select 
-            value={selectedCategory} 
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="bg-black border border-white/10 text-white text-sm rounded-lg focus:ring-[#E8C881] focus:border-[#E8C881] block p-2.5 outline-none cursor-pointer"
+        <label className="grid gap-1 text-sm font-semibold text-mut">
+          Category
+          <select
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            className="min-h-11 rounded-ctl border border-line bg-surf px-3 text-base text-ink"
           >
-            <option value="Latest News">Latest News</option>
-            <option value="Official Editorial">Official Editorial</option>
-            <option value="Match Reports">Match Reports</option>
-            <option value="Satire">Satire</option>
-            <option value="Features">Features</option>
+            {CATEGORIES.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
-        </div>
-      </div>
+        </label>
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {/* 4. WRAP THE COMPONENT IN A LINK! */}
-        {newsList.map(article => (
-          <Link 
-            key={article.id} 
-            to={`/article/${article.id}`} 
-            className="block hover:scale-[1.02] transition-transform duration-300"
-          >
-            <NewsArticle article={article} />
-          </Link>
-        ))}
-        
-        {/* Fallback if the category is empty */}
-        {newsList.length === 0 && (
-           <p className="text-zinc-500 italic mt-4">No articles found in this category.</p>
-        )}
-      </div>
+      {error ? (
+        <ErrorState title="News could not load" message={error.message} onRetry={retry} />
+      ) : loading ? (
+        <ul aria-busy="true" aria-label="Loading news" className="grid list-none gap-4 p-0 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => <li key={i}><Skeleton className="h-64 rounded-card" /></li>)}
+        </ul>
+      ) : articles.length === 0 ? (
+        <EmptyState title="No articles in this category">
+          Checked the {category.toLowerCase()} list. New articles appear here when they are published.
+        </EmptyState>
+      ) : (
+        <ul className="grid list-none gap-4 p-0 sm:grid-cols-2 xl:grid-cols-3">
+          {articles.map((article) => (
+            <li key={article.id}>
+              <Link to={`/article/${article.id}`} className="block rounded-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc">
+                <NewsArticle article={article} />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
