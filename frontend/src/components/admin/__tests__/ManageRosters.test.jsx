@@ -512,9 +512,9 @@ describe('the FUT card in the player forms', () => {
     await openTeam();
     await chooseNewAccount('bea');
     expect(newCard().getAttribute('aria-label')).toBe('FUT card: Unnamed player');
-    expect(within(newCard()).getByTestId('card-rating').textContent).toBe('—'); // no rating until one is entered
+    expect(within(newCard()).getByTestId('card-rating').textContent).toBe('-'); // no rating until one is entered
     expect(screen.getByLabelText('New rating').value).toBe('');
-    expect(newCard().textContent).toMatch(/PAC—.*PHY—/);
+    expect(newCard().textContent).toMatch(/PAC-.*PHY-/);
     expect(newCard().textContent).toMatch(/Preferred foot: not set/);
     expect(newCard().textContent).toMatch(/Play style: not set/);
     pick('New first name', 'Bea');
