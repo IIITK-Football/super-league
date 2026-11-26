@@ -115,11 +115,11 @@ export default function PlayerProfile({ onBack }) {
                     <dl className={`w-max rounded-card border border-line bg-surf p-4 ${styles.bioGrid}`}>
                         <div>
                             <dt className="text-xs uppercase tracking-wider text-mut">Position</dt>
-                            <dd className="mt-1 font-semibold text-ink">{player.position || '—'}</dd>
+                            <dd className="mt-1 font-semibold text-ink">{player.position || '-'}</dd>
                         </div>
                         <div>
                             <dt className="text-xs uppercase tracking-wider text-mut">Preferred foot</dt>
-                            <dd className="mt-1 font-semibold text-ink">{bio.preferredFoot || '—'}</dd>
+                            <dd className="mt-1 font-semibold text-ink">{bio.preferredFoot || '-'}</dd>
                         </div>
                     </dl>
                 </div>
@@ -133,7 +133,7 @@ export default function PlayerProfile({ onBack }) {
                                 <div key={category} className="grid gap-2 text-sm">
                                     <div className="flex items-baseline justify-between font-semibold text-mut">
                                         <span>{category}</span>
-                                        <span className="font-display text-2xl font-bold tabular-nums text-ink">{total ?? '—'}</span>
+                                        <span className="font-display text-2xl font-bold tabular-nums text-ink">{total ?? '-'}</span>
                                     </div>
                                     <div className="h-1.5 w-full overflow-hidden rounded-pill bg-raise" role="presentation">
                                         <div className="h-full bg-acc" style={{ width: `${total ?? 0}%` }} />
@@ -204,9 +204,9 @@ export function SeasonHistory({ player }) {
                             {seasons.map((line) => (
                                 <tr key={line.season.id} className="border-t border-line">
                                     <td className="py-2 pr-4 font-semibold text-ink">{line.division?.name ? `${line.division.name} ` : ''}{line.season.name}</td>
-                                    <td className="py-2 pr-4 text-ink">{line.team?.name || '—'}</td>
-                                    <td className="py-2 pr-4 tabular-nums">{line.jersey_number ?? '—'}</td>
-                                    <td className="py-2 pr-4">{line.position || '—'}</td>
+                                    <td className="py-2 pr-4 text-ink">{line.team?.name || '-'}</td>
+                                    <td className="py-2 pr-4 tabular-nums">{line.jersey_number ?? '-'}</td>
+                                    <td className="py-2 pr-4">{line.position || '-'}</td>
                                     <td className="py-2 pr-4 text-right font-display text-lg font-bold tabular-nums">{line.goals}</td>
                                     <td className="py-2 text-right font-display text-lg font-bold tabular-nums">{line.assists}</td>
                                 </tr>
