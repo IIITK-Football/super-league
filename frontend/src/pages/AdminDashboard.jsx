@@ -48,7 +48,7 @@ export function AdminDashboard() {
   const sections = isDictator ? DICTATOR_SECTIONS : [{ id: 'live', label: 'Live matches' }];
 
   return (
-    <div className="workspace min-h-screen bg-bg pt-20 text-ink">
+    <div className="min-h-screen bg-bg text-ink">
       <div className="mx-auto max-w-6xl space-y-8 px-4 pb-16 pt-6 md:px-8">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-3">

@@ -562,7 +562,7 @@ export function TeamBuilder() {
         else setSuccess(`Saved ${saved} ${saved === 1 ? 'player' : 'players'}.`);
     };
 
-    if (loading) return <main className="workspace mx-auto w-full max-w-5xl space-y-4 px-4 py-6 sm:px-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-40 w-full" /></main>;
+    if (loading) return <main className="mx-auto w-full max-w-5xl space-y-4 px-4 py-6 sm:px-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-40 w-full" /></main>;
 
     const pickers = isDictator && <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Division" as="select" value={divisionId} onChange={(event) => { const v = event.target.value; discardIfConfirmed(() => chooseDivision(v)); }}>
@@ -588,7 +588,7 @@ export function TeamBuilder() {
         <h1 className="font-display text-5xl font-black uppercase leading-[0.9] tracking-tight sm:text-6xl">Team builder</h1>
     </header>;
 
-    if (!registration) return <main className="workspace mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
+    if (!registration) return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
         {heading}
         {isDictator
             ? <>
@@ -600,7 +600,7 @@ export function TeamBuilder() {
     </main>;
 
     // A captain whose team has no logo or colour yet sets them up before the roster.
-    if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictator && registration.registrationId && !readOnly) return <main className="workspace mx-auto w-full max-w-2xl space-y-6 px-4 py-6 text-ink sm:px-6">
+    if ((!registration.team?.logo_url || !registration.team?.team_color) && !isDictator && registration.registrationId && !readOnly) return <main className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6 text-ink sm:px-6">
         {heading}
         <Card className="space-y-5">
             <div>
@@ -651,7 +651,7 @@ export function TeamBuilder() {
         <Button type="submit" disabled={saving || !changedPlayers.length} aria-busy={saving || undefined}>{saving ? 'Saving...' : 'Save player profiles'}</Button>
     </div>;
 
-    if (!players.length) return <main className="workspace mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
+    if (!players.length) return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
         {heading}
         {pickers}
         {captainPicker}
@@ -702,7 +702,7 @@ export function TeamBuilder() {
         </div>}
     </Card>;
 
-    return <main className="workspace mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
+    return <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-ink sm:px-6">
         {heading}
         {pickers}
         {captainPicker}
