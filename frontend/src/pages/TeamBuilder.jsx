@@ -693,7 +693,7 @@ export function TeamBuilder() {
                 error={positionMissingFor === currentPlayer.id && !currentPlayer.position ? 'Choose a position. It is required before saving.' : undefined}>
                 {(p) => <Select {...p} value={currentPlayer.position} placeholder="Choose a position"
                     onChange={(value) => { updatePlayer('position', value); setPositionMissingFor(null); }}
-                    options={positions.map((position) => ({ value: position, label: position }))} />}
+                    options={[...positions, ...(currentPlayer.position && !positions.includes(currentPlayer.position) ? [currentPlayer.position] : [])].map((position) => ({ value: position, label: position }))} />}
             </Field>
             <Field label="Jersey number">
                 {(p) => <NumberField {...p} min={0} max={99} placeholder="None" value={numOrNull(currentPlayer.jerseyNumber)} onChange={(n) => updatePlayer('jerseyNumber', n)} />}
@@ -735,7 +735,7 @@ export function TeamBuilder() {
         {teamCard}
         {readOnly && <Notice tone="warning">Past season: captains can view it but not change it.</Notice>}
         <form onSubmit={handleSubmit} className="space-y-6 pb-2" noValidate>
-            <fieldset disabled={readOnly || saving} className="space-y-6">
+            <fieldset disabled={readOnly || saving} className="min-w-0 space-y-6">
                 <section aria-label="Squad" className="space-y-3">
                     <h2 className="font-display text-xl font-black uppercase tracking-tight">Squad</h2>
                     <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
