@@ -36,6 +36,9 @@ request (503) if `SUPABASE_URL` is missing or contains the production reference.
 
 ## Checking a deploy
 - The build log ends with `Deployed super-league-api-staging` and the deployment lists the `develop` commit.
+- The served pair: `/version.json` names the site's commit and `/api/health` the Worker's commit and version.
+  `node scripts/staging-routing-check.mjs` checks the same-origin `/api` contract (bearer forwarding, errors, no-store)
+  and records both. Rolling back the pair: [docs/rollback/pages-worker-pair.md](rollback/pages-worker-pair.md).
 - The Worker has no public URL; once the staging Pages project has its `API` service binding, `GET /api/health` on
   the staging site returns `{"ok":true,"service":"super-league-api","environment":"staging"}`.
 
