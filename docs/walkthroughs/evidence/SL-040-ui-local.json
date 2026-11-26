@@ -1,0 +1,38 @@
+{
+  "item": "SL-040",
+  "target": "local",
+  "servedCommit": "e4f6112faadedf5efac6af1def1189796365605e",
+  "steps": [
+    {
+      "scenario": "create, publish, reorder and select",
+      "outcomes": [
+        "Hidden defaults in new and existing divisions",
+        "Explicit season URL opens its season"
+      ]
+    },
+    {
+      "scenario": "hide, archive and restore",
+      "outcomes": [
+        "Hiding and archiving clear current",
+        "Restore is hidden",
+        "A hidden division suppresses its seasons"
+      ]
+    },
+    {
+      "scenario": "configure sections",
+      "outcomes": [
+        "Edited label in navigation",
+        "Disabled Teams denied with 404",
+        "Nav-hidden Fixtures API remains available"
+      ]
+    },
+    {
+      "scenario": "validate and audit",
+      "outcomes": [
+        "Normal user refused",
+        "Invalid update leaves the row unchanged",
+        "Dictator recorded as audit actor"
+      ]
+    }
+  ]
+}
