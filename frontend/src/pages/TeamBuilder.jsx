@@ -6,7 +6,8 @@ import { CARD_STATS, FEET, applyCardDraft, cardDraft } from '../lib/playerCard';
 import { API_BASE_URL } from '../lib/api';
 import { rosterPlayerRpcArgs } from '../lib/rosterPlayerUpdate';
 import { cardBackground } from '../components/players/FutCard';
-import { Button, Card, EmptyState, ErrorState, Crest, Field, Notice, Sheet, Skeleton, Tabs, useConfirm } from '../components/ui';
+import { Hash, ImagePlus, Palette, Shield, Type } from 'lucide-react';
+import { Button, Card, Combobox, EmptyState, ErrorState, Crest, Field, NumberField, Notice, Select, SegmentedControl, Sheet, Skeleton, Tabs, TextInput, toast, useConfirm } from '../components/ui';
 
 const API_URL = API_BASE_URL;
 const positions = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'CF', 'ST'];
@@ -67,6 +68,10 @@ async function imageProblem(file, { label, side }) {
 const logoProblem = (file) => imageProblem(file, { label: 'Club logo', side: 256 });
 const portraitProblem = (file) => imageProblem(file, { label: 'Player image', side: 500 });
 
+// A NumberField holds a number or nothing; the draft keeps '' for "not set".
+const numOrNull = (value) => (value === '' || value == null ? null : Number(value));
+const HEX = /^#[0-9a-f]{6}$/i;
+
 const messageOf = (error, fallback) => error?.message || fallback;
 
 // Previews a chosen file (or shows the saved image) as a thumbnail, and gives a labelled file input that the keyboard
@@ -90,16 +95,16 @@ function ImageSlot({ label, hint, file, currentUrl, alt, disabled, error, onFile
             {src
                 ? <img src={src} alt={alt} className="size-24 shrink-0 rounded-card border border-line object-cover" />
                 : <div aria-hidden="true" className="flex size-24 shrink-0 items-center justify-center rounded-card border border-dashed border-line text-sm text-mut">No image</div>}
-            <Field
-                className="min-w-0 flex-1"
-                label={label}
-                type="file"
-                accept="image/png"
-                hint={hint}
-                error={error}
-                disabled={disabled}
-                onChange={(event) => { onFile(event.target.files?.[0] ?? null); event.target.value = ''; }}
-            />
+            <Field className="min-w-0 flex-1" label={label} hint={hint} error={error}>
+                {(p) => (
+                    <label className={`well flex min-h-11 cursor-pointer items-center gap-2.5 rounded-ctl px-3.5 text-sm text-ink focus-within:ring-2 focus-within:ring-ink/40 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
+                        <ImagePlus size={18} aria-hidden="true" className="shrink-0 text-mut" />
+                        <span className="min-w-0 flex-1 truncate">{file?.name || (src ? 'Replace the image' : 'Choose a PNG')}</span>
+                        <input {...p} type="file" accept="image/png" disabled={disabled} className="sr-only"
+                            onChange={(event) => { onFile(event.target.files?.[0] ?? null); event.target.value = ''; }} />
+                    </label>
+                )}
+            </Field>
         </div>
     );
 }
@@ -107,9 +112,9 @@ function ImageSlot({ label, hint, file, currentUrl, alt, disabled, error, onFile
 function PlayStylePicker({ value, onChange }) {
     const style = getPlayStyle(value);
     return <div className="space-y-3">
-        <Field label="Play style" as="select" value={value} onChange={(event) => onChange(event.target.value)}>
-            <option value="">No play style</option>
-            {PLAY_STYLES.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+        <Field label="Play style">
+            {(p) => <Combobox {...p} value={value} onChange={onChange} searchPlaceholder="Search play styles"
+                options={[{ value: '', label: 'No play style' }, ...PLAY_STYLES.map((option) => ({ value: option.id, label: option.name, icon: <img src={option.imageUrl} alt="" className="size-6 object-contain" /> }))]} />}
         </Field>
         {style
             ? <div className="flex items-center gap-3 rounded-ctl border border-line p-3">
@@ -177,12 +182,14 @@ function BrandingForm({ team, draft, setDraft, notice, saving, onSubmit, onCance
             <Crest name={draft.name || team?.name} src={team?.logo_url} color={draft.color || undefined} size="lg" />
             <p className="text-sm text-mut">The logo and colour appear on the team card and the public team page.</p>
         </div>
-        <Field label="Team name" required value={draft.name} maxLength={60} error={draft.nameError}
-            onChange={(event) => setDraft({ ...draft, name: event.target.value, nameError: '' })}
-            hint="2 to 60 characters." />
-        <Field label="Short name" value={draft.shortName} maxLength={5} error={draft.shortError}
-            onChange={(event) => setDraft({ ...draft, shortName: event.target.value, shortError: '' })}
-            hint="2 to 5 letters or numbers, shown where space is tight." />
+        <Field label="Team name" error={draft.nameError} hint="2 to 60 characters.">
+            {(p) => <TextInput {...p} icon={Shield} required value={draft.name} maxLength={60}
+                onChange={(event) => setDraft({ ...draft, name: event.target.value, nameError: '' })} />}
+        </Field>
+        <Field label="Short name" error={draft.shortError} hint="2 to 5 letters or numbers, shown where space is tight.">
+            {(p) => <TextInput {...p} icon={Type} value={draft.shortName} maxLength={5} inputClassName="uppercase"
+                onChange={(event) => setDraft({ ...draft, shortName: event.target.value, shortError: '' })} />}
+        </Field>
         <ImageSlot
             label={setup || team?.logo_url ? 'Team logo' : 'Team logo (required)'}
             hint="PNG, exactly 256 × 256 pixels, 5 MB or smaller. Not cropped."
@@ -192,16 +199,24 @@ function BrandingForm({ team, draft, setDraft, notice, saving, onSubmit, onCance
             error={draft.logoError}
             onFile={onLogo}
         />
-        <div className="space-y-2">
-            <p className="text-sm font-semibold">Team colour</p>
-            <div className="flex flex-wrap items-center gap-3">
-                <input type="color" value={colourSet ? draft.color : '#000000'} aria-label="Team colour"
-                    onChange={(event) => setDraft({ ...draft, color: event.target.value, colorError: '' })}
-                    className="size-11 cursor-pointer rounded-ctl border border-line bg-surf p-1" />
-                <span className="text-sm text-mut">{colourSet ? draft.color.toUpperCase() : 'Not set. Pick a colour.'}</span>
-            </div>
-            {draft.colorError && <p className="text-sm text-live">{draft.colorError}</p>}
-        </div>
+        <Field label="Team colour" error={draft.colorError} hint={colourSet ? undefined : 'Not set. Pick a colour.'}>
+            {(p) => (
+                <div className="flex items-center gap-3">
+                    <label className="relative size-11 shrink-0 cursor-pointer overflow-hidden rounded-ctl border border-line focus-within:ring-2 focus-within:ring-ink/40" style={{ backgroundColor: colourSet ? draft.color : undefined }}>
+                        {!colourSet && <Palette size={18} aria-hidden="true" className="absolute inset-0 m-auto text-mut" />}
+                        <input type="color" aria-label="Pick team colour" value={colourSet ? draft.color : '#000000'}
+                            onChange={(event) => setDraft({ ...draft, color: event.target.value, colorError: '' })}
+                            className="absolute inset-0 size-full cursor-pointer opacity-0" />
+                    </label>
+                    <TextInput {...p} icon={Hash} placeholder="RRGGBB" maxLength={6} inputClassName="uppercase tabular-nums"
+                        value={colourSet ? draft.color.replace('#', '') : ''}
+                        onChange={(event) => {
+                            const hex = `#${event.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6)}`;
+                            setDraft({ ...draft, color: hex.length === 1 ? '' : hex, colorError: '' });
+                        }} />
+                </div>
+            )}
+        </Field>
         {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between sm:items-center">
             <p className="text-sm text-mut">{dirty ? 'Unsaved team details' : 'No unsaved changes'}</p>
@@ -231,7 +246,6 @@ export function TeamBuilder() {
     const [saving, setSaving] = useState(false);
     const [positionMissingFor, setPositionMissingFor] = useState(null);
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
     const [brandingOpen, setBrandingOpen] = useState(false);
     const [brand, setBrand] = useState(null); // the team details draft; null until a team is open
     const [brandSaving, setBrandSaving] = useState(false);
@@ -296,7 +310,7 @@ export function TeamBuilder() {
         setBrand(context ? brandDraft(context.team) : null);
         setBrandingOpen(false);
         setBrandNotice(null);
-        setError(''); setSuccess('');
+        setError('');
         const key = context?.id ?? null;
         latestRegistration.current = key;
         if (!context) { setRosterLoading(false); return; }
@@ -437,6 +451,7 @@ export function TeamBuilder() {
         if (short && !/^[A-Za-z0-9]{2,5}$/.test(short)) problems.shortError = 'The short name must be 2 to 5 letters or numbers.';
         if (!registration.team?.logo_url && !brand.logoFile) problems.logoError = 'Upload a team logo before saving.';
         if (!brand.color) problems.colorError = 'Pick a team colour before saving.';
+        else if (!HEX.test(brand.color)) problems.colorError = 'Enter a full colour code of 6 characters, for example 1A2B3C.';
         if (Object.keys(problems).length) { setBrand((d) => ({ ...d, ...problems })); return; }
 
         setBrandSaving(true);
@@ -467,7 +482,7 @@ export function TeamBuilder() {
             setBrand(brandDraft({ ...registration.team, ...savedTeam }));
             setBrandingOpen(false);
             setBrandNotice(null);
-            setSuccess('Team details saved.');
+            toast({ title: 'Team details saved', tone: 'success' });
         } catch (saveError) {
             setBrandNotice({ tone: 'error', text: messageOf(saveError, 'Could not save team details.') });
         } finally {
@@ -484,7 +499,6 @@ export function TeamBuilder() {
     const handleImageUpload = async (file) => {
         if (readOnly || !file) return;
         setError('');
-        setSuccess('');
         setPortraitError('');
         const problem = await portraitProblem(file);
         if (problem) { setPortraitError(problem); return; }
@@ -506,7 +520,7 @@ export function TeamBuilder() {
             if (!response.ok) throw new Error(result.message || result.error || 'Could not upload the player image.');
 
             updatePlayer('imageUrl', result.imageUrl);
-            setSuccess(`Uploaded ${currentPlayer.fullName}'s image. Save to apply.`);
+            toast({ title: 'Image uploaded', description: `${currentPlayer.fullName}'s image applies when you save the squad.`, tone: 'success' });
         } catch (uploadError) {
             setPortraitError(messageOf(uploadError, 'Could not upload the player image.'));
         } finally {
@@ -519,11 +533,10 @@ export function TeamBuilder() {
         event.preventDefault();
         if (readOnly || saving) return;
         setError('');
-        setSuccess('');
 
         // Only changed players are saved, so nothing unedited is rewritten. An empty rating stays "not set"; a rating
         // that is set must be 1..99. Nothing is filled in.
-        if (!changedPlayers.length) { setSuccess('No player changes to save.'); return; }
+        if (!changedPlayers.length) { toast({ title: 'No player changes to save', tone: 'info' }); return; }
         for (const player of changedPlayers) {
             if (!player.position) {
                 const index = players.indexOf(player);
@@ -559,28 +572,35 @@ export function TeamBuilder() {
             setSaving(false);
         }
         if (failed) setError(`Saved ${saved} of ${changedPlayers.length}, failed at ${failed.player.fullName}: ${failed.message}`);
-        else setSuccess(`Saved ${saved} ${saved === 1 ? 'player' : 'players'}.`);
+        else toast({ title: `Saved ${saved} ${saved === 1 ? 'player' : 'players'}`, tone: 'success' });
     };
 
     if (loading) return <main className="mx-auto w-full max-w-5xl space-y-4 px-4 py-6 sm:px-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-40 w-full" /></main>;
 
     const pickers = isDictator && <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Division" as="select" value={divisionId} onChange={(event) => { const v = event.target.value; discardIfConfirmed(() => chooseDivision(v)); }}>
-            <option value="">{divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
-            {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        <Field label="Division">
+            {(p) => <Select {...p} value={divisionId} onChange={(v) => discardIfConfirmed(() => chooseDivision(v))}
+                placeholder={divisions.length ? 'Choose a division' : 'No divisions yet'} disabled={!divisions.length}
+                options={divisions.map((d) => ({ value: d.id, label: d.name }))} />}
         </Field>
-        <Field label="Season" as="select" value={seasonId} disabled={!divisionId || picking.seasons} onChange={(event) => { const v = event.target.value; discardIfConfirmed(() => chooseSeason(v)); }}>
-            <option value="">{picking.seasons ? 'Loading seasons...' : divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}</option>
-            {seasons.map((x) => <option key={x.id} value={x.id}>{x.name}{x.is_current ? ' (current)' : ''}</option>)}
+        <Field label="Season">
+            {(p) => <Select {...p} value={seasonId} disabled={!divisionId || picking.seasons || !seasons.length} onChange={(v) => discardIfConfirmed(() => chooseSeason(v))}
+                placeholder={picking.seasons ? 'Loading seasons...' : divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}
+                options={seasons.map((x) => ({ value: x.id, label: x.name, description: x.is_current ? 'Current' : undefined }))} />}
         </Field>
-        <Field label="Team" as="select" value={teamId} disabled={!seasonId || picking.teams} onChange={(event) => { const v = event.target.value; discardIfConfirmed(() => chooseTeam(v)); }}>
-            <option value="">{picking.teams ? 'Loading teams...' : seasonId && !teams.length ? 'No teams in this season' : 'Choose a team'}</option>
-            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        <Field label="Team">
+            {(p) => <Combobox {...p} value={teamId} disabled={!seasonId || picking.teams || !teams.length} onChange={(v) => discardIfConfirmed(() => chooseTeam(v))}
+                placeholder={picking.teams ? 'Loading teams...' : seasonId && !teams.length ? 'No teams in this season' : 'Choose a team'} searchPlaceholder="Search teams"
+                options={teams.map((t) => ({ value: t.id, label: t.name, icon: <Crest name={t.name} src={t.logo_url} color={t.team_color || undefined} size="sm" /> }))} />}
         </Field>
     </div>;
 
-    const captainPicker = !isDictator && registrations.length > 1 && <Field label="Your team" as="select" value={registration?.id || ''} onChange={(event) => { const v = event.target.value; discardIfConfirmed(() => selectRegistration(v)); }}>
-        {registrations.map((item) => <option key={item.id} value={item.id}>{teamLabel(item)} · {item.season?.division?.name} {item.season?.name}{item.season?.is_current ? '' : ' (past season, read only)'}</option>)}
+    const captainPicker = !isDictator && registrations.length > 1 && <Field label="Your team">
+        {(p) => <Select {...p} value={registration?.id || ''} onChange={(v) => discardIfConfirmed(() => selectRegistration(v))}
+            options={registrations.map((item) => ({
+                value: item.id,
+                label: `${teamLabel(item)} · ${item.season?.division?.name} ${item.season?.name}${item.season?.is_current ? '' : ' (past season, read only)'}`,
+            }))} />}
     </Field>;
 
     const heading = <header className="space-y-1">
@@ -669,14 +689,18 @@ export function TeamBuilder() {
         </div>
         <Tabs label="Player details" tabs={PLAYER_TABS} value={activeTab} onChange={setActiveTab} />
         {activeTab === 'details' && <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Position" as="select" required value={currentPlayer.position}
-                error={positionMissingFor === currentPlayer.id && !currentPlayer.position ? 'Choose a position. It is required before saving.' : undefined}
-                onChange={(event) => { updatePlayer('position', event.target.value); setPositionMissingFor(null); }}>
-                <option value="">Choose a position</option>
-                {positions.map((position) => <option key={position}>{position}</option>)}
+            <Field label="Position"
+                error={positionMissingFor === currentPlayer.id && !currentPlayer.position ? 'Choose a position. It is required before saving.' : undefined}>
+                {(p) => <Select {...p} value={currentPlayer.position} placeholder="Choose a position"
+                    onChange={(value) => { updatePlayer('position', value); setPositionMissingFor(null); }}
+                    options={positions.map((position) => ({ value: position, label: position }))} />}
             </Field>
-            <Field label="Jersey number" type="number" min="0" max="99" value={currentPlayer.jerseyNumber} onChange={(event) => updatePlayer('jerseyNumber', event.target.value)} />
-            <Field label="Overall rating" type="number" min="1" max="99" placeholder="Not set" value={currentPlayer.overallRating} onChange={(event) => updatePlayer('overallRating', event.target.value)} hint="Leave empty if not set." />
+            <Field label="Jersey number">
+                {(p) => <NumberField {...p} min={0} max={99} placeholder="None" value={numOrNull(currentPlayer.jerseyNumber)} onChange={(n) => updatePlayer('jerseyNumber', n)} />}
+            </Field>
+            <Field label="Overall rating" hint="Leave empty if not set.">
+                {(p) => <NumberField {...p} min={1} max={99} placeholder="Not set" value={numOrNull(currentPlayer.overallRating)} onChange={(n) => updatePlayer('overallRating', String(n))} />}
+            </Field>
             <div className="sm:col-span-2">
                 <ImageSlot
                     label="Player image"
@@ -691,14 +715,16 @@ export function TeamBuilder() {
             </div>
         </div>}
         {activeTab === 'style' && <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Preferred foot" as="select" value={currentPlayer.preferredFoot} onChange={(event) => updatePlayer('preferredFoot', event.target.value)}>
-                <option value="">Not set</option>
-                {FEET.map((foot) => <option key={foot}>{foot}</option>)}
+            <Field label="Preferred foot">
+                {(p) => <SegmentedControl aria-labelledby={p['aria-labelledby']} value={currentPlayer.preferredFoot} onChange={(value) => updatePlayer('preferredFoot', value)}
+                    options={[{ value: '', label: 'Not set' }, ...FEET.map((foot) => ({ value: foot, label: foot }))]} />}
             </Field>
             <PlayStylePicker value={currentPlayer.playStyleId} onChange={(value) => updatePlayer('playStyleId', value)} />
         </div>}
         {activeTab === 'attributes' && <div className="grid gap-4 sm:grid-cols-3">
-            {CARD_STATS.map(({ key }) => <Field key={key} label={key} type="number" min="1" max="99" placeholder="Not set" value={currentPlayer.stats[key]} onChange={(event) => updateStat(key, event.target.value)} />)}
+            {CARD_STATS.map(({ key }) => <Field key={key} label={key}>
+                {(p) => <NumberField {...p} min={1} max={99} placeholder="Not set" value={numOrNull(currentPlayer.stats[key])} onChange={(n) => updateStat(key, String(n))} />}
+            </Field>)}
         </div>}
     </Card>;
 
@@ -730,7 +756,7 @@ export function TeamBuilder() {
                     </div>
                 </section>
                 {panel}
-                {(error || success) && <Notice tone={error ? 'error' : 'success'}>{error || success}</Notice>}
+                {error && <Notice tone="error">{error}</Notice>}
                 {saveBar}
             </fieldset>
         </form>
