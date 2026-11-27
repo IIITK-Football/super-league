@@ -6,31 +6,23 @@ handoff steps.
 
 ## Status
 
-- Handoff updated on 2026-11-27. Claude can resume in the main checkout on `develop`. SL-040 and its verification are already published there.
-- Phase 3 merged in PR #193 at `af61b3f`. Both local branches were fast-forwarded to that release before SL-040.
-- Phase 4 is active. SL-040 is done. Local and staging walkthroughs passed on `c7b8318` and C1 was attested at the owner’s direction.
-- The owner confirmed on 2026-11-27 that Codex fast-forwards and pushes `develop` at verified staging handoffs and uses the provided Cloudflare Access token for staging.
-- `d426640` implements the division and season lifecycle, the audited Worker routes, the dictator workspace, and data-driven public navigation and section gating. The new management routes live in the Worker so the existing API test group covers them.
-- `6a6647e` fixes landing navigation cleanup. `e4f6112` keeps the selected season in the URL when the division has no current season. `bbcb0d1` records C1 and closes the item. `c768780` records the clean-tree completion evidence.
-- The owner chose to leave staff sign-in and role assignment as they are. There is no access-request work in this handoff.
+- 2026-11-27: Claude holds the work, in the main checkout on `develop`.
+- Phase 4 is active. SL-040 is done. SL-044 is in progress ([plan](../plans/SL-044.md)).
+- Done for SL-044: migration `20261207000000_season_rules_versions.sql` and seed call, Worker routes, public Rules page, dictator editor, local walkthrough `scripts/ui-walkthrough/rules.mjs` (all four scenarios passed on `f06e1ed`).
 
 ## Verification
 
-- The guarded local reset applied `20261206000000_division_season_lifecycle.sql` and the demo seed on port 54322.
-- All 596 pgTAP checks passed. The `divisions`, `api-services`, `frontend-components`, and `fantasy` groups passed. Both TypeScript checks, the walkthrough guard tests, and the strict coverage check passed.
-- The local Worker parity runner passed 37 checks across all eight groups on `d426640`. The real-app walkthrough passed all four scenarios locally and on staging at `c7b8318`. The item completion groups passed. See the [walkthrough](../walkthroughs/SL-040.md).
+- Local reset applied the migration and demo seed on 54322; 621 pgTAP checks, 110 Worker tests, 270 frontend tests (20 local-only skipped) and both TypeScript checks passed.
 
 ## Exact next step
 
-Start [SL-044](../../backlog/items/SL-044.md), the versioned rules editor, with `pnpm work start SL-044`. It has not been started. Begin with the existing `seasons.rules_md` content and verify the migration before retiring the legacy reader or field. The public page serves the latest published version, and preview and version history stay in the dictator workspace. SL-045 consumes the exact accepted version later.
-
-## In flight
-
-No product files in flight or outstanding SL-040 checks. The pre-existing untracked `.pnpm-store/` remains local.
+1. Push `develop`, then run `node scripts/ui-walkthrough/rules.mjs --target staging` once the staging database, Pages and Worker serve the new commit.
+2. Only after it passes: add `20261207000001_retire_rules_md.sql` (drop `seasons.rules_md`, redefine `backfill_season_rules` without it, update `027_season_rules.test.sql` and `docs/decisions/D-01-division-season-mapping.md`), reset locally, test, push, walk through again.
+3. Write `docs/walkthroughs/SL-044.md`, run `pnpm work done SL-044`; C1 is the owner's attestation.
 
 ## Local database
 
-Local Supabase on port 54322 is running with the lifecycle migration and the demo seed. The frontend on port 5173 and Worker on port 8787 were left running from the Codex checkout. Start them from the main checkout when verifying Claude’s next commit.
+Local Supabase on 54322 runs the new migration and demo seed. No dev servers are left running.
 
 ## Not migrated on purpose
 
