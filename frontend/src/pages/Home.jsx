@@ -74,7 +74,7 @@ function NewsCarousel({ articles, division }) {
   const [playing, setPlaying] = useState(true);
   const [interacting, setInteracting] = useState(false);
   const [visible, setVisible] = useState(() => typeof IntersectionObserver === 'undefined');
-  const [active, setActive] = useState(0);
+  const multiple = articles.length > 1;
 
   useEffect(() => {
     const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -83,6 +83,24 @@ function NewsCarousel({ articles, division }) {
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
   }, []);
+
+  useEffect(() => {
+    if (reduced && rail.current) {
+      for (const card of rail.current.children) { card.style.transform = ''; card.style.opacity = ''; }
+    }
+  }, [reduced]);
+
+  useEffect(() => {
+    const list = rail.current;
+    if (!list || !multiple) return undefined;
+    const center = () => {
+      const card = list.children[articles.length];
+      if (card) list.scrollLeft = card.offsetLeft - list.children[0].offsetLeft - (list.clientWidth - card.offsetWidth) / 2;
+    };
+    center();
+    window.addEventListener('resize', center);
+    return () => window.removeEventListener('resize', center);
+  }, [articles.length, multiple]);
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined' || !rail.current) return undefined;
@@ -95,28 +113,48 @@ function NewsCarousel({ articles, division }) {
     const list = rail.current;
     if (!list || !list.children.length) return;
     const cards = [...list.children];
-    const first = cards[0].offsetLeft;
-    const end = Math.max(0, list.scrollWidth - list.clientWidth);
-    const current = cards.reduce((closest, card, index) =>
-      Math.abs(card.offsetLeft - first - list.scrollLeft) < Math.abs(cards[closest].offsetLeft - first - list.scrollLeft) ? index : closest, 0);
-    const next = (current + direction + cards.length) % cards.length;
-    const left = direction > 0 && list.scrollLeft >= end - 1 ? 0
-      : direction < 0 && list.scrollLeft <= 0 ? end : cards[next].offsetLeft - first;
-    list.scrollTo({ left, behavior: reduced ? 'instant' : 'smooth' });
-  }, [reduced]);
+    const base = cards[0].offsetLeft;
+    const middle = list.scrollLeft + list.clientWidth / 2;
+    let current = cards.reduce((closest, card, index) =>
+      Math.abs(card.offsetLeft - base + card.offsetWidth / 2 - middle)
+      < Math.abs(cards[closest].offsetLeft - base + cards[closest].offsetWidth / 2 - middle) ? index : closest, 0);
+    const cycle = multiple ? cards[articles.length].offsetLeft - base : 0;
+    if (cycle > 0 && direction < 0 && current < articles.length) { list.scrollLeft += cycle; current += articles.length; }
+    if (cycle > 0 && direction > 0 && current >= articles.length * 2) { list.scrollLeft -= cycle; current -= articles.length; }
+    const card = cards[Math.max(0, Math.min(cards.length - 1, current + direction))];
+    list.scrollTo({ left: card.offsetLeft - base - (list.clientWidth - card.offsetWidth) / 2, behavior: reduced ? 'instant' : 'smooth' });
+  }, [articles.length, multiple, reduced]);
 
   useEffect(() => {
-    if (!playing || interacting || reduced || !visible || articles.length < 2) return undefined;
-    const timer = window.setInterval(() => { if (!document.hidden) move(1); }, 12000);
-    return () => window.clearInterval(timer);
-  }, [playing, interacting, reduced, visible, articles.length, move]);
+    const list = rail.current;
+    if (!list || !multiple || !playing || interacting || reduced || !visible) return undefined;
+    let frame;
+    let last;
+    let position = list.scrollLeft;
+    const animate = (now) => {
+      if (last !== undefined && !document.hidden) position += Math.min(now - last, 50) * 0.038;
+      last = now;
+      const first = list.children[0];
+      const middle = list.children[articles.length];
+      if (first && middle) {
+        const cycle = middle.offsetLeft - first.offsetLeft;
+        if (cycle > 0 && position >= cycle * 2) position -= cycle;
+      }
+      list.scrollLeft = position;
+      frame = window.requestAnimationFrame(animate);
+    };
+    frame = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(frame);
+  }, [articles.length, multiple, playing, interacting, reduced, visible]);
 
+  const cards = multiple ? [...articles, ...articles, ...articles] : articles;
   return <section className="min-w-0 space-y-4" aria-label="News carousel" aria-roledescription="carousel"
     onMouseEnter={() => setInteracting(true)} onMouseLeave={() => setInteracting(false)}
-    onFocusCapture={() => setInteracting(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setInteracting(false); }}>
+    onFocusCapture={() => setInteracting(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setInteracting(false); }}
+    onTouchStart={() => setInteracting(true)} onTouchEnd={() => setInteracting(false)}>
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
       <SectionHead title="News" to={`/${division}/news`} action="All news" />
-      {articles.length > 1 && <div className="flex items-center gap-2">
+      {multiple && <div className="flex items-center gap-2">
         {!reduced && <button type="button" aria-label={playing ? 'Pause news carousel' : 'Play news carousel'} onClick={() => setPlaying((value) => !value)} className="glass rounded-full p-3">{playing ? <Pause size={16} /> : <Play size={16} />}</button>}
         <button type="button" aria-label="Previous news" onClick={() => move(-1)} className="glass rounded-full p-3"><ArrowLeft size={16} /></button>
         <button type="button" aria-label="Next news" onClick={() => move(1)} className="glass rounded-full p-3"><ArrowRight size={16} /></button>
@@ -124,15 +162,24 @@ function NewsCarousel({ articles, division }) {
     </div>
     <ul ref={rail} onScroll={(event) => {
       const list = event.currentTarget;
-      const cards = [...list.children];
-      const first = cards[0]?.offsetLeft ?? 0;
-      setActive(cards.reduce((nearest, card, index) => Math.abs(card.offsetLeft - first - list.scrollLeft)
-        < Math.abs(cards[nearest].offsetLeft - first - list.scrollLeft) ? index : nearest, 0));
-    }} className="no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto pb-7 pt-2 [--news-card-width:min(72%,20rem)] before:w-[calc((100%-var(--news-card-width))/2-0.75rem)] before:shrink-0 before:content-[''] after:w-[calc((100%-var(--news-card-width))/2-0.75rem)] after:shrink-0 after:content-[''] md:[--news-card-width:34%]">
-      {articles.map((article, index) => <li key={article.id} className="w-[var(--news-card-width)] shrink-0 snap-center motion-safe:transition-[transform,opacity] motion-safe:duration-700"
-        style={reduced || index === active ? undefined : { transform: 'translateY(18px) scale(0.92)', opacity: 0.8 }}>
-        <Link to={`/article/${article.id}`} className="block h-full rounded-card"><NewsArticle article={article} /></Link>
-      </li>)}
+      const nodes = [...list.children];
+      if (!nodes.length) return;
+      const base = nodes[0].offsetLeft;
+      const middle = list.scrollLeft + list.clientWidth / 2;
+      const step = nodes[1] ? nodes[1].offsetLeft - base : nodes[0].offsetWidth;
+      for (const card of nodes) {
+        const distance = Math.abs(card.offsetLeft - base + card.offsetWidth / 2 - middle) / (step || 1);
+        const depth = reduced ? 0 : Math.min(1, distance * distance);
+        card.style.transform = depth ? `translateY(${22 * depth}px) scale(${1 - 0.1 * depth})` : '';
+        card.style.opacity = depth ? String(1 - 0.2 * depth) : '';
+      }
+    }} className="no-scrollbar flex gap-3 overflow-x-auto pb-7 pt-2 [--news-card-width:min(72%,20rem)] md:[--news-card-width:34%]">
+      {cards.map((article, index) => {
+        const duplicate = multiple && (index < articles.length || index >= articles.length * 2);
+        return <li key={`${article.id}-${index}`} aria-hidden={duplicate || undefined} className="w-[var(--news-card-width)] shrink-0">
+          <Link tabIndex={duplicate ? -1 : undefined} to={`/article/${article.id}`} className="block h-full rounded-card"><NewsArticle article={article} /></Link>
+        </li>;
+      })}
     </ul>
   </section>;
 }

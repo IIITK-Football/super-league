@@ -124,20 +124,28 @@ describe('division home', () => {
   });
 
   it('offers controls to move and pause the news carousel', async () => {
-    const intervals = vi.spyOn(window, 'setInterval');
     responses.dashboard = { json: { success: true, data: { ...dashboardPayload.data,
       news: [{ id: 'one', title: 'First article' }, { id: 'two', title: 'Second article' }] } } };
     renderHome();
     const carousel = await screen.findByRole('region', { name: 'News carousel' });
-    expect(intervals).toHaveBeenCalledWith(expect.any(Function), 12000);
     const rail = carousel.querySelector('ul');
-    expect(rail.children[1].style.transform).toContain('translateY');
+    expect(rail.querySelectorAll('[aria-hidden="true"]')).toHaveLength(4);
+    Object.defineProperty(rail, 'clientWidth', { configurable: true, value: 200 });
+    [...rail.children].forEach((card, index) => {
+      Object.defineProperty(card, 'offsetLeft', { configurable: true, value: index * 100 });
+      Object.defineProperty(card, 'offsetWidth', { configurable: true, value: 100 });
+    });
+    rail.scrollLeft = 25;
+    fireEvent.scroll(rail);
+    const before = rail.children[1].style.transform;
+    rail.scrollLeft = 30;
+    fireEvent.scroll(rail);
+    expect(rail.children[1].style.transform).not.toBe(before);
     expect(rail.children[1].style.transform).not.toContain('rotate');
     rail.scrollTo = vi.fn();
     fireEvent.click(screen.getByRole('button', { name: 'Next news' }));
     expect(rail.scrollTo).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Pause news carousel' }));
     expect(screen.getByRole('button', { name: 'Play news carousel' })).toBeTruthy();
-    intervals.mockRestore();
   });
 });
