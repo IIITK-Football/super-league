@@ -1,5 +1,13 @@
-# pnpm workspace: each package keeps its own pnpm-lock.yaml (see .npmrc).
+# pnpm workspace: each package keeps its own pnpm-lock.yaml, so the Pages site and the Workers build keep
+# independently deployable dependency graphs.
 packages:
   - frontend
   - backend
   - api
+
+sharedWorkspaceLockfile: false
+
+# The only dependencies allowed to run install scripts: both fetch the platform binary they need.
+allowBuilds:
+  esbuild: true
+  workerd: true
