@@ -7,35 +7,48 @@ handoff steps.
 ## Status
 
 - 2026-11-27: Claude holds the work, in the main checkout on `develop`.
-- Phase 4 is active. SL-040 is done. SL-044 ([plan](../plans/SL-044.md)) is built, verified and on staging; it waits for the owner's C1 attestation.
-- `a78d670` versioned rules tables, backfill and seed call; `e6f3835` Worker routes; `f06e1ed` public page and dictator editor; `bf96271` drops `seasons.rules_md`.
+- SL-040 and SL-044 are done. Phase 4 is not yet closed with `pnpm work phase`.
+- Maintenance the owner asked for, after SL-044: the Next.js runtime is removed (`5a86178`) and the toolchain is updated (through `a77a2b4`): Node 24, pnpm 12, Vite 8, Vitest 5, React 19, TypeScript 7, current GitHub Actions, current minor and patch releases, and Worker compatibility date 2026-11-20.
+
+## Held back on purpose
+
+- **Supabase CLI stays on 2.x** (2.122.1). Version 3 `init` writes `config.jsonc`, but the restore test in `scripts/backup/database-backup.sh` edits `config.toml`; `db push` also targets the local stack by default and needs `--remote` and `--yes`, and the project guard does not know `--remote`. An upgrade needs the backup script, `db-deploy.yml` and the guard changed together, with the restore test proven in CI.
+- **ESLint stays on 9**: `eslint-plugin-react` supports no later major. `pnpm lint` in `frontend/` reports existing problems and no gate runs it.
+- `lottie-react` and the unused football loader were removed, not upgraded.
 
 ## Verification
 
-- 622 pgTAP checks, 110 Worker tests, 34 division tests, the local dashboard test, 270 frontend tests (20 local-only skipped), both TypeScript checks and the strict mapped-and-covered check passed.
-- `scripts/ui-walkthrough/rules.mjs` passed all four scenarios locally and on staging at `bf96271` ([local](../walkthroughs/evidence/SL-044-ui-local.json), [staging](../walkthroughs/evidence/SL-044-ui-staging.json)). [Staging database run](https://github.com/IIITK-Football/super-league/actions/runs/45945503886).
-- The first staging run, at `a23f838` just after the deploy, timed out once waiting for version 2 on the public page; the rerun and the `bf96271` run passed.
-- The shell's Node 24 fails `ManageDivisions.local.test.jsx` (jsdom `AbortSignal`). Run tests and `pnpm work` with Node 22 (`.nvmrc`): put the folder of `pnpm dlx node@22 -e 'console.log(process.execPath)'` first on `PATH`.
+- On Node 24.22.3 and pnpm 12.23.0 at `a77a2b4`: 622 pgTAP checks, 915 backend, 114 Worker and 271 frontend tests (20 local-only skipped, run separately: 20 passed), both TypeScript checks, site and Worker builds, bundle guard, and a clean `pnpm audit` in all four packages.
+- Local browser walkthroughs `rules`, `divisions`, `parity` and `match-events` passed at `a77a2b4`.
+- Before this, the `database`, `tooling` and `rosters` tests had stale expectations from SL-040 and SL-044 (schema counts, hidden-season fixtures) that the item completions never ran. They are fixed in `5a86178`.
+
+## Using the toolchain locally
+
+- Node 24.15 or later (`.nvmrc`) and pnpm 12. A global pnpm 10 cannot switch to pnpm 12 (`ENOEXEC`): run `npm install -g pnpm@12.23.0`.
+- pnpm refuses releases younger than a day and runs install scripts only for `esbuild` and `workerd` (`pnpm-workspace.yaml`).
 
 ## Exact next step
 
-1. Owner: `pnpm work attest SL-044 C1 "<note>"`.
-2. Under Node 22: `pnpm work done SL-044 --base e1f0bef`, fill the walkthrough `docs/walkthroughs/SL-044.md`, commit, run it again.
-3. Start SL-045 (needs a plan first). It stores the accepted rules version id (`season_rules_versions.id`) and adds the player's view of that version; `season_rules(p_season)` serves only the latest.
+1. Confirm CI, Cloudflare Pages, Workers Builds and the staging database run for the pushed commit, then run the walkthroughs with `--target staging`.
+2. Start SL-045 (needs a plan first). It stores the accepted rules version id (`season_rules_versions.id`) and adds the player's view of that version; `season_rules(p_season)` serves only the latest.
 
-For the walkthrough's risks: a production release must serve the new site before the migrations run, because the previous site reads `rules_md`. Rolling back past `20261207000001` needs the column added again from version 1. Each staging walkthrough reuses the archived `sl-check-rules` division and leaves one season in it, since published versions cannot be deleted.
+## Owner actions
+
+- Upgrade the local Node and pnpm as above.
+- Cloudflare: set the build variable `NODE_VERSION` to 24 for both Workers and Pages (it overrides `.nvmrc`), and review the Pages compatibility date.
+- Optional: enable Dependabot alerts; delete the unused `Preview` and `Production` GitHub environments.
 
 ## In flight
 
-No product files in flight. Untracked `.github/agents`, `.github/hooks`, `.github/skills`, `.pnpm-store/` and `supabase/` predate this work and were left alone.
+Untracked `.github/agents`, `.github/hooks`, `.github/skills`, `.pnpm-store/` and `supabase/` predate this work and were left alone.
 
 ## Local database
 
-Local Supabase on 54322 runs both new migrations and the demo seed. No dev servers are left running.
+Local Supabase on 54322 runs all migrations and the demo seed. No dev servers are left running.
 
 ## Not migrated on purpose
 
-`auth/login`, `legends` and `admin/teams` still build clients directly. The Worker does not serve them; they are Next-only and are retired by SL-034.
+`auth/login`, `legends` and `admin/teams` are gone with the Next.js runtime; SL-034 still holds the rollback rehearsal and the owner's check.
 
 ## Contributor prototypes to read when their item comes up
 
@@ -45,9 +58,8 @@ Local Supabase on 54322 runs both new migrations and the demo seed. No dev serve
 
 ## Remaining order
 
-1. SL-044.
-2. SL-045.
-3. SL-050, SL-054.
-4. SL-053, SL-108.
-5. Phase 8: SL-104, SL-043, storage (SL-070 → SL-071 → SL-105 → SL-072 → SL-106), SL-060, SL-061.
-6. Phase 9, then Phase 10.
+1. SL-045.
+2. SL-050, SL-054.
+3. SL-053, SL-108.
+4. Phase 8: SL-104, SL-043, storage (SL-070 → SL-071 → SL-105 → SL-072 → SL-106), SL-060, SL-061.
+5. Phase 9, then Phase 10.
