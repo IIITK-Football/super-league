@@ -2,12 +2,18 @@
 // Group: frontend-components. A division section outranks a season of the same division, so /<division>/matches is
 // never read as a season called "matches", and the division-less addresses are still routed.
 import { describe, expect, it, vi } from 'vitest';
-import { matchRoutes } from 'react-router-dom';
+import { matchRoutes, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach } from 'vitest';
+vi.mock('../../context/LeagueContext', () => ({ useLeague: () => ({ division: 'super-league' }), LeagueProvider: ({ children }) => children }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../Fantasy', () => ({ Fantasy: () => null }));
 vi.mock('../LeagueLanding', () => ({ LeagueLanding: () => null }));
 vi.mock('../../components/Loader', () => ({ Loader: () => null }));
-import { routes } from '../../App';
+import { routes, DivisionRedirect } from '../../App';
+
+afterEach(cleanup);
+function Location() { const { pathname, search } = useLocation(); return <p>{pathname + search}</p>; }
 
 const matched = (path) => matchRoutes(routes, path).at(-1).route.path;
 
@@ -18,6 +24,14 @@ describe('division routes', () => {
     expect(matched('/wsl/teams/abc')).toBe('/:division/teams/:teamId');
     expect(matched('/freshers/news')).toBe('/:division/news');
     expect(matched('/inter/rules')).toBe('/:division/rules');
+  });
+
+  it('preserves an explicit division on a legacy link', () => {
+    render(<MemoryRouter initialEntries={['/rules?division=wsl&season=2026']}><Routes>
+      <Route path="/rules" element={<DivisionRedirect to="rules" />} />
+      <Route path="/:division/rules" element={<Location />} />
+    </Routes></MemoryRouter>);
+    expect(screen.getByText('/wsl/rules?division=wsl&season=2026')).toBeTruthy();
   });
 
   it('keeps a season address for the division home', () => {

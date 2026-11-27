@@ -73,10 +73,11 @@ function DivisionScope({ children }) {
 }
 
 // Old division-less addresses (/matches, /vault, /rules, /teams) open the same page in the division in view.
-function DivisionRedirect({ to }) {
+export function DivisionRedirect({ to }) {
   const { division } = useLeague();
   const { search } = useLocation();
-  return <Navigate to={`/${division}/${to}${search}`} replace />;
+  const requested = new URLSearchParams(search).get('division') || division;
+  return <Navigate to={`/${encodeURIComponent(requested)}/${to}${search}`} replace />;
 }
 
 function WcRoute() {
