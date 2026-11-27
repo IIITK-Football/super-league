@@ -51,15 +51,11 @@ function useWideHeader() {
 // The site wordmark, stacked like the original "SUPER / LEAGUE" mark, in a box of one fixed size. The division in
 // view shows beside it as a small label that truncates, so the bar never changes width between divisions or while
 // they load.
-function Wordmark({ label }) {
+function Wordmark({ division }) {
   return (
     <span className="flex w-44 items-center gap-3 sm:w-52">
-      <span className="flex shrink-0 flex-col text-lg font-black uppercase italic leading-[0.82] tracking-tighter text-ink sm:text-xl">
-        <span>Super</span>
-        <span>League</span>
-      </span>
-      <span aria-hidden="true" className="h-7 w-px shrink-0 bg-line" />
-      <span className="eyebrow min-w-0 truncate">{label || ' '}</span>
+      {division?.logo_url && <img src={division.logo_url} alt="" className="h-10 w-10 shrink-0 object-contain" />}
+      <span className="eyebrow min-w-0 truncate">{division?.name || ' '}</span>
     </span>
   );
 }
@@ -147,8 +143,8 @@ export function AppShell({ children }) {
         <header className={cn('border-b transition-[background-color,border-color,backdrop-filter] duration-300',
           scrolled ? 'border-line/80 bg-bg/65 backdrop-blur-2xl backdrop-saturate-150' : 'border-transparent bg-bg/30 backdrop-blur-md')}>
           <div className="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto] items-center gap-3 px-4 sm:h-[72px] sm:px-6 lg:grid-cols-[1fr_auto_1fr]">
-            <Link to={`/${division}`} aria-label={`${current?.name ?? 'Super League'} home`} className="justify-self-start rounded-ctl transition-opacity hover:opacity-80">
-              <Wordmark label={current?.short_name || current?.name} />
+            <Link to={`/${division}`} aria-label={`${current?.name ?? 'Division'} home`} className="justify-self-start rounded-ctl transition-opacity hover:opacity-80">
+              <Wordmark division={current} />
             </Link>
             <PillNav items={allSections} isActive={isActive} reduced={reduced} />
             <div className="flex items-center justify-self-end gap-2 sm:gap-3">
@@ -178,9 +174,19 @@ export function AppShell({ children }) {
         accentColor={accent}
       >
         <div className="sm-panel-extra flex flex-1 flex-col justify-between gap-8">
-          <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} onPick={() => setMenuOpen(false)} />
+          <div className="space-y-6">
+            <DivisionSwitcher divisions={divisions} loading={loading} division={division} current={current} onPick={() => setMenuOpen(false)} />
+            {seasonScope.seasons?.length > 0 && <nav aria-label="Seasons" className="space-y-2">
+              <p className="eyebrow">Season</p>
+              <div className="flex flex-wrap gap-2">{seasonScope.seasons.map((season) => (
+                <Link key={season.id} to={season.is_current ? `/${division}` : `/${division}/${season.slug}`}
+                  onClick={() => setMenuOpen(false)} aria-current={seasonScope.season?.id === season.id ? 'page' : undefined}
+                  className="glass rounded-pill px-4 py-3 text-sm font-bold text-ink">{season.name}{season.is_current ? ' · Current' : ''}</Link>
+              ))}</div>
+            </nav>}
+          </div>
           <div className="flex items-center justify-between border-t border-line pt-4">
-            <span className="eyebrow">Super League · IIIT Kottayam</span>
+            <span className="eyebrow">IIIT Kottayam</span>
             <ThemeToggle />
           </div>
         </div>

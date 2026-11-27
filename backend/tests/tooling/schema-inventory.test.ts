@@ -86,7 +86,7 @@ describe('schema inventory on the local database', () => {
     expect(by('table')).toHaveLength(33);
     expect(by('view')).toHaveLength(2);
     // Division lifecycle and versioned rules add 18 functions and two policies.
-    expect(by('function')).toHaveLength(88);
+    expect(by('function')).toHaveLength(90);
     expect(by('policy')).toHaveLength(53);
     expect(by('table').map((r) => r.object)).toEqual(expect.arrayContaining(['public.season_rules_drafts', 'public.season_rules_versions']));
     // the division and season model (20261119000000_divisions_and_seasons.sql)
@@ -126,7 +126,7 @@ describe('schema inventory on the local database', () => {
     expect(triggers).toContain('public.user_profiles.audit_user_profiles');
     expect(triggers).toContain('public.season_rules_versions.season_rules_versions_immutable');
     expect(triggers).toContain('public.seasons.seasons_clear_unavailable_current');
-    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(42);
+    expect(triggers.filter((t) => t.startsWith('public.'))).toHaveLength(43);
   });
 
   it('includes function bodies and security-definer settings used to judge drift', () => {

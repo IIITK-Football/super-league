@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../../context/AuthContext', () => ({
@@ -82,8 +82,20 @@ describe('header bar', () => {
     divisionsState.divisions = [{ slug: 'super-league', name: 'Super League', short_name: 'SL' }, { slug: 'wsl', name: 'WSL' }];
     divisionsState.loading = false;
     shellAt('/super-league');
+    expect(screen.getByRole('link', { name: 'Super League home' }).textContent).toBe('Super League');
     expect(document.querySelector('#site-menu nav[aria-label="Divisions"]')).not.toBeNull();
     expect(document.querySelector('header nav[aria-label="Divisions"]')).toBeNull();
+  });
+
+  it('keeps the menu open while choosing from a portalled division dropdown', async () => {
+    divisionsState.divisions = ['Super League', 'WSL', 'Freshers', 'New League'].map((name, index) => ({ slug: index ? `d${index}` : 'super-league', name }));
+    divisionsState.loading = false;
+    shellAt('/super-league');
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose division' }));
+    const option = await screen.findByRole('option', { name: 'New League' });
+    fireEvent.mouseDown(option);
+    expect(screen.getByRole('button', { name: 'Close menu' }).getAttribute('aria-expanded')).toBe('true');
   });
 });
 
@@ -102,6 +114,14 @@ describe('menu contents', () => {
 });
 
 describe('DivisionSwitcher label', () => {
+  it('switches to a dropdown when there are more than three divisions', async () => {
+    const divisions = ['Super League', 'WSL', 'Freshers', 'New League'].map((name, index) => ({ slug: `d${index}`, name }));
+    const onPick = vi.fn();
+    render(<MemoryRouter><DivisionSwitcher divisions={divisions} division="d0" onPick={onPick} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Choose division' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'New League' }));
+    expect(onPick).toHaveBeenCalledOnce();
+  });
   it('shows a skeleton, not the slug, while divisions load', () => {
     const { container } = render(
       <MemoryRouter>

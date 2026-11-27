@@ -46,7 +46,7 @@ export async function GET(
       away_team_id: m.away_team?.id,
     }));
 
-    return Response.json({ success: true, data: matches });
+    return Response.json({ success: true, data: matches }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return handleError(error, 'Fetch Team Matches');
   }

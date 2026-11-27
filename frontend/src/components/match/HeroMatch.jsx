@@ -49,7 +49,7 @@ export function HeroMatch({ match, detail, className }) {
     <Link
       to={`/matches/${match.id}`}
       aria-label={`${home.name} against ${away.name}, ${status}`}
-      className={cn('pitch lift group block rounded-card border border-white/10 px-4 pb-7 pt-5 sm:px-8 sm:pb-10 sm:pt-7', live && 'beam', className)}
+      className={cn('lift group block rounded-card border border-white/10 px-4 pb-7 pt-5 sm:px-8 sm:pb-10 sm:pt-7', live ? 'pitch beam' : 'bg-zinc-900', className)}
     >
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex items-center gap-2.5 rounded-pill border border-white/15 bg-black/50 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.25em] text-white backdrop-blur-md">

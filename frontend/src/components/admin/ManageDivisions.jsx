@@ -90,7 +90,7 @@ export default function ManageDivisions() {
     setLoading(true);
     const { data, error: loadError } = await supabase
       .from('divisions')
-      .select('id, slug, name, short_name, visibility, archived_at, logo_url, primary_color, secondary_color, sort_order')
+      .select('id, slug, name, short_name, visibility, archived_at, logo_url, landing_video_key, is_featured, primary_color, secondary_color, sort_order')
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
     if (loadError) setError(describeError(loadError));
@@ -197,11 +197,18 @@ export default function ManageDivisions() {
   const saveDivision = (division) => {
     const invalid = validateDivision(division);
     if (invalid) return report(new Error(invalid));
-    const { name, short_name, logo_url, primary_color, secondary_color } = division;
+    const { name, short_name, logo_url, landing_video_key, primary_color, secondary_color } = division;
     return patchDivision(division, {
       name: name.trim(), short_name: short_name?.trim() || null, logo_url: logo_url?.trim() || null,
+      landing_video_key: landing_video_key?.trim() || null,
       primary_color: primary_color || null, secondary_color: secondary_color || null,
     }, `Division "${name.trim()}" saved.`);
+  };
+
+  const featureDivision = async (division) => {
+    const ok = await confirm({ title: `Make ${division.name} the current division?`, description: 'This changes the division featured on the landing page.', confirmLabel: 'Make current' });
+    if (ok) return write(`division-${division.id}`, `/admin/divisions/${division.id}/current`, 'POST', undefined,
+      `${division.name} is now the current division.`, loadDivisions);
   };
 
   const deleteDivision = async (division) => {
@@ -321,11 +328,14 @@ export default function ManageDivisions() {
       : <ul aria-label="Divisions" className="space-y-3">{divisions.map((d, index) => <li key={d.id} className={`grid gap-3 rounded-2xl border p-4 lg:grid-cols-[1.5fr_140px_auto] lg:items-center ${selectedDivision?.id === d.id ? 'border-[#d9ff4a]/40 bg-[#d9ff4a]/[.04]' : 'border-white/10 bg-white/[.03]'}`}>
         <div className="space-y-1">
           <input aria-label={`Name of ${d.slug}`} value={d.name} onChange={(e) => changeDivision(d.id, 'name', e.target.value)} className={`${inputClass} font-bold`} />
-          <div className="flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">/{d.slug} {stateBadge(d)}</div>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">/{d.slug} {stateBadge(d)} {d.is_featured && badge('Current division', 'lime')}</div>
+          <label className={labelClass}>Logo URL<input aria-label={`Logo URL of ${d.slug}`} value={d.logo_url || ''} onChange={(e) => changeDivision(d.id, 'logo_url', e.target.value)} className={inputClass} /></label>
+          <label className={labelClass}>Landing video key<input aria-label={`Landing video key of ${d.slug}`} value={d.landing_video_key || ''} onChange={(e) => changeDivision(d.id, 'landing_video_key', e.target.value)} className={inputClass} /></label>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => saveDivision(d)} disabled={!!busy} className={ghostButton}><Save size={13} /> Save</button>
           <button type="button" onClick={() => chooseDivision(d)} disabled={!!busy} className={ghostButton}><Layers size={13} /> Seasons</button>
+          {!d.is_featured && d.visibility === 'public' && !d.archived_at && <button type="button" onClick={() => featureDivision(d)} disabled={!!busy} className={ghostButton}><Star size={13} /> Make current division</button>}
           {lifecycleButtons(d, patchDivision)}
           {orderButtons(d.name, index, divisions.length, (offset) => reorder('divisions', divisions, index, offset))}
           <button type="button" onClick={() => deleteDivision(d)} disabled={!!busy} aria-label={`Delete ${d.name}`} className="rounded-lg border border-red-500/30 px-3 py-2 text-red-400 disabled:opacity-40"><Trash2 size={13} /></button>

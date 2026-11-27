@@ -8,7 +8,7 @@ vi.hoisted(() => {
 });
 vi.mock('@supabase/supabase-js', async () => (await import('./fake-supabase')).supabaseModule);
 
-import { GET, revalidate } from '../../app/api/teams/[team_id]/matches/route';
+import { GET } from '../../app/api/teams/[team_id]/matches/route';
 
 const TEAM = '3f2c1a4e-8b7d-4c6e-9a1f-0d2e3c4b5a69';
 const call = (teamId: string) => GET(new Request('http://localhost/api/teams/x/matches'), { params: Promise.resolve({ team_id: teamId }) });
@@ -19,8 +19,9 @@ beforeEach(() => {
 });
 
 describe('GET /api/teams/:team_id/matches', () => {
-  it('is not cached, so live scores are current', () => {
-    expect(revalidate).toBe(0);
+  it('is not cached, so live scores are current', async () => {
+    db.tables.matches = { data: [], error: null };
+    expect((await call(TEAM)).headers.get('Cache-Control')).toBe('no-store');
   });
 
   it('rejects a team_id that is not a UUID without querying', async () => {

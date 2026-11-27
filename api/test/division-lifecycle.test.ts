@@ -76,6 +76,7 @@ it('writes the full lifecycle as the dictator and preserves stored state on deni
   const denied = [
     ['/admin/divisions', 'POST', { ...draft, slug: `${tag}-denied` }],
     [divisionPath, 'PATCH', { name: 'Denied' }],
+    [`${divisionPath}/current`, 'POST', undefined],
     [`/admin/divisions/${empty}`, 'DELETE', undefined],
     ['/admin/divisions/order', 'PUT', { ids: order }],
     ['/admin/seasons', 'POST', { division_id: division, slug: 'denied', name: 'Denied' }],

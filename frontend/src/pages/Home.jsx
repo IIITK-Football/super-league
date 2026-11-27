@@ -1,11 +1,12 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { SeasonSelect } from '../components/SeasonSelect';
 import { MatchStrip } from '../components/match/MatchStrip';
 import { HeroMatch } from '../components/match/HeroMatch';
-import { isFinal, isLive, isUpcoming, pickHeroMatch } from '../components/match/matchState';
+import { isFinal, pickHeroMatch } from '../components/match/matchState';
 import { StandingsTable } from '../components/standings/StandingsTable';
 import { NewsArticle } from '../components/NewsArticle';
 import { EmptyState, ErrorState, NumberTicker, Skeleton, Spotlight } from '../components/ui';
@@ -45,11 +46,8 @@ function HomeSkeleton() {
 
 // The matches around today, for the rail under the hero: live first, then the next fixtures, then recent results.
 function railMatches(matches, hero) {
-  const rest = matches.filter((m) => m.id !== hero?.match.id);
-  const live = rest.filter(isLive);
-  const next = rest.filter(isUpcoming).sort((a, b) => time(a) - time(b));
-  const done = rest.filter(isFinal).sort((a, b) => time(b) - time(a));
-  return [...live, ...next.slice(0, 4), ...done.slice(0, 6)].slice(0, 8);
+  return matches.filter((m) => m.id !== hero?.match.id && isFinal(m))
+    .sort((a, b) => time(b) - time(a)).slice(0, 4);
 }
 
 // A leader tile: the number counts up, the name links to the player.
@@ -68,6 +66,25 @@ function Leader({ label, unit, player }) {
       </p>
     </Spotlight>
   );
+}
+
+function NewsCarousel({ articles, division }) {
+  const [start, setStart] = useState(0);
+  const visible = articles.map((_, index) => articles[(start + index) % articles.length]);
+  return <section className="space-y-4" aria-label="News carousel">
+    <div className="flex items-end justify-between gap-3">
+      <SectionHead title="News" to={`/${division}/news`} action="All news" />
+      {articles.length > 1 && <div className="flex gap-2">
+        <button type="button" aria-label="Previous news" onClick={() => setStart((i) => (i - 1 + articles.length) % articles.length)} className="glass rounded-full p-3"><ArrowLeft size={18} /></button>
+        <button type="button" aria-label="Next news" onClick={() => setStart((i) => (i + 1) % articles.length)} className="glass rounded-full p-3"><ArrowRight size={18} /></button>
+      </div>}
+    </div>
+    <ul className="no-scrollbar -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+      {visible.map((article) => <li key={article.id} className="w-[85%] shrink-0 snap-start md:w-[calc((100%-2rem)/3)]">
+        <Link to={`/article/${article.id}`} className="block h-full rounded-card"><NewsArticle article={article} /></Link>
+      </li>)}
+    </ul>
+  </section>;
 }
 
 // The division's front page. Above the fold: the live (else next, else latest) match on a night pitch, with the
@@ -132,7 +149,8 @@ export function Home() {
     home: withLogo(m.home, m.home_team_id, logos),
     away: withLogo(m.away, m.away_team_id, logos),
   }));
-  const hero = pickHeroMatch(matches);
+  const selected = pickHeroMatch(matches);
+  const hero = selected?.kind === 'result' ? null : selected;
   const rail = railMatches(matches, hero);
 
   const extraData = extras.data?.data ?? {};
@@ -140,7 +158,7 @@ export function Home() {
   const liveDetail = extraData.liveMatch;
   const heroHome = hero && (Array.isArray(hero.match.home) ? hero.match.home[0] : hero.match.home)?.name;
   const detail = liveDetail && heroHome && liveDetail.homeTeam === heroHome ? liveDetail : null;
-  const news = (extraData.news ?? []).slice(0, 3);
+  const news = extraData.news ?? [];
   const leaders = [
     extraData.topScorer && { key: 'scorer', label: 'Golden boot', unit: 'goals', player: extraData.topScorer },
     extraData.topAssist && { key: 'assist', label: 'Playmaker', unit: 'assists', player: extraData.topAssist },
@@ -161,9 +179,23 @@ export function Home() {
           </EmptyState>
         )}
 
-        {(hero || table.length > 0) && (
+        {(hero || rail.length > 0 || table.length > 0) && (
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-            {hero ? <section aria-label={HERO_LABEL[hero.kind]}><HeroMatch match={hero.match} detail={detail} /></section> : <div className="hidden lg:block" />}
+            <div className="min-w-0 space-y-5">
+              {hero && <section aria-label={HERO_LABEL[hero.kind]}><HeroMatch match={hero.match} detail={detail} /></section>}
+      {rail.length > 0 && (
+        <section className="space-y-4">
+          <SectionHead title="Recent matches" to={`/${division}/matches`} action="View all" />
+          <ul className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
+            {rail.map((m) => (
+              <li key={m.id} className="w-[19rem] shrink-0 snap-start sm:w-[22rem]">
+                <MatchStrip match={m} className="h-full" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+            </div>
             {table.length > 0 && (
               <section className="space-y-3">
                 <SectionHead title="Table" to={`/standings/${division}`} action="Full table" />
@@ -174,22 +206,13 @@ export function Home() {
         )}
       </div>
 
-      {rail.length > 0 && (
-        <section className="space-y-4">
-          <SectionHead title="Matches" to={`/${division}/matches`} action="All matches" />
-          <ul className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
-            {rail.map((m) => (
-              <li key={m.id} className="w-[19rem] shrink-0 snap-start sm:w-[22rem]">
-                <MatchStrip match={m} className="h-full" />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+
 
       {extras.error && (
         <ErrorState title="News, stats and predictions did not load" message={extras.error.message} onRetry={extras.retry} />
       )}
+
+      {news.length > 0 && <NewsCarousel articles={news} division={division} />}
 
       {(leaders.length > 0 || predictions.length > 0) && (
         <section className="space-y-4">
@@ -219,20 +242,6 @@ export function Home() {
         </section>
       )}
 
-      {news.length > 0 && (
-        <section className="space-y-4">
-          <SectionHead title="News" to={`/${division}/news`} action="All news" />
-          <ul className="grid gap-4 md:grid-cols-3">
-            {news.map((article) => (
-              <li key={article.id}>
-                <Link to={`/article/${article.id}`} className="block h-full rounded-card">
-                  <NewsArticle article={article} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
       </div>
     </div>
   );

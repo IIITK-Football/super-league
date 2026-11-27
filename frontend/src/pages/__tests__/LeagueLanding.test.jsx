@@ -24,7 +24,7 @@ vi.mock('../../lib/supabase', () => ({
 import { LeagueLanding } from '../LeagueLanding';
 
 const divisions = [
-  { id: 'd1', slug: 'super-league', name: 'Super League', primary_color: '#123456', logo_url: null, archived_at: null },
+  { id: 'd1', slug: 'super-league', name: 'Super League', primary_color: '#123456', logo_url: null, archived_at: null, is_featured: true, landing_video_key: 'superLeague1' },
   { id: 'd2', slug: 'wsl', name: 'Women Super League', primary_color: null, logo_url: null, archived_at: null },
   { id: 'd3', slug: 'old', name: 'Old Cup', primary_color: null, logo_url: null, archived_at: '2025-01-01' },
 ];
@@ -74,9 +74,10 @@ describe('landing division choice', () => {
     renderLanding();
     const list = await screen.findByRole('list', { name: '' }).catch(() => null);
     expect(list).toBeTruthy();
-    const link = await findCard('/super-league');
+    const link = await screen.findByRole('link', { name: 'Enter Super League' });
     expect(link.getAttribute('href')).toBe('/super-league');
-    expect(link.textContent).toContain('Alpha 2 - 1 Beta');
+    expect(document.querySelectorAll('video')).toHaveLength(1);
+    expect(document.querySelector('section[aria-label=Divisions] a[href="/super-league"]')).toBeNull();
     expect(await findCard('/wsl')).toBeTruthy();
     expect(screen.queryByText('Old Cup')).toBeNull();
     for (const table of ['divisions', 'seasons']) {
@@ -88,7 +89,7 @@ describe('landing division choice', () => {
 
   it('uses no key shortcut: Enter on the page does not open a division', async () => {
     renderLanding();
-    await findCard('/super-league');
+    await screen.findByRole('link', { name: 'Enter Super League' });
     fireEvent.keyDown(window, { key: 'Enter' });
     expect(screen.queryByText('Division page')).toBeNull();
   });
@@ -106,7 +107,7 @@ describe('landing division choice', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
     divisionsRead.mockImplementation(() => ({ data: divisions, error: null }));
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await findCard('/super-league')).toBeTruthy();
+    expect(await screen.findByRole('link', { name: 'Enter Super League' })).toBeTruthy();
   });
 });
 
@@ -114,7 +115,7 @@ describe('landing motion', () => {
   it('shows the still and no video when reduced motion is requested', async () => {
     window.matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener() {}, removeEventListener() {} });
     const { container } = renderLanding();
-    await findCard('/super-league');
+    await screen.findByRole('link', { name: 'Enter Super League' });
     expect(container.querySelector('video')).toBeNull();
     expect(screen.queryByRole('button', { name: /Pause background video/ })).toBeNull();
   });

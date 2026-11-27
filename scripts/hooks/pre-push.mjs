@@ -19,10 +19,15 @@ const refProblems = checkPushRefs(lines);
 if (refProblems.length) fail(refProblems);
 
 for (const line of lines) {
-  const [, localSha, , remoteSha] = line.trim().split(/\s+/);
+  const [, localSha, remoteRef, remoteSha] = line.trim().split(/\s+/);
   // A new branch is judged against develop on the remote; an update against what the remote already has.
   const isNew = /^0+$/.test(remoteSha);
-  const start = isNew ? git(['merge-base', localSha, 'origin/develop']).stdout.trim() : remoteSha;
+  let start = isNew ? git(['merge-base', localSha, 'origin/develop']).stdout.trim() : remoteSha;
+  // Bootstrap a fork only at the exact upstream tip, with the usual hygiene checks still applied.
+  if (!start && isNew && process.argv[2] === 'origin' && remoteRef === 'refs/heads/develop') {
+    const upstream = git(['rev-parse', '--verify', 'upstream/develop^{commit}']).stdout.trim();
+    if (upstream === localSha) start = upstream;
+  }
   if (!start) fail(['cannot find where this branch starts (fetch origin first).']);
   // Judge only what came after the workflow was adopted, exactly as CI does: older history cannot be rewritten.
   let base;

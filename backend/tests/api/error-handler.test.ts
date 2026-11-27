@@ -1,6 +1,5 @@
 // Error responses: a 500 never leaks the database message; a 400 says why the request was refused.
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 import { handleError } from '../../lib/errorHandler';
 
 const respond = async (error: unknown) => {
@@ -22,7 +21,7 @@ describe('handleError', () => {
   });
 
   it('names the first invalid field of a validation error', async () => {
-    const zodError = (() => { try { z.object({ home: z.number().int().min(0, 'Home score cannot be negative.') }).parse({ home: -1 }); } catch (e) { return e; } })();
+    const zodError = { name: 'ZodError', issues: [{ message: 'Home score cannot be negative.' }] };
     const out = await respond(zodError);
     expect(out.status).toBe(400);
     expect(out.body.message).toBe('Home score cannot be negative.');

@@ -60,7 +60,7 @@ export function LiveTicker({ divisions }) {
             {/* Two copies make the loop seamless; the second is hidden from screen readers. */}
             <div className="flex w-max animate-marquee group-hover:[animation-play-state:paused]">
               <div className="flex shrink-0">{row}</div>
-              <div className="flex shrink-0" aria-hidden="true" inert="">{row}</div>
+              <div className="flex shrink-0" aria-hidden="true" inert>{row}</div>
             </div>
           </div>
         </>

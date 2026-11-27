@@ -85,7 +85,7 @@ export function StaggeredMenu({
   // Escape closes. While open the page behind does not scroll.
   useEffect(() => {
     if (!open) return undefined;
-    const onKeyDown = (event) => { if (event.key === 'Escape') onClose(); };
+    const onKeyDown = (event) => { if (event.key === 'Escape' && !event.defaultPrevented) onClose(); };
     document.addEventListener('keydown', onKeyDown);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -101,7 +101,7 @@ export function StaggeredMenu({
     const onPointerDown = (event) => {
       const panel = panelRef.current;
       const toggle = toggleRef?.current;
-      if (panel && !panel.contains(event.target) && !(toggle && toggle.contains(event.target))) onClose();
+      if (panel && !panel.contains(event.target) && !event.target.closest?.('[data-radix-popper-content-wrapper]') && !(toggle && toggle.contains(event.target))) onClose();
     };
     document.addEventListener('mousedown', onPointerDown);
     return () => document.removeEventListener('mousedown', onPointerDown);
@@ -124,7 +124,7 @@ export function StaggeredMenu({
       <aside
         id="site-menu"
         ref={panelRef}
-        inert={open ? undefined : ''}
+        inert={!open}
         aria-hidden={!open}
         aria-label={label}
         className="sm-panel"
