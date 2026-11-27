@@ -10,7 +10,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "super-league-api",
   "main": "src/index.ts",
-  "compatibility_date": "2025-09-01",
+  "compatibility_date": "2026-11-20",
   // nodejs_compat exposes text bindings as process.env (compatibility date >= 2025-04-01) and provides the Node APIs
   // the shared handlers and the Supabase client use.
   "compatibility_flags": ["nodejs_compat"],

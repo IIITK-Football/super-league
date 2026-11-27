@@ -13,3 +13,12 @@ it('maps @/ to the backend folder without the removed baseUrl option', () => {
   const [target] = compilerOptions.paths['@/*'];
   expect(existsSync(resolve(api, target.replace('*', 'lib/scope.ts')))).toBe(true);
 });
+
+it('runs every environment on a current compatibility date with the Node APIs', () => {
+  const config = JSON.parse(read('wrangler.jsonc').replace(/,(\s*[}\]])/g, '$1'));
+  expect(config.compatibility_date >= '2026-11-20').toBe(true);
+  expect(config.compatibility_flags).toContain('nodejs_compat');
+  for (const env of Object.values(config.env as Record<string, { compatibility_date?: string }>)) {
+    expect(env.compatibility_date).toBeUndefined();
+  }
+});
