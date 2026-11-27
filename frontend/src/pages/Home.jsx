@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react';
 import { useLeague } from '../context/LeagueContext';
@@ -69,12 +69,44 @@ function Leader({ label, unit, player }) {
 }
 
 function NewsCarousel({ articles, division }) {
-  const rail = useRef(null);
+  const stage = useRef(null);
+  const angle = useRef(0);
+  const target = useRef(null);
+  const touch = useRef(null);
+  const swiped = useRef(false);
   const [reduced, setReduced] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   const [playing, setPlaying] = useState(true);
   const [interacting, setInteracting] = useState(false);
   const [visible, setVisible] = useState(() => typeof IntersectionObserver === 'undefined');
+  const [stepping, setStepping] = useState(false);
   const multiple = articles.length > 1;
+
+  const positionCards = useCallback(() => {
+    const container = stage.current;
+    if (!container) return;
+    const radius = Math.min(container.clientWidth * 0.39, 390);
+    [...container.children].forEach((card, index) => {
+      const theta = index * Math.PI * 2 / articles.length - angle.current;
+      const depth = (Math.cos(theta) + 1) / 2;
+      const x = Math.sin(theta) * radius;
+      const y = (1 - depth) * 42;
+      const scale = 0.72 + depth * 0.28;
+      const hidden = depth < 0.12;
+      const fade = Math.min(1, Math.max(0, (depth - 0.12) / 0.3));
+      card.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${scale})`;
+      card.style.opacity = String(fade * (0.55 + depth * 0.45));
+      card.style.zIndex = String(Math.round(depth * 100));
+      card.style.pointerEvents = hidden ? 'none' : '';
+      card.setAttribute('aria-hidden', String(hidden));
+      card.querySelector('a')?.setAttribute('tabindex', hidden ? '-1' : '0');
+    });
+  }, [articles.length]);
+
+  useLayoutEffect(() => {
+    positionCards();
+    window.addEventListener('resize', positionCards);
+    return () => window.removeEventListener('resize', positionCards);
+  }, [positionCards]);
 
   useEffect(() => {
     const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -85,73 +117,44 @@ function NewsCarousel({ articles, division }) {
   }, []);
 
   useEffect(() => {
-    if (reduced && rail.current) {
-      for (const card of rail.current.children) { card.style.transform = ''; card.style.opacity = ''; }
-    }
-  }, [reduced]);
-
-  useEffect(() => {
-    const list = rail.current;
-    if (!list || !multiple) return undefined;
-    const center = () => {
-      const card = list.children[articles.length];
-      if (card) list.scrollLeft = card.offsetLeft - list.children[0].offsetLeft - (list.clientWidth - card.offsetWidth) / 2;
-    };
-    center();
-    window.addEventListener('resize', center);
-    return () => window.removeEventListener('resize', center);
-  }, [articles.length, multiple]);
-
-  useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined' || !rail.current) return undefined;
+    if (typeof IntersectionObserver === 'undefined' || !stage.current) return undefined;
     const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0.2 });
-    observer.observe(rail.current);
+    observer.observe(stage.current);
     return () => observer.disconnect();
   }, []);
 
-  const move = useCallback((direction) => {
-    const list = rail.current;
-    if (!list || !list.children.length) return;
-    const cards = [...list.children];
-    const base = cards[0].offsetLeft;
-    const middle = list.scrollLeft + list.clientWidth / 2;
-    let current = cards.reduce((closest, card, index) =>
-      Math.abs(card.offsetLeft - base + card.offsetWidth / 2 - middle)
-      < Math.abs(cards[closest].offsetLeft - base + cards[closest].offsetWidth / 2 - middle) ? index : closest, 0);
-    const cycle = multiple ? cards[articles.length].offsetLeft - base : 0;
-    if (cycle > 0 && direction < 0 && current < articles.length) { list.scrollLeft += cycle; current += articles.length; }
-    if (cycle > 0 && direction > 0 && current >= articles.length * 2) { list.scrollLeft -= cycle; current -= articles.length; }
-    const card = cards[Math.max(0, Math.min(cards.length - 1, current + direction))];
-    list.scrollTo({ left: card.offsetLeft - base - (list.clientWidth - card.offsetWidth) / 2, behavior: reduced ? 'instant' : 'smooth' });
-  }, [articles.length, multiple, reduced]);
+  const move = (direction) => {
+    const step = Math.PI * 2 / articles.length;
+    target.current = (Math.round(angle.current / step) + direction) * step;
+    if (reduced) { angle.current = target.current; target.current = null; positionCards(); }
+    else setStepping(true);
+  };
 
   useEffect(() => {
-    const list = rail.current;
-    if (!list || !multiple || !playing || interacting || reduced || !visible) return undefined;
+    const autoplay = multiple && playing && !interacting && !reduced && visible;
+    if (!autoplay && !stepping) return undefined;
     let frame;
     let last;
-    let position = list.scrollLeft;
     const animate = (now) => {
-      if (last !== undefined && !document.hidden) position += Math.min(now - last, 50) * 0.038;
+      const elapsed = last === undefined ? 0 : Math.min(now - last, 50);
       last = now;
-      const first = list.children[0];
-      const middle = list.children[articles.length];
-      if (first && middle) {
-        const cycle = middle.offsetLeft - first.offsetLeft;
-        if (cycle > 0 && position >= cycle * 2) position -= cycle;
+      if (target.current !== null) {
+        const difference = target.current - angle.current;
+        angle.current += difference * (1 - Math.exp(-elapsed / 260));
+        if (Math.abs(difference) < 0.001) { angle.current = target.current; target.current = null; setStepping(false); }
+      } else if (autoplay && !document.hidden) {
+        angle.current += elapsed * Math.PI * 2 / (articles.length * 14000);
       }
-      list.scrollLeft = position;
+      positionCards();
       frame = window.requestAnimationFrame(animate);
     };
     frame = window.requestAnimationFrame(animate);
     return () => window.cancelAnimationFrame(frame);
-  }, [articles.length, multiple, playing, interacting, reduced, visible]);
+  }, [articles.length, multiple, playing, interacting, reduced, visible, stepping, positionCards]);
 
-  const cards = multiple ? [...articles, ...articles, ...articles] : articles;
   return <section className="min-w-0 space-y-4" aria-label="News carousel" aria-roledescription="carousel"
     onMouseEnter={() => setInteracting(true)} onMouseLeave={() => setInteracting(false)}
-    onFocusCapture={() => setInteracting(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setInteracting(false); }}
-    onTouchStart={() => setInteracting(true)} onTouchEnd={() => setInteracting(false)}>
+    onFocusCapture={() => setInteracting(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setInteracting(false); }}>
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
       <SectionHead title="News" to={`/${division}/news`} action="All news" />
       {multiple && <div className="flex items-center gap-2">
@@ -160,26 +163,20 @@ function NewsCarousel({ articles, division }) {
         <button type="button" aria-label="Next news" onClick={() => move(1)} className="glass rounded-full p-3"><ArrowRight size={16} /></button>
       </div>}
     </div>
-    <ul ref={rail} onScroll={(event) => {
-      const list = event.currentTarget;
-      const nodes = [...list.children];
-      if (!nodes.length) return;
-      const base = nodes[0].offsetLeft;
-      const middle = list.scrollLeft + list.clientWidth / 2;
-      const step = nodes[1] ? nodes[1].offsetLeft - base : nodes[0].offsetWidth;
-      for (const card of nodes) {
-        const distance = Math.abs(card.offsetLeft - base + card.offsetWidth / 2 - middle) / (step || 1);
-        const depth = reduced ? 0 : Math.min(1, distance * distance);
-        card.style.transform = depth ? `translateY(${22 * depth}px) scale(${1 - 0.1 * depth})` : '';
-        card.style.opacity = depth ? String(1 - 0.2 * depth) : '';
-      }
-    }} className="no-scrollbar flex gap-3 overflow-x-auto pb-7 pt-2 [--news-card-width:min(72%,20rem)] md:[--news-card-width:34%]">
-      {cards.map((article, index) => {
-        const duplicate = multiple && (index < articles.length || index >= articles.length * 2);
-        return <li key={`${article.id}-${index}`} aria-hidden={duplicate || undefined} className="w-[var(--news-card-width)] shrink-0">
-          <Link tabIndex={duplicate ? -1 : undefined} to={`/article/${article.id}`} className="block h-full rounded-card"><NewsArticle article={article} /></Link>
-        </li>;
-      })}
+    <ul ref={stage} className="relative h-[23rem] overflow-hidden sm:h-[27rem]" style={{ touchAction: 'pan-y' }}
+      onTouchStart={(event) => { touch.current = event.touches[0].clientX; setInteracting(true); }}
+      onTouchEnd={(event) => {
+        const delta = event.changedTouches[0].clientX - touch.current;
+        if (multiple && Math.abs(delta) > 35) {
+          swiped.current = true; move(delta < 0 ? 1 : -1);
+          window.setTimeout(() => { swiped.current = false; }, 500);
+        }
+        touch.current = null; setInteracting(false);
+      }}
+      onClickCapture={(event) => { if (swiped.current) { event.preventDefault(); swiped.current = false; } }}>
+      {articles.map((article) => <li key={article.id} className="absolute left-1/2 top-1/2 w-[min(68%,19rem)] origin-center rounded-card bg-surf shadow-2xl will-change-transform">
+        <Link to={`/article/${article.id}`} className="block rounded-card"><NewsArticle article={article} /></Link>
+      </li>)}
     </ul>
   </section>;
 }
