@@ -50,15 +50,15 @@ export function StaggeredMenu({
         ease: 'power3.in',
         overwrite: 'auto',
         onComplete: () => {
-          gsap.set(itemLabels, { yPercent: 120, rotate: 8 });
-          gsap.set(itemNumbers, { opacity: 0 });
+          if (itemLabels.length) gsap.set(itemLabels, { yPercent: 120, rotate: 8 });
+          if (itemNumbers.length) gsap.set(itemNumbers, { opacity: 0 });
         },
       });
       return undefined;
     }
 
-    gsap.set(itemLabels, { yPercent: 120, rotate: 8 });
-    gsap.set(itemNumbers, { opacity: 0 });
+    if (itemLabels.length) gsap.set(itemLabels, { yPercent: 120, rotate: 8 });
+    if (itemNumbers.length) gsap.set(itemNumbers, { opacity: 0 });
 
     const timeline = gsap.timeline();
     layers.forEach((layer, index) => {
@@ -66,21 +66,21 @@ export function StaggeredMenu({
     });
     const panelAt = layers.length ? (layers.length - 1) * time(0.07) + time(0.08) : 0;
     timeline.to(panel, { xPercent: 0, duration: time(0.65), ease: 'power4.out' }, panelAt);
-    timeline.to(itemLabels, {
+    if (itemLabels.length) timeline.to(itemLabels, {
       yPercent: 0,
       rotate: 0,
       duration: time(0.9),
       ease: 'power4.out',
       stagger: { each: time(0.08), from: 'start' },
     }, panelAt + time(0.1));
-    timeline.to(itemNumbers, {
+    if (itemNumbers.length) timeline.to(itemNumbers, {
       opacity: 1,
       duration: time(0.5),
       stagger: { each: time(0.06), from: 'start' },
     }, panelAt + time(0.16));
     timelineRef.current = timeline;
     return undefined;
-  }, [open]);
+  }, [open, items.length]);
 
   // Escape closes. While open the page behind does not scroll.
   useEffect(() => {
