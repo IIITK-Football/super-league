@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Archive, Check, Layers, Loader2, Plus, RotateCcw, Save, Star, Trash2 } from 'lucide-react';
+import { Archive, Check, Layers, Loader2, Plus, RotateCcw, Save, ScrollText, Star, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { fetchApi } from '../../hooks/useApi';
+import ManageRules from './ManageRules';
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -68,10 +69,12 @@ export default function ManageDivisions() {
   const [selectedSeasonId, setSelectedSeasonId] = useState(null);
   const [sections, setSections] = useState([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
+  const [rulesSeasonId, setRulesSeasonId] = useState(null);
   const seasonLoad = useRef(0);
   const sectionLoad = useRef(0);
   const selectedDivision = divisions.find(({ id }) => id === selectedDivisionId);
   const selectedSeason = seasons.find(({ id }) => id === selectedSeasonId);
+  const rulesSeason = seasons.find(({ id }) => id === rulesSeasonId);
 
   const report = (err, success) => {
     if (err) { setMessage(''); setError(describeError(err)); return false; }
@@ -347,6 +350,7 @@ export default function ManageDivisions() {
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => saveSeason(s)} disabled={!!busy} className={ghostButton}><Save size={13} /> Save</button>
             <button type="button" onClick={() => chooseSeason(s)} disabled={!!busy} className={ghostButton}><Layers size={13} /> Sections</button>
+            <button type="button" onClick={() => setRulesSeasonId(rulesSeasonId === s.id ? null : s.id)} disabled={!!busy} className={ghostButton}><ScrollText size={13} /> Rules</button>
             {!s.is_current && !s.archived_at && s.visibility === 'public' && <button type="button" onClick={() => makeCurrent(s)} disabled={!!busy} className={ghostButton}><Star size={13} /> Make current</button>}
             {lifecycleButtons(s, patchSeason)}
             {orderButtons(s.name, index, seasons.length, (offset) => reorder('seasons', seasons, index, offset))}
@@ -369,5 +373,7 @@ export default function ManageDivisions() {
         <Check size={13} /> Save sections
       </button>
     </section>}
+
+    {rulesSeason && <ManageRules key={rulesSeason.id} season={rulesSeason} />}
   </div>;
 }

@@ -73,7 +73,7 @@ export function LeagueProvider({ children }) {
       let error = divisionError?.message || types.error?.message || '';
       if (record) {
         const { data, error: seasonsError } = await supabase.from('seasons')
-          .select('id, slug, name, is_current, starts_on, ends_on, format, rules_md, sort_order, season_sections(section_key, label, enabled, nav_visible, sort_order)')
+          .select('id, slug, name, is_current, starts_on, ends_on, format, sort_order, season_sections(section_key, label, enabled, nav_visible, sort_order)')
           .eq('division_id', record.id).eq('visibility', 'public').is('archived_at', null);
         seasons = orderSeasons(data || []);
         error = seasonsError?.message || error;
