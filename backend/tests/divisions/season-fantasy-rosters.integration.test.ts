@@ -1,12 +1,11 @@
 // Group: divisions. Rosters, the fantasy schedule, a user's predictions and fantasy points all belong to a season.
 // Each route handler runs for real against THIS repository's local Supabase stack: a second WSL season gets its own
 // roster, match and graded prediction, and nothing of it may appear in (or change) the 2026 season.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys, uniqueEmail } from '../auth/local-supabase';
 import { insertLocal } from '../local-fixtures';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 const tag = `fant${Date.now().toString(36)}`;
 let admin: SupabaseClient;

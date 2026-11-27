@@ -1,8 +1,6 @@
 import { publicClient } from '@/lib/supabase/clients';
 import { getOpponent } from '../../../lib/roundOf32';
 
-export const dynamic = 'force-dynamic';
-
 // The 16 "Home" slots based on the 48-team World Cup matrix
 const R32_HOME_SLOTS = [
     // Top half (Feeds the left side of the bracket)

@@ -3,8 +3,6 @@ import { handleError } from '../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
 
 // Turn off caching temporarily so you can test the Mens/Womens toggle instantly!
-export const revalidate = 0; 
-
 export async function GET(request: Request) {
   try {
     // ?division=<slug>&season=<slug or id>; without a season, the division's current season.

@@ -1,8 +1,6 @@
 
 import { StorageError, videoBase } from '@/lib/storage';
 
-export const dynamic = 'force-dynamic';
-
 const allowedStreams = new Set([
   'superLeague1', 'superLeague2', 'superLeague3',
   'wsl1', 'wsl2', 'wsl3',

@@ -3,10 +3,9 @@
 // voids cards, steps the score with +1 and -1. Every step moves the cached score exactly once and is audited; a replayed
 // id changes nothing, different content for the same id and a stale version are 409s; denied roles write nothing.
 // Handlers run for real against the local stack with each account's token.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { account, cleanup, startFixture, uuid, withPlayers, world } from './fixture';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 const f = startFixture();
 let w: Awaited<ReturnType<typeof world>>;

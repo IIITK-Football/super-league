@@ -3,8 +3,6 @@ import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
 
 // Turn off caching so the admin sees live updates instantly!
-export const revalidate = 0;
-
 // The caller's client (D-04): publishable key plus their token, so RLS and the audit actor are theirs.
 async function getSupabaseClient(request: Request) {
   return requestClient(request);

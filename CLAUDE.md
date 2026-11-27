@@ -32,7 +32,7 @@ Enforce these boundaries in server authorization and Supabase RLS wherever direc
 ## Current repository facts
 
 - `frontend/` is a React 18 / Vite application deployed as Cloudflare Pages. Public division and season pages share the slug-based routes.
-- `api/` is the modular Hono Worker. It serves the shared handlers in `backend/` behind the Pages binding and the local Vite proxy. Next runtime retirement follows verification for active flows.
+- `api/` is the modular Hono Worker. It serves the shared handlers in `backend/` behind the Pages binding and the local Vite proxy. The Next.js runtime and the Vercel project are retired (owner, 2026-11-27); `backend/` holds handlers, shared code, the Supabase project and tests.
 - The Supabase CLI project is in `backend/supabase/`. Local application development uses database port **54322**. Keep this project self-contained and use explicit local CLI commands.
 - `backend/supabase/migrations/20261106000000_baseline.sql` is the current baseline; older migrations are in `migrations_legacy/`. `20261106180125_harden_roles_and_rpc.sql` and the root `schema.sql` are empty. The local seed is `backend/supabase/seed.sql`.
 - The Phase 0 decision records are in `docs/decisions/` (SL-002 glossary, SL-003 role matrix, SL-004 migration/cutover); local safety is in `docs/local-development.md`.

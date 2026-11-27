@@ -10,7 +10,7 @@ const repo = join(backend, '..');
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
-    if (['node_modules', '.next', 'dist', '.git'].includes(name)) continue;
+    if (['node_modules', 'dist', '.git'].includes(name)) continue;
     const p = join(dir, name);
     if (statSync(p).isDirectory()) walk(p, out);
     else if (/\.(ts|tsx|js|jsx|mjs)$/.test(name)) out.push(p);
@@ -18,7 +18,7 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const serverSources = [...walk(join(backend, 'app')), ...walk(join(backend, 'lib')), join(backend, 'middleware.ts')].filter(
+const serverSources = [...walk(join(backend, 'app')), ...walk(join(backend, 'lib'))].filter(
   (p) => !/lib\/(supabase\/keys|supabase\/clients|env)\.ts$/.test(p),
 );
 const rel = (p: string) => relative(backend, p).split('\\').join('/');
@@ -51,8 +51,8 @@ describe('Supabase key usage (backend)', () => {
     expect(stale, 'Listed but no longer using the secret key: remove it from ELEVATED').toEqual([]);
   });
 
-  it('middleware and shared lib code never use the secret key', () => {
-    const offenders = serverSources.filter((p) => /middleware\.ts$|\/lib\//.test(rel(p)) || rel(p) === 'middleware.ts')
+  it('shared lib code never uses the secret key', () => {
+    const offenders = serverSources.filter((p) => /^lib\//.test(rel(p)))
       .filter((p) => ELEVATED_USE.test(read(p))).map(rel);
     expect(offenders).toEqual([]);
   });

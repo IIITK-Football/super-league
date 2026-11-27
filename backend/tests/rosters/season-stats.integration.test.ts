@@ -1,14 +1,12 @@
 // Group: rosters. Goals and assists are season facts, never stored on the reusable player identity. One player with
 // roster places in two seasons scores in each; every reader (season roster, statistics leaderboard, home dashboard,
-// player page, legends) shows only the requested season's numbers, the player page adds a career line that is the
-// sum of the seasons, and legends equal the sum of the season lines. Runs against THIS repository's local Supabase
+// player page) shows only the requested season's numbers, and the player page adds a career line that is the sum of
+// the seasons. Runs against THIS repository's local Supabase
 // stack (127.0.0.1:54321).
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys } from '../auth/local-supabase';
 import { insertLocal } from '../local-fixtures';
-
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 const tag = `stats${Date.now().toString(36)}`;
 let admin: SupabaseClient;
@@ -40,8 +38,8 @@ beforeAll(async () => {
   const wsl = must(await admin.from('divisions').select('id').eq('slug', 'wsl').single()).data!;
   const freshers = must(await admin.from('divisions').select('id').eq('slug', 'freshers').single()).data!;
   made.seasons = must(await admin.from('seasons').insert([
-    { division_id: wsl.id, slug: `${tag}-a`, name: `${tag} A`, starts_on: '2027-01-01' },
-    { division_id: freshers.id, slug: `${tag}-b`, name: `${tag} B`, starts_on: '2028-01-01' },
+    { division_id: wsl.id, slug: `${tag}-a`, name: `${tag} A`, starts_on: '2027-01-01', visibility: 'public' },
+    { division_id: freshers.id, slug: `${tag}-b`, name: `${tag} B`, starts_on: '2028-01-01', visibility: 'public' },
   ]).select('id')).data!.map((s) => s.id);
   made.teams = must(await admin.from('teams').insert([
     { name: `${tag} Alpha`, short_name: 'ALP' }, { name: `${tag} Beta`, short_name: 'BET' },
@@ -129,13 +127,4 @@ describe('season-specific statistics', () => {
     }
   });
 
-  it('legends equal the sum of each player\'s season lines', async () => {
-    const legends = await get('legends');
-    expect(legends.body.data.length).toBeGreaterThan(0);
-    for (const legend of legends.body.data) {
-      const { data: lines } = await admin.from('season_player_stats').select('goals, assists').eq('player_id', legend.id);
-      expect(legend.goalsScored).toBe((lines ?? []).reduce((n, l) => n + l.goals, 0));
-      expect(legend.assists).toBe((lines ?? []).reduce((n, l) => n + l.assists, 0));
-    }
-  });
 });

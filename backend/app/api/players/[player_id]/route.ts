@@ -1,8 +1,6 @@
 import { publicClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 
-export const dynamic = 'force-dynamic';
-
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type SeasonRef = { id: string; slug: string; name: string; starts_on: string | null; division: { slug: string; name: string } | null };

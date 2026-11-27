@@ -3,12 +3,11 @@
 // and the history triggers decide. Allowed for a dictator; refused for a captain, editor, normal user
 // and anon, with nothing written. Also the captain portrait upload route and the registration route. Runs against
 // THIS repository's local Supabase stack (127.0.0.1:54321).
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys, uniqueEmail } from '../auth/local-supabase';
 import { insertLocal } from '../local-fixtures';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 const tag = `roster${Date.now().toString(36)}`;
 let admin: SupabaseClient;

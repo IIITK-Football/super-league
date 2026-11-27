@@ -46,7 +46,7 @@ Supabase's *Secure password change* is on locally (`secure_password_change = tru
 
 ## Google sign-in settings per environment
 
-Google sign-in is a browser-to-Supabase flow: the browser calls the project's Auth, Auth sends it to Google, Google returns to the **project's** `/auth/v1/callback`, and Auth then redirects to the app. The Vercel backend is not involved. Each environment has its **own** Supabase project, Google OAuth client, Site URL and redirect list; never share or reuse one across environments.
+Google sign-in is a browser-to-Supabase flow: the browser calls the project's Auth, Auth sends it to Google, Google returns to the **project's** `/auth/v1/callback`, and Auth then redirects to the app. The API Worker is not involved. Each environment has its **own** Supabase project, Google OAuth client, Site URL and redirect list; never share or reuse one across environments.
 
 | | Local | Staging (develop) | Production |
 |---|---|---|---|

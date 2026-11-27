@@ -2,8 +2,6 @@ import { publicClient } from '@/lib/supabase/clients';
 import { scopeFromUrl } from '@/lib/scope';
 import { handleError } from '@/lib/errorHandler';
 
-export const revalidate = 0; 
-
 export async function GET(request: Request) {
   const supabase = publicClient();
   try {

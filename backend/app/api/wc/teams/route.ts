@@ -1,8 +1,6 @@
 import { publicClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET() {
   const supabase = publicClient();
   try {

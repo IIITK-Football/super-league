@@ -19,7 +19,7 @@ live in the database (row level security and RPCs), so many features are a migra
 ## Set up locally
 
 Prerequisites: Node.js 22.19+ (`.nvmrc`), pnpm 10 (`corepack enable`), Docker (for local Supabase) and an internet
-connection. Use **pnpm only**. You need no Cloudflare, Supabase or Vercel account.
+connection. Use **pnpm only**. You need no Cloudflare or Supabase account.
 
 **1. Install and start the local database**
 

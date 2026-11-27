@@ -10,9 +10,7 @@ const repo = join(__dirname, '../../..');
 const LEGACY = /SUPABASE_ANON_KEY|SUPABASE_SERVICE_ROLE_KEY|VITE_SUPABASE_ANON_KEY/;
 
 const ALLOWED = new Set([
-  'backend/lib/env.ts', // reports old names as renamed
-  'frontend/src/lib/env.js', // same, for the browser
-  'backend/tests/config/env.test.ts',
+  'frontend/src/lib/env.js', // reports old names as renamed
   'backend/tests/config/supabase-keys.test.ts',
   'backend/tests/config/supabase-key-usage.test.ts',
   'backend/tests/config/no-legacy-key-names.test.ts',

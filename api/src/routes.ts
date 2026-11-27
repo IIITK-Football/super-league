@@ -2,8 +2,7 @@
 // module in backend/app/api. Modules are imported lazily, so a route's code (and any configuration it reads) loads
 // only when that route is called.
 //
-// Routes deliberately NOT mounted (no frontend caller, no schedule; see docs/worker-routes.md): auth/login,
-// admin/teams, the predictions root and legends. The finished World Cup's test, matches, champion-predictors, sync/*
+// The finished World Cup's test, matches, champion-predictors, sync/*
 // and grade/* routes were removed (no caller, no schedule).
 
 // Handlers declare their own param shapes ({ team_id }, { path: string[] }); the router supplies them by name.
@@ -51,9 +50,9 @@ export const routes: [path: string, load: Loader][] = [
   ['/admin/freshers/player-image', () => import('../../backend/app/api/admin/freshers/player-image/route')],
   ['/captain/team-branding', () => import('../../backend/app/api/captain/team-branding/route')],
   ['/profile/player-portrait', () => import('../../backend/app/api/profile/player-portrait/route')],
-  // Media (home video HLS proxy); the remaining path is passed as segments, like Next's [...path]
+  // Media (home video HLS proxy); the remaining path is passed as segments, like the [...path] folder name
   ['/media/*', () => import('../../backend/app/api/media/[...path]/route')],
-  // World Cup: a finished, read-only archive. Behaviour is identical to the Next routes (submissions stay locked).
+  // World Cup: a finished, read-only archive. Submissions stay locked.
   ['/wc/flair', () => import('../../backend/app/api/wc/flair/route')],
   ['/wc/teams', () => import('../../backend/app/api/wc/teams/route')],
   ['/wc/players', () => import('../../backend/app/api/wc/players/route')],

@@ -5,7 +5,7 @@ Where each Supabase API key is used and why. The list of files using the **secre
 ## Publishable key (low privilege)
 - **Browser** (`frontend/src/lib/supabase.js`): the only Supabase client in the frontend. Safe to expose; protected by RLS.
 - **Pages Function** (`frontend/functions/_middleware.js`): reads one newsletter row for share previews. Sends the key as `apikey` only.
-- **Backend** (about 45 route files, `middleware.ts`, the login route): user-level clients that use the caller's session or run public reads.
+- **Backend** (the route files the Worker serves): user-level clients that use the caller's session or run public reads.
 
 ## Secret key (bypasses RLS)
 
@@ -27,7 +27,7 @@ publishable key. The old World Cup sync and grade routes have been removed.
 
 The public roster, player and statistics routes (`players`, `players/[player_id]`, `leaderboard`) read only public data under RLS with the publishable key (2026-11-18).
 
-The secret key is never used by `middleware.ts`, shared `lib` code, or anything in the frontend (tested).
+The secret key is never used by shared `lib` code or anything in the frontend (tested).
 
 ## Findings to fix in the authorization work (not changed by the key migration)
 1. `wc/sync/manual` and `wc/sync/brazil` run with elevated access and no authentication. **Closed (2026-11-20):** the finished tournament's `wc/sync/*`, `wc/grade/*`, `wc/test`, `wc/matches` and `wc/champion-predictors` routes are removed. They had no caller and no schedule, and the API Worker never served them.
@@ -44,10 +44,10 @@ The secret key is never used by `middleware.ts`, shared `lib` code, or anything 
 2. **Staging**: in the staging dashboard (Project Settings -> API Keys) confirm the publishable key and create a **named secret key**; configure your local staging env files; run the checks below.
 3. **Production**, in this order, each step your approval:
    1. Dashboard: confirm the publishable key and create a **named secret key**. Legacy keys keep working.
-   2. Add the **new** variables to Vercel (backend) and Cloudflare Pages (build variables and Functions variables) while **keeping the old ones**.
+   2. Add the **new** variables to the API Worker and Cloudflare Pages (build variables and Functions variables) while **keeping the old ones**.
    3. Deploy the new code. Rollback is "redeploy the previous build", which still uses the old variables.
    4. Verify (below).
-   5. Remove the old variables from Vercel, Pages and your local files.
+   5. Remove the old variables from the Worker, Pages and your local files.
    6. Only then check whether the legacy keys still show recent use in the dashboard and **disable them last**. Check whether your dashboard lets you re-enable them; if not, treat this step as irreversible.
 
 **Checks with the new keys before disabling legacy keys:** public pages load data and live scores update; password and Google sign-in work; a newsletter share preview resolves (Pages Function); one role-checked write (captain branding or an admin match update) succeeds and an admin grading call works on staging. The Supabase API logs show no new 401 responses. Any 401 after deploying means a variable is missing: fix it before removing anything.

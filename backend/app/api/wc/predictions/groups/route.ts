@@ -1,7 +1,5 @@
 import { jobClient } from '@/lib/supabase/clients';
 
-export const dynamic = 'force-dynamic';
-
 // Closed archive (D-02): the World Cup prediction deadline passed on 2026-06-22, and every submission has been refused
 // since. The old write path trusted a body user_id and wrote with the secret key, so it is gone; only the refusal is
 // served, with the same status and body.

@@ -9,9 +9,7 @@
   "scripts": {
     "install:all": "pnpm install --frozen-lockfile",
     "dev:frontend": "pnpm --filter ./frontend dev",
-    "dev:backend": "pnpm --filter ./backend dev",
     "build:frontend": "pnpm --filter ./frontend build",
-    "build:backend": "pnpm --filter ./backend build",
     "lint": "pnpm -r lint",
     "db:check": "bash scripts/local-db.sh check",
     "db:start": "bash scripts/local-db.sh start",

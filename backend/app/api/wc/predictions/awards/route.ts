@@ -1,7 +1,5 @@
 import { jobClient } from '@/lib/supabase/clients';
 
-export const dynamic = 'force-dynamic';
-
 // Set the global deadline
 
 // GET: Retrieve a user's award predictions

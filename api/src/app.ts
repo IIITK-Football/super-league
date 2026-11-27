@@ -1,8 +1,8 @@
 // The Super League API as one Hono application (D-05: one modular Worker on the Pages origin, no gateway).
-// It mounts the runtime-neutral handlers from backend/app/api and applies what the Next middleware applied:
+// It mounts the runtime-neutral handlers from backend/app/api and applies the request rules in front of them:
 // - reads: a per-device rate limit;
 // - writes (POST, PUT, PATCH, DELETE): a valid Supabase session token, checked before any handler runs, then a
-//   per-account rate limit. PATCH is now included (the Next middleware missed it).
+//   per-account rate limit. PATCH is now included (the earlier middleware missed it).
 // Same origin only: the browser reaches this through the Pages /api function, so no CORS policy is served.
 import { Hono } from 'hono';
 import { routes, type RouteModule } from './routes';

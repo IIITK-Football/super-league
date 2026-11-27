@@ -9,9 +9,6 @@ What this folder holds now that the API runs as the Hono Worker in [`api/`](../a
 | `supabase/` | The Supabase CLI project: migrations (`supabase/migrations/`, forward-only), the synthetic seed (`supabase/seed.sql`), pgTAP tests (`supabase/tests/database/`) and local config (`supabase/config.toml`, database port 54322) |
 | `tests/` | Vitest tests grouped by area (`tests/groups.json` at the repository root maps them); integration tests run against the local Supabase stack |
 
-The Next.js files (`next.config.ts`, `middleware.ts`, `pnpm dev`) remain only from the retired Next deployment. They are
-not how the API runs locally or in production: start the Worker with `pnpm --dir api dev` instead.
-
 ## Local setup and tests
 
 Follow [`CONTRIBUTING.md`](../CONTRIBUTING.md) for the full setup. From the repository root:

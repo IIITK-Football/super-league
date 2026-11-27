@@ -2,8 +2,6 @@ import { publicClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../lib/errorHandler';
 import { resolveScope, seasonTeamIds } from '@/lib/scope';
 
-export const revalidate = 0; 
-
 export async function GET(request: Request) {
   const supabase = publicClient();
   try {

@@ -2,11 +2,10 @@
 // real against THIS repository's local Supabase stack with a signed-in account's token, as the dashboard sends it.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys, uniqueEmail } from '../auth/local-supabase';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 // Logo storage is not exercised here (a colour-only update never uploads); the client must still be constructible.
 
 let admin: SupabaseClient;
@@ -79,17 +78,6 @@ describe('admin matches', () => {
   });
 });
 
-describe('admin teams', () => {
-  it('creates a team entered in the chosen division\'s current season', async () => {
-    const { POST } = await import('../../app/api/admin/teams/route');
-    const res = await json(POST, 'http://localhost/api/admin/teams', dictatorToken, { division: 'freshers', name: `Season Test ${Date.now()}`, short_name: 'STS' });
-    expect(res.status).toBe(200);
-    made.teams.push(res.body.data.id);
-    const { data: entries } = await admin.from('team_entries').select('season_id').eq('team_id', res.body.data.id);
-    expect(entries).toEqual([{ season_id: current.freshers }]);
-  });
-});
-
 describe('captain team branding', () => {
   it('finds the captain\'s assignment through its team entry and saves the colour', async () => {
     const captain = await tokenFor('captain');
@@ -148,6 +136,10 @@ describe('captain team branding refusals', () => {
 describe('retired unused routes', () => {
   it('the uncalled admin stats route is gone (no frontend caller; cookie-only auth the API never receives)', () => {
     expect(existsSync(join(__dirname, '../../app/api/admin/stats'))).toBe(false);
+  });
+
+  it.each(['admin/teams', 'auth/login', 'legends', 'predictions/route.ts'])('the unmounted %s route is gone', (path) => {
+    expect(existsSync(join(__dirname, '../../app/api', path))).toBe(false);
   });
 
   it('the unused polls routes are gone', () => {

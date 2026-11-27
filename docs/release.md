@@ -7,7 +7,7 @@ Database changes reach the hosted projects only through GitHub Actions (`.github
 | `develop` | staging (`super-league-staging`) | `Database Preview` | migrations (`db push`), then the seed and its checks (`scripts/preview-seed.sh`) | **yes**, the existing synthetic seed, refreshed on every run |
 | `main` | production (the original project) | `Database Production` | migrations only, after a required reviewer approves | **never** |
 
-The GitHub environments named `Preview` and `Production` are owned by the Vercel integration and are deliberately **not** used here, so Vercel's deployment tracking and this workflow's secrets and protection rules never mix. Do not create an environment called `staging`.
+The GitHub environments named `Preview` and `Production` are leftovers of the retired Vercel project and are **not** used here; the owner may delete them. Do not create an environment called `staging`.
 
 Both jobs first prove the migrations and seed on an empty **local** database (the `database` test group). The `verify` job also runs the seed a **second time** and fails if any row count changes, then runs the Preview checks, all on that local database. Each environment has its own project reference and secrets. The workflow only runs when migrations, the seed or the workflow itself change, and never on pull requests.
 
@@ -23,7 +23,7 @@ Both jobs first prove the migrations and seed on an empty **local** database (th
 ### GitHub (Settings)
 1. **Environments → New environment `Database Preview`:** deployment branches = selected branches → `develop`. Secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` (staging values); variable `SUPABASE_PROJECT_REF` (staging reference).
 2. **Environments → New environment `Database Production`:** deployment branches = selected branches → `main`; **Required reviewers** = you; the same three names with **production** values.
-   (The existing `Preview` and `Production` environments are Vercel's: leave them alone. Moving the values from them into the two new environments is up to you; deleting the copies in Vercel's environments afterwards is optional.)
+   (The leftover `Preview` and `Production` environments of the retired Vercel project are not used; move any value you still need into the two new environments before deleting them.)
 3. **Secrets and variables → Actions → Variables:** repository variable `PRODUCTION_PROJECT_REF` (the production reference). The staging job refuses to run if its reference equals this.
 4. Put **no** Supabase secret at repository level, so a `develop` run can never read production's.
 5. Actions → General: workflow permissions "Read repository contents"; require approval for outside contributors' workflow runs. Recommended: protect `main` (pull request and CI checks required).

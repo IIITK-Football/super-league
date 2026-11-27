@@ -1,6 +1,4 @@
 import { requestClient } from '@/lib/supabase/clients';
-export const dynamic = 'force-dynamic';
-
 import { handleError } from '../../../../lib/errorHandler';
 import { resolveScope } from '@/lib/scope';
 import { actualPlayers, frequencyMap } from '@/lib/grading';

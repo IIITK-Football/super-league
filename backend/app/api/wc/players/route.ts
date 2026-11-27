@@ -1,8 +1,6 @@
 import { jobClient } from '@/lib/supabase/clients';
 import { handleError } from '../../../../lib/errorHandler';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: Request) {
   const supabase = jobClient();
   try {

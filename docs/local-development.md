@@ -35,7 +35,7 @@ git rev-parse --short HEAD         # the commit being served
 
 The browser only ever calls `/api` on its own origin: Vite forwards it to the Worker locally (`API_PROXY_TARGET` overrides
 the target), and the Pages site forwards it through its `API` service binding when hosted. Leave `VITE_API_URL` blank.
-The Next.js dev server (`pnpm dev:backend`, port 3000) is no longer how the API runs.
+The API runs only as that Worker; `backend/` holds its handlers and shared code.
 
 If a server is already listening on 8787 or 5173, stop it first (`lsof -nP -iTCP:5173 -sTCP:LISTEN`), so the port serves the checkout you mean to verify.
 

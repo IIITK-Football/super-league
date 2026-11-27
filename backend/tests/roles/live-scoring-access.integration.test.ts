@@ -1,10 +1,9 @@
 // Group: auth-roles. The live scoring route accepts a dictator and a scorer assigned to the match or its season; it
 // refuses a captain, a normal account, an unassigned or expired scorer, and an assignment without the scorer grant.
 // The handler runs for real against the local stack with each account's token, as the dashboard sends it.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { account, cleanup, startFixture, world } from './fixture';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 const f = startFixture();
 let w: Awaited<ReturnType<typeof world>>;

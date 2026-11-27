@@ -1,10 +1,9 @@
 // Group: auth-roles. A captain edits the name, short name and colour of the team they captain, in any division, in a
 // current or upcoming season. Another team, an assignment without the captain grant and a completed season are
 // refused and change nothing; the dictator names the entry. Captains never create, rename or remove players.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { account, cleanup, startFixture, world } from './fixture';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 // A name or colour update never uploads a logo, so it needs no media storage at all.
 
 const f = startFixture();

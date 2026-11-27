@@ -64,7 +64,7 @@ describe('needsLocalDatabase', () => {
   });
 
   it('follows the auth files into a database-backed group', () => {
-    const groups = affectedGroups(['backend/lib/auth/collegeEmail.ts'], config);
+    const groups = affectedGroups(['backend/lib/auth/roles.ts'], config);
     expect(groups).toContain('auth-identity');
     expect(needsLocalDatabase(groups, config)).toBe(true);
   });

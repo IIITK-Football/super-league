@@ -10,12 +10,12 @@ let fan = { id: '', token: '' };
 let matchId = '';
 
 const submit = async (token: string | null, body: Record<string, unknown>) => {
-  const { POST } = await import('../../app/api/predictions/route');
-  const res = await POST(new Request('http://localhost/api/predictions', {
+  const { POST } = await import('../../app/api/predictions/[match_id]/route');
+  const res = await POST(new Request(`http://localhost/api/predictions/${matchId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body),
-  }));
+  }), { params: Promise.resolve({ match_id: matchId }) });
   return { status: res.status, body: await res.json() };
 };
 
@@ -50,7 +50,7 @@ afterAll(async () => {
 }, 30000);
 
 describe('prediction submission', () => {
-  const prediction = () => ({ match_id: matchId, predicted_home_score: 1, predicted_away_score: 0, predicted_scorers: ['someone'], predicted_assists: [] });
+  const prediction = () => ({ predicted_home_score: 1, predicted_away_score: 0, predicted_scorers: ['someone'], predicted_assists: [] });
 
   it('stores a signed-in fan\'s prediction under their own id', async () => {
     const r = await submit(fan.token, prediction());

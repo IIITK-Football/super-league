@@ -8,7 +8,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys, uniqueEmail } from '../auth/local-supabase';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 const uploaded: string[] = [];
 vi.mock('@/lib/roster/playerImage', async (original) => {
   const real = await original<typeof import('@/lib/roster/playerImage')>();

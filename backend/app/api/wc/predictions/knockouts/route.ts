@@ -1,7 +1,5 @@
 import { publicClient } from '@/lib/supabase/clients';
 
-export const dynamic = 'force-dynamic';
-
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",

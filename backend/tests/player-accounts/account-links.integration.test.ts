@@ -6,12 +6,11 @@
 // roster places, and unlinking (only the link changes; the player then has no email and no key). A captain, an
 // editor, a normal user and the server key are refused on every path. Legacy unlinked players and their match keys
 // are written as the seed writes them (local only). Runs against THIS repository's local Supabase (127.0.0.1:54321).
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys, uniqueEmail } from '../auth/local-supabase';
 import { insertLocal } from '../local-fixtures';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 const tag = `acct${Date.now().toString(36)}`;
 let admin: SupabaseClient;

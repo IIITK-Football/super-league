@@ -48,7 +48,7 @@ Paths are relative to `/api`. The method list comes from the [route table](../..
 
 [Worker routing and scope tests](../../api/test/app.test.ts), [authorization tests](../../api/test/security.test.ts), [news and archive tests](../../api/test/archive-routes.test.ts) and the [remaining Worker tests](../../api/test) cover representative paths.
 
-The legacy handler files for `/auth/login`, `/admin/teams`, the `/predictions` root and `/legends` remain unmounted. Polls, `freshers_fixtures`, `/matches/update`, `/admin/stats`, and unused World Cup matches, champion-predictors, test, sync and grading routes are retired. Freshers registration is tracked in [SL-045](../../backlog/items/SL-045.md).
+The unmounted `/auth/login`, `/admin/teams`, `/predictions` root and `/legends` handlers were removed with the Next.js runtime (2026-11-27). Polls, `freshers_fixtures`, `/matches/update`, `/admin/stats`, and unused World Cup matches, champion-predictors, test, sync and grading routes are retired. Freshers registration is tracked in [SL-045](../../backlog/items/SL-045.md).
 
 ## Parity status (SL-032, 2026-11-26)
 

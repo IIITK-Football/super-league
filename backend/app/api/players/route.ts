@@ -2,8 +2,6 @@ import { publicClient } from '@/lib/supabase/clients';
 import { resolveScope } from '@/lib/scope';
 import { handleError } from '../../../lib/errorHandler';
 
-export const dynamic = 'force-dynamic';
-
 type Membership = {
   id: string;
   jersey_number: number | null;

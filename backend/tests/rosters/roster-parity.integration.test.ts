@@ -2,11 +2,10 @@
 // page reads the same people and the same numbers. For each division, the season roster lists each player once
 // (one per roster place), the statistics leaderboard and the home dashboard agree with season_player_stats (the
 // single source), and the live-scoring player list is the season roster. Local Supabase stack only.
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys } from '../auth/local-supabase';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 let admin: SupabaseClient;
 const get = async (name: string, query = '') => {

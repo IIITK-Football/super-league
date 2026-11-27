@@ -1,10 +1,9 @@
 // Group: match-operations. A walkover or forfeit is an explicit awarded result: a dictator creates it through the
 // schedule route with a required reason and an awarded score (3-0 only as the default), it has no goal events, it
 // counts in the standings, and nobody else can award or change it. The route never leaves a half-made match behind.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { account, cleanup, startFixture, withPlayers, world } from './fixture';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 const f = startFixture();
 let w: Awaited<ReturnType<typeof world>>;

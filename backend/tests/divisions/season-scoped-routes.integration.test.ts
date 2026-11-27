@@ -2,12 +2,11 @@
 // handler runs for real against THIS repository's local Supabase stack (127.0.0.1:54321): a second WSL season with
 // its own teams, match and goal is created, and every route must scope to the requested season, default to the
 // current one, and refuse unknown, hidden or legacy names.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { clients, localKeys } from '../auth/local-supabase';
 import { insertLocal } from '../local-fixtures';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 const tag = `scope${Date.now().toString(36)}`;
 const LAMB = '60000000-0000-4000-8000-000000000001'; // seeded fixture account with fantasy points
@@ -37,7 +36,6 @@ beforeAll(async () => {
     standings: (await import('../../app/api/standings/route')).GET,
     teams: (await import('../../app/api/teams/route')).GET,
     leaderboard: (await import('../../app/api/leaderboard/route')).GET,
-    legends: (await import('../../app/api/legends/route')).GET as unknown as (r: Request) => Promise<Response>,
     'predictions/leaderboard': (await import('../../app/api/predictions/leaderboard/route')).GET,
   };
 
@@ -180,13 +178,6 @@ describe('standings, teams and statistics', () => {
       .eq('division_id', (await admin.from('divisions').select('id').eq('slug', 'freshers').single()).data!.id).single()).data!;
     const { data: best } = await admin.from('season_player_stats').select('goals').eq('season_id', season.id).order('goals', { ascending: false }).limit(1);
     expect(body.data.topScorers[0].goalsScored).toBe(best![0].goals);
-  });
-
-  it('legends add a player\'s goals up across every season', async () => {
-    const { body } = await routes.legends(new Request('http://localhost/api/legends')).then(async (r) => ({ body: await r.json() }));
-    expect(body.data.length).toBeGreaterThan(0);
-    const goals = body.data.map((p: any) => p.goalsScored);
-    expect(goals).toEqual([...goals].sort((a: number, b: number) => b - a));
   });
 
   it('the fantasy leaderboard shows flairs of the requested division', async () => {

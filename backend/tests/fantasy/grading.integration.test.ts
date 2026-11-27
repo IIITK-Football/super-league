@@ -1,10 +1,9 @@
 // Group: fantasy. Grading reads match events: scoreline from the cached score, player points from attributed goals and
 // their assisters. Grading twice gives the same points; a correction after grading flags "needs regrade" and regrading
 // gives the corrected points; only a dictator grades or regrades; the history breakdown explains the same points.
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { account, cleanup, startFixture, withPlayers, world } from '../match-operations/fixture';
 
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll: () => [], set: () => {} }) }));
 
 const f = startFixture();
 let w: Awaited<ReturnType<typeof world>>;
