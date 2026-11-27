@@ -12,6 +12,7 @@ handoff steps.
 - Next: review the revamp diff and Phase 9 item acceptance, then push a feature branch and prepare a PR when requested. No staging or production verification was performed for these changes.
 - Follow-up: the news carousel advances smoothly with pause and reduced-motion controls; the live hero and recent results fit phone widths. Focused frontend tests, build, lint and a 375px browser check passed (lint retains 66 warnings).
 - Carousel follow-up: React Bits-inspired subtle card depth and 12-second advance, paused offscreen and while interacting. Focused tests, build, lint and a 375px browser autoplay check passed.
+- Carousel refinement: centered story with neighboring cards on a gentle arc, without angled text. Focused frontend tests, build, lint and a phone-width browser check passed.
 
 - 2026-11-27: Claude holds the work, in the main checkout on `develop`.
 - SL-040 and SL-044 are done, so Phase 4 is complete (`pnpm work phase 4` confirms it). Every active test group passed on 2026-11-27 after the toolchain update.

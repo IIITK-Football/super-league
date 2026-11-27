@@ -131,6 +131,8 @@ describe('division home', () => {
     const carousel = await screen.findByRole('region', { name: 'News carousel' });
     expect(intervals).toHaveBeenCalledWith(expect.any(Function), 12000);
     const rail = carousel.querySelector('ul');
+    expect(rail.children[1].style.transform).toContain('translateY');
+    expect(rail.children[1].style.transform).not.toContain('rotate');
     rail.scrollTo = vi.fn();
     fireEvent.click(screen.getByRole('button', { name: 'Next news' }));
     expect(rail.scrollTo).toHaveBeenCalled();

@@ -128,9 +128,9 @@ function NewsCarousel({ articles, division }) {
       const first = cards[0]?.offsetLeft ?? 0;
       setActive(cards.reduce((nearest, card, index) => Math.abs(card.offsetLeft - first - list.scrollLeft)
         < Math.abs(cards[nearest].offsetLeft - first - list.scrollLeft) ? index : nearest, 0));
-    }} className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [perspective:1200px]">
-      {articles.map((article, index) => <li key={article.id} className="w-[min(85%,22rem)] shrink-0 snap-start motion-safe:transition-[transform,opacity] motion-safe:duration-700"
-        style={reduced || index === active ? undefined : { transform: `rotateY(${index < active ? 4 : -4}deg) scale(0.98)`, opacity: 0.88 }}>
+    }} className="no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto pb-7 pt-2 [--news-card-width:min(72%,20rem)] before:w-[calc((100%-var(--news-card-width))/2-0.75rem)] before:shrink-0 before:content-[''] after:w-[calc((100%-var(--news-card-width))/2-0.75rem)] after:shrink-0 after:content-[''] md:[--news-card-width:34%]">
+      {articles.map((article, index) => <li key={article.id} className="w-[var(--news-card-width)] shrink-0 snap-center motion-safe:transition-[transform,opacity] motion-safe:duration-700"
+        style={reduced || index === active ? undefined : { transform: 'translateY(18px) scale(0.92)', opacity: 0.8 }}>
         <Link to={`/article/${article.id}`} className="block h-full rounded-card"><NewsArticle article={article} /></Link>
       </li>)}
     </ul>
