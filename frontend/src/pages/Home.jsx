@@ -73,6 +73,8 @@ function NewsCarousel({ articles, division }) {
   const [reduced, setReduced] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   const [playing, setPlaying] = useState(true);
   const [interacting, setInteracting] = useState(false);
+  const [visible, setVisible] = useState(() => typeof IntersectionObserver === 'undefined');
+  const [active, setActive] = useState(0);
 
   useEffect(() => {
     const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -80,6 +82,13 @@ function NewsCarousel({ articles, division }) {
     const update = () => setReduced(query.matches);
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined' || !rail.current) return undefined;
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0.2 });
+    observer.observe(rail.current);
+    return () => observer.disconnect();
   }, []);
 
   const move = useCallback((direction) => {
@@ -97,10 +106,10 @@ function NewsCarousel({ articles, division }) {
   }, [reduced]);
 
   useEffect(() => {
-    if (!playing || interacting || reduced || articles.length < 2) return undefined;
-    const timer = window.setInterval(() => move(1), 6000);
+    if (!playing || interacting || reduced || !visible || articles.length < 2) return undefined;
+    const timer = window.setInterval(() => { if (!document.hidden) move(1); }, 12000);
     return () => window.clearInterval(timer);
-  }, [playing, interacting, reduced, articles.length, move]);
+  }, [playing, interacting, reduced, visible, articles.length, move]);
 
   return <section className="min-w-0 space-y-4" aria-label="News carousel" aria-roledescription="carousel"
     onMouseEnter={() => setInteracting(true)} onMouseLeave={() => setInteracting(false)}
@@ -113,8 +122,15 @@ function NewsCarousel({ articles, division }) {
         <button type="button" aria-label="Next news" onClick={() => move(1)} className="glass rounded-full p-3"><ArrowRight size={16} /></button>
       </div>}
     </div>
-    <ul ref={rail} className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2">
-      {articles.map((article) => <li key={article.id} className="w-[min(85%,22rem)] shrink-0 snap-start md:w-[calc((100%-2rem)/3)]">
+    <ul ref={rail} onScroll={(event) => {
+      const list = event.currentTarget;
+      const cards = [...list.children];
+      const first = cards[0]?.offsetLeft ?? 0;
+      setActive(cards.reduce((nearest, card, index) => Math.abs(card.offsetLeft - first - list.scrollLeft)
+        < Math.abs(cards[nearest].offsetLeft - first - list.scrollLeft) ? index : nearest, 0));
+    }} className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [perspective:1200px]">
+      {articles.map((article, index) => <li key={article.id} className="w-[min(85%,22rem)] shrink-0 snap-start motion-safe:transition-[transform,opacity] motion-safe:duration-700"
+        style={reduced || index === active ? undefined : { transform: `rotateY(${index < active ? 4 : -4}deg) scale(0.98)`, opacity: 0.88 }}>
         <Link to={`/article/${article.id}`} className="block h-full rounded-card"><NewsArticle article={article} /></Link>
       </li>)}
     </ul>

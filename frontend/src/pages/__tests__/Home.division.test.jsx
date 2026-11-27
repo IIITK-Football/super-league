@@ -124,15 +124,18 @@ describe('division home', () => {
   });
 
   it('offers controls to move and pause the news carousel', async () => {
+    const intervals = vi.spyOn(window, 'setInterval');
     responses.dashboard = { json: { success: true, data: { ...dashboardPayload.data,
       news: [{ id: 'one', title: 'First article' }, { id: 'two', title: 'Second article' }] } } };
     renderHome();
     const carousel = await screen.findByRole('region', { name: 'News carousel' });
+    expect(intervals).toHaveBeenCalledWith(expect.any(Function), 12000);
     const rail = carousel.querySelector('ul');
     rail.scrollTo = vi.fn();
     fireEvent.click(screen.getByRole('button', { name: 'Next news' }));
     expect(rail.scrollTo).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Pause news carousel' }));
     expect(screen.getByRole('button', { name: 'Play news carousel' })).toBeTruthy();
+    intervals.mockRestore();
   });
 });
