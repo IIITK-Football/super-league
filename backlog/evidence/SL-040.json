@@ -1,9 +1,9 @@
 {
-  "head": "c7b83185a6a8dc4cf46c4ebe4575b6319d9403ca",
-  "tree": "9a9c236e3444f5c7ae17cfb73c61de971b642c75",
-  "clean": false,
+  "head": "bbcb0d13667f9e2303f66273fec5f571829808e5",
+  "tree": "4dd251285b01eb029cc35efb2f06be37bc4e3e02",
+  "clean": true,
   "dryRun": false,
-  "at": "2026-11-27T05:02:10.132Z",
+  "at": "2026-11-27T05:03:38.362Z",
   "groups": [
     {
       "name": "divisions",
@@ -14,13 +14,13 @@
           "cwd": "backend",
           "cmd": "pnpm exec vitest run --no-file-parallelism tests/divisions",
           "exit": 0,
-          "ms": 11633
+          "ms": 9766
         },
         {
           "cwd": "frontend",
           "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageDivisions.local.test.jsx",
           "exit": 0,
-          "ms": 3792
+          "ms": 3663
         }
       ]
     },
@@ -33,13 +33,13 @@
           "cwd": "api",
           "cmd": "pnpm exec tsc --noEmit",
           "exit": 0,
-          "ms": 1821
+          "ms": 1896
         },
         {
           "cwd": "api",
           "cmd": "pnpm exec vitest run",
           "exit": 0,
-          "ms": 21217
+          "ms": 20821
         }
       ]
     },
@@ -52,7 +52,7 @@
           "cwd": "frontend",
           "cmd": "pnpm exec vitest run --passWithNoTests",
           "exit": 0,
-          "ms": 9492
+          "ms": 8499
         }
       ]
     }
