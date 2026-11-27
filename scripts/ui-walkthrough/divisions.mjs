@@ -68,6 +68,8 @@ async function main() {
   const ids = [];
   const steps = [];
   let browser;
+  const pages = [];
+  const slow = [];
   try {
     if (local) await serve(keys);
     const version = await fetch(`${site}/version.json`, { headers: access }).then((r) => r.json());
@@ -100,8 +102,25 @@ async function main() {
         await context.addInitScript(([key, session]) => localStorage.setItem(key, JSON.stringify(session)), [storageKey, account.session]);
       }
       const page = await context.newPage();
-      page.setDefaultTimeout(12000);
+      // A read on an idle, reused connection to staging can stall for well over ten seconds before it answers.
+      page.setDefaultTimeout(local ? 12000 : 40000);
       page.on('pageerror', (error) => pageErrors.push(error.message));
+      const started = new Map();
+      const answered = new Map();
+      page.on('response', (response) => answered.set(response.request(), response.status()));
+      page.on('request', (request) => started.set(request, Date.now()));
+      page.on('requestfinished', (request) => {
+        const ms = Date.now() - started.get(request);
+        if (ms > 3000) slow.push(`${new URL(request.url()).pathname} ${ms} ms`);
+        started.delete(request);
+      });
+      page.on('requestfailed', (request) => {
+        slow.push(`${new URL(request.url()).pathname} failed: ${request.failure()?.errorText}`);
+        started.delete(request);
+      });
+      page.on('console', (message) => { if (message.type() === 'error') slow.push(`console: ${message.text().slice(0, 160)}`); });
+      page.pending = () => [...started].map(([request, at]) => `${request.method()} ${new URL(request.url()).pathname} waiting ${Date.now() - at} ms, status ${answered.get(request) ?? 'none yet'}`);
+      pages.push(page);
       return page;
     };
     const admin = await open(dictator);
@@ -219,7 +238,18 @@ async function main() {
     assert.equal(unchanged.name, 'Walkthrough Second');
     steps.push({ scenario: 'validate and audit', outcomes: ['Normal user refused', 'Invalid update leaves the row unchanged', 'Dictator recorded as audit actor'] });
     assert.deepEqual(pageErrors, [], 'The browser reported no uncaught errors');
-    console.log(JSON.stringify({ item: 'SL-040', target, servedCommit: version.commit, steps }, null, 2));
+    const slowRequests = slow.filter((entry) => entry.endsWith(' ms'));
+    console.log(JSON.stringify({ item: 'SL-040', target, servedCommit: version.commit, steps, slowRequests }, null, 2));
+  } catch (error) {
+    // What the pages showed when a step failed, and any request that took more than three seconds.
+    for (const page of pages) {
+      const body = await page.locator('body').innerText({ timeout: 1000 }).catch(() => '');
+      const stored = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => !key.includes('auth')).map(([k, v]) => `${k}=${v}`)).catch(() => []);
+      console.error(`Page ${new URL(page.url()).pathname}: ${body.replace(/\s+/g, ' ').slice(0, 300)}`);
+      console.error(`  pending: ${page.pending().join(', ') || 'none'}; stored: ${stored.join(', ')}`);
+    }
+    console.error(`Slow requests: ${slow.join(', ') || 'none'}`);
+    throw error;
   } finally {
     try {
       if (browser) await browser.close();
