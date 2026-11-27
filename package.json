@@ -30,6 +30,6 @@
     "work": "node scripts/work/cli.mjs"
   },
   "devDependencies": {
-    "supabase": "^2.119.0"
+    "supabase": "^2.122.1"
   }
 }

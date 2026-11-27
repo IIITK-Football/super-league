@@ -186,7 +186,7 @@ importers:
   .:
     devDependencies:
       supabase:
-        specifier: ^2.119.0
+        specifier: ^2.122.1
         version: 2.122.1
 
 packages:
