@@ -812,4 +812,7 @@ ON CONFLICT (player_id) DO NOTHING;
 UPDATE public.predictions p SET graded_events_version = m.events_version
 FROM public.matches m WHERE m.id = p.match_id AND p.status = 'graded' AND p.graded_events_version IS DISTINCT FROM m.events_version;
 
+-- Seeded seasons are created after the migrations ran: give them version 1 of their rules the same way.
+SELECT public.backfill_season_rules();
+
 COMMIT;
