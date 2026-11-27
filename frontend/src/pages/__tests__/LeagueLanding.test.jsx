@@ -6,11 +6,14 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 globalThis.__db = {};
+globalThis.__filters = [];
 vi.mock('../../lib/supabase', () => ({
   supabase: {
     from: (table) => {
       const builder = {
-        select: () => builder, order: () => builder, in: () => builder, eq: () => builder,
+        select: () => builder, order: () => builder, in: () => builder,
+        eq: (...args) => { globalThis.__filters.push([table, 'eq', ...args]); return builder; },
+        is: (...args) => { globalThis.__filters.push([table, 'is', ...args]); return builder; },
         then: (resolve, reject) => Promise.resolve(globalThis.__db[table]?.() ?? { data: [], error: null }).then(resolve, reject),
       };
       return builder;
@@ -62,6 +65,7 @@ function renderLanding() {
 beforeEach(() => {
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} });
   setData();
+  globalThis.__filters = [];
 });
 afterEach(cleanup);
 
@@ -75,6 +79,10 @@ describe('landing division choice', () => {
     expect(link.textContent).toContain('Alpha 2 - 1 Beta');
     expect(await findCard('/wsl')).toBeTruthy();
     expect(screen.queryByText('Old Cup')).toBeNull();
+    for (const table of ['divisions', 'seasons']) {
+      expect(globalThis.__filters).toContainEqual([table, 'eq', 'visibility', 'public']);
+      expect(globalThis.__filters).toContainEqual([table, 'is', 'archived_at', null]);
+    }
     expect(screen.queryByText(/SL \/ 26/)).toBeNull();
   });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { API_BASE_URL } from '../../lib/api';
 import { AlarmClockOff, ChevronLeft, Flag, Minus, Pause, Play, Plus, Timer } from 'lucide-react';
@@ -101,7 +101,7 @@ export default function LiveController() {
       setMinuteDraft(null);
       setNow(Date.now());
       return true;
-    } catch (err) {
+    } catch {
       say(false, 'The clock was not saved. Check your connection and try again.');
       return false;
     } finally { setClockBusy(false); }
@@ -153,7 +153,7 @@ export default function LiveController() {
       }
       await fetchMatchEvents();
       return r;
-    } catch (err) {
+    } catch {
       say(false, 'The change was not saved. Check your connection and try again.');
       await fetchMatchEvents();
     } finally { setBusyId(''); }
@@ -167,7 +167,7 @@ export default function LiveController() {
       if (r.ok) { say(true, r.message); refetch(); refetchDone(); return true; }
       say(false, r.message || 'The action failed.');
       return false;
-    } catch (err) { say(false, 'Action failed. Check your connection.'); return false; }
+    } catch { say(false, 'Action failed. Check your connection.'); return false; }
     finally { setLoading(false); }
   };
 

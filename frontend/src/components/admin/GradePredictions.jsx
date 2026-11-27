@@ -7,13 +7,11 @@ import { CheckCircle2, Target } from 'lucide-react';
 import { Button, Crest, Pill, SegmentedControl, Skeleton, toast, useConfirm } from '../ui';
 import { formatKickoff } from './adminFormat';
 
-// Grading works on one season: the completed matches of the division's current season (the list's scope). Regrading
-// sends that season with the division, so it never touches another season's points.
+// The match list is season-scoped; regrading recalculates every graded prediction.
 export default function GradePredictions() {
   const [division, setDivision] = useState('super-league');
   const { data: resp, refetch, loading: fetchLoading } = useApi(`/admin/matches?status=completed&division=${division}`);
   const matches = resp?.data || [];
-  const seasonId = matches[0]?.season_id;
   const seasonName = matches[0]?.season_name;
   const confirm = useConfirm();
 
@@ -24,9 +22,9 @@ export default function GradePredictions() {
 
   const handleRegradeAll = async () => {
     const ok = await confirm({
-      title: `Regrade ${seasonName}?`,
-      description: 'Recalculates points for every graded prediction in this season from its match events, then updates the season leaderboards. Other seasons are not changed.',
-      confirmLabel: 'Regrade season',
+      title: 'Regrade all predictions?',
+      description: 'Recalculates every graded prediction across all seasons from match events.',
+      confirmLabel: 'Regrade all',
       tone: 'danger',
     });
     if (!ok) return;
@@ -35,7 +33,7 @@ export default function GradePredictions() {
     setNotice(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${API_BASE_URL}/admin/predictions/regrade-all?division=${division}&season=${seasonId}`, {
+      const res = await fetch(`${API_BASE_URL}/admin/predictions/regrade-all`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session?.access_token}` }
       });
@@ -46,7 +44,7 @@ export default function GradePredictions() {
       } else {
         setNotice({ tone: 'error', text: `Regrade failed: ${result.message || 'Unknown error'}` });
       }
-    } catch (err) {
+    } catch {
       setNotice({ tone: 'error', text: 'Regrade failed. Check your connection and try again.' });
     } finally {
       setIsRegradingAll(false);
@@ -80,7 +78,7 @@ export default function GradePredictions() {
       } else {
         setNotice({ tone: 'error', text: `Grading failed: ${result.message || 'Unknown error'}` });
       }
-    } catch (err) {
+    } catch {
       setNotice({ tone: 'error', text: 'Grading failed. Check your connection and try again.' });
     } finally {
       setGradingId(null);
@@ -115,8 +113,8 @@ export default function GradePredictions() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <DivisionSwitch value={division} onChange={setDivision} />
-        <Button variant="secondary" onClick={handleRegradeAll} disabled={isRegradingAll || !seasonId} className="text-live">
-          {isRegradingAll ? 'Processing...' : 'Regrade season'}
+        <Button variant="secondary" onClick={handleRegradeAll} disabled={isRegradingAll} className="text-live">
+          {isRegradingAll ? 'Processing...' : 'Regrade all'}
         </Button>
       </div>
 

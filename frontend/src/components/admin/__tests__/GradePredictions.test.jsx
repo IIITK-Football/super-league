@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
-// Group: match-operations. Grading works on one season: regrade asks first, names the season, and sends the division
-// and that season. Results and failures are shown as toasts; no browser dialogs are used.
+// Group: match-operations. Regrading all seasons requires confirmation.
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,14 +22,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('GradePredictions regrade', () => {
-  it('asks before regrading the season, then sends the division and that season', async () => {
+  it('asks before regrading all seasons', async () => {
     render(<ConfirmProvider><GradePredictions /></ConfirmProvider>);
-    fireEvent.click(screen.getByRole('button', { name: /regrade season/i }));
+    fireEvent.click(screen.getByRole('button', { name: /regrade all/i }));
     const dialog = await screen.findByRole('alertdialog');
-    expect(within(dialog).getByText(/2026 season/)).toBeTruthy();
+    expect(within(dialog).getByText(/across all seasons/)).toBeTruthy();
     expect(urls).toHaveLength(0);
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Regrade season' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Regrade all' }));
     await waitFor(() => expect(readToasts().at(-1)?.title).toBe('Regraded 4 predictions in 2026 season.'));
-    expect(urls).toEqual(['http://api.test/admin/predictions/regrade-all?division=super-league&season=s1']);
+    expect(urls).toEqual(['http://api.test/admin/predictions/regrade-all']);
   });
 });

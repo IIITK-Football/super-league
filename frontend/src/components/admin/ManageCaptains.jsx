@@ -89,7 +89,6 @@ export default function ManageCaptains() {
   const chooseSeason = (id) => { clearBelow(2); setSeasonId(id); if (id) loadTeams(id); };
   const chooseTeam = (id) => { clearBelow(3); setTeamId(id); if (id) loadAssignment(seasonId, id); };
 
-  const division = divisions.find((d) => d.id === divisionId);
   const team = teams.find((t) => t.id === teamId);
 
   const entryId = assignment?.entryId;

@@ -231,7 +231,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(must(await admin.from('roster_memberships').select('team_entry_id').eq('id', ada.roster_memberships[0].id).single()).team_entry_id).toBe(made.entries.Beta);
 
     // Remove the veteran from this season's roster: the player and last season's place stay.
-    const veteranPlace = must(await admin.from('roster_memberships').select('id').eq('player_id', made.veteran).eq('season_id', made.seasons.now).single()).id;
+    must(await admin.from('roster_memberships').select('id').eq('player_id', made.veteran).eq('season_id', made.seasons.now).single()).id;
     fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Vera Veteran$/ }));
     fireEvent.click(screen.getByRole('button', { name: /remove from roster/i }));
     await statusText(/Removed from the roster/);

@@ -163,7 +163,7 @@ describe.skipIf(!TARGET)(`roles and assignments through the real Data API (${TAR
     await pick(`New captain for ${teamName}`, new RegExp(`${tag}-ui-default2@`));
     fireEvent.click(screen.getByRole('button', { name: /change captain/i }));
     await toasted(/is now the captain/);
-    expect((await admin.from('captain_assignments').select('user_id').eq('team_entry_id', entry)).data).toEqual([{ user_id: scorer.id }]);
+    await waitFor(async () => expect((await admin.from('captain_assignments').select('user_id').eq('team_entry_id', entry)).data).toEqual([{ user_id: scorer.id }]), { timeout: 15000 });
     expect(await grantsOf(normal.id)).toEqual([]);
     globalThis.confirmAnswer = vi.fn(async () => true);
     fireEvent.click(await screen.findByRole('button', { name: /revoke captain/i }, { timeout: 15000 }));

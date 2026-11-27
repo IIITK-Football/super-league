@@ -38,6 +38,7 @@ export function handleError(error: any, context: string) {
   } else if (error.status === 403 || error.status === 404 || error.status === 409) {
     // Thrown by the routes themselves with a fixed message ("not assigned to score this match"), never a database error.
     statusCode = error.status;
+    safeMessage = error.message || safeMessage;
   } else if (typeof error.code === 'string' && DATABASE_STATUS[error.code]) {
     // A database refusal is the caller's problem, not a server failure. Permission and conflict answers use fixed
     // messages; the checks our own functions raise (invalid value, rule broken, not found) carry readable messages.

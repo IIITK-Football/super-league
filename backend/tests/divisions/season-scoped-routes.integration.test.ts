@@ -14,6 +14,8 @@ let admin: SupabaseClient;
 let routes: Record<string, (request: Request) => Promise<Response>>;
 const made = { seasons: [] as string[], teams: [] as string[], players: [] as string[], matches: [] as string[] };
 let wsl: { id: string };
+let previousWslFlair: string | null = null;
+let superLeagueFlair: string | null = null;
 
 const must = <T extends { error: unknown }>(r: T): T => {
   if (r.error) throw new Error(`setup failed: ${JSON.stringify(r.error)}`);
@@ -67,12 +69,16 @@ beforeAll(async () => {
   }).select('id').single());
   made.matches = [match!.id];
   must(await admin.from('match_events').insert({ match_id: match!.id, team_id: made.teams[0], kind: 'goal', player_id: made.players[0], assist_player_id: made.players[1], minute: 10 }));
+  const superLeague = must(await admin.from('divisions').select('id').eq('slug', 'super-league').single()).data!;
+  previousWslFlair = must(await admin.from('division_flairs').select('team_name').eq('user_id', LAMB).eq('division_id', wsl.id).maybeSingle()).data?.team_name ?? null;
+  superLeagueFlair = must(await admin.from('division_flairs').select('team_name').eq('user_id', LAMB).eq('division_id', superLeague.id).maybeSingle()).data?.team_name ?? null;
   must(await admin.from('division_flairs').upsert({ user_id: LAMB, division_id: wsl.id, team_name: 'Falcone Family' }));
 }, 60000);
 
 afterAll(async () => {
   if (!admin) return;
-  await admin.from('division_flairs').delete().eq('user_id', LAMB).eq('division_id', wsl?.id ?? '');
+  if (previousWslFlair !== null) await admin.from('division_flairs').upsert({ user_id: LAMB, division_id: wsl.id, team_name: previousWslFlair });
+  else await admin.from('division_flairs').delete().eq('user_id', LAMB).eq('division_id', wsl?.id ?? '');
   for (const id of made.matches) await admin.from('matches').delete().eq('id', id); // its events go with it
   await admin.from('roster_memberships').delete().in('season_id', made.seasons);
   for (const id of made.players) await admin.from('players').delete().eq('id', id);
@@ -112,7 +118,7 @@ describe('home dashboard', () => {
     const lamb = body.data.fantasyTop.find((u: any) => u.id === LAMB);
     if (lamb) expect(lamb.flair).toBe('Falcone Family');
     const sl = await call('home/dashboard', 'division=super-league');
-    expect(sl.body.data.fantasyTop.find((u: any) => u.id === LAMB)?.flair ?? null).toBeNull();
+    expect(sl.body.data.fantasyTop.find((u: any) => u.id === LAMB)?.flair ?? null).toBe(superLeagueFlair);
   });
 
   it('refuses the retired division strings, unknown and hidden seasons, and malformed names', async () => {
@@ -184,6 +190,6 @@ describe('standings, teams and statistics', () => {
     const wslBoard = await call('predictions/leaderboard', 'division=wsl');
     expect(wslBoard.body.data.overall.find((e: any) => e.user_id === LAMB)?.flair).toBe('Falcone Family');
     const slBoard = await call('predictions/leaderboard', 'division=super-league');
-    expect(slBoard.body.data.overall.find((e: any) => e.user_id === LAMB)?.flair).toBeNull();
+    expect(slBoard.body.data.overall.find((e: any) => e.user_id === LAMB)?.flair ?? null).toBe(superLeagueFlair);
   });
 });

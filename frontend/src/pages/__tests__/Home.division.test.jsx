@@ -12,11 +12,12 @@ vi.mock('../../lib/supabase', () => ({
       const b = {
         select: () => b,
         eq: () => b,
+        is: () => b,
         order: () => b,
         maybeSingle: async () => ({ data: table === 'divisions' ? { id: 'd1', slug: 'super-league', name: 'Super League' } : null, error: null }),
         then: (resolve) => resolve(table === 'seasons'
           ? { data: [{ id: 's26', slug: '2026', name: '2026', is_current: true, starts_on: '2026-08-01' }], error: null }
-          : { data: [], error: null }),
+          : { data: table === 'section_types' ? [{ key: 'overview', label: 'Overview', default_enabled: true, default_sort_order: 1 }] : [], error: null }),
       };
       return b;
     },
@@ -54,7 +55,7 @@ function renderHome() {
     <LeagueProvider>
       <MemoryRouter initialEntries={['/super-league']}>
         <Routes>
-          <Route path="/super-league" element={<DivisionHomeRoute division="super-league"><Home /></DivisionHomeRoute>} />
+          <Route path="/:division" element={<DivisionHomeRoute><Home /></DivisionHomeRoute>} />
         </Routes>
       </MemoryRouter>
     </LeagueProvider>,

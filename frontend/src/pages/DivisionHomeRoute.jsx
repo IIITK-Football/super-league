@@ -22,7 +22,7 @@ export function DivisionHomeRoute({ children }) {
   if (season && (!seasonScope.season || seasonScope.season.slug !== season)) {
     return <section className="space-y-2">
       <h1 className="text-xl font-bold">Season not found</h1>
-      <p>There is no season "{season}" in {seasonScope.divisionRecord.name}.</p>
+      <p>There is no season &quot;{season}&quot; in {seasonScope.divisionRecord.name}.</p>
       <Link className="underline" to={`/${division}`}>{seasonScope.currentSeason ? 'Go to the current season' : 'View the division'}</Link>
     </section>;
   }

@@ -32,7 +32,7 @@ describe('GET /api/teams/:team_id/matches', () => {
   });
 
   it('returns the team fixtures for a valid UUID', async () => {
-    db.tables.matches = { data: [{ id: 'm1', date: '2026-12-01', status: 'scheduled', home_score: null, away_score: null, venue: null, home_team: { id: TEAM, name: 'A' }, away_team: { id: 'b', name: 'B' } }], error: null };
+    db.tables.matches = { data: [{ id: 'm1', date: '2026-12-01', status: 'scheduled', season: { section_flags: { teams: true } }, home_score: null, away_score: null, venue: null, home_team: { id: TEAM, name: 'A' }, away_team: { id: 'b', name: 'B' } }], error: null };
     const res = await call(TEAM);
     expect(res.status).toBe(200);
     expect((await res.json()).data[0]).toMatchObject({ id: 'm1', home_team: 'A', away_team: 'B' });

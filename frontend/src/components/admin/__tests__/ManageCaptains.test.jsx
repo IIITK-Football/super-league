@@ -4,7 +4,7 @@
 // a captain calls assign_captain with the replace flag (one assignment stays), assigning calls it without, revoking
 // calls revoke_captain, and after each the captain is reloaded from the database. A person may captain several entries
 // so every account is offered. Accounts are found by every word and labelled by the account directory.
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
 vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer, toast: (t) => globalThis.toasts.push(t) }));

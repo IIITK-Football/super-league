@@ -50,7 +50,6 @@ const opts = { auth: { persistSession: false, autoRefreshToken: false, detectSes
 let conn;
 let admin;
 const users = [];
-let divisionId = null;
 
 async function signedInAs(label, role) {
   const email = `${tag}-${label}@${DOMAIN}`;

@@ -17,17 +17,20 @@ const SPRING = { type: 'spring', bounce: 0.18, duration: 0.35 };
 
 // Every section of a division, in menu order. primary sections also sit in the header bar under their short name.
 // The World Cup page is reached from the home page only.
-function sections(division) {
+function sections(division, configured) {
   return [
-    { to: `/${division}`, label: 'Home', exact: true, primary: true },
-    { to: `/${division}/matches`, label: 'Matches', primary: true },
-    { to: `/standings/${division}`, label: 'Table', primary: true },
-    { to: `/${division}/teams`, label: 'Clubs' },
-    { to: '/leaderboard', label: 'Player stats', short: 'Stats', primary: true },
-    { to: '/fantasy', label: 'Predictions' },
-    { to: `/${division}/news`, label: 'News', primary: true },
-    { to: `/${division}/rules`, label: 'Rules' },
-  ];
+    { key: 'overview', to: `/${division}`, label: 'Home', exact: true, primary: true },
+    { key: 'fixtures', to: `/${division}/matches`, label: 'Matches', primary: true },
+    { key: 'standings', to: `/standings/${division}`, label: 'Table', primary: true },
+    { key: 'teams', to: `/${division}/teams`, label: 'Clubs' },
+    { key: 'stats', to: '/leaderboard', label: 'Player stats', short: 'Stats', primary: true },
+    { key: 'fantasy', to: '/fantasy', label: 'Predictions' },
+    { key: 'news', to: `/${division}/news`, label: 'News', primary: true },
+    { key: 'rules', to: `/${division}/rules`, label: 'Rules' },
+  ].map((item) => ({ ...item, setting: configured.find((section) => section.key === item.key) }))
+    .filter((item) => item.setting?.enabled && item.setting.navVisible)
+    .sort((a, b) => a.setting.order - b.setting.order)
+    .map((item) => ({ ...item, label: item.setting.label || item.label, short: item.setting.label && item.setting.label !== item.label ? undefined : item.short }));
 }
 
 // True at the width where the header carries the section pill, so the menu can carry just the rest. Without media
@@ -62,11 +65,11 @@ function Wordmark({ label }) {
 }
 
 // The main sections as one floating glass pill. The lit section has a white pill that slides between links.
-function PillNav({ division, isActive, reduced }) {
+function PillNav({ items, isActive, reduced }) {
   return (
     <nav aria-label="Main" className="glass hidden rounded-pill p-1 lg:block">
       <ul className="flex items-center">
-        {sections(division).filter((s) => s.primary).map(({ to, label, short, exact }) => {
+        {items.filter((s) => s.primary).map(({ to, label, short, exact }) => {
           const active = isActive(to, exact);
           return (
             <li key={label}>
@@ -100,8 +103,8 @@ const WORKSPACES = new Set(['dictator', 'editor', 'team-builder']);
 
 export function AppShell({ children }) {
   const location = useLocation();
-  const { division } = useLeague();
-  const { divisions, loading } = useDivisions();
+  const { division, seasonScope } = useLeague();
+  const { divisions, loading } = useDivisions({ publicOnly: true });
   const reduced = useReducedMotion();
   const wide = useWideHeader();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -133,7 +136,7 @@ export function AppShell({ children }) {
   const isActive = (to, exact) => location.pathname === to || (!exact && location.pathname.startsWith(`${to}/`));
 
   // The pill already lists the main sections, so the menu carries those only where the pill is not shown.
-  const allSections = sections(division);
+  const allSections = sections(division, seasonScope.sections);
   const menuItems = (wide ? allSections.filter((s) => !s.primary) : allSections)
     .map(({ to, label, exact }) => ({ to, label, active: isActive(to, exact) }));
 
@@ -147,7 +150,7 @@ export function AppShell({ children }) {
             <Link to={`/${division}`} aria-label={`${current?.name ?? 'Super League'} home`} className="justify-self-start rounded-ctl transition-opacity hover:opacity-80">
               <Wordmark label={current?.short_name || current?.name} />
             </Link>
-            <PillNav division={division} isActive={isActive} reduced={reduced} />
+            <PillNav items={allSections} isActive={isActive} reduced={reduced} />
             <div className="flex items-center justify-self-end gap-2 sm:gap-3">
               <AccountMenu />
               <button

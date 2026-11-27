@@ -12,11 +12,12 @@ vi.mock('../../lib/supabase', () => ({
       const b = {
         select: () => b,
         eq: () => b,
+        is: () => b,
         order: () => b,
         maybeSingle: async () => ({ data: table === 'divisions' ? { id: 'd1', slug: 'wsl', name: 'WSL' } : null, error: null }),
         then: (resolve) => resolve(table === 'seasons'
           ? { data: [{ id: 's1', slug: '2026', name: '2026', is_current: true, starts_on: '2026-08-01', format: 'knockout' }], error: null }
-          : { data: [], error: null }),
+          : { data: table === 'section_types' ? [{ key: 'overview', label: 'Overview', default_enabled: true, default_sort_order: 1 }] : [], error: null }),
       };
       return b;
     },

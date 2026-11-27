@@ -124,7 +124,8 @@ describe('season choice on the division homepage', () => {
   it('navigates to the chosen season even when none is current', async () => {
     state.seasons = [season('2027'), season('2026')];
     renderAt('/wsl/2027');
-    fireEvent.change(await screen.findByLabelText('Season'), { target: { value: '2026' } });
+    await screen.findByRole('button', { name: /Season/ });
+    await pick(/Season/, '2026');
     await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/wsl/2026'));
   });
 

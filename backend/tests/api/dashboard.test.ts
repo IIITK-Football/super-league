@@ -11,7 +11,7 @@ vi.mock('@supabase/supabase-js', async () => (await import('./fake-supabase')).s
 import { GET } from '../../app/api/home/dashboard/route';
 
 const DIVISION = { id: 'd1', slug: 'super-league', name: 'Super League' };
-const SEASON = { id: 's1', slug: '2026', name: '2026', is_current: true, format: 'league' };
+const SEASON = { id: 's1', slug: '2026', name: '2026', is_current: true, format: 'league', division: DIVISION, section_flags: { overview: true, fixtures: true, teams: true } };
 const call = () => GET(new Request('http://localhost/api/home/dashboard'));
 
 const healthy = () => {
@@ -39,8 +39,7 @@ describe('GET /api/home/dashboard', () => {
 
   it('answers 500 when the teams query fails, not an empty standings table', async () => {
     healthy();
-    db.tables.team_entries = { data: [{ team_id: 't1' }], error: null };
-    db.tables.teams = { data: null, error: { message: 'permission denied for table teams' } };
+    db.tables.team_entries = { data: null, error: { message: 'team query failed' } };
     const res = await call();
     expect(res.status).toBe(500);
     expect((await res.json()).success).toBe(false);

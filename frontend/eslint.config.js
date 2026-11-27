@@ -29,10 +29,20 @@ export default [
       ...react.configs['jsx-runtime'].rules,
       ...reactHooks.configs.recommended.rules,
       'react/jsx-no-target-blank': 'off',
+      // This project uses plain JSX without runtime PropTypes.
+      'react/prop-types': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
       ],
     },
+  },
+  {
+    files: ['**/*.test.{js,jsx}', 'scripts/**/*.js', 'vite.config.js'],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['functions/**/*.js'],
+    languageOptions: { globals: { HTMLRewriter: 'readonly' } },
   },
 ]

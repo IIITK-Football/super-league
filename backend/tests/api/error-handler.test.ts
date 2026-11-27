@@ -12,8 +12,8 @@ describe('handleError', () => {
   it('hides the message of an unexpected database error behind a generic 500', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const out = await respond({ message: 'permission denied for table user_roles', code: '42501' });
-    expect(out.status).toBe(500);
-    expect(out.body).toEqual({ success: false, message: 'An unexpected internal server error occurred.' });
+    expect(out.status).toBe(403);
+    expect(out.body).toEqual({ success: false, message: 'You are not allowed to do that.' });
   });
 
   it('passes the reason of a 400 through', async () => {

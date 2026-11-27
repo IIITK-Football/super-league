@@ -62,13 +62,15 @@ function usePrefersMotion() {
 async function loadDivisionCards() {
     const { data: divisions, error } = await supabase.from('divisions')
         .select('id, slug, name, primary_color, logo_url, archived_at')
+        .eq('visibility', 'public').is('archived_at', null)
         .order('sort_order', { ascending: true }).order('name', { ascending: true });
     if (error) throw error;
     const visible = (divisions || []).filter((d) => !d.archived_at);
     if (visible.length === 0) return [];
 
     const { data: seasons, error: seasonsError } = await supabase.from('seasons')
-        .select('id, division_id, name').in('division_id', visible.map((d) => d.id)).eq('is_current', true);
+        .select('id, division_id, name').in('division_id', visible.map((d) => d.id)).eq('is_current', true)
+        .eq('visibility', 'public').is('archived_at', null);
     if (seasonsError) throw seasonsError;
     const seasonIds = (seasons || []).map((s) => s.id);
 
@@ -242,7 +244,6 @@ function warmPosters() {
 }
 
 export function LeagueLanding() {
-    const { divisions, loading: divisionsLoading, error: divisionsError } = useDivisions({ publicOnly: true });
     const [carouselIndex, setCarouselIndex] = useState(0);
     const [activeSlot, setActiveSlot] = useState(0);
     const [slotStreamNames, setSlotStreamNames] = useState([null, null]);

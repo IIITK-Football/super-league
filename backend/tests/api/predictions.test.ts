@@ -6,6 +6,7 @@ vi.hoisted(() => {
   process.env.SUPABASE_PUBLISHABLE_KEY = 'test-publishable';
   process.env.SUPABASE_URL = 'http://127.0.0.1:54321';
 });
+vi.mock('@supabase/supabase-js', async () => (await import('./fake-supabase')).supabaseModule);
 vi.mock('@supabase/ssr', async () => (await import('./fake-supabase')).ssrModule);
 
 import { POST } from '../../app/api/predictions/[match_id]/route';
@@ -30,7 +31,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   db.user = { id: 'u1' };
   db.tables.predictions = { data: null, error: null };
-  db.tables.matches = { data: { status: 'scheduled', date: future() }, error: null };
+  db.tables.matches = { data: { status: 'scheduled', date: future(), season: { section_flags: { fantasy: true } } }, error: null };
 });
 
 describe('POST /api/predictions/:match_id', () => {
@@ -41,7 +42,7 @@ describe('POST /api/predictions/:match_id', () => {
   });
 
   it('refuses a prediction once kickoff has passed', async () => {
-    db.tables.matches = { data: { status: 'scheduled', date: past() }, error: null };
+    db.tables.matches = { data: { status: 'scheduled', date: past(), season: { section_flags: { fantasy: true } } }, error: null };
     const res = await submit(valid);
     expect(res.status).toBe(400);
     expect((await res.json()).message).toBe('Predictions are closed for this match.');
@@ -50,7 +51,7 @@ describe('POST /api/predictions/:match_id', () => {
 
   it('refuses a prediction for a match that is live or final', async () => {
     for (const status of ['live', 'completed', 'forfeited']) {
-      db.tables.matches = { data: { status, date: future() }, error: null };
+      db.tables.matches = { data: { status, date: future(), season: { section_flags: { fantasy: true } } }, error: null };
       expect((await submit(valid)).status).toBe(400);
     }
     expect(db.inserts).toEqual([]);
@@ -64,6 +65,12 @@ describe('POST /api/predictions/:match_id', () => {
     ]) {
       expect((await submit(body)).status).toBe(400);
     }
+    expect(db.inserts).toEqual([]);
+  });
+
+  it('refuses predictions when the season has disabled fantasy', async () => {
+    db.tables.matches = { data: { status: 'scheduled', date: future(), season: { section_flags: { fantasy: false } } }, error: null };
+    expect((await submit(valid)).status).toBe(404);
     expect(db.inserts).toEqual([]);
   });
 

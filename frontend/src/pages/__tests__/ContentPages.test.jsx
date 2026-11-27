@@ -89,16 +89,18 @@ describe('article page', () => {
 describe('rules', () => {
   it('names the division, and never shows Super League rules for another division', () => {
     leagueState.current = { division: 'freshers', seasonScope: { ready: true, divisionRecord: { name: 'Freshers' }, season: null } };
+    apiState.current = { data: { success: true, data: { rules: { blocks: [] } } }, loading: false };
     wrap(<Rules />);
-    expect(screen.getByRole('heading', { level: 1, name: 'Freshers rules' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: /Freshers rules/i })).toBeTruthy();
     expect(screen.queryByText('Super League rules')).toBeNull();
-    expect(screen.getByRole('heading', { level: 2, name: 'Rosters & Player Eligibility' })).toBeTruthy();
+    expect(screen.queryByText('Rosters & Player Eligibility')).toBeNull();
   });
 
   it('shows an empty state for a division without published rules', () => {
     leagueState.current = { division: 'inter', seasonScope: { ready: true, divisionRecord: { name: 'Inter' }, season: null } };
+    apiState.current = { data: { success: true, data: { rules: null } }, loading: false };
     wrap(<Rules />);
-    expect(screen.getByText('No rules published yet')).toBeTruthy();
+    expect(screen.getByText('Rules have not been published for this season yet.')).toBeTruthy();
   });
 });
 

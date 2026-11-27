@@ -11,7 +11,7 @@ vi.mock('@supabase/ssr', async () => (await import('./fake-supabase')).ssrModule
 import { GET } from '../../app/api/admin/matches/route';
 
 const DIVISION = { id: 'd1', slug: 'super-league', name: 'Super League' };
-const SEASON = { id: 's1', slug: '2026', name: '2026', is_current: true, format: 'league' };
+const SEASON = { id: 's1', slug: '2026', name: '2026', is_current: true, format: 'league', division: DIVISION, section_flags: { overview: true, fixtures: true, teams: true } };
 const MATCH = { id: 'm1', home_team_id: 't1', away_team_id: 't2', status: 'scheduled', home: { id: 't1', name: 'A' }, away: { id: 't2', name: 'B' } };
 const call = () => GET(new Request('http://localhost/api/admin/matches?division=super-league', { headers: { Authorization: 'Bearer t' } }));
 const matchReads = () => db.calls.filter((c) => c.target === 'matches' && c.method === 'select');

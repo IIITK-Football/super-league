@@ -12,7 +12,7 @@ import { GET } from '../../app/api/schedule/route';
 import { OPEN_STATUSES } from '../../lib/matchStatus';
 
 const DIVISION = { id: 'd1', slug: 'super-league', name: 'Super League' };
-const SEASON = { id: 's1', slug: '2026', name: '2026', is_current: true, format: 'league' };
+const SEASON = { id: 's1', slug: '2026', name: '2026', is_current: true, format: 'league', division: DIVISION, section_flags: { overview: true, fixtures: true, teams: true } };
 const call = (query = '') => GET(new Request(`http://localhost/api/schedule${query}`));
 const matchCalls = (method: string) => db.calls.filter((c) => c.target === 'matches' && c.method === method);
 

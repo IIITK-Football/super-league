@@ -7,9 +7,10 @@ vi.mock('../../../context/AuthContext', () => ({
   useAuth: () => ({ user: null, profile: null, roles: null, hasRole: () => false, loading: false, signOut: vi.fn() }),
 }));
 vi.mock('../../../context/LeagueContext', () => ({
-  useLeague: () => ({ division: 'super-league', fantasySection: 'fifa', setFantasySection: vi.fn(), setDivision: vi.fn() }),
+  useLeague: () => ({ division: 'super-league', seasonScope: { season: null, sections: sectionsState, divisionRecord: null }, fantasySection: 'fifa', setFantasySection: vi.fn(), setDivision: vi.fn() }),
 }));
 const divisionsState = { divisions: [], loading: true };
+const sectionsState = ['overview', 'fixtures', 'standings', 'teams', 'stats', 'fantasy', 'news', 'rules'].map((key, order) => ({ key, label: ({ overview: 'Home', fixtures: 'Matches', standings: 'Table', teams: 'Clubs', stats: 'Player stats', fantasy: 'Predictions', news: 'News', rules: 'Rules' })[key], order, enabled: true, navVisible: true }));
 vi.mock('../../../hooks/useDivisions', () => ({ useDivisions: () => divisionsState }));
 
 import { AppShell } from '../AppShell';
@@ -31,8 +32,7 @@ describe('World Cup navigation stays frozen', () => {
   it('keeps the legacy menu on /wc, not the new menu', () => {
     shellAt('/wc');
     // The legacy menu lists these entries (in the DOM, opened from its hamburger).
-    expect(screen.getByText('FANTASY')).toBeTruthy();
-    expect(screen.getByText('LEGENDS')).toBeTruthy();
+    expect(screen.getByText('WORLD CUP')).toBeTruthy();
     expect(screen.getByText('page body')).toBeTruthy();
     expect(document.querySelector('#site-menu')).toBeNull();
   });
@@ -48,6 +48,18 @@ describe('World Cup navigation stays frozen', () => {
 });
 
 describe('division paths', () => {
+  it('hides disabled and navigation-hidden sections', () => {
+    sectionsState.find((s) => s.key === 'fixtures').enabled = false;
+    sectionsState.find((s) => s.key === 'rules').navVisible = false;
+    try {
+      shellAt('/super-league');
+      expect(document.querySelector('a[href="/super-league/matches"]')).toBeNull();
+      expect(document.querySelector('a[href="/super-league/rules"]')).toBeNull();
+    } finally {
+      sectionsState.find((s) => s.key === 'fixtures').enabled = true;
+      sectionsState.find((s) => s.key === 'rules').navVisible = true;
+    }
+  });
   it('links the sections to the division in view', () => {
     shellAt('/super-league');
     const hrefs = [...document.querySelectorAll('nav[aria-label="Sections"] a')].map((a) => a.getAttribute('href'));

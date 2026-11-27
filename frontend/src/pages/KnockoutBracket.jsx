@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MatchNode } from '../components/bracket/MatchNode';
-import { generateRoundOf32, generateEmptyKnockouts } from '../utils/fifaBracketLogic';
+import { generateEmptyKnockouts } from '../utils/fifaBracketLogic';
 import './KnockoutBracket.css';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -275,7 +275,7 @@ export function KnockoutBracket({ onBack }) {
                         const teamsRes = await fetch(`${API_BASE_URL}/wc/teams`);
                     const teamsJson = await teamsRes.json();
                     if (teamsJson.success) masterTeams = teamsJson.data;
-                } catch (err) { console.error("Failed to fetch teams"); }
+                } catch { console.error("Failed to fetch teams"); }
 
                 const resolveTeam = (rawTeam) => {
                     if (!rawTeam) return null;
@@ -371,12 +371,11 @@ export function KnockoutBracket({ onBack }) {
         setBracketState(prev => {
             const newState = JSON.parse(JSON.stringify(prev)); // Deep copy to prevent reference bugs
             let matchFound = null;
-            let currentRound = null;
 
             // 1. Find the match
             Object.keys(newState).forEach(roundKey => {
                 const m = newState[roundKey].find(m => m.id === matchId);
-                if (m) { matchFound = m; currentRound = roundKey; }
+                if (m) { matchFound = m; }
             });
 
             if (!matchFound) return prev;
