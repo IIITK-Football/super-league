@@ -1,0 +1,38 @@
+# Weekly version updates, opened against develop. Grouping keeps the commit subjects within the 72-character rule the
+# hygiene check applies to every commit.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories: ['/', '/frontend', '/backend', '/api']
+    target-branch: develop
+    schedule:
+      interval: weekly
+    # pnpm refuses releases younger than a day (pnpm-workspace.yaml), so updates wait a little longer than that.
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: chore
+    groups:
+      minor:
+        update-types: [minor, patch]
+      major:
+        update-types: [major]
+    ignore:
+      # Held back on purpose (docs/handoffs/CURRENT.md): remove a rule when its upgrade is done.
+      - dependency-name: supabase
+        update-types: ['version-update:semver-major']
+      - dependency-name: eslint
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@eslint/js'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']

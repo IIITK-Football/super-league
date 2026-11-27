@@ -26,4 +26,14 @@ describe('toolchain versions', () => {
     expect(read('pnpm-workspace.yaml')).not.toContain('minimumReleaseAgeExclude');
     for (const dir of ['frontend', 'backend', 'api']) expect(existsSync(join(repo, dir, 'pnpm-lock.yaml')), dir).toBe(true);
   });
+
+  it('Dependabot updates go to develop, grouped, and leave the held-back majors alone', () => {
+    const config = read('.github/dependabot.yml');
+    expect(config.match(/^ {4}target-branch: develop$/gm)).toHaveLength(2);
+    expect(config).toContain("directories: ['/', '/frontend', '/backend', '/api']");
+    expect(config.match(/^ {4}groups:$/gm)).toHaveLength(2);
+    // Subjects like "chore: bump the minor group across 4 directories with 12 updates" fit the 72-character rule.
+    expect(config.match(/^ {6}prefix: (chore|ci)$/gm)).toHaveLength(2);
+    for (const held of ['supabase', 'eslint']) expect(config).toContain(`dependency-name: ${held}`);
+  });
 });

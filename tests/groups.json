@@ -98,6 +98,7 @@
       "paths": [
         ".claude/settings.json",
         ".github/actions/**",
+        ".github/dependabot.yml",
         ".githooks/**",
         ".github/workflows/**",
         ".gitmessage",
@@ -126,6 +127,7 @@
       "covers": [
         ".claude/settings.json",
         ".github/actions/**",
+        ".github/dependabot.yml",
         ".githooks/**",
         ".github/workflows/**",
         ".gitmessage",
