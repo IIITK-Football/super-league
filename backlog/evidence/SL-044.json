@@ -1,0 +1,68 @@
+{
+  "head": "32a4c07596bef99e955ae0e5abf7f05f6637c2b9",
+  "tree": "8326df292abd8059af0ab164463700739ad45a86",
+  "clean": true,
+  "dryRun": false,
+  "at": "2026-11-27T05:47:31.000Z",
+  "groups": [
+    {
+      "name": "divisions",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "backend",
+          "cmd": "pnpm exec vitest run --no-file-parallelism tests/divisions",
+          "exit": 0,
+          "ms": 12148
+        },
+        {
+          "cwd": "frontend",
+          "cmd": "env SL_LOCAL_SUPABASE=1 pnpm exec vitest run src/components/admin/__tests__/ManageDivisions.local.test.jsx",
+          "exit": 0,
+          "ms": 3329
+        }
+      ]
+    },
+    {
+      "name": "api-services",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "api",
+          "cmd": "pnpm exec tsc --noEmit",
+          "exit": 0,
+          "ms": 1749
+        },
+        {
+          "cwd": "api",
+          "cmd": "pnpm exec vitest run",
+          "exit": 0,
+          "ms": 25017
+        }
+      ]
+    },
+    {
+      "name": "frontend-components",
+      "state": "passed",
+      "note": "",
+      "commands": [
+        {
+          "cwd": "frontend",
+          "cmd": "pnpm exec vitest run --passWithNoTests",
+          "exit": 0,
+          "ms": 9193
+        }
+      ]
+    }
+  ],
+  "selected": [
+    "divisions",
+    "api-services",
+    "frontend-components"
+  ],
+  "commandChecks": {},
+  "id": "SL-044",
+  "base": "e1f0bef"
+}
