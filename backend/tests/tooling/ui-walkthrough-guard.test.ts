@@ -40,3 +40,20 @@ describe('division lifecycle walkthrough', () => {
     }
   });
 });
+
+describe('versioned rules walkthrough', () => {
+  const rules = readFileSync(join(__dirname, '../../../scripts/ui-walkthrough/rules.mjs'), 'utf8');
+
+  it('guards both targets and removes history only on the local database', () => {
+    expect(rules).toMatch(/verifyTarget\(env\), \.\.\.verifySite\(site\)/);
+    expect(rules).toMatch(/localProblems\(keys,/);
+    expect(rules).toMatch(/if \(divisionId && local\) \{[\s\S]*127\.0\.0\.1:54322[\s\S]*session_replication_role/);
+    expect(rules).toMatch(/finally \{[\s\S]*archived: true[\s\S]*db\.deleteUser/);
+    expect(rules).not.toMatch(/console\.log\([^)]*(SECRET_KEY|PUBLISHABLE_KEY|access_token)/);
+  });
+
+  it('reports the served commit and covers the item scenarios', () => {
+    expect(rules).toMatch(/servedCommit: version.commit, steps/);
+    for (const scenario of ['migrated rules', 'build and preview', 'publish and history', 'refusals']) expect(rules).toContain(scenario);
+  });
+});
