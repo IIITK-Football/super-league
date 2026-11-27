@@ -7,22 +7,31 @@ handoff steps.
 ## Status
 
 - 2026-11-27: Claude holds the work, in the main checkout on `develop`.
-- Phase 4 is active. SL-040 is done. SL-044 is in progress ([plan](../plans/SL-044.md)).
-- Done for SL-044: migration `20261207000000_season_rules_versions.sql` and seed call, Worker routes, public Rules page, dictator editor, local walkthrough `scripts/ui-walkthrough/rules.mjs` (all four scenarios passed on `f06e1ed`).
+- Phase 4 is active. SL-040 is done. SL-044 ([plan](../plans/SL-044.md)) is built, verified and on staging; it waits for the owner's C1 attestation.
+- `a78d670` versioned rules tables, backfill and seed call; `e6f3835` Worker routes; `f06e1ed` public page and dictator editor; `bf96271` drops `seasons.rules_md`.
 
 ## Verification
 
-- Local reset applied the migration and demo seed on 54322; 621 pgTAP checks, 110 Worker tests, 270 frontend tests (20 local-only skipped) and both TypeScript checks passed.
+- 622 pgTAP checks, 110 Worker tests, 34 division tests, the local dashboard test, 270 frontend tests (20 local-only skipped), both TypeScript checks and the strict mapped-and-covered check passed.
+- `scripts/ui-walkthrough/rules.mjs` passed all four scenarios locally and on staging at `bf96271` ([local](../walkthroughs/evidence/SL-044-ui-local.json), [staging](../walkthroughs/evidence/SL-044-ui-staging.json)). [Staging database run](https://github.com/IIITK-Football/super-league/actions/runs/45945503886).
+- The first staging run, at `a23f838` just after the deploy, timed out once waiting for version 2 on the public page; the rerun and the `bf96271` run passed.
+- The shell's Node 24 fails `ManageDivisions.local.test.jsx` (jsdom `AbortSignal`). Run tests and `pnpm work` with Node 22 (`.nvmrc`): put the folder of `pnpm dlx node@22 -e 'console.log(process.execPath)'` first on `PATH`.
 
 ## Exact next step
 
-1. Push `develop`, then run `node scripts/ui-walkthrough/rules.mjs --target staging` once the staging database, Pages and Worker serve the new commit.
-2. Only after it passes: add `20261207000001_retire_rules_md.sql` (drop `seasons.rules_md`, redefine `backfill_season_rules` without it, update `027_season_rules.test.sql` and `docs/decisions/D-01-division-season-mapping.md`), reset locally, test, push, walk through again.
-3. Write `docs/walkthroughs/SL-044.md`, run `pnpm work done SL-044`; C1 is the owner's attestation.
+1. Owner: `pnpm work attest SL-044 C1 "<note>"`.
+2. Under Node 22: `pnpm work done SL-044 --base e1f0bef`, fill the walkthrough `docs/walkthroughs/SL-044.md`, commit, run it again.
+3. Start SL-045 (needs a plan first). It stores the accepted rules version id (`season_rules_versions.id`) and adds the player's view of that version; `season_rules(p_season)` serves only the latest.
+
+For the walkthrough's risks: a production release must serve the new site before the migrations run, because the previous site reads `rules_md`. Rolling back past `20261207000001` needs the column added again from version 1. Each staging walkthrough reuses the archived `sl-check-rules` division and leaves one season in it, since published versions cannot be deleted.
+
+## In flight
+
+No product files in flight. Untracked `.github/agents`, `.github/hooks`, `.github/skills`, `.pnpm-store/` and `supabase/` predate this work and were left alone.
 
 ## Local database
 
-Local Supabase on 54322 runs the new migration and demo seed. No dev servers are left running.
+Local Supabase on 54322 runs both new migrations and the demo seed. No dev servers are left running.
 
 ## Not migrated on purpose
 
