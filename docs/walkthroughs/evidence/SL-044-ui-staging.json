@@ -1,0 +1,38 @@
+{
+  "item": "SL-044",
+  "target": "staging",
+  "servedCommit": "bf9627169b6a32952e26b993456825290c6db446",
+  "steps": [
+    {
+      "scenario": "migrated rules",
+      "outcomes": [
+        "Super League and WSL rules are readable from their published versions"
+      ]
+    },
+    {
+      "scenario": "build and preview",
+      "outcomes": [
+        "Five block types assembled, reordered and one hidden",
+        "Preview leaves the hidden block out",
+        "Saving a draft publishes nothing"
+      ]
+    },
+    {
+      "scenario": "publish and history",
+      "outcomes": [
+        "Version 1 published, in the chosen order",
+        "A new draft changes nothing public",
+        "Version 2 public, version 1 unchanged and readable",
+        "Both publishes audited with the dictator"
+      ]
+    },
+    {
+      "scenario": "refusals",
+      "outcomes": [
+        "Normal user and visitor refused on every management route",
+        "Drafts and history unreadable through the Data API",
+        "Stored draft unchanged"
+      ]
+    }
+  ]
+}
