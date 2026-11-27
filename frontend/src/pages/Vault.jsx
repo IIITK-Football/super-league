@@ -1,74 +1,80 @@
-import React, { useState } from 'react'; 
-import { useLeague } from '../context/LeagueContext';
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { NewsArticle } from '../components/NewsArticle';
-import { Loader2 } from 'lucide-react';
-import { Loader } from '../components/Loader';
-import { Link } from 'react-router-dom'; // 1. IMPORT LINK HERE!
+import { EmptyState, ErrorState, Skeleton, Tabs } from '../components/ui';
+import { formatNewsDate } from '../lib/newsDate';
 
-export function Vault() {
-  const { division } = useLeague();
-  const [selectedCategory, setSelectedCategory] = useState('Latest News');
-  
-  // 2. Extract 'error' here so the if(error) block works!
-  const { data: newsResp, loading, error } = useApi(`/news?category=${selectedCategory}`);
-  
-  // 3. Keep the naming consistent!
-  const newsList = newsResp?.data || [];  
+const CATEGORIES = ['Latest News', 'Official Editorial', 'Match Reports', 'Satire', 'Features'];
 
-  if (loading) {
-    return <Loader text="Fetching Latest Stories..." />;
-  }
-  
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-red-500/80 space-y-4">
-        <span className="font-black tracking-[0.3em] uppercase text-sm">Publishing Server Offline</span>
+// The lead story: a wide tile, photo on the left, headline set large.
+function FeaturedStory({ article }) {
+  const headline = article.headline || article.title || 'Untitled article';
+  const imgUrl = article.imgUrl || article.image_url;
+  const date = formatNewsDate(article.date);
+  return (
+    <Link to={`/article/${article.id}`} className="glass lift group grid overflow-hidden rounded-card md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc">
+      {imgUrl && (
+        <img src={imgUrl} alt="" className="aspect-[16/10] w-full object-cover grayscale transition duration-500 group-hover:grayscale-0" />
+      )}
+      <div className="flex flex-col justify-end gap-4 p-5 sm:p-8">
+        {(article.category || date) && (
+          <p className="eyebrow flex flex-wrap gap-2">
+            {article.category && <span>{article.category}</span>}
+            {date && <time dateTime={article.date}>{date}</time>}
+          </p>
+        )}
+        <h2 className="font-display text-3xl leading-none text-ink sm:text-5xl">{headline}</h2>
       </div>
-    );
-  }
+    </Link>
+  );
+}
+
+// The news list. Changing the category reloads only the list: the page header and the filter keep their place and focus.
+export function Vault() {
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const { data, error, loading, retry } = useApi(`/news?category=${encodeURIComponent(category)}`);
+  const articles = data?.data || [];
+  const [lead, ...rest] = articles;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between px-2 gap-4">
-        <div>
-          <h2 className="text-3xl sm:text-4xl font-black tracking-tighter uppercase">Onion Newsletter</h2>
-          <p className="text-zinc-400 mt-1 font-medium">Satire, reports, and exclusive stories.</p>
+    <div className="mx-auto max-w-6xl space-y-10 pb-12">
+      <header className="space-y-6">
+        <div className="space-y-3">
+          <h1 className="font-display text-4xl text-ink sm:text-6xl">News</h1>
+          <p className="text-mut">Match reports, features and official notices.</p>
         </div>
-        
-        <div className="flex gap-2">
-          {/* THE DROPDOWN */}
-          <select 
-            value={selectedCategory} 
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="bg-black border border-white/10 text-white text-sm rounded-lg focus:ring-[#E8C881] focus:border-[#E8C881] block p-2.5 outline-none cursor-pointer"
-          >
-            <option value="Latest News">Latest News</option>
-            <option value="Official Editorial">Official Editorial</option>
-            <option value="Match Reports">Match Reports</option>
-            <option value="Satire">Satire</option>
-            <option value="Features">Features</option>
-          </select>
-        </div>
-      </div>
+        <Tabs label="Category" value={category} onChange={setCategory} tabs={CATEGORIES.map((name) => ({ id: name, label: name }))} />
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {/* 4. WRAP THE COMPONENT IN A LINK! */}
-        {newsList.map(article => (
-          <Link 
-            key={article.id} 
-            to={`/article/${article.id}`} 
-            className="block hover:scale-[1.02] transition-transform duration-300"
-          >
-            <NewsArticle article={article} />
-          </Link>
-        ))}
-        
-        {/* Fallback if the category is empty */}
-        {newsList.length === 0 && (
-           <p className="text-zinc-500 italic mt-4">No articles found in this category.</p>
-        )}
-      </div>
+      {error ? (
+        <ErrorState title="News could not load" message={error.message} onRetry={retry} />
+      ) : loading ? (
+        <ul aria-busy="true" aria-label="Loading news" className="grid list-none gap-4 p-0 sm:grid-cols-2 xl:grid-cols-3">
+          <li className="sm:col-span-2 xl:col-span-3"><Skeleton className="h-80 w-full rounded-card" /></li>
+          {[0, 1, 2].map((i) => <li key={i}><Skeleton className="h-64 rounded-card" /></li>)}
+        </ul>
+      ) : articles.length === 0 ? (
+        <EmptyState title="No articles in this category">
+          Checked the {category.toLowerCase()} list. New articles appear here when they are published.
+        </EmptyState>
+      ) : (
+        <div className="space-y-6">
+          <FeaturedStory article={lead} />
+          {rest.length > 0 && (
+            <ul className="grid list-none gap-4 p-0 sm:grid-cols-2 xl:grid-cols-3">
+              {rest.map((article) => (
+                <li key={article.id}>
+                  <Link to={`/article/${article.id}`} className="block rounded-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc">
+                    <NewsArticle article={article} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

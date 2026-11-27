@@ -1,6 +1,7 @@
 import { publicClient, requestClient } from '@/lib/supabase/clients';
 import { ScopeError } from '@/lib/scope';
 import { handleError } from '../../../../lib/errorHandler'; 
+import { MATCH_STATUS } from '@/lib/matchStatus';
 
 // The caller's client (D-04): publishable key plus their token, so RLS decides.
 async function getSupabaseClient(request: Request) {
@@ -31,13 +32,10 @@ export async function GET(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw { status: 401, message: "Unauthorized" };
 
-    await checkFantasySection(match_id);
-    const { data, error } = await supabase
-      .from('predictions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('match_id', match_id)
-      .maybeSingle(); 
+    const [, { data, error }] = await Promise.all([
+      checkFantasySection(match_id),
+      supabase.from('predictions').select('*').eq('user_id', user.id).eq('match_id', match_id).maybeSingle(),
+    ]);
 
     if (error) throw error;
 
@@ -71,18 +69,30 @@ export async function POST(
       throw { status: 401, message: 'Unauthorized: You must be logged in to predict.' };
     }
 
-    // 2. MAGIC FIX: Check if they already predicted this match!
-    const [, { data: existingPrediction, error: existingError }] = await Promise.all([
-      checkFantasySection(match_id),
+    // 2. The scores are whole numbers, and the match is still open: scheduled, and before kickoff
+    const isScore = (v: unknown) => Number.isInteger(v) && (v as number) >= 0;
+    if (!isScore(body.predicted_home_score) || !isScore(body.predicted_away_score)) {
+      throw { status: 400, message: 'Scores must be whole numbers, zero or more.' };
+    }
+    const [{ data: match, error: matchError }, { data: existingPrediction, error: existingError }] = await Promise.all([
+      publicClient().from('matches').select('status, date, season:seasons!inner(section_flags)').eq('id', match_id).maybeSingle(),
       supabase.from('predictions').select('id').eq('user_id', user.id).eq('match_id', match_id).maybeSingle(),
     ]);
+    if (matchError) throw matchError;
+    if (!match) throw { status: 404, message: 'Match not found.' };
+    const season = match.season as unknown as { section_flags?: Record<string, boolean> } | undefined;
+    if (!season?.section_flags?.fantasy) throw new ScopeError(404, 'This section is not available for this season');
+    if (match.status !== MATCH_STATUS.scheduled || new Date(match.date).getTime() <= Date.now()) {
+      throw { status: 400, message: 'Predictions are closed for this match.' };
+    }
+
     if (existingError) throw existingError;
 
     if (existingPrediction) {
       throw { status: 400, message: "Nice try! You have already predicted this match." };
     }
 
-    // 3. Insert the Prediction into the database
+    // 4. Insert the Prediction into the database
     const { data, error } = await supabase
       .from('predictions')
       .insert([{

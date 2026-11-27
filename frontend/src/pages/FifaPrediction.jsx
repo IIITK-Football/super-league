@@ -1,6 +1,5 @@
-import React, { useState, useEffect ,useCallback} from 'react';
+import { useState, useEffect ,useCallback} from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useLeague } from '../context/LeagueContext';
 import { createPortal } from 'react-dom';
 import { AutocompleteInput } from '../components/AutocompleteInput';
 import { KnockoutBracket } from './KnockoutBracket';
@@ -23,7 +22,7 @@ export function FifaPrediction() {
     try {
       const saved = localStorage.getItem('flagAnimationEnabled');
       return saved !== '0';
-    } catch (e) {
+    } catch {
       return true;
     }
   });
@@ -320,24 +319,24 @@ export function FifaPrediction() {
   const userTeam = profile?.wc_team_flair ? allTeams.find(t => t.name === profile.wc_team_flair) : null;
 
   const [goldenBoot, setGoldenBoot] = useState(() => {
-    try { return localStorage.getItem('fifaGoldenBoot') || ''; } catch(e) { return ''; }
+    try { return localStorage.getItem('fifaGoldenBoot') || ''; } catch { return ''; }
   });
   const [goldenBootId, setGoldenBootId] = useState(() => {
-    try { return localStorage.getItem('fifaGoldenBootId') || null; } catch(e) { return null; }
+    try { return localStorage.getItem('fifaGoldenBootId') || null; } catch { return null; }
   });
 
   const [goldenGlove, setGoldenGlove] = useState(() => {
-    try { return localStorage.getItem('fifaGoldenGlove') || ''; } catch(e) { return ''; }
+    try { return localStorage.getItem('fifaGoldenGlove') || ''; } catch { return ''; }
   });
   const [goldenGloveId, setGoldenGloveId] = useState(() => {
-    try { return localStorage.getItem('fifaGoldenGloveId') || null; } catch(e) { return null; }
+    try { return localStorage.getItem('fifaGoldenGloveId') || null; } catch { return null; }
   });
 
   const [goldenBall, setGoldenBall] = useState(() => {
-    try { return localStorage.getItem('fifaGoldenBall') || ''; } catch(e) { return ''; }
+    try { return localStorage.getItem('fifaGoldenBall') || ''; } catch { return ''; }
   });
   const [goldenBallId, setGoldenBallId] = useState(() => {
-    try { return localStorage.getItem('fifaGoldenBallId') || null; } catch(e) { return null; }
+    try { return localStorage.getItem('fifaGoldenBallId') || null; } catch { return null; }
   });
 
   const [draggingTeam, setDraggingTeam] = useState(null); 
@@ -369,7 +368,7 @@ export function FifaPrediction() {
     setFlagAnimationEnabled(enabled);
     try {
       localStorage.setItem('flagAnimationEnabled', enabled ? '1' : '0');
-    } catch (err) {}
+    } catch { /* Storage may be unavailable. */ }
     
     if (enabled) {
       setShowHint(true);
@@ -902,7 +901,7 @@ export function FifaPrediction() {
                   <div className="sh" style={{ marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
                     <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
                       {viewingOtherUser ? (
-                        <>VIEWING <span style={{ color: 'var(--fifa-gold)' }}>{viewingOtherUser.nickname.toUpperCase()}'S</span> PREDICTIONS</>
+                        <>VIEWING <span style={{ color: 'var(--fifa-gold)' }}>{viewingOtherUser.nickname.toUpperCase()}&apos;S</span> PREDICTIONS</>
                       ) : (
                         <>PREDICT THE GROUP <span style={{ color: 'var(--fifa-gold)' }}>STAGES</span></>
                       )}

@@ -1,48 +1,34 @@
 // @vitest-environment jsdom
-// Group: frontend-components. The Divisions & Seasons tab is offered to a dictator only. A legacy "admin"
-// value is not a role and gets nothing; row level security refuses its writes anyway.
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+// Group: frontend-components. Divisions and seasons is offered to a dictator only. A legacy "admin" value is not a
+// role and gets nothing, not even by typing the address; row level security refuses its writes anyway.
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const state = { roles: ['dictator'] };
 vi.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1' }, roles: state.roles, hasRole: (r) => Boolean(state.roles?.includes(r)), signOut: vi.fn() }),
+  useAuth: () => ({ user: { id: 'u1' }, roles: state.roles, loading: false, rolesError: null, hasRole: (r) => Boolean(state.roles?.includes(r)) }),
 }));
-vi.mock('../../components/admin/LiveController', () => ({ default: () => <p>live panel</p> }));
-vi.mock('../../components/admin/ManageRosters', () => ({ default: () => null }));
-vi.mock('../../components/admin/ScheduleMatches', () => ({ default: () => null }));
-vi.mock('../../components/admin/ManageNews', () => ({ default: () => null }));
-vi.mock('../../components/admin/GradePredictions', () => ({ default: () => null }));
-vi.mock('../../components/admin/ManageCaptains', () => ({ default: () => null }));
-vi.mock('../../components/admin/ManageScorers', () => ({ default: () => null }));
-vi.mock('../../components/admin/ManageRoles', () => ({ default: () => null }));
-vi.mock('../../components/admin/ManageDivisions', () => ({ default: () => <p>divisions panel</p> }));
-vi.mock('../../components/admin/AuditHistory', () => ({ default: () => null }));
-
-import { AdminDashboard } from '../AdminDashboard';
+vi.mock('../../lib/supabase', () => ({ supabase: {} }));
+const { mockTools, renderWorkspace } = await import('./workspaceHarness');
+mockTools();
 
 afterEach(cleanup);
 
-describe('AdminDashboard divisions tab', () => {
+describe('workspace divisions tool', () => {
   it('is offered to a dictator and opens the divisions panel', async () => {
     state.roles = ['dictator'];
-    render(<AdminDashboard />);
-    fireEvent.click(await screen.findByRole('button', { name: /divisions & seasons/i }));
-    expect(await screen.findByText('divisions panel')).toBeTruthy();
+    await renderWorkspace('/dictator');
+    fireEvent.click((await screen.findAllByRole('link', { name: /divisions and seasons/i }))[0]);
+    expect(await screen.findByText('ManageDivisions panel')).toBeTruthy();
   });
 
-  it('is not offered to a legacy admin, who gets no dashboard at all', async () => {
-    state.roles = ['admin'];
-    render(<AdminDashboard />);
-    expect(await screen.findByText(/403 forbidden/i)).toBeTruthy();
-    expect(screen.queryByText('live panel')).toBeNull();
-    expect(screen.queryByRole('button', { name: /divisions & seasons/i })).toBeNull();
-    expect(screen.queryByText('divisions panel')).toBeNull();
-  });
-
-  it('keeps everyone else out of the dashboard', async () => {
-    state.roles = [];
-    render(<AdminDashboard />);
-    expect(await screen.findByText(/403 forbidden/i)).toBeTruthy();
+  it('is not offered to a legacy admin or a scorer, even at its address', async () => {
+    for (const roles of [['admin'], ['scorer'], []]) {
+      state.roles = roles;
+      await renderWorkspace('/dictator/divisions');
+      expect(await screen.findByText('You do not have access to this workspace')).toBeTruthy();
+      expect(screen.queryByText('ManageDivisions panel')).toBeNull();
+      cleanup();
+    }
   });
 });

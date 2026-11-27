@@ -99,11 +99,11 @@ describe('Google identity', () => {
     });
   });
 
-  it('explains when Google is not configured for this environment', async () => {
+  it('says Google sign-in is unavailable in plain words', async () => {
     const sb = fakeSupabase({
       signInWithOAuth: vi.fn().mockResolvedValue({ data: {}, error: { message: 'Unsupported provider: provider is not enabled' } }),
     });
-    expect((await createAuthApi(sb, { origin }).signInWithGoogle()).error).toMatch(/not (set up|configured)/i);
+    expect((await createAuthApi(sb, { origin }).signInWithGoogle()).error).toMatch(/unavailable/i);
   });
 
   it('links Google to the signed-in account (no second user)', async () => {

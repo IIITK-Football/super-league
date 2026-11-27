@@ -3,6 +3,7 @@
 // success and error states, the table and actor filters, readable summaries (only changed fields for an update, a
 // private field never shown) and paging. The real path is AuditHistory.local.test.jsx (audit group).
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { optionsOf, pick, trigger } from './listbox';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const db = { rows: [], profiles: [], actors: [], actorsFail: null, calls: [], fail: null, slow: null };
@@ -87,13 +88,9 @@ describe('AuditHistory', () => {
     db.rows = [...db.rows, ...Array.from({ length: PAGE_SIZE }, (_, i) => entry({ id: 100 + i, actor_id: i === PAGE_SIZE - 1 ? 'u-old' : 'u1' }))];
     render(<AuditHistory />);
     await screen.findByRole('list', { name: 'Audit entries' });
-    const options = await waitFor(() => {
-      const names = within(screen.getByLabelText('Changed by')).getAllByRole('option').map((o) => o.textContent);
-      expect(names).toContain('Old Timer');
-      return names;
-    });
-    expect(options).toEqual(['Anyone', 'diana@iiitkottayam.ac.in', 'lamb@iiitkottayam.ac.in', 'Old Timer']);
-    fireEvent.change(screen.getByLabelText('Changed by'), { target: { value: 'u-old' } });
+    await waitFor(() => expect(trigger('Changed by').disabled).toBe(false));
+    expect(await optionsOf('Changed by')).toEqual(['Anyone', 'diana@iiitkottayam.ac.in', 'lamb@iiitkottayam.ac.in', 'Old Timer']);
+    await pick('Changed by', 'Old Timer');
     await waitFor(() => expect(db.calls.filter((c) => c.table === 'audit_log').at(-1).filters).toEqual([['actor_id', 'u-old']]));
   });
 
@@ -111,7 +108,7 @@ describe('AuditHistory', () => {
   it('reloads the people list once when someone new appears, and never loops for an unknown account', async () => {
     render(<AuditHistory />);
     await screen.findByRole('list', { name: 'Audit entries' });
-    await waitFor(() => expect(screen.getByLabelText('Changed by').disabled).toBe(false));
+    await waitFor(() => expect(trigger('Changed by').disabled).toBe(false));
     const rpcCalls = () => db.calls.filter((c) => c.rpc).length;
     expect(rpcCalls()).toBe(1);
     // Two new people act after the page loaded: the list now knows one of them (u9) but not the other (u8).
@@ -133,11 +130,11 @@ describe('AuditHistory', () => {
     render(<AuditHistory />);
     const list = await screen.findByRole('list', { name: 'Audit entries' });
     await waitFor(() => expect(screen.getByText(/people list could not be loaded/i)).toBeTruthy());
-    expect(screen.getByLabelText('Changed by').disabled).toBe(true);
+    expect(trigger('Changed by').disabled).toBe(true);
     expect(within(list).getAllByText(UNKNOWN_ACCOUNT).length).toBeGreaterThan(0);
     db.actorsFail = null;
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
-    await waitFor(() => expect(screen.getByLabelText('Changed by').disabled).toBe(false));
+    await waitFor(() => expect(trigger('Changed by').disabled).toBe(false));
     expect(within(list).getAllByText('lamb@iiitkottayam.ac.in').length).toBeGreaterThan(0);
   });
 
@@ -145,8 +142,8 @@ describe('AuditHistory', () => {
     render(<AuditHistory />);
     await screen.findByRole('list', { name: 'Audit entries' });
     db.slow = 'seasons';
-    fireEvent.change(screen.getByLabelText('Table'), { target: { value: 'seasons' } });
-    fireEvent.change(screen.getByLabelText('Table'), { target: { value: 'user_roles' } });
+    await pick('Table', 'Seasons');
+    await pick('Table', 'Roles');
     await new Promise((r) => setTimeout(r, 120));
     const items = within(screen.getByRole('list', { name: 'Audit entries' })).getAllByRole('listitem');
     expect(items.map((li) => li.textContent).join(' ')).toMatch(/role: default → captain/);
@@ -156,12 +153,12 @@ describe('AuditHistory', () => {
   it('filters by table and by the person who made the change', async () => {
     render(<AuditHistory />);
     await screen.findByRole('list', { name: 'Audit entries' });
-    fireEvent.change(screen.getByLabelText('Table'), { target: { value: 'user_roles' } });
+    await pick('Table', 'Roles');
     await waitFor(() => expect(within(screen.getByRole('list', { name: 'Audit entries' })).getAllByText(/role: default → captain/)).toHaveLength(1));
     expect(db.calls.at(-1)?.table === 'audit_log' ? db.calls.at(-1).filters : db.calls.at(-2).filters).toEqual([['table_name', 'user_roles']]);
-    fireEvent.change(screen.getByLabelText('Table'), { target: { value: '' } });
-    await waitFor(() => expect(within(screen.getByLabelText('Changed by')).getByRole('option', { name: 'lamb@iiitkottayam.ac.in' })).toBeTruthy());
-    fireEvent.change(screen.getByLabelText('Changed by'), { target: { value: 'u1' } });
+    await pick('Table', 'All tables');
+    await waitFor(() => expect(trigger('Changed by').disabled).toBe(false));
+    await pick('Changed by', 'lamb@iiitkottayam.ac.in');
     await waitFor(() => expect(screen.queryByText(/role: default → captain/)).toBeNull());
     expect(screen.getByText(/name: Inter → Inter League/)).toBeTruthy();
   });

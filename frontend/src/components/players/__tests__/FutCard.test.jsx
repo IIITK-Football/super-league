@@ -20,14 +20,14 @@ describe('FutCard', () => {
     expect(c.textContent).toMatch(/ST/);
     expect(c.textContent).toMatch(/PAC81/);
     expect(c.textContent).toMatch(/SHO64/); // an older flat value, converted
-    expect(c.textContent).toMatch(/PAS—/);
+    expect(c.textContent).toMatch(/PAS-/);
     expect(within(c).getByRole('img', { name: 'Power Shot' }).getAttribute('src')).toMatch(/powershot\.png$/); // from the catalog
   });
 
   it('shows dashes and no position for an empty draft, and the details caption on request', () => {
     render(<FutCard details player={{ first_name: '', last_name: '', overall_rating: '', attributes: {} }} />);
     const c = card('Unnamed player');
-    expect(within(c).getByTestId('card-rating').textContent).toBe('—');
+    expect(within(c).getByTestId('card-rating').textContent).toBe('-');
     expect(c.textContent).not.toMatch(/RES/);
     expect(c.textContent).toMatch(/Preferred foot: not set/);
     expect(c.textContent).toMatch(/Play style: not set/);

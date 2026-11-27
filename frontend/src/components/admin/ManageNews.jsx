@@ -1,37 +1,114 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApi } from '../../hooks/useApi';
-import { Newspaper, Trash2, Plus, Image as ImageIcon, Type, Quote, UploadCloud } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../../lib/api';
-const API_URL = API_BASE_URL;
+import { useAuth } from '../../context/AuthContext';
+import { ImagePlus, Newspaper, Pencil, Pilcrow, Quote, Trash2 } from 'lucide-react';
+import { Button, Field, Notice, Select, Skeleton, toast, useConfirm } from '../ui';
 
+const API_URL = API_BASE_URL;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // Mirrors the API cap in app/api/admin/newsletter/image.
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const CATEGORIES = ['Official Editorial', 'Match Report', 'Transfer News', 'Satire', 'News', 'Announcement'];
+const newId = () => Math.random().toString(36).slice(2);
+
+const blankBlock = (type) => ({ id: newId(), type, value: '', author: '', url: '', alt: '', file: null });
+const blankForm = { title: '', summary: '', category: CATEGORIES[0] };
+
+// The server's message when it gives one, else the fallback. A non-JSON error page must not throw.
+async function errorMessage(res, fallback) {
+  const body = await res.json().catch(() => ({}));
+  return body.message || body.error || fallback;
+}
+
+function fileProblem(file) {
+  if (!IMAGE_TYPES.includes(file.type)) return 'Use a PNG, JPEG, WebP or GIF image.';
+  if (file.size > MAX_IMAGE_BYTES) return 'Images must be 10 MB or smaller.';
+  return null;
+}
+
+function useFilePreview(file) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!file) { setUrl(null); return undefined; }
+    const next = URL.createObjectURL(file);
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [file]);
+  return url;
+}
+
+// A file input with a thumbnail of what will be uploaded, or of the image the article already has.
+function ImageInput({ label, file, currentUrl, error, onFile }) {
+  const preview = useFilePreview(file);
+  const src = preview || currentUrl;
+  return (
+    <div className="flex flex-col gap-3">
+      <Field
+        label={label}
+        type="file"
+        accept={IMAGE_TYPES.join(',')}
+        hint="PNG, JPEG, WebP or GIF, up to 10 MB"
+        error={error}
+        onChange={(e) => { onFile(e.target.files?.[0] ?? null); e.target.value = ''; }}
+      />
+      {src && <img src={src} alt={`${label} preview`} className="h-32 w-full rounded-ctl object-cover sm:w-56" />}
+    </div>
+  );
+}
 
 export default function ManageNews() {
-  const { data: newsResp, refetch: refetchNews } = useApi('/news'); 
-  const newsList = newsResp?.data || [];
+  const { roles } = useAuth();
+  const canDelete = Boolean(roles?.includes('dictator'));
+  const confirm = useConfirm();
+  const { data: newsResp, loading: loadingNews, error: newsError, retry: refetchNews } = useApi('/news');
+  const articles = newsResp?.data || [];
 
-  const [loading, setLoading] = useState(false);
-  const [heroImageFile, setHeroImageFile] = useState(null);
-  const [form, setForm] = useState({ title: '', summary: '', category: 'Official Editorial' });
-  
-  // The Lego Blocks!
-  const [contentBlocks, setContentBlocks] = useState([{ id: Date.now(), type: 'paragraph', value: '' }]);
+  const [form, setForm] = useState(blankForm);
+  const [heroFile, setHeroFile] = useState(null);
+  const [blocks, setBlocks] = useState([blankBlock('paragraph')]);
+  const [editing, setEditing] = useState(null); // the article being edited, or null for a new one
+  const [errors, setErrors] = useState({});
+  const [notice, setNotice] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const addBlock = (type) => {
-    setContentBlocks([...contentBlocks, { id: Date.now(), type, value: '', url: '', alt: '', author: '', file: null }]);
+  const resetForm = () => {
+    setForm(blankForm);
+    setHeroFile(null);
+    setBlocks([blankBlock('paragraph')]);
+    setEditing(null);
+    setErrors({});
+  };
+
+  const startEdit = (article) => {
+    setEditing(article);
+    setForm({ title: article.title || '', summary: article.summary || '', category: article.category || CATEGORIES[0] });
+    setHeroFile(null);
+    setErrors({});
+    setNotice(null);
+    document.getElementById('write-news')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    setBlocks((article.content || []).map((b) => ({
+      ...blankBlock(b.type),
+      value: b.value || '',
+      author: b.author || '',
+      url: b.url || '',
+      alt: b.alt || '',
+    })));
   };
 
   const updateBlock = (id, field, value) => {
-    setContentBlocks(blocks => blocks.map(b => b.id === id ? { ...b, [field]: value } : b));
+    setBlocks((list) => list.map((b) => (b.id === id ? { ...b, [field]: value } : b)));
   };
 
-  const removeBlock = (id) => {
-    setContentBlocks(blocks => blocks.filter(b => b.id !== id));
+  // A new file is checked here, so a bad one is refused before any upload starts.
+  const chooseFile = (key, file, apply) => {
+    const problem = file ? fileProblem(file) : null;
+    setErrors((e) => ({ ...e, [key]: problem ?? undefined }));
+    if (!problem) apply(file);
   };
 
   // Uploads one image through the API, which stores it in the news bucket and returns its public URL.
   const uploadImage = async (file) => {
-    if (!file) return null;
     const { data: { session } } = await supabase.auth.getSession();
     const body = new FormData();
     body.append('image', file);
@@ -40,176 +117,168 @@ export default function ManageNews() {
       headers: { Authorization: `Bearer ${session?.access_token}` },
       body,
     });
+    if (!res.ok) throw new Error(await errorMessage(res, 'Could not upload the image.'));
     const result = await res.json().catch(() => ({}));
-    if (!res.ok || !result.publicUrl) throw new Error(result.error || 'Could not upload the image.');
+    if (!result.publicUrl) throw new Error('Could not upload the image.');
     return result.publicUrl;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // 1. Upload Hero Image (Now goes to R2!)
-      let finalHeroUrl = await uploadImage(heroImageFile);
-
-      // 2. Upload any images embedded inside the content blocks! (Now goes to R2!)
-      const processedBlocks = await Promise.all(contentBlocks.map(async (block) => {
-        if (block.type === 'image' && block.file) {
-          const blockImageUrl = await uploadImage(block.file);
-          return { type: 'image', url: blockImageUrl, alt: block.alt };
-        }
-        // If it's a paragraph or quote, just return the text
-        if (block.type === 'paragraph') return { type: 'paragraph', value: block.value };
-        if (block.type === 'quote') return { type: 'quote', value: block.value, author: block.author };
-        return block;
-      }));
-
-      // 3. Send to API
-      const res = await fetch(`${API_URL}/admin/newsletter`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ 
-          title: form.title, 
-          summary: form.summary, 
-          category: form.category,
-          image_url: finalHeroUrl, 
-          content: processedBlocks
-        })
-      });
-
-      if (res.ok) {
-        alert("Article Published!");
-        refetchNews();
-        setForm({ title: '', summary: '', category: 'Official Editorial' });
-        setHeroImageFile(null);
-        setContentBlocks([{ id: Date.now(), type: 'paragraph', value: '' }]);
-      } else {
-        const errData = await res.json();
-        alert(`Error: ${errData.message}`);
-      }
-    } catch (err) {
-      alert(err?.message ? `Failed to publish: ${err.message}` : "Failed to publish. Check console.");
-      console.error(err);
-    } finally {
-      setLoading(false);
+    setNotice(null);
+    if (blocks.some((b) => b.type === 'image' && !b.file && !b.url)) {
+      setNotice({ tone: 'error', text: 'Choose an image for every image block, or remove the block.' });
+      return;
     }
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm("Delete this article forever?")) return;
+    setBusy(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      await fetch(`${API_URL}/admin/newsletter?id=${id}`, { 
-        method: 'DELETE', 
-        credentials: 'include', 
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
+      const heroUrl = heroFile ? await uploadImage(heroFile) : (editing?.image_url ?? null);
+      const content = [];
+      for (const block of blocks) {
+        if (block.type === 'paragraph') content.push({ type: 'paragraph', value: block.value });
+        else if (block.type === 'quote') content.push({ type: 'quote', value: block.value, author: block.author });
+        else content.push({ type: 'image', url: block.file ? await uploadImage(block.file) : block.url, alt: block.alt });
+      }
+      const res = await fetch(editing ? `${API_URL}/admin/newsletter?id=${editing.id}` : `${API_URL}/admin/newsletter`, {
+        method: editing ? 'PUT' : 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ title: form.title, summary: form.summary, category: form.category, image_url: heroUrl, content }),
       });
+      if (!res.ok) throw new Error(await errorMessage(res, 'Could not save the article.'));
+      toast({ tone: 'success', title: editing ? 'Changes saved.' : 'Article published.' });
+      resetForm();
       refetchNews();
     } catch (err) {
-      alert("Failed to delete.");
+      setNotice({ tone: 'error', text: err.message || 'Could not save the article.' });
+    } finally {
+      setBusy(false);
     }
   };
 
-  return (
-    <div className="p-6 space-y-8 animate-in fade-in duration-500">
-      
-      {/* THE ARTICLE EDITOR */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-        <h3 className="text-sm font-black uppercase tracking-widest text-zinc-300 mb-6 flex items-center gap-2">
-          <Newspaper size={16} className="text-[#E8C881]" /> Write Article
-        </h3>
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <input type="text" placeholder="Headline / Title" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 outline-none focus:border-[#E8C881]/50 text-xl font-black text-white" />
-            <textarea placeholder="Short Summary (Subtitle)" required value={form.summary} onChange={e => setForm({...form, summary: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50 text-sm text-zinc-300 h-20 resize-none" />
-            <div className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest min-w-[100px]">Category</span>
-              <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-transparent outline-none text-sm text-zinc-300 cursor-pointer [&>option]:bg-zinc-900 [&>option]:text-white">
-                <option value="Official Editorial">Official Editorial</option>
-                <option value="Match Report">Match Report</option>
-                <option value="Transfer News">Transfer News</option>
-                <option value="Satire">Satire</option>
-                <option value="News">News</option>
-                <option value="Announcement">Announcement</option>
-              </select>
-            </div>
-            
-            <div className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest min-w-[100px]">Hero Image</span>
-              <UploadCloud size={16} className="text-zinc-500" />
-              <input type="file" accept="image/*" onChange={e => setHeroImageFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-white/10 file:text-white hover:file:bg-white/20" />
-            </div>
-          </div>
+  const handleDelete = async (article) => {
+    const ok = await confirm({
+      title: `Delete "${article.title}"?`,
+      description: 'The article is removed from News for everyone. This cannot be undone.',
+      confirmLabel: 'Delete article',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setNotice(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${API_URL}/admin/newsletter?id=${article.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (!res.ok) throw new Error(await errorMessage(res, 'Could not delete the article.'));
+      if (editing?.id === article.id) resetForm();
+      toast({ tone: 'success', title: 'Article deleted.' });
+      refetchNews();
+    } catch (err) {
+      setNotice({ tone: 'error', text: err.message || 'Could not delete the article.' });
+    }
+  };
 
-          <div className="border-t border-white/10 pt-6 space-y-4">
-            <h4 className="text-xs font-black uppercase tracking-widest text-zinc-500">Article Content</h4>
-            
-            {contentBlocks.map((block, index) => (
-              <div key={block.id} className="relative group bg-black/30 border border-white/5 rounded-xl p-4 transition-all hover:border-white/20">
-                <button type="button" onClick={() => removeBlock(block.id)} className="absolute -right-2 -top-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} /></button>
-                
+  const heroCurrent = heroFile ? null : editing?.image_url;
+
+  const BLOCKS = [{ type: 'paragraph', label: 'Add paragraph', icon: Pilcrow }, { type: 'quote', label: 'Add quote', icon: Quote }, { type: 'image', label: 'Add image', icon: ImagePlus }];
+  const blockIcon = { paragraph: Pilcrow, quote: Quote, image: ImagePlus };
+
+  return (
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
+      <form id="write-news" onSubmit={handleSubmit} className="glass scroll-mt-28 space-y-6 rounded-card p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-2xl text-ink">{editing ? `Edit "${editing.title}"` : 'New article'}</h2>
+          {editing && <Button variant="quiet" size="sm" onClick={resetForm}>Cancel editing</Button>}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          <Field label="Category">{(p) => <Select {...p} value={form.category} onChange={(category) => setForm({ ...form, category })} options={CATEGORIES.map((c) => ({ value: c, label: c }))} />}</Field>
+          <Field className="sm:col-span-2" label="Summary" as="textarea" rows={2} required value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} hint="Shown under the title in News." />
+          <div className="sm:col-span-2">
+            <ImageInput label="Hero image" file={heroFile} currentUrl={heroCurrent} error={errors.hero} onFile={(file) => chooseFile('hero', file, setHeroFile)} />
+          </div>
+        </div>
+
+        <section className="space-y-4 border-t border-line pt-6">
+          <h3 className="eyebrow">Article content</h3>
+          {blocks.map((block, index) => {
+            const Icon = blockIcon[block.type];
+            return (
+              <div key={block.id} className="space-y-3 rounded-ctl border border-line p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold capitalize text-mut"><Icon size={16} aria-hidden="true" />{block.type}</span>
+                  <Button variant="quiet" size="sm" aria-label={`Remove ${block.type} ${index + 1}`} onClick={() => setBlocks((list) => list.filter((b) => b.id !== block.id))}><Trash2 size={15} aria-hidden="true" />Remove</Button>
+                </div>
+
                 {block.type === 'paragraph' && (
-                  <textarea placeholder="Write a paragraph..." required value={block.value} onChange={e => updateBlock(block.id, 'value', e.target.value)} className="w-full bg-transparent outline-none text-sm text-zinc-300 min-h-[100px] resize-none" />
+                  <Field label="Text" as="textarea" rows={4} required value={block.value} onChange={(e) => updateBlock(block.id, 'value', e.target.value)} />
                 )}
-                
+
                 {block.type === 'quote' && (
-                  <div className="space-y-2 border-l-4 border-[#E8C881] pl-4">
-                    <textarea placeholder="Enter quote text..." required value={block.value} onChange={e => updateBlock(block.id, 'value', e.target.value)} className="w-full bg-transparent outline-none text-sm italic text-white min-h-[60px] resize-none" />
-                    <input type="text" placeholder="Author / Speaker" required value={block.author} onChange={e => updateBlock(block.id, 'author', e.target.value)} className="w-full bg-transparent outline-none text-xs text-zinc-500 font-bold" />
+                  <div className="space-y-3">
+                    <Field label="Quote" as="textarea" rows={2} required value={block.value} onChange={(e) => updateBlock(block.id, 'value', e.target.value)} />
+                    <Field label="Speaker" required value={block.author} onChange={(e) => updateBlock(block.id, 'author', e.target.value)} />
                   </div>
                 )}
-                
+
                 {block.type === 'image' && (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <ImageIcon size={16} className="text-zinc-500" />
-                      <input type="file" accept="image/*" required onChange={e => updateBlock(block.id, 'file', e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-white/10 file:text-white" />
-                    </div>
-                    <input type="text" placeholder="Image Caption / Alt Text" required value={block.alt} onChange={e => updateBlock(block.id, 'alt', e.target.value)} className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 outline-none text-xs text-zinc-400" />
+                    <ImageInput label="Image" file={block.file} currentUrl={block.url} error={errors[block.id]} onFile={(file) => chooseFile(block.id, file, (f) => updateBlock(block.id, 'file', f))} />
+                    <Field label="Alt text" required value={block.alt} onChange={(e) => updateBlock(block.id, 'alt', e.target.value)} hint="Describes the image for screen readers." />
                   </div>
                 )}
               </div>
+            );
+          })}
+
+          <div className="flex flex-wrap gap-2">
+            {BLOCKS.map(({ type, label, icon: Icon }) => (
+              <Button key={type} variant="secondary" size="sm" onClick={() => setBlocks((list) => [...list, blankBlock(type)])}><Icon size={15} aria-hidden="true" />{label}</Button>
             ))}
-
-            {/* BLOCK CONTROLS */}
-            <div className="flex gap-2">
-              <button type="button" onClick={() => addBlock('paragraph')} className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-lg text-xs font-bold text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"><Type size={14} /> Add Paragraph</button>
-              <button type="button" onClick={() => addBlock('quote')} className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-lg text-xs font-bold text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"><Quote size={14} /> Add Quote</button>
-              <button type="button" onClick={() => addBlock('image')} className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-lg text-xs font-bold text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"><ImageIcon size={14} /> Add Image</button>
-            </div>
           </div>
+        </section>
 
-          <button type="submit" disabled={loading} className="w-full bg-[#E8C881] text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-[#F9D992] transition-colors">
-            {loading ? "Uploading Article & Images..." : "Publish Article"}
-          </button>
-        </form>
-      </div>
+        {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
 
-      {/* PUBLISHED ARTICLES TABLE */}
-      <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden">
-        <div className="grid grid-cols-[3fr_1fr_1fr] gap-4 p-4 border-b border-white/10 text-[10px] font-black tracking-widest text-zinc-500 uppercase bg-black/60">
-          <div>Headline</div><div>Date</div><div className="text-right">Actions</div>
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <Button type="submit" disabled={busy} aria-busy={busy || undefined}>
+            {busy ? 'Saving...' : editing ? 'Save changes' : 'Publish article'}
+          </Button>
         </div>
-        <div className="divide-y divide-white/5 max-h-[500px] overflow-y-auto">
-          {newsList.map(article => (
-            <div key={article.id} className="grid grid-cols-[3fr_1fr_1fr] gap-4 p-4 items-center hover:bg-white/5 transition-colors text-sm">
-              <div className="font-bold flex items-center gap-3 truncate">
-                {article.image_url ? <img src={article.image_url} className="w-10 h-6 object-cover rounded" /> : <div className="w-10 h-6 bg-white/10 rounded flex items-center justify-center"><Newspaper size={12} className="text-zinc-500"/></div>}
-                <span className="truncate">{article.title}</span>
+      </form>
+
+      <section aria-labelledby="news-published" className="space-y-3">
+        <h2 id="news-published" className="eyebrow">Published articles</h2>
+        {loadingNews && !newsResp && <Skeleton className="h-20 w-full" />}
+        {newsError && <Notice tone="error">Could not load the articles. <Button variant="quiet" size="sm" onClick={refetchNews}>Try again</Button></Notice>}
+        {!loadingNews && !newsError && articles.length === 0 && <div className="flex flex-col items-start gap-2 rounded-card border border-dashed border-line p-6 text-sm text-mut">
+          <Newspaper size={26} aria-hidden="true" />
+          <p className="font-semibold text-ink">No articles yet</p>
+          Write the first one and it appears in News as soon as it is saved.
+        </div>}
+        {articles.length > 0 && <ul className="glass divide-y divide-line/70 rounded-card px-2">
+          {articles.map((article) => (
+            <li key={article.id} className="group flex items-center gap-3 p-2.5">
+              {article.image_url
+                ? <img src={article.image_url} alt="" className="h-12 w-16 shrink-0 rounded-[10px] object-cover grayscale transition duration-300 group-hover:grayscale-0" />
+                : <div aria-hidden="true" className="flex h-12 w-16 shrink-0 items-center justify-center rounded-[10px] bg-raise text-mut"><Newspaper size={18} /></div>}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-ink">{article.title}</p>
+                <p className="truncate text-xs text-mut">{article.category} · {new Date(article.date).toLocaleDateString()}</p>
               </div>
-              <div className="text-zinc-500 text-xs font-mono">{new Date(article.date).toLocaleDateString()}</div>
-              <div className="flex justify-end gap-3">
-                <button onClick={() => handleDelete(article.id)} className="text-red-500/50 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+              <div className="flex shrink-0">
+                <Button variant="quiet" size="sm" className="px-3" aria-label={`Edit ${article.title}`} onClick={() => startEdit(article)}><Pencil size={15} aria-hidden="true" /></Button>
+                {canDelete && <Button variant="quiet" size="sm" className="px-3 text-live" aria-label={`Delete ${article.title}`} onClick={() => handleDelete(article)}><Trash2 size={15} aria-hidden="true" /></Button>}
               </div>
-            </div>
+            </li>
           ))}
-        </div>
-      </div>
-
+        </ul>}
+      </section>
     </div>
   );
 }

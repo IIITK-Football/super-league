@@ -88,6 +88,7 @@ export const divisionDetail = {
   PATCH: lifecycleRoute('update_division', 'fields', 'p_division'),
   DELETE: lifecycleRoute('delete_division', null, 'p_division'),
 };
+export const divisionCurrent = { POST: lifecycleRoute('set_featured_division', null, 'p_division') };
 export const divisionOrder = { PUT: lifecycleRoute('reorder_divisions', 'order') };
 export const seasonCreate = { POST: lifecycleRoute('create_season', 'season', undefined, 201) };
 export const seasonDetail = { PATCH: lifecycleRoute('update_season', 'fields', 'p_season') };

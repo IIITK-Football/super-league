@@ -50,7 +50,6 @@ const opts = { auth: { persistSession: false, autoRefreshToken: false, detectSes
 let conn;
 let admin;
 const users = [];
-let divisionId = null;
 
 async function signedInAs(label, role) {
   const email = `${tag}-${label}@${DOMAIN}`;
@@ -111,10 +110,10 @@ describe.skipIf(!TARGET)(`your player card through the real Data API (${TARGET ?
   it('a linked player changes their preferred foot and removes their portrait; nothing else changes', async () => {
     holder.client = linked.client;
     render(<MyPlayerCard />);
-    const foot = await screen.findByLabelText('Preferred foot', {}, { timeout: 10000 });
-    expect(foot.value).toBe('Right');
+    await screen.findByRole('radiogroup', { name: 'Preferred foot' }, { timeout: 10000 });
+    expect(screen.getByRole('radio', { name: 'Right' }).getAttribute('aria-checked')).toBe('true');
     expect(screen.getByText(/Email:/).textContent).toContain(linked.email); // the account's email, read-only
-    fireEvent.change(foot, { target: { value: 'Both' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Both' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove portrait' }));
     fireEvent.click(screen.getByRole('button', { name: /save card/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/saved/), { timeout: 10000 });

@@ -21,11 +21,13 @@ export const cardBackground = (rating) => {
   if (num >= 70) return "url('/silver.png')";
   return "url('/bronze.png')";
 };
+// Ink that suits each tier art. Fixed colours, because the art is fixed.
+const ART_INK = { gold: 'text-amber-950', silver: 'text-zinc-900', bronze: 'text-orange-950' };
 const cardTextColor = (rating) => {
   const num = parseInt(rating, 10) || 50;
-  if (num >= 85) return 'text-amber-950';
-  if (num >= 70) return 'text-zinc-900';
-  return 'text-orange-950';
+  if (num >= 85) return ART_INK.gold;
+  if (num >= 70) return ART_INK.silver;
+  return ART_INK.bronze;
 };
 
 /* eslint-disable react/prop-types -- this codebase does not use prop-types */
@@ -46,7 +48,7 @@ export default function FutCard({ player, position, portrait, details = false })
         <div className="relative z-10 h-[380px] w-[260px] select-none overflow-hidden bg-center bg-no-repeat"
           style={{ backgroundImage: cardBackground(rating), backgroundSize: '100% 100%' }}>
           <div className={`absolute left-[16%] top-[22%] z-10 flex flex-col items-start ${text}`}>
-            <span className="text-4xl font-black leading-none tabular-nums" data-testid="card-rating">{rating ?? '—'}</span>
+            <span className="text-4xl font-black leading-none tabular-nums" data-testid="card-rating">{rating ?? "-"}</span>
             {position && <span className="text-sm font-bold uppercase tracking-wider">{position}</span>}
           </div>
           <div className="absolute left-0 top-[18%] flex w-full justify-center">
@@ -55,14 +57,14 @@ export default function FutCard({ player, position, portrait, details = false })
               : <Shield aria-hidden="true" className={`h-[175px] w-auto opacity-40 ${text}`} />}
           </div>
           <div className={`absolute bottom-[28%] left-0 w-full text-center ${text}`}>
-            <div className="text-[14px] font-black uppercase tracking-widest">{name || '—'}</div>
+            <div className="text-[14px] font-black uppercase tracking-widest">{name || "-"}</div>
           </div>
           <div className={`absolute bottom-[19%] left-0 w-full px-6 ${text}`}>
             <dl className={`m-0 text-center ${styles.cardStatsGrid}`}>
               {CARD_STATS.map(({ key, short }) => (
                 <div key={key} className="grid grid-rows-2 justify-items-center">
                   <dt className="text-[9px] font-bold opacity-80">{short}</dt>
-                  <dd className="m-0 text-[15px] font-black leading-none">{statValue(attributes, key) ?? '—'}</dd>
+                  <dd className="m-0 text-[15px] font-black leading-none">{statValue(attributes, key) ?? "-"}</dd>
                 </div>
               ))}
             </dl>
@@ -71,11 +73,11 @@ export default function FutCard({ player, position, portrait, details = false })
         {style && <img src={style.imageUrl} alt={style.name}
           className="absolute left-[26px] top-[48%] z-20 h-8 w-8 -translate-x-1/2 -translate-y-1/2 object-contain" {...noDrag} />}
       </div>
-      {details && <figcaption className="max-w-[260px] text-center text-xs text-zinc-400">
+      {details && <figcaption className="max-w-[260px] text-center text-sm text-mut">
         <span>Preferred foot: {attributes.bio?.preferredFoot || 'not set'}</span><br />
         <span>Play style: {style?.name || 'not set'}</span>
       </figcaption>}
-      {portrait?.status && <figcaption className={`text-xs ${portrait.status === 'failed' ? 'text-red-300' : 'text-amber-200'}`}>{PORTRAIT_NOTES[portrait.status]}</figcaption>}
+      {portrait?.status && <figcaption className={`text-xs ${portrait.status === 'failed' ? 'text-live' : 'text-mut'}`}>{PORTRAIT_NOTES[portrait.status]}</figcaption>}
     </figure>
   );
 }

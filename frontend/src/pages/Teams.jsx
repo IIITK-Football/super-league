@@ -1,368 +1,198 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
-import { ArrowLeft, Shield, Loader2, Users, Calendar } from 'lucide-react';
-import { Loader } from '../components/Loader';
-import styles from './Teams.module.css';
+import { Crest, EmptyState, ErrorState, Skeleton, Spotlight, Tabs } from '../components/ui';
+import { MatchList } from '../components/match/MatchList';
 import PlayerProfile from '../components/PlayerProfile';
 
+// Squad order: goalkeepers, defenders, midfielders, forwards, then any other position, then unassigned players.
 const POSITION_ORDER = [
-    'GK', 'Goalkeepers',
-    'CB', 'LB', 'RB', 'LWB', 'RWB', 'DEF', 'Defenders',
-    'CDM', 'CM', 'CAM', 'LM', 'RM', 'MID', 'Midfielders',
-    'LW', 'RW', 'CF', 'ST', 'FWD', 'Forwards', 'Attackers'
+  'GK', 'Goalkeepers',
+  'CB', 'LB', 'RB', 'LWB', 'RWB', 'DEF', 'Defenders',
+  'CDM', 'CM', 'CAM', 'LM', 'RM', 'MID', 'Midfielders',
+  'LW', 'RW', 'CF', 'ST', 'FWD', 'Forwards', 'Attackers',
 ];
-const POSITION_LABELS = {
-    GK: 'Goalkeepers',
-    DEF: 'Defenders',
-    MID: 'Midfielders',
-    FWD: 'Forwards',
-    UNASSIGNED: 'UNASSIGNED',
-};
+const POSITION_LABELS = { GK: 'Goalkeepers', DEF: 'Defenders', MID: 'Midfielders', FWD: 'Forwards', UNASSIGNED: 'Unassigned' };
+const isUnassigned = (position) => !position || position.toUpperCase() === 'UNASSIGNED';
 
-const getTeamColorClass = (teamName) => {
-    if (!teamName) return styles.defaultTeam;
+// Players grouped by position in squad order. Exported for tests.
+export function groupSquad(players) {
+  const groups = new Map();
+  const place = (key, player) => groups.set(key, [...(groups.get(key) ?? []), player]);
+  const known = new Map(POSITION_ORDER.map((p) => [p.toUpperCase(), p]));
+  const unassigned = [];
 
-    const cleanName = teamName.trim();
+  for (const player of players) {
+    const raw = (player.position || '').trim();
+    if (isUnassigned(raw)) unassigned.push(player);
+    else place(known.get(raw.toUpperCase()) ?? raw, player);
+  }
 
-    const map = {
-        'KFC': styles.kfc,
-        'HRZxKadayadis': styles.hrzx,
-        'MILF': styles.milf,
-        'BBC': styles.bbc,
-        'AL Balal': styles.alBalal,
-        'AC Nilan': styles.acNilan,
-        'Red Wolves': styles.redWolves,
-        'DILF': styles.dilf,
-        'FAAAH United': styles.faaah,
-        'KULASTHREE FC': styles.kulasthree,
-        'Fivestars': styles.fivestars
-    };
-    return map[cleanName] || styles.defaultTeam;
-};
-
-function PlayerRow({ player, teamColor, teamColorHex, onSelect }) {
-    return (
-        <div
-            onClick={() => onSelect(player)}
-            className="flex items-center gap-4 py-3 px-2 border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors group rounded-lg"
-        >
-            <div className={`w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-white/10 ${teamColorHex ? '' : teamColor}`} style={teamColorHex ? { backgroundColor: teamColorHex } : undefined}>
-                {player.image_url ? (
-                    <img src={player.image_url} alt={player.name} className="w-full h-full object-cover" />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                        <Shield className="w-5 h-5 text-zinc-600" />
-                    </div>
-                )}
-            </div>
-
-            <div className="flex-1 min-w-0">
-                <p className="font-bold text-white group-hover:text-zinc-200 transition-colors truncate">
-                    {player.name}
-                </p>
-            </div>
-
-            {player.jersey_number != null && (
-                <span className="text-sm font-mono font-bold text-zinc-500 shrink-0">
-                    #{player.jersey_number}
-                </span>
-            )}
-        </div>
-    );
+  const ordered = [...groups.entries()].sort(([a], [b]) => {
+    const rank = (key) => (POSITION_ORDER.indexOf(key) === -1 ? POSITION_ORDER.length : POSITION_ORDER.indexOf(key));
+    return rank(a) - rank(b) || a.localeCompare(b);
+  });
+  // Players with a photo first, then by name.
+  const byPhotoThenName = (a, b) => Number(Boolean(b.image_url)) - Number(Boolean(a.image_url)) || (a.name || '').localeCompare(b.name || '');
+  if (unassigned.length) ordered.push(['UNASSIGNED', unassigned.sort(byPhotoThenName)]);
+  return ordered.map(([key, list]) => ({ key, label: POSITION_LABELS[key] || key, players: list.sort(byPhotoThenName) }));
 }
 
-function MatchCard({ match, teamId, onClick }) {
-    const isHome = match.home_team_id === teamId;
-    const opponent = isHome ? match.away_team : match.home_team;
-    const curr = isHome ? match.home_team : match.away_team;
-
-    const homeName = isHome ? curr : opponent;
-    const awayName = !isHome ? curr : opponent;
-
-    return (
-        <div
-            onClick={onClick}
-            className="bg-[#1A1820] border border-white/5 hover:border-white/20 rounded-2xl p-4 sm:p-6 cursor-pointer hover:bg-white/5 transition-all group relative overflow-hidden"
-        >
-            <div className="flex justify-between items-center text-[10px] sm:text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 sm:mb-6">
-                <span className="flex items-center gap-1.5 sm:gap-2">
-                    <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                    {match.date ? new Date(match.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'TBA'}
-                </span>
-                <span className={match.status === 'live' ? 'text-red-500 animate-pulse' : 'text-zinc-400'}>
-                    {match.status === 'live' ? `LIVE • ${match.minute || "1'"}` : match.status}
-                </span>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
-                <div className="flex-1 text-right flex flex-col justify-center">
-                    <h3 className={`text-[13px] sm:text-xl md:text-2xl font-black uppercase tracking-tight leading-tight ${isHome ? 'text-white' : 'text-zinc-400'}`}>
-                        {homeName}
-                    </h3>
-                </div>
-
-                <div className="bg-black/60 px-3 py-2 sm:px-6 sm:py-3 rounded-xl border border-white/10 font-black text-xl sm:text-3xl tabular-nums text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-500 shadow-xl shrink-0">
-                    {match.status === 'scheduled' ? 'VS' : `${match.home_score || 0} - ${match.away_score || 0}`}
-                </div>
-
-                <div className="flex-1 text-left flex flex-col justify-center">
-                    <h3 className={`text-[13px] sm:text-xl md:text-2xl font-black uppercase tracking-tight leading-tight ${!isHome ? 'text-white' : 'text-zinc-400'}`}>
-                        {awayName}
-                    </h3>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function TeamOverview({ team, allPlayers, onBack, onSelectPlayer, onSelectMatch }) {
-    const [activeTab, setActiveTab] = useState(() => {
-        return sessionStorage.getItem('activeTeamTab') || 'matches';
-    });
-
-    const { data: matchesResp, loading: matchesLoading } = useApi(`/teams/${team.id}/matches`);
-    const matches = matchesResp?.data || [];
-
-    const teamColorClass = getTeamColorClass(team.name);
-
-    const teamPlayers = useMemo(
-        () => allPlayers.filter(p => p.team_id === team.id),
-        [allPlayers, team.id]
-    );
-
-    const playersByPosition = useMemo(() => {
-        const groups = {};
-
-        // 1. Group by known tactical order
-        for (const pos of POSITION_ORDER) {
-            const inPos = teamPlayers.filter(p => {
-                const pPos = (p.position || '').trim();
-                return pPos.toUpperCase() === pos.toUpperCase();
-            });
-            if (inPos.length > 0) {
-                groups[pos] = inPos;
-            }
-        }
-
-        // 2. Any other assigned positions not in POSITION_ORDER and not unassigned
-        teamPlayers.forEach(p => {
-            const rawPos = (p.position || '').trim();
-            const isUnassigned = !rawPos || rawPos.toUpperCase() === 'UNASSIGNED';
-            if (!isUnassigned) {
-                const alreadyGrouped = POSITION_ORDER.some(pos => pos.toUpperCase() === rawPos.toUpperCase());
-                if (!alreadyGrouped) {
-                    if (!groups[rawPos]) groups[rawPos] = [];
-                    if (!groups[rawPos].find(x => x.id === p.id)) groups[rawPos].push(p);
-                }
-            }
-        });
-
-        // 3. UNASSIGNED players strictly at the very end
-        const unassignedPlayers = teamPlayers.filter(p => {
-            const rawPos = (p.position || '').trim();
-            return !rawPos || rawPos.toUpperCase() === 'UNASSIGNED';
-        });
-
-        if (unassignedPlayers.length > 0) {
-            unassignedPlayers.sort((a, b) => {
-                if (Boolean(a.image_url) !== Boolean(a.image_url)) {
-                    return a.image_url ? -1 : 1;
-                }
-                return (a.name || '').localeCompare(b.name || '');
-            });
-            groups['UNASSIGNED'] = unassignedPlayers;
-        }
-
-        return groups;
-    }, [teamPlayers]);
-
-    return (
-        <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl sm:text-5xl font-black tracking-tighter uppercase">
-                    {team.name} <span className="text-zinc-600">Overview</span>
-                </h1>
-                <button
-                    onClick={onBack}
-                    className="flex items-center gap-2 px-3 py-2 sm:px-4 border border-white/10 bg-white/5 rounded-lg hover:bg-white/10 transition-colors text-sm font-bold"
+function SquadList({ players }) {
+  const groups = useMemo(() => groupSquad(players), [players]);
+  if (players.length === 0) {
+    return <EmptyState title="No players yet">Players appear here once they are added to this club&apos;s squad.</EmptyState>;
+  }
+  return (
+    <div className="grid gap-10 lg:grid-cols-2">
+      {groups.map((group) => (
+        <section key={group.key} aria-label={group.label} className="space-y-3">
+          <h3 className="eyebrow">{group.label}</h3>
+          <ul className="glass divide-y divide-line/70 overflow-hidden rounded-card">
+            {group.players.map((player) => (
+              <li key={player.id}>
+                <Link
+                  to={`?player=${player.id}`}
+                  className="flex min-h-16 items-center gap-4 px-4 py-3 transition-colors hover:bg-ink/[0.04] sm:px-5"
                 >
-                    <ArrowLeft size={16} />
-                    <span className="hidden sm:inline">Back to Clubs</span>
-                </button>
-            </div>
-
-            <div className="flex gap-1 bg-white/5 p-1 rounded-xl w-fit border border-white/10">
-                {['matches', 'squad'].map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => {
-                            setActiveTab(tab);
-                            sessionStorage.setItem('activeTeamTab', tab); // <-- Save it!
-                        }}
-                        className={`px-5 py-2 rounded-lg text-sm font-bold uppercase tracking-widest transition-colors ${activeTab === tab ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'
-                            }`}
-                    >
-                        {tab === 'squad' ? 'Squad' : 'Matches'}
-                    </button>
-                ))}
-            </div>
-
-            {activeTab === 'squad' ? (
-                teamPlayers.length === 0 ? (
-                    <div className="py-16 text-center border border-white/5 bg-white/5 rounded-2xl">
-                        <Shield className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-                        <p className="text-zinc-400 font-bold uppercase tracking-widest text-sm">No players registered yet.</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                        {Object.entries(playersByPosition).map(([position, players]) => (
-                            <div key={position} className={position === 'UNASSIGNED' ? 'col-span-1 md:col-span-2' : ''}>
-                                <h3 className="text-base font-bold text-white mb-3">
-                                    {POSITION_LABELS[position] || position}
-                                </h3>
-                                <div className={position === 'UNASSIGNED' ? 'grid grid-cols-1 md:grid-cols-2 gap-x-12' : ''}>
-                                    {players.map(player => (
-                                        <PlayerRow key={player.id} player={player} teamColor={teamColorClass} teamColorHex={team.team_color} onSelect={onSelectPlayer} />
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )
-            ) : (
-                <div className="space-y-4">
-                    {matchesLoading ? (
-                        <div className="flex items-center justify-center py-12 border border-white/5 bg-white/5 rounded-2xl">
-                            <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
-                        </div>
-                    ) : matches.length === 0 ? (
-                        <div className="py-12 text-center border border-white/5 bg-white/5 rounded-2xl">
-                            <Calendar className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-                            <p className="text-zinc-500 font-bold uppercase tracking-widest text-sm">No matches found.</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 gap-4">
-                            {matches.map(match => (
-                                <MatchCard
-                                    key={match.id}
-                                    match={match}
-                                    teamId={team.id}
-                                    onClick={() => onSelectMatch(match)}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
+                  <span className="w-9 shrink-0 text-right font-display text-3xl leading-none tabular-nums text-mut">{player.jersey_number ?? '-'}</span>
+                  <span className="size-11 shrink-0 overflow-hidden rounded-full bg-raise">
+                    {player.image_url && <img src={player.image_url} alt="" className="size-full object-cover" />}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-black uppercase tracking-tight text-ink">{player.name}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
 }
 
-export function Teams() {
-    const { setView: setLeagueView } = useLeague();
-    const navigate = useNavigate();
-    const [selectedTeam, setSelectedTeam] = useState(() => {
-        const saved = sessionStorage.getItem('selectedTeam');
-        return saved ? JSON.parse(saved) : null;
-    });
-    const [selectedPlayer, setSelectedPlayer] = useState(null);
+// One club: its matches this season and its squad. The club and tab are in the address.
+function ClubPage({ team, teams, allPlayers, tab, setParams }) {
+  const { seasonScope } = useLeague();
+  const matchesApi = useApi(`/teams/${team.id}/matches`);
+  const logos = new Map(teams.map((t) => [t.id, t.logo_url]));
+  const matches = (matchesApi.data?.data ?? []).map((m) => ({
+    ...m,
+    home: { name: m.home_team, logo_url: logos.get(m.home_team_id) ?? null },
+    away: { name: m.away_team, logo_url: logos.get(m.away_team_id) ?? null },
+  }));
+  const players = useMemo(() => allPlayers.filter((p) => p.team_id === team.id), [allPlayers, team.id]);
 
-    const { data: teamsResp, loading: teamsLoading, error: teamsError } = useApi('/teams');
-    const { data: playersResp } = useApi('/players');
-
-    const teams = useMemo(() => {
-        const raw = teamsResp?.data || [];
-        return raw.filter(t => t.name);
-    }, [teamsResp]);
-
-    const allPlayers = playersResp?.data || [];
-
-    const handleSelectPlayer = (player) => {
-        setSelectedPlayer(player);
-        sessionStorage.setItem('selectedPlayer', JSON.stringify(player));
-        setLeagueView('player-profile');
-    };
-
-    const handleSelectMatch = (match) => {
-        sessionStorage.setItem('selectedMatch', JSON.stringify(match));
-        sessionStorage.setItem('matchSource', 'teams');
-        navigate(`/matches/${match.id}`);
-    };
-
-    if (teamsLoading) {
-        return <Loader text="Loading Clubs..." />;
-    }
-
-    if (selectedPlayer) {
-        return <PlayerProfile onBack={() => setSelectedPlayer(null)} />;
-    }
-
-    if (teamsError || teams.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] text-zinc-500 space-y-4">
-                <Shield className="w-12 h-12 text-zinc-700" />
-                <span className="font-black tracking-[0.3em] uppercase text-sm">No teams found</span>
-            </div>
-        );
-    }
-
-    if (selectedTeam) {
-        return (
-            <TeamOverview
-                team={selectedTeam}
-                allPlayers={allPlayers}
-                onBack={() => {
-                    setSelectedTeam(null);
-                    sessionStorage.removeItem('selectedTeam');
-                    sessionStorage.removeItem('activeTeamTab')
-                }}
-                onSelectPlayer={handleSelectPlayer}
-                onSelectMatch={handleSelectMatch}
-            />
-        );
-    }
-
-    return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-12">
-            <h1 className="text-3xl sm:text-5xl font-black tracking-tighter uppercase">
-                Clubs <span className="text-zinc-600">Overview</span>
-            </h1>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {teams.map((team) => {
-                    const playerCount = allPlayers.filter(p => p.team_id === team.id).length;
-                    return (
-                        <div
-                            key={team.id}
-                            onClick={() => {
-                                setSelectedTeam(team);
-                                sessionStorage.setItem('selectedTeam', JSON.stringify(team));
-                            }}
-                            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-white/10 shadow-lg hover:shadow-2xl transition-shadow duration-300"
-                        >
-                            <div
-                                className={`absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity duration-300 ${team.team_color ? '' : getTeamColorClass(team.name)}`}
-                                style={team.team_color ? { backgroundImage: `linear-gradient(135deg, ${team.team_color}, #18181b)` } : undefined}
-                            />
-                            <div className="relative p-8 flex flex-col items-center justify-center text-center gap-3 h-52">
-                                {team.logo_url ? (
-                                    <img src={team.logo_url} alt={team.name} className="w-14 h-14 object-contain" />
-                                ) : (
-                                    <Shield className="w-12 h-12 text-white/80 group-hover:text-white transition-colors" />
-                                )}
-                                <h3 className="text-xl sm:text-2xl font-bold tracking-widest uppercase">{team.name}</h3>
-                                {playerCount > 0 && (
-                                    <span className="flex items-center gap-1 text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                                        <Users size={12} /> {playerCount} Players
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+  return (
+    <div className="space-y-10 pb-12">
+      <header className="flex flex-wrap items-end justify-between gap-6">
+        <div className="flex min-w-0 items-center gap-5 sm:gap-8">
+          <Crest name={team.name} src={team.logo_url} color={team.team_color} size="lg" className="size-24 sm:size-32" />
+          <div className="min-w-0 space-y-2">
+            <p className="eyebrow">{[seasonScope.divisionRecord?.name, seasonScope.season && `${seasonScope.season.name} season`].filter(Boolean).join(' · ')}</p>
+            <h1 className="break-words font-display text-4xl text-ink sm:text-6xl">{team.name}</h1>
+          </div>
         </div>
+        <Link to={`/${seasonScope.division}/teams`} className="eyebrow inline-flex min-h-11 items-center hover:text-ink">All clubs</Link>
+      </header>
+
+      <Tabs
+        label="Club sections"
+        tabs={[{ id: 'matches', label: 'Matches' }, { id: 'squad', label: 'Squad' }]}
+        value={tab}
+        onChange={(next) => setParams(next === 'squad' ? { club: team.id, tab: 'squad' } : { club: team.id })}
+      />
+
+      {tab === 'squad' ? <SquadList players={players} />
+        : matchesApi.loading ? <Skeleton className="h-36 w-full rounded-card" />
+          : matchesApi.error ? <ErrorState message={matchesApi.error.message} onRetry={matchesApi.retry} />
+            : matches.length === 0 ? <EmptyState title={`No matches for ${team.name} yet`}>Fixtures appear here once they are scheduled.</EmptyState>
+              : <MatchList matches={matches} headingLevel={3} />}
+    </div>
+  );
+}
+
+// The clubs of the selected season. /teams lists them; /teams?club=<id> opens one; /teams?club=<id>&player=<id>
+// opens a player from that squad. The address holds all of it, so back and shared links work.
+export function Teams() {
+  const { seasonScope } = useLeague();
+  const { teamId } = useParams();
+  const [params, setParams] = useSearchParams();
+  const clubId = teamId ?? params.get('club');
+  const playerId = params.get('player');
+  const tab = params.get('tab') === 'squad' ? 'squad' : 'matches';
+
+  const teamsApi = useApi('/teams');
+  const playersApi = useApi('/players');
+  const teams = useMemo(() => (teamsApi.data?.data ?? []).filter((t) => t.name), [teamsApi.data]);
+  const allPlayers = playersApi.data?.data ?? [];
+
+  if (playerId) {
+    // PlayerProfile reads the player it shows from this entry, so it is set before the profile mounts.
+    sessionStorage.setItem('selectedPlayer', JSON.stringify({ id: playerId }));
+    return <PlayerProfile onBack={() => setParams(clubId ? { club: clubId } : {})} />;
+  }
+
+  const header = (
+    <header className="space-y-2">
+      <p className="eyebrow">{[seasonScope.divisionRecord?.name, seasonScope.season && `${seasonScope.season.name} season`].filter(Boolean).join(' · ') || ' '}</p>
+      <h1 className="font-display text-4xl text-ink sm:text-6xl">Clubs</h1>
+    </header>
+  );
+
+  if (teamsApi.loading) {
+    return (
+      <div aria-busy="true" aria-label="Loading clubs" className="space-y-10 pb-12">
+        {header}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-56 w-full rounded-card" />)}
+        </div>
+      </div>
     );
+  }
+
+  if (teamsApi.error) {
+    return <div className="space-y-10 pb-12">{header}<ErrorState message={teamsApi.error.message} onRetry={teamsApi.retry} /></div>;
+  }
+
+  if (clubId) {
+    const team = teams.find((t) => t.id === clubId);
+    if (!team) {
+      return (
+        <EmptyState title="Club not found">
+          It is not in this season. <Link className="font-semibold text-ink underline underline-offset-4" to="/teams">See all clubs</Link>
+        </EmptyState>
+      );
+    }
+    return <ClubPage team={team} teams={teams} allPlayers={allPlayers} tab={tab} setParams={setParams} />;
+  }
+
+  if (teams.length === 0) {
+    return <div className="space-y-10 pb-12">{header}<EmptyState title="No clubs in this season yet">Clubs appear here once teams are entered.</EmptyState></div>;
+  }
+
+  return (
+    <div className="space-y-10 pb-12">
+      {header}
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {teams.map((team) => {
+          const playerCount = allPlayers.filter((p) => p.team_id === team.id).length;
+          return (
+            <li key={team.id}>
+              <Spotlight
+                as={Link}
+                to={`/${seasonScope.division}/teams/${team.id}`}
+                className="glass lift flex h-full flex-col items-center gap-4 rounded-card p-6 text-center"
+                style={team.team_color ? { boxShadow: `inset 0 3px 0 ${team.team_color}` } : undefined}
+              >
+                <Crest name={team.name} src={team.logo_url} color={team.team_color} size="lg" className="size-24" />
+                <span className="font-display text-2xl leading-none text-ink">{team.name}</span>
+                {playersApi.data && <span className="eyebrow">{playerCount} {playerCount === 1 ? 'player' : 'players'}</span>}
+              </Spotlight>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }

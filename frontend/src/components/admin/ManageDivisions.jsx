@@ -3,6 +3,7 @@ import { Archive, Check, Layers, Loader2, Plus, RotateCcw, Save, ScrollText, Sta
 import { supabase } from '../../lib/supabase';
 import { fetchApi } from '../../hooks/useApi';
 import ManageRules from './ManageRules';
+import { useConfirm } from '../ui';
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -15,6 +16,9 @@ export const SEASON_FORMATS = [
 
 const blankDivision = () => ({ slug: '', name: '', short_name: '', primary_color: '' });
 const blankSeason = () => ({ slug: '', name: '', starts_on: '', ends_on: '', format: 'league' });
+// The slug follows the name until someone types a slug of their own.
+const slugify = (text) => text.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-$/g, '');
+const followSlug = (current, name) => (!current.slug || current.slug === slugify(current.name) ? slugify(name) : current.slug);
 
 export function validateDivision(d) {
   if (!d.name.trim()) return 'Enter a division name.';
@@ -46,7 +50,7 @@ export function describeError(error) {
   if (error.code === '42501' || error.status === 403) return 'Only a dictator can change divisions, seasons and sections.';
   if (error.code === '23505') return 'That slug is already used here. Choose another one.';
   if (error.code === '23503') return 'This record already has data, so it cannot be deleted. Archive it instead.';
-  return error.message || 'Something went wrong. Try again.';
+  return error.message || 'The request did not complete. Try again.';
 }
 
 const inputClass = 'w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-[#d9ff4a]/60';
@@ -56,6 +60,7 @@ const primaryButton = 'flex items-center gap-2 rounded-lg bg-[#d9ff4a] px-3 py-2
 const badge = (text, tone = 'zinc') => <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${tone === 'lime' ? 'border-[#d9ff4a]/40 text-[#d9ff4a]' : tone === 'red' ? 'border-red-500/30 text-red-300' : 'border-white/15 text-zinc-400'}`}>{text}</span>;
 
 export default function ManageDivisions() {
+  const confirm = useConfirm();
   const [divisions, setDivisions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
@@ -85,7 +90,7 @@ export default function ManageDivisions() {
     setLoading(true);
     const { data, error: loadError } = await supabase
       .from('divisions')
-      .select('id, slug, name, short_name, visibility, archived_at, logo_url, primary_color, secondary_color, sort_order')
+      .select('id, slug, name, short_name, visibility, archived_at, logo_url, landing_video_key, is_featured, primary_color, secondary_color, sort_order')
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
     if (loadError) setError(describeError(loadError));
@@ -192,15 +197,22 @@ export default function ManageDivisions() {
   const saveDivision = (division) => {
     const invalid = validateDivision(division);
     if (invalid) return report(new Error(invalid));
-    const { name, short_name, logo_url, primary_color, secondary_color } = division;
+    const { name, short_name, logo_url, landing_video_key, primary_color, secondary_color } = division;
     return patchDivision(division, {
       name: name.trim(), short_name: short_name?.trim() || null, logo_url: logo_url?.trim() || null,
+      landing_video_key: landing_video_key?.trim() || null,
       primary_color: primary_color || null, secondary_color: secondary_color || null,
     }, `Division "${name.trim()}" saved.`);
   };
 
-  const deleteDivision = (division) => {
-    if (!window.confirm(`Delete the division "${division.name}"? This only works while it has no seasons.`)) return;
+  const featureDivision = async (division) => {
+    const ok = await confirm({ title: `Make ${division.name} the current division?`, description: 'This changes the division featured on the landing page.', confirmLabel: 'Make current' });
+    if (ok) return write(`division-${division.id}`, `/admin/divisions/${division.id}/current`, 'POST', undefined,
+      `${division.name} is now the current division.`, loadDivisions);
+  };
+
+  const deleteDivision = async (division) => {
+    if (!(await confirm({ title: `Delete ${division.name}?`, description: 'This only works while the division has no seasons.', confirmLabel: 'Delete division', tone: 'danger' }))) return;
     return write(`division-${division.id}`, `/admin/divisions/${division.id}`, 'DELETE', undefined,
       `Division "${division.name}" deleted.`, () => {
         if (selectedDivision?.id === division.id) {
@@ -241,8 +253,10 @@ export default function ManageDivisions() {
     }, `Season "${season.name.trim()}" saved.`);
   };
 
-  const makeCurrent = (season) => write(`season-${season.id}`, `/admin/seasons/${season.id}/current`, 'POST', undefined,
-    `"${season.name}" is now the current season of ${selectedDivision.name}.`, reloadSeasons);
+  const makeCurrent = async (season) => {
+    const ok = await confirm({ title: `Make ${season.name} the current season?`, description: `The public site shows ${season.name} for ${selectedDivision.name} from now on.`, confirmLabel: 'Make current' });
+    if (ok) return write(`season-${season.id}`, `/admin/seasons/${season.id}/current`, 'POST', undefined, `"${season.name}" is now the current season of ${selectedDivision.name}.`, reloadSeasons);
+  };
 
   const move = (items, index, offset) => {
     const ordered = [...items];
@@ -302,7 +316,7 @@ export default function ManageDivisions() {
     {message && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</p>}
 
     <form onSubmit={createDivision} aria-label="New division" className="grid gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-5 lg:grid-cols-[1.3fr_1fr_1fr_140px_120px_auto] lg:items-end">
-      <label className={labelClass}>Division name<input value={newDivision.name} onChange={(e) => setNewDivision({ ...newDivision, name: e.target.value })} placeholder="Inter" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
+      <label className={labelClass}>Division name<input value={newDivision.name} onChange={(e) => setNewDivision((d) => ({ ...d, name: e.target.value, slug: followSlug(d, e.target.value) }))} placeholder="Inter" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
       <label className={labelClass}>Slug<input value={newDivision.slug} onChange={(e) => setNewDivision({ ...newDivision, slug: e.target.value.trim().toLowerCase() })} placeholder="inter" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
       <label className={labelClass}>Short name<input value={newDivision.short_name} onChange={(e) => setNewDivision({ ...newDivision, short_name: e.target.value })} placeholder="Optional" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
       <label className={labelClass}>Colour<input value={newDivision.primary_color} onChange={(e) => setNewDivision({ ...newDivision, primary_color: e.target.value })} placeholder="#d9ff4a" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
@@ -314,11 +328,14 @@ export default function ManageDivisions() {
       : <ul aria-label="Divisions" className="space-y-3">{divisions.map((d, index) => <li key={d.id} className={`grid gap-3 rounded-2xl border p-4 lg:grid-cols-[1.5fr_140px_auto] lg:items-center ${selectedDivision?.id === d.id ? 'border-[#d9ff4a]/40 bg-[#d9ff4a]/[.04]' : 'border-white/10 bg-white/[.03]'}`}>
         <div className="space-y-1">
           <input aria-label={`Name of ${d.slug}`} value={d.name} onChange={(e) => changeDivision(d.id, 'name', e.target.value)} className={`${inputClass} font-bold`} />
-          <div className="flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">/{d.slug} {stateBadge(d)}</div>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">/{d.slug} {stateBadge(d)} {d.is_featured && badge('Current division', 'lime')}</div>
+          <label className={labelClass}>Logo URL<input aria-label={`Logo URL of ${d.slug}`} value={d.logo_url || ''} onChange={(e) => changeDivision(d.id, 'logo_url', e.target.value)} className={inputClass} /></label>
+          <label className={labelClass}>Landing video key<input aria-label={`Landing video key of ${d.slug}`} value={d.landing_video_key || ''} onChange={(e) => changeDivision(d.id, 'landing_video_key', e.target.value)} className={inputClass} /></label>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => saveDivision(d)} disabled={!!busy} className={ghostButton}><Save size={13} /> Save</button>
           <button type="button" onClick={() => chooseDivision(d)} disabled={!!busy} className={ghostButton}><Layers size={13} /> Seasons</button>
+          {!d.is_featured && d.visibility === 'public' && !d.archived_at && <button type="button" onClick={() => featureDivision(d)} disabled={!!busy} className={ghostButton}><Star size={13} /> Make current division</button>}
           {lifecycleButtons(d, patchDivision)}
           {orderButtons(d.name, index, divisions.length, (offset) => reorder('divisions', divisions, index, offset))}
           <button type="button" onClick={() => deleteDivision(d)} disabled={!!busy} aria-label={`Delete ${d.name}`} className="rounded-lg border border-red-500/30 px-3 py-2 text-red-400 disabled:opacity-40"><Trash2 size={13} /></button>
@@ -328,7 +345,7 @@ export default function ManageDivisions() {
     {selectedDivision && <section aria-label={`Seasons of ${selectedDivision.name}`} className="space-y-4 rounded-2xl border border-white/10 bg-white/[.02] p-5">
       <h3 className="text-sm font-black uppercase tracking-wider text-zinc-300">Seasons of {selectedDivision.name}</h3>
       <form onSubmit={createSeason} aria-label="New season" className="grid gap-3 lg:grid-cols-[1fr_1fr_150px_150px_140px_160px_auto] lg:items-end">
-        <label className={labelClass}>Season name<input value={newSeason.name} onChange={(e) => setNewSeason({ ...newSeason, name: e.target.value })} placeholder="2026–27" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
+        <label className={labelClass}>Season name<input value={newSeason.name} onChange={(e) => setNewSeason((x) => ({ ...x, name: e.target.value, slug: followSlug(x, e.target.value) }))} placeholder="2026–27" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
         <label className={labelClass}>Season slug<input value={newSeason.slug} onChange={(e) => setNewSeason({ ...newSeason, slug: e.target.value.trim().toLowerCase() })} placeholder="2026-27" className={`${inputClass} mt-1 normal-case tracking-normal`} /></label>
         <label className={labelClass}>Starts<input type="date" value={newSeason.starts_on} onChange={(e) => setNewSeason({ ...newSeason, starts_on: e.target.value })} className={`${inputClass} mt-1`} /></label>
         <label className={labelClass}>Ends<input type="date" value={newSeason.ends_on} onChange={(e) => setNewSeason({ ...newSeason, ends_on: e.target.value })} className={`${inputClass} mt-1`} /></label>

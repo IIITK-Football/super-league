@@ -1,3 +1,4 @@
+/* Layout only: colours and type come from the tokens in the component. FutCard uses cardStatsGrid. */
 .mainLayout {
     display: grid;
     grid-template-columns: 1fr;
@@ -5,10 +6,9 @@
         "card"
         "header"
         "attrs"
-        "styles";
+        "styles"
+        "history";
     gap: 2rem;
-    max-width: 80rem;
-    margin: 0 auto;
 }
 
 @media (min-width: 768px) {
@@ -17,7 +17,8 @@
         grid-template-areas:
             "card header"
             "attrs attrs"
-            "styles styles";
+            "styles styles"
+            "history history";
         column-gap: 3rem;
         row-gap: 2.5rem;
         align-items: center;
@@ -34,7 +35,8 @@
         grid-template-columns: 1fr 1fr;
         grid-template-areas:
             "card header"
-            "attrs styles";
+            "attrs styles"
+            "history history";
         align-items: start;
     }
 
@@ -69,6 +71,10 @@
     }
 }
 
+.historyArea {
+    grid-area: history;
+}
+
 .attrsArea {
     grid-area: attrs;
     display: grid;
@@ -92,29 +98,4 @@
     grid-template-columns: max-content max-content;
     column-gap: 2rem;
     align-items: center;
-}
-
-.coreAttributesGrid {
-    display: grid;
-    grid-template-columns: repeat(1, minmax(0, 1fr));
-    row-gap: 1.25rem;
-}
-
-@media (min-width: 768px) {
-    .coreAttributesGrid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        column-gap: 3rem;
-    }
-}
-
-@media (min-width: 1024px) {
-    .coreAttributesGrid {
-        grid-template-columns: repeat(1, minmax(0, 1fr));
-    }
-}
-
-@media (min-width: 1280px) {
-    .coreAttributesGrid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
 }

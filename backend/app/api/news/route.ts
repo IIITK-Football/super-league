@@ -3,8 +3,8 @@ import { requestClient } from '@/lib/supabase/clients';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+    const limit = Math.max(1, parseInt(searchParams.get('limit') || '10') || 10);
     const category = searchParams.get('category'); // <--- 1. Get Category from URL
 
     const from = (page - 1) * limit;

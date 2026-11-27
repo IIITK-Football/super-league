@@ -33,6 +33,7 @@ export const routes: [path: string, load: Loader][] = [
   ['/admin/divisions/order', () => import('./divisionLifecycle').then((module) => module.divisionOrder)],
   ['/admin/seasons', () => import('./divisionLifecycle').then((module) => module.seasonCreate)],
   ['/admin/seasons/order', () => import('./divisionLifecycle').then((module) => module.seasonOrder)],
+  ['/admin/divisions/:id/current', () => import('./divisionLifecycle').then((module) => module.divisionCurrent)],
   ['/admin/divisions/:id', () => import('./divisionLifecycle').then((module) => module.divisionDetail)],
   ['/admin/seasons/:id', () => import('./divisionLifecycle').then((module) => module.seasonDetail)],
   ['/admin/seasons/:id/current', () => import('./divisionLifecycle').then((module) => module.seasonCurrent)],

@@ -17,12 +17,13 @@ export async function GET(request: Request) {
     const supabase = await getSupabaseClient(request);
     // D-04: at most three sequential rounds. Round 1: who is calling, and which season (?division=<slug>&season=<slug
     // or id>; without a season, the division's current season).
-    const [{ data: { user } }, { data: isDictator }, scope] = await Promise.all([
+    const [{ data: { user } }, { data: isDictator, error: roleError }, scope] = await Promise.all([
       supabase.auth.getUser(),
       supabase.rpc('is_dictator'),
       resolveScope(supabase, { division: searchParams.get('division'), season: searchParams.get('season') }),
     ]);
     if (!user) throw { status: 401, message: "Unauthorized: Please log in." };
+    if (roleError) throw roleError;
 
     let query = supabase
       .from('matches')
@@ -34,7 +35,11 @@ export async function GET(request: Request) {
         away_score, 
         status, 
         season_id,
+        date,
+        venue,
         minute,
+        timer_start_time,
+        timer_calibration,
         is_graded,
         result_kind,
         events_version,

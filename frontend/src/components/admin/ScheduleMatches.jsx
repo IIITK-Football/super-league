@@ -1,167 +1,259 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { CalendarPlus, MapPin, Pencil, X } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
+import { useDivisions } from '../../hooks/useDivisions';
 import { API_BASE_URL } from '../../lib/api';
-import { Calendar, Swords } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { WomensBracket, FreshersBracket } from '../../pages/Standings';
 import { DivisionSwitch } from './DivisionSwitch';
-const API_URL = API_BASE_URL;
+import { Button, Combobox, ConfirmDialog, Crest, DateTimeField, Field, Notice, Pill, SegmentedControl, Select, Sheet, Switch, TextInput, toast } from '../ui';
+import { formatKickoff } from './adminFormat';
+
+const EMPTY = { home_team_id: '', away_team_id: '', date: '', venue: '', is_walkover: false, walkover_winner: '', walkover_reason: '' };
+
+// One request to the admin matches route, with the signed-in token. Returns the parsed body or throws its message.
+async function matchesApi(method, query, body) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`${API_BASE_URL}/admin/matches${query}`, {
+    method,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || 'Unknown error');
+  return data;
+}
 
 export default function ScheduleMatches() {
   const [division, setDivision] = useState('super-league');
+  const [season, setSeason] = useState('');
+  const [seasons, setSeasons] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ home_team_id: '', away_team_id: '', date: '', venue: '', is_walkover: false, walkover_winner: '' });
+  const [form, setForm] = useState(EMPTY);
+  const [errors, setErrors] = useState({});
+  const [notice, setNotice] = useState(null); // { tone, text }
+  const [editing, setEditing] = useState(null); // fixture being edited: { id, home_team_id, away_team_id, date, venue }
+  const [editError, setEditError] = useState('');
+  const [cancelTarget, setCancelTarget] = useState(null);
 
+  const { divisions } = useDivisions();
+  const divisionId = divisions.find((d) => d.slug === division)?.id;
+
+  // The seasons of the selected division; the current one is the default.
+  useEffect(() => {
+    if (!divisionId) return undefined;
+    let current = true;
+    supabase.from('seasons').select('id, slug, name, is_current').eq('division_id', divisionId).order('sort_order', { ascending: true })
+      .then(({ data }) => {
+        if (!current) return;
+        const list = data || [];
+        setSeasons(list);
+        setSeason(list.find((x) => x.is_current)?.id ?? list[0]?.id ?? '');
+      });
+    return () => { current = false; };
+  }, [divisionId]);
+
+  const seasonQuery = season ? `&season=${season}` : '';
   // Fetch teams specifically for the selected division!
   const { data: teamsResp } = useApi(`/teams?division=${division}`);
   const teams = teamsResp?.data || [];
+
+  // Every fixture of the season, scheduled or not, so a mistyped one can be corrected or cancelled.
+  const { data: fixturesResp, refetch: refetchFixtures } = useApi(`/admin/matches?division=${division}${seasonQuery}`);
+  const fixtures = fixturesResp?.data || [];
 
   // Fetch the current standings/schedule data to display the bracket preview
   const { data: standingsResp } = useApi(`/standings?division=${division}`);
   const bracketMatches = standingsResp?.data?.bracketMatches || [];
 
+  const set = (patch) => setForm((prev) => ({ ...prev, ...patch }));
+
+  const validate = () => {
+    const next = {};
+    if (form.home_team_id && form.home_team_id === form.away_team_id) next.teams = 'A team cannot play against itself.';
+    if (form.is_walkover && !form.walkover_reason.trim()) next.reason = 'Give a reason for the walkover.';
+    if (form.is_walkover && !form.walkover_winner) next.winner = 'Choose which team is awarded the result.';
+    return next;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.home_team_id === form.away_team_id) {
-      return alert("A team cannot play against itself!");
-    }
+    const next = validate();
+    setErrors(next);
+    setNotice(null);
+    if (Object.keys(next).length) return;
 
     setLoading(true);
     try {
-      // 1. Grab the VIP Pass (Auth Token)
-      const { data: { session } } = await supabase.auth.getSession();
-
-      // 2. Fix the URL and add the Auth Headers!
-      const res = await fetch(`${API_URL}/admin/matches`, { 
-        method: 'POST',
-        credentials: 'include', 
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}` 
-        },
-        body: JSON.stringify({ ...form, division })
-      });
-      
-      if (res.ok) {
-        alert("Match Scheduled" + (form.is_walkover ? " as a Walkover!" : "!"));
-        setForm({ home_team_id: '', away_team_id: '', date: '', venue: '', is_walkover: false, walkover_winner: '' });
-      } else {
-        const errorData = await res.json();
-        alert(`Failed to schedule match: ${errorData.message || 'Unknown error'}`);
-      }
+      await matchesApi('POST', '', { ...form, division, season });
+      toast({ tone: 'success', title: form.is_walkover ? 'Walkover registered.' : 'Match scheduled.' });
+      setForm(EMPTY);
+      refetchFixtures();
     } catch (err) {
-      alert(`Failed to schedule match: ${err.message}`);
+      setNotice({ tone: 'error', text: `Could not schedule the match: ${err.message}` });
     } finally {
       setLoading(false);
     }
   };
 
+  const openEdit = (m) => {
+    setEditError('');
+    setEditing({ id: m.id, home_team_id: m.home_team_id, away_team_id: m.away_team_id, date: '', venue: m.venue ?? '', kickoff: m.date });
+  };
+
+  // Date is optional when editing: blank keeps the stored kickoff.
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    if (editing.home_team_id === editing.away_team_id) return setEditError('A team cannot play against itself.');
+    setEditError('');
+    try {
+      await matchesApi('PUT', '', {
+        id: editing.id,
+        home_team_id: editing.home_team_id,
+        away_team_id: editing.away_team_id,
+        date: editing.date || undefined,
+        venue: editing.venue.trim() || undefined,
+      });
+      setEditing(null);
+      toast({ tone: 'success', title: 'Fixture updated.' });
+      refetchFixtures();
+    } catch (err) {
+      setEditError(`Could not save the fixture: ${err.message}`);
+    }
+  };
+
+  const cancelFixture = async () => {
+    try {
+      await matchesApi('DELETE', `?id=${cancelTarget.id}`);
+      toast({ tone: 'success', title: 'Fixture cancelled.' });
+      refetchFixtures();
+    } catch (err) {
+      throw new Error(`Could not cancel the fixture: ${err.message}`);
+    }
+  };
+
+  const crestOf = (id) => { const t = teams.find((x) => x.id === id); return t ? <Crest name={t.name} src={t.logo_url} color={t.team_color} size="sm" /> : null; };
+  const teamOptions = teams.map((t) => ({ value: t.id, label: t.name, icon: crestOf(t.id) }));
+  const bracketDivision = division === 'wsl' || division === 'freshers';
+  const teamPicker = (label, value, onChange, extra = {}) => (
+    <Field label={label} error={extra.error}>{(p) => <Combobox {...p} aria-label={label} value={value} onChange={onChange}
+      placeholder={extra.placeholder ?? 'Choose a team'} searchPlaceholder="Search teams" options={teamOptions} />}</Field>
+  );
+
   return (
-    <div className="p-6 space-y-8 animate-in fade-in duration-500">
-      
-      {/* LEAGUE TOGGLE */}
-      <div className="flex justify-center mb-8">
-        <DivisionSwitch value={division} onChange={setDivision} />
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <DivisionSwitch value={division} onChange={(next) => { setDivision(next); setSeason(''); }} />
+        <Field label="Season" className="lg:w-64">{(p) => <Select {...p} aria-label="Season" value={season} onChange={setSeason}
+          placeholder="No seasons yet" options={seasons.map((x) => ({ value: x.id, label: `${x.name}${x.is_current ? ' (current)' : ''}` }))} />}</Field>
       </div>
 
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-8 max-w-2xl mx-auto">
-        <h3 className="text-xl font-black uppercase tracking-widest text-white mb-6 flex items-center gap-3 justify-center">
-          <Calendar size={24} className="text-zinc-500" /> Fixture Generator
-        </h3>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex items-center gap-4">
-            {/* HOME TEAM SELECT */}
-            <div className="flex-1">
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Home Team</label>
-              <select required value={form.home_team_id} onChange={e => setForm({...form, home_team_id: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-white/30 appearance-none text-white">
-                <option value="" disabled className="bg-zinc-900 text-white">Select Home Team...</option>
-                {teams.map(t => <option key={t.id} value={t.id} className="bg-zinc-900 text-white">{t.name}</option>)}
-              </select>
-            </div>
-            
-            <div className="pt-6">
-              <Swords className="text-zinc-600 w-8 h-8" />
-            </div>
-            
-            {/* AWAY TEAM SELECT */}
-            <div className="flex-1">
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Away Team</label>
-              <select required value={form.away_team_id} onChange={e => setForm({...form, away_team_id: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-white/30 appearance-none text-white">
-                <option value="" disabled className="bg-zinc-900 text-white">Select Away Team...</option>
-                {teams.map(t => <option key={t.id} value={t.id} className="bg-zinc-900 text-white">{t.name}</option>)}
-              </select>
-            </div>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:items-start">
+        <section id="add-fixture" aria-labelledby="add-fixture-heading" className="glass scroll-mt-28 space-y-5 rounded-card p-5">
+          <div className="space-y-1">
+            <h2 id="add-fixture-heading" className="font-display text-2xl text-ink">Schedule a match</h2>
+            <p className="text-sm text-mut">Matches start at 0-0. Results are entered on the live desk.</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* DATE INPUT (Fixed with color-scheme:dark) */}
-            <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Kickoff Date & Time</label>
-              <input type="datetime-local" required value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-white/30 text-white [color-scheme:dark]" />
+          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
+              {teamPicker('Home team', form.home_team_id, (id) => set({ home_team_id: id }), { placeholder: 'Select home team' })}
+              {teamPicker('Away team', form.away_team_id, (id) => set({ away_team_id: id }), { placeholder: 'Select away team', error: errors.teams })}
+              <Field label="Kickoff">{(p) => <DateTimeField {...p} type="datetime-local" required value={form.date} onChange={(e) => set({ date: e.target.value })} />}</Field>
+              <Field label="Venue">{(p) => <TextInput {...p} icon={MapPin} required placeholder="e.g. Main turf" value={form.venue} onChange={(e) => set({ venue: e.target.value })} />}</Field>
             </div>
-            
-            {/* VENUE INPUT */}
-            <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Venue / Pitch</label>
-              <input type="text" placeholder="e.g. Main Turf" required value={form.venue} onChange={e => setForm({...form, venue: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-white/30 text-white" />
-            </div>
-          </div>
 
-          {/* WALKOVER SETTINGS */}
-          <div className="bg-black/30 border border-white/5 rounded-xl p-4 space-y-4">
-            <div className="flex items-center gap-3">
-              <input 
-                type="checkbox" 
-                id="walkover-toggle"
-                checked={form.is_walkover}
-                onChange={(e) => setForm({...form, is_walkover: e.target.checked, walkover_winner: e.target.checked ? 'home' : ''})}
-                className="w-4 h-4 accent-white"
-              />
-              <label htmlFor="walkover-toggle" className="text-sm font-bold text-white uppercase tracking-widest cursor-pointer">Register as Walkover (Instant 3-0 Win)</label>
+            <div className="space-y-4 rounded-ctl border border-line p-4">
+              <Switch label="Register as walkover (3-0 win)" checked={form.is_walkover} onChange={(on) => set({ is_walkover: on, walkover_winner: on ? form.walkover_winner : '' })} />
+              {form.is_walkover && (
+                <div className="grid grid-cols-1 gap-4">
+                  <Field label="Awarded to" error={errors.winner}>{(p) => <SegmentedControl aria-labelledby={p['aria-labelledby']} value={form.walkover_winner} onChange={(v) => set({ walkover_winner: v })}
+                    options={[{ value: 'home', label: 'Home team' }, { value: 'away', label: 'Away team' }]} />}</Field>
+                  <Field label="Reason" required hint="Shown on the result, for example no-show or ineligible player." error={errors.reason} value={form.walkover_reason} onChange={(e) => set({ walkover_reason: e.target.value })} />
+                </div>
+              )}
             </div>
-            
-            {form.is_walkover && (
-              <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-white/5">
-                <label className="block text-xs font-bold text-red-400 uppercase tracking-widest mb-2">Who gets the 3-0 Win?</label>
-                <select 
-                  required={form.is_walkover}
-                  value={form.walkover_winner} 
-                  onChange={e => setForm({...form, walkover_winner: e.target.value})} 
-                  className="w-full bg-red-950/30 border border-red-500/30 rounded-xl px-4 py-3 outline-none focus:border-red-500/50 appearance-none text-red-200"
-                >
-                  <option value="" disabled>Select the Winner...</option>
-                  <option value="home">Home Team (Left)</option>
-                  <option value="away">Away Team (Right)</option>
-                </select>
-              </div>
-            )}
-          </div>
 
-          <button type="submit" disabled={loading} className="w-full bg-white text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-zinc-200 transition-colors mt-4">
-            {loading ? (form.is_walkover ? "Registering Walkover..." : "Locking in Fixture...") : (form.is_walkover ? "Register Walkover" : "Schedule Match")}
-          </button>
-        </form>
+            {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
+
+            <Button type="submit" disabled={loading || !season} size="lg" className="w-full">
+              <CalendarPlus size={17} aria-hidden="true" />{loading ? 'Saving...' : form.is_walkover ? 'Register walkover' : 'Schedule match'}
+            </Button>
+          </form>
+        </section>
+
+        <section className="space-y-3" aria-labelledby="fixtures-heading">
+          <h2 id="fixtures-heading" className="eyebrow">Fixtures in this season</h2>
+          {fixtures.length === 0 && <div className="flex flex-col items-start gap-2 rounded-card border border-dashed border-line p-6 text-sm text-mut">
+            <CalendarPlus size={26} aria-hidden="true" />
+            <p className="font-semibold text-ink">No fixtures in this season yet</p>
+            Schedule the first match with the form.
+          </div>}
+          {fixtures.length > 0 && (
+            <ul aria-label="Fixtures" className="glass divide-y divide-line/70 rounded-card px-2">
+              {fixtures.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap">
+                  <div className="w-24 shrink-0 text-xs tabular-nums text-mut">{formatKickoff(m.date) || 'Not set'}</div>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    {[[m.home_team_id, m.home_team_name], [m.away_team_id, m.away_team_name]].map(([id, name]) => (
+                      <span key={id} className="flex min-w-0 items-center gap-2.5">{crestOf(id)}<span className="min-w-0 truncate text-sm font-black uppercase tracking-tight text-ink">{name}</span></span>
+                    ))}
+                    <span className="sr-only">{m.home_team_name} vs {m.away_team_name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-mut">
+                    {m.status === 'live' && <Pill tone="live">Live</Pill>}
+                    {m.status === 'completed' && <span className="font-display text-sm tabular-nums text-ink">{m.home_score} - {m.away_score}</span>}
+                    <span className="hidden items-center gap-1 md:inline-flex"><MapPin size={13} aria-hidden="true" />{m.venue || 'No venue'}</span>
+                  </div>
+                  <div className="ml-auto flex shrink-0">
+                    <Button variant="quiet" size="sm" className="px-3" aria-label={`Edit ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => openEdit(m)}><Pencil size={15} aria-hidden="true" /></Button>
+                    <Button variant="quiet" size="sm" className="px-3 text-live" aria-label={`Cancel ${m.home_team_name} vs ${m.away_team_name}`} onClick={() => setCancelTarget(m)}><X size={16} aria-hidden="true" /></Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
 
-      {/* RENDER THE SCHEDULE MAP FOR BRACKET DIVISIONS */}
-      {(division === 'wsl' || division === 'freshers') && (
-        <div className="mt-16 pt-8 border-t border-white/10">
-          <div className="text-center mb-8">
-            <h3 className="text-sm font-black text-zinc-500 uppercase tracking-widest mb-2">Live Preview</h3>
-            <p className="text-xs text-zinc-400">This is how the bracket will look to the public based on the chronologically scheduled dates.</p>
+      <Sheet open={Boolean(editing)} onClose={() => setEditing(null)} title="Edit fixture">
+        {editing && (
+          <form onSubmit={saveEdit} className="space-y-4">
+            {teamPicker('Home team', editing.home_team_id, (id) => setEditing({ ...editing, home_team_id: id }))}
+            {teamPicker('Away team', editing.away_team_id, (id) => setEditing({ ...editing, away_team_id: id }), { error: editError.startsWith('A team') ? editError : undefined })}
+            <Field label="Kickoff" hint={`Now: ${formatKickoff(editing.kickoff) || 'not set'}. Leave blank to keep it.`}>{(p) => <DateTimeField {...p} type="datetime-local" value={editing.date} onChange={(e) => setEditing({ ...editing, date: e.target.value })} />}</Field>
+            <Field label="Venue">{(p) => <TextInput {...p} icon={MapPin} value={editing.venue} onChange={(e) => setEditing({ ...editing, venue: e.target.value })} />}</Field>
+            {editError && !editError.startsWith('A team') && <Notice tone="error">{editError}</Notice>}
+            <Button type="submit" size="lg" className="w-full">Save fixture</Button>
+          </form>
+        )}
+      </Sheet>
+
+      <ConfirmDialog
+        open={Boolean(cancelTarget)}
+        onOpenChange={(open) => { if (!open) setCancelTarget(null); }}
+        title="Cancel this fixture?"
+        description={cancelTarget ? `${cancelTarget.home_team_name} vs ${cancelTarget.away_team_name} is removed from the season. Matches with results cannot be removed.` : ''}
+        confirmLabel="Cancel fixture"
+        cancelLabel="Keep fixture"
+        tone="danger"
+        onConfirm={cancelFixture}
+      />
+
+      {bracketDivision && (
+        <section className="space-y-3 border-t border-line pt-8">
+          <div>
+            <h2 className="font-display text-2xl font-black uppercase tracking-tight text-ink">Bracket preview</h2>
+            <p className="text-sm text-mut">How the public bracket looks, from the scheduled dates.</p>
           </div>
-          
-          <div className="opacity-90 scale-95 origin-top">
-            {division === 'wsl' ? (
-              <WomensBracket matches={bracketMatches} title="Bracket Preview" buttonText="Current mapping of slots" />
-            ) : (
-              <FreshersBracket matches={bracketMatches} title="Bracket Preview" buttonText="Current mapping of slots" />
-            )}
-          </div>
-        </div>
+          {division === 'wsl' ? (
+            <WomensBracket matches={bracketMatches} title="Bracket preview" buttonText="Current mapping of slots" />
+          ) : (
+            <FreshersBracket matches={bracketMatches} title="Bracket preview" buttonText="Current mapping of slots" />
+          )}
+        </section>
       )}
-
     </div>
   );
 }

@@ -37,6 +37,10 @@ vi.mock('../../../lib/supabase', () => ({
 }));
 
 import ManageRosters from '../ManageRosters';
+import { optionsOf, pick as choose, trigger } from './listbox';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 function connection() {
   if (TARGET === 'local') {
@@ -122,10 +126,12 @@ async function removeFixtures() {
 }
 
 const type = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
-const statusText = async (re) => waitFor(() => expect(screen.getByRole('status').textContent).toMatch(re), { timeout: 15000 });
-const option = (name) => waitFor(() => expect(screen.getByRole('option', { name })).toBeTruthy(), { timeout: 15000 });
+// The open sheet repeats the page's notices, so look at every status region.
+const statusText = async (re) => waitFor(() => expect(screen.getAllByRole('status').map((n) => n.textContent).join(' ')).toMatch(re), { timeout: 15000 });
 
 // The new player's account comes first: searched by email and chosen in the form.
+// The creator lives in the "Add player" sheet, so open it first. The team header button comes before the empty-state one.
+const openAddPlayer = () => fireEvent.click(screen.getAllByRole('button', { name: 'Add player' })[0]);
 async function chooseNewAccount(email) {
   type('New player email search', email);
   const list = await screen.findByRole('list', { name: 'New player matches' }, { timeout: 15000 });
@@ -133,12 +139,14 @@ async function chooseNewAccount(email) {
 }
 
 async function openTeam(team) {
-  await option(`SL Check ${tag}`);
-  type('Division', made.division);
-  await option(`${tag} 2026 (current)`);
-  type('Season', made.seasons.now);
-  await option(`${tag} Alpha`);
-  type('Team', made.entries[team]);
+  const ready = (label) => waitFor(() => expect(trigger(label).disabled).toBe(false), { timeout: 15000 });
+  await ready('Division');
+  await waitFor(async () => expect(await optionsOf('Division')).toContain(`SL Check ${tag}`), { timeout: 15000 });
+  await choose('Division', `SL Check ${tag}`);
+  await ready('Season');
+  await choose('Season', `${tag} 2026 (current)`);
+  await ready('Team');
+  await choose('Team', `${tag} ${team}`);
 }
 
 describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? 'skipped'})`, () => {
@@ -167,25 +175,26 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
 
   it('a dictator manages the season\'s teams and roster, every write persisted', async () => {
     holder.client = dictator.client;
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    globalThis.confirmAnswer = vi.fn(async () => true);
     render(<ManageRosters />);
     await openTeam('Alpha');
     await screen.findByText(/no players on this roster yet/i, {}, { timeout: 15000 });
 
     // Gamma played only last season: add it to this season.
-    type('Existing team', made.teams.Gamma);
+    await choose('Existing team', `${tag} Gamma`);
     fireEvent.click(screen.getByRole('button', { name: /add team/i }));
     await statusText(/Gamma added to/);
     expect(must(await admin.from('team_entries').select('id').eq('team_id', made.teams.Gamma).eq('season_id', made.seasons.now))).toHaveLength(1);
 
     // Create a player on Alpha's roster for Ada's verified account.
     const adaAccount = await verifiedAccount('ada');
-    const form = screen.getByRole('form', { name: 'New player' });
+    openAddPlayer();
+    const form = await screen.findByRole('form', { name: 'New player' }, { timeout: 15000 });
     await chooseNewAccount(adaAccount.email);
     type('New first name', `${tag}Ada`);
     type('New last name', 'Striker');
     type('New jersey', '9');
-    type('New position', 'ST');
+    await choose('New position', 'ST');
     type('New rating', '74');
     fireEvent.click(within(form).getByRole('button', { name: /create player/i }));
     await statusText(/Ada Striker added to .*linked to/);
@@ -195,8 +204,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(ada.roster_memberships).toEqual([expect.objectContaining({ team_entry_id: made.entries.Alpha, jersey_number: 9, position: 'ST' })]);
 
     // Edit the card and the roster place.
-    await option(/9 · .*Ada Striker · ST/);
-    type('Player', ada.roster_memberships[0].id);
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Ada Striker$/ }));
     type('Edit last name', 'Finisher');
     type('Edit jersey', '10');
     fireEvent.click(screen.getByRole('button', { name: /save player/i }));
@@ -205,6 +213,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(must(await admin.from('roster_memberships').select('jersey_number').eq('id', ada.roster_memberships[0].id).single()).jersey_number).toBe(10);
 
     // Add last season's player: the same identity now has a roster place in two seasons.
+    openAddPlayer();
     type('Search players', `${tag}Vera`); // searched as you type, through search_players
     const list = await screen.findByRole('list', { name: 'Matching players' }, { timeout: 15000 });
     expect(within(list).getByText(/Latest: .*· #/)).toBeTruthy(); // the earlier season's roster place tells them apart
@@ -215,17 +224,15 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     expect(must(await admin.from('players').select('id').eq('first_name', `${tag}Vera`))).toHaveLength(1);
 
     // Move Ada to Beta within the season.
-    await option(/10 · .*Ada Finisher/);
-    type('Player', ada.roster_memberships[0].id);
-    type('Move to team', made.entries.Beta);
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Ada Finisher$/ }));
+    await choose('Move to team', `${tag} Beta`);
     fireEvent.click(screen.getByRole('button', { name: /^move$/i }));
     await statusText(/Moved to/);
     expect(must(await admin.from('roster_memberships').select('team_entry_id').eq('id', ada.roster_memberships[0].id).single()).team_entry_id).toBe(made.entries.Beta);
 
     // Remove the veteran from this season's roster: the player and last season's place stay.
-    const veteranPlace = must(await admin.from('roster_memberships').select('id').eq('player_id', made.veteran).eq('season_id', made.seasons.now).single()).id;
-    await option(/Vera Veteran/);
-    type('Player', veteranPlace);
+    must(await admin.from('roster_memberships').select('id').eq('player_id', made.veteran).eq('season_id', made.seasons.now).single()).id;
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Vera Veteran$/ }));
     fireEvent.click(screen.getByRole('button', { name: /remove from roster/i }));
     await statusText(/Removed from the roster/);
     expect(must(await admin.from('roster_memberships').select('season_id').eq('player_id', made.veteran))).toEqual([{ season_id: made.seasons.old }]);
@@ -233,7 +240,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
 
   it('a dictator creates a team in the season and deletes a player who never played', async () => {
     holder.client = dictator.client;
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirm = globalThis.confirmAnswer = vi.fn(async () => true);
     render(<ManageRosters />);
     await openTeam('Alpha');
 
@@ -243,11 +250,12 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     await statusText(new RegExp(`${tag} Delta created and added to ${tag} 2026`));
     const delta = must(await admin.from('teams').select('id, team_entries(id, season_id)').eq('name', `${tag} Delta`).single());
     expect(delta.team_entries).toEqual([expect.objectContaining({ season_id: made.seasons.now })]);
-    await waitFor(() => expect(within(screen.getByLabelText('Team')).getByRole('option', { name: `${tag} Delta` })).toBeTruthy(), { timeout: 15000 });
+    await waitFor(async () => expect(await optionsOf('Team')).toContain(`${tag} Delta`), { timeout: 15000 });
 
     // Give Delta a player who never plays, then delete them for good (delete_unplayed_player).
-    type('Team', delta.team_entries[0].id);
+    await choose('Team', `${tag} Delta`);
     await screen.findByText(/no players on this roster yet/i, {}, { timeout: 15000 });
+    openAddPlayer();
     await chooseNewAccount((await verifiedAccount('temp')).email);
     type('New first name', `${tag}Temp`);
     type('New last name', 'Trialist');
@@ -255,11 +263,10 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     await statusText(/Temp Trialist added to/);
     const temp = must(await admin.from('players').select('id, roster_memberships(id)').eq('first_name', `${tag}Temp`).single());
     expect(temp.roster_memberships).toHaveLength(1);
-    await option(/Temp Trialist/);
-    type('Player', temp.roster_memberships[0].id);
+    fireEvent.click(await screen.findByRole('button', { name: /^Edit .*Temp Trialist$/ }));
     fireEvent.click(screen.getByRole('button', { name: /delete player/i }));
     await statusText(/Temp Trialist deleted/);
-    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/Delete .*Temp Trialist for good/));
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringMatching(/Delete .*Temp Trialist for good/) }));
     expect(must(await admin.from('players').select('id').eq('id', temp.id))).toEqual([]);
     expect(must(await admin.from('roster_memberships').select('id').eq('player_id', temp.id))).toEqual([]);
   }, 120000);
@@ -270,6 +277,7 @@ describe.skipIf(!TARGET)(`ManageRosters through the real Data API (${TARGET ?? '
     await openTeam('Alpha');
     // No account is offered to a normal user, and the creator itself refuses them.
     const spare = await verifiedAccount('refused');
+    openAddPlayer();
     type('New player email search', spare.email);
     await screen.findByText(/No verified account matches/, {}, { timeout: 15000 });
     expect(screen.queryByLabelText('New first name')).toBeNull();

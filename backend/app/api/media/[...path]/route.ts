@@ -1,5 +1,6 @@
 
 import { StorageError, videoBase } from '@/lib/storage';
+import { publicClient } from '@/lib/supabase/clients';
 
 const allowedStreams = new Set([
   'superLeague1', 'superLeague2', 'superLeague3',
@@ -11,7 +12,6 @@ type RouteContext = { params: Promise<{ path: string[] }> };
 
 function getAllowedPath(path: string[]) {
   if (!path.length || path.some((part) => !/^[a-zA-Z0-9._-]+$/.test(part) || part === '.' || part === '..')) return null;
-  if (!allowedStreams.has(path[0])) return null;
   return path.join('/');
 }
 
@@ -25,6 +25,12 @@ async function proxyMedia(request: Request, context: RouteContext) {
   const { path } = await context.params;
   const relativePath = getAllowedPath(path);
   if (!relativePath) return Response.json({ error: 'Media path not found' }, { status: 404 });
+  if (!allowedStreams.has(path[0])) {
+    const { data, error } = await publicClient().from('divisions').select('id')
+      .eq('landing_video_key', path[0]).eq('visibility', 'public').is('archived_at', null).limit(1);
+    if (error) return Response.json({ error: 'Could not validate video' }, { status: 503 });
+    if (!data?.length) return Response.json({ error: 'Media path not found' }, { status: 404 });
+  }
 
   let videoBaseUrl: string;
   try {

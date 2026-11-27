@@ -24,6 +24,8 @@ beforeEach(() => {
   rpc.mockReset();
   globalThis.fetch = vi.fn();
   URL.createObjectURL = vi.fn(() => 'blob:local');
+  // Pictures are measured before they are shown: a 500 x 500 image loads at once.
+  vi.stubGlobal('Image', class { set src(v) { this._src = v; setTimeout(() => { this.naturalWidth = 500; this.naturalHeight = 500; this.onload?.(); }, 0); } });
 });
 afterEach(() => cleanup());
 
@@ -35,7 +37,7 @@ describe('your player card', () => {
     expect(card().getAttribute('aria-busy')).toBe('true');
     await act(async () => resolve({ data: null, error: null }));
     expect(screen.getByText(/No player is linked to your account/)).toBeTruthy();
-    expect(screen.queryByLabelText('Preferred foot')).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Preferred foot' })).toBeNull();
   });
 
   it('reports a load failure and retries', async () => {
@@ -43,13 +45,13 @@ describe('your player card', () => {
     render(<MyPlayerCard />);
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/offline/));
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await waitFor(() => expect(screen.getByLabelText('Preferred foot')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('radiogroup', { name: 'Preferred foot' })).toBeTruthy());
   });
 
   it('shows the card read-only except portrait and foot, and the seasons', async () => {
     rpc.mockResolvedValueOnce({ data: me, error: null });
     render(<MyPlayerCard />);
-    await waitFor(() => expect(screen.getByLabelText('Preferred foot').value).toBe('Right'));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Right' }).getAttribute('aria-checked')).toBe('true'));
     expect(card().textContent).toMatch(/Play style: Power Shot/);
     expect(within(card()).getByText('70')).toBeTruthy();
     expect(screen.queryByLabelText(/rating|first name|pace|play style/i)).toBeNull();
@@ -63,11 +65,11 @@ describe('your player card', () => {
     rpc.mockImplementation(async (name) => (name === 'my_player' ? { data: me, error: null } : { data: null, error: null }));
     fetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, imageUrl: 'https://media.example/players/p1.png?v2' }) });
     render(<MyPlayerCard />);
-    await waitFor(() => expect(screen.getByLabelText('Preferred foot')).toBeTruthy());
-    fireEvent.change(screen.getByLabelText('Preferred foot'), { target: { value: 'Left' } });
+    await waitFor(() => expect(screen.getByRole('radiogroup', { name: 'Preferred foot' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('radio', { name: 'Left' }));
     expect(card().textContent).toMatch(/Left/);
     fireEvent.change(screen.getByLabelText('Portrait file'), { target: { files: [png()] } });
-    expect(within(card()).getByAltText('Ada Striker portrait').getAttribute('src')).toBe('blob:local');
+    await waitFor(() => expect(within(card()).getByAltText('Ada Striker portrait').getAttribute('src')).toBe('blob:local'));
     fireEvent.click(screen.getByRole('button', { name: /save card/i }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/saved/));
     const [url, init] = fetch.mock.calls[0];
@@ -84,6 +86,7 @@ describe('your player card', () => {
     render(<MyPlayerCard />);
     await waitFor(() => expect(screen.getByLabelText('Portrait file')).toBeTruthy());
     fireEvent.change(screen.getByLabelText('Portrait file'), { target: { files: [png()] } });
+    await waitFor(() => expect(within(card()).getByAltText('Ada Striker portrait').getAttribute('src')).toBe('blob:local'));
     fireEvent.click(screen.getByRole('button', { name: /save card/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/did not upload: Choose a 500 x 500 PNG image\. Nothing was changed/));
     expect(rpc).not.toHaveBeenCalledWith('update_my_player', expect.anything());

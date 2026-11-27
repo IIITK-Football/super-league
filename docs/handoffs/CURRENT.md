@@ -6,6 +6,18 @@ handoff steps.
 
 ## Status
 
+- 2026-11-27: Codex's revamp is in `feat/site-revamp` at `0acca25`, based on `upstream/develop` `9fd7a7f`; the fork's `origin/develop` matches upstream. The revamp branch is local and has not been pushed.
+- The local stack on 54322 includes migrations through `20261209000000`; the existing extra card and five account passwords remain. The local app on 5173 and a public quick tunnel are running. The tunnel permits sign-in and editing.
+- Verification: 629 pgTAP checks, 432 frontend tests (20 skipped), 114 Worker tests and 39 backend API tests passed; frontend build and backlog check passed. Frontend lint has 66 warnings, no errors. Phase 9 work is implemented in part but its backlog gates and owner checks remain open.
+- Next: review the revamp diff and Phase 9 item acceptance, then push a feature branch and prepare a PR when requested. No staging or production verification was performed for these changes.
+- Follow-up: the news carousel advances smoothly with pause and reduced-motion controls; the live hero and recent results fit phone widths. Focused frontend tests, build, lint and a 375px browser check passed (lint retains 66 warnings).
+- Carousel follow-up: React Bits-inspired subtle card depth and 12-second advance, paused offscreen and while interacting. Focused tests, build, lint and a 375px browser autoplay check passed.
+- Carousel refinement: centered story with neighboring cards on a gentle arc, without angled text. Focused frontend tests, build, lint and a phone-width browser check passed.
+- Latest carousel: continuous looping motion with card depth computed from position, pause and reduced-motion support. Focused tests, build and phone-width browser checks passed.
+- Orbit refinement: news cards travel around a slower ellipse with gradual depth fading, touch controls, pause and reduced-motion handling. Focused tests, build, lint and mobile browser checks passed.
+- Fixed carousel cards covering the sticky navigation by isolating their stacking context; verified desktop scroll positions and the mobile menu in the browser.
+- Removed the carousel pause button at the owner's request. Motion stops after keyboard focus or touch, and remains off for reduced motion; refreshing restarts it.
+
 - 2026-11-27: Claude holds the work, in the main checkout on `develop`.
 - SL-040 and SL-044 are done, so Phase 4 is complete (`pnpm work phase 4` confirms it). Every active test group passed on 2026-11-27 after the toolchain update.
 - The owner asked to stop before SL-045: do not plan or start it until they say so.

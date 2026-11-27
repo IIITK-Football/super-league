@@ -1,13 +1,39 @@
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useEffect, useState } from 'react';
+import { Mail, Lock } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { GlassPanel } from '../components/GlassPanel';
-import { ArrowLeft, LogIn, Mail } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Link } from 'react-router-dom';
+import { roleHome } from '../lib/authApi';
 import { TurnstileWidget, turnstileSiteKey } from '../components/TurnstileWidget';
+import { Button, Field, Notice, TextInput } from '../components/ui';
 
+// The Super League mark, drawn in the ink colour through a mask of the logo file.
+const MARK_MASK = {
+  maskImage: 'url(/slklogo3.png)', WebkitMaskImage: 'url(/slklogo3.png)', maskSize: 'contain', WebkitMaskSize: 'contain',
+  maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat', maskPosition: 'center', WebkitMaskPosition: 'center',
+};
+const PILL = 'inline-flex min-h-11 w-full items-center justify-center rounded-pill bg-ink px-6 text-sm font-black uppercase tracking-[0.2em] text-bg transition hover:opacity-85 disabled:pointer-events-none disabled:opacity-40';
+const GLASS_PILL = 'glass inline-flex min-h-11 w-full items-center justify-center rounded-pill px-6 text-sm font-black uppercase tracking-[0.2em] text-ink transition hover:text-mut';
+
+// The centred glass card every sign-in screen shares: the mark, a big heading, then the form.
+function AuthShell({ heading, children }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-12 text-ink">
+      <section className="glass flex w-full max-w-md flex-col gap-8 rounded-card p-6 sm:p-10">
+        <span role="img" aria-label="Super League, IIIT Kottayam" className="block size-12 bg-ink" style={MARK_MASK} />
+        <h1 className="font-display text-4xl text-ink sm:text-5xl">{heading}</h1>
+        {children}
+      </section>
+    </main>
+  );
+}
+
+
+
+// The one sign-in for people. The page they were headed to is kept (router state, or sessionStorage after Google
+// sends them back here), then their role's home, then the home page.
 export function Login() {
-  const { signInWithGoogle, signInWithPassword, signUpWithPassword, requestPasswordReset, roles, loading, user } = useAuth();
+  const { signInWithGoogle, signInWithPassword, signUpWithPassword, requestPasswordReset, roles, rolesError, retryAuth, accessError, loading, user } = useAuth();
   const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'reset'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,29 +45,18 @@ export function Login() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // The page the user was sent from, if any. Without one we keep the role-based default below.
-  const from = location.state?.from?.pathname;
-
-  // Save the destination before authentication.
+  // Where the person was headed: the route that sent them here, or this page when it is rendered inline.
+  const from = location.state?.from?.pathname || (location.pathname !== '/login' ? location.pathname : null);
   useEffect(() => {
-    if (from && from !== "/") {
-      sessionStorage.setItem('authRedirect', from);
-    }
+    if (from && from !== '/') sessionStorage.setItem('authRedirect', from);
   }, [from]);
 
-  // 3. When the user comes back and is authenticated, send them to the saved route
   useEffect(() => {
-    if (user && roles) {
-      // The first workspace the person's grants open: dictator, then captain, editor and scorer. A normal user goes home.
-      const destination = roles.includes('dictator') ? '/dictator'
-        : roles.includes('captain') ? '/team-builder'
-        : roles.includes('editor') ? '/editor'
-        : roles.includes('scorer') ? '/dictator'
-        : '/';
-      sessionStorage.removeItem('authRedirect'); 
-      navigate(destination, { replace: true });
-    }
-  }, [user, roles, navigate]);
+    if (!user || loading || !roles) return;
+    const saved = sessionStorage.getItem('authRedirect');
+    sessionStorage.removeItem('authRedirect');
+    navigate(saved && saved !== '/login' ? saved : roleHome(roles), { replace: true });
+  }, [user, roles, loading, navigate]);
 
   const switchMode = (next) => {
     setMode(next);
@@ -83,57 +98,57 @@ export function Login() {
     setBusy(false);
   };
 
-  const inputClass = 'w-full rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-sm text-white placeholder-zinc-600 focus:border-white/40 focus:outline-none';
+  const heading = { signin: 'Sign in', signup: 'Create an account', reset: 'Reset your password' }[mode];
+  const submitLabel = { signin: 'Sign in', signup: 'Create account', reset: 'Send reset link' }[mode];
+  const shownError = error || accessError;
 
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background aesthetics */}
-      <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-white/5 rounded-full blur-[120px] -z-10 mix-blend-screen" />
-      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-zinc-500/10 rounded-full blur-[100px] -z-10 mix-blend-screen" />
+    <AuthShell heading={heading}>
+      <div className="space-y-3">
+        <p className="text-mut">Use your college account. Only @iiitkottayam.ac.in addresses can sign in.</p>
+      </div>
 
-      <GlassPanel className="max-w-md w-full p-8 sm:p-12 text-center relative z-10 border border-white/10 bg-black/60 backdrop-blur-2xl">
-        <Link to="/" className="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-white uppercase tracking-widest mb-8"><ArrowLeft size={14} /> Back</Link>
-        <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
-          Super League
-        </h1>
-        <p className="text-zinc-400 font-medium mb-8 tracking-wide uppercase text-sm">
-          Sign in with your college account
-        </p>
-        <button type="button" onClick={handleGoogle} disabled={loading || busy} className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white/5 py-4 text-sm font-black uppercase tracking-widest text-white transition-colors hover:bg-white/10 disabled:opacity-50">
-          <LogIn size={17} /> Continue with Google
-        </button>
-
-        <div className="my-6 flex items-center gap-3 text-[10px] uppercase tracking-widest text-zinc-600">
-          <span className="h-px flex-1 bg-white/10" /> or use email and password <span className="h-px flex-1 bg-white/10" />
+      {rolesError && (
+        <div className="flex flex-col items-start gap-2">
+          <Notice tone="error" role="alert">We could not load your access. Check your connection and try again.</Notice>
+          <Button variant="secondary" size="sm" onClick={retryAuth}>Try again</Button>
         </div>
+      )}
+      {shownError && <Notice tone="error" role="alert">{shownError}</Notice>}
+      {notice && <Notice tone="success">{notice}</Notice>}
 
-        <form onSubmit={handleSubmit} className="space-y-3 text-left" noValidate>
-          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-500" htmlFor="login-email">College email</label>
-          <input id="login-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@iiitkottayam.ac.in" className={inputClass} required />
-          {mode !== 'reset' && (
-            <>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-500" htmlFor="login-password">Password</label>
-              <input id="login-password" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} required />
-            </>
-          )}
-          <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
-          {error && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs font-bold text-red-400">{error}</p>}
-          {notice && <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs font-bold text-emerald-300">{notice}</p>}
-          <button type="submit" disabled={busy || loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-sm font-black uppercase tracking-widest text-black transition-colors hover:bg-zinc-200 disabled:opacity-50">
-            <Mail size={16} /> {mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
+      {mode !== 'reset' && (
+        <>
+          <button type="button" onClick={handleGoogle} disabled={loading || busy} className={GLASS_PILL}>
+            Continue with Google
           </button>
-        </form>
+          <p className="eyebrow text-center">or use your email and password</p>
+        </>
+      )}
 
-        <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] uppercase tracking-widest text-zinc-500">
-          {mode !== 'signin' && <button type="button" onClick={() => switchMode('signin')} className="hover:text-white">Sign in</button>}
-          {mode !== 'signup' && <button type="button" onClick={() => switchMode('signup')} className="hover:text-white">Create account</button>}
-          {mode !== 'reset' && <button type="button" onClick={() => switchMode('reset')} className="hover:text-white">Forgot password</button>}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+        <Field label="College email">
+          {(p) => <TextInput {...p} icon={Mail} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@iiitkottayam.ac.in" required />}
+        </Field>
+        {mode !== 'reset' && (
+          <Field label="Password" hint={mode === 'signup' ? 'At least 8 characters, and not your email address.' : undefined}>
+            {(p) => <TextInput {...p} icon={Lock} type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={(e) => setPassword(e.target.value)} required />}
+          </Field>
+        )}
+        <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
+        <button type="submit" disabled={busy || loading} className={PILL}>
+          {submitLabel}
+        </button>
+      </form>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          {mode !== 'signin' && <Button variant="quiet" size="sm" onClick={() => switchMode('signin')}>Sign in</Button>}
+          {mode !== 'signup' && <Button variant="quiet" size="sm" onClick={() => switchMode('signup')}>Create account</Button>}
+          {mode !== 'reset' && <Button variant="quiet" size="sm" onClick={() => switchMode('reset')}>Forgot password</Button>}
         </div>
-
-        <p className="mt-8 text-xs text-zinc-600 uppercase tracking-widest font-black">
-          Only @iiitkottayam.ac.in accounts can sign in
-        </p>
-      </GlassPanel>
-    </div>
+        <Link to="/" className="eyebrow inline-flex min-h-11 items-center hover:text-ink">Back to home</Link>
+      </div>
+    </AuthShell>
   );
 }

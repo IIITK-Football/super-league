@@ -59,7 +59,8 @@ describe('season-scoped pages', () => {
     const url = queries().find((u) => u.pathname.endsWith('/leaderboard'));
     expect(url.searchParams.get('division')).toBe('wsl');
     expect(url.searchParams.get('season')).toBe('2027');
-    expect(await screen.findByText(/WSL 2027 Player Stats/i)).toBeTruthy();
+    expect(await screen.findByText('WSL 2027')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Player stats' })).toBeTruthy();
   });
 
   it('fantasy schedule, players and leaderboard requests carry the chosen season', async () => {

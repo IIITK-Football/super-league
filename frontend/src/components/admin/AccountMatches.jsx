@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link2, Loader2, RefreshCw, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { ghostButton, primaryButton } from './adminStyles';
 import { linkErrorMessage } from './PlayerAccountLink';
+import { Button, Card, Notice, Pill, Table, useConfirm } from '../ui';
 
 // Account matching, for a dictator: legacy players without an account are matched to verified accounts by exact email
 // (never by name). The preview is live (account_link_matches); "Link all ready matches" sends exactly the ready pairs
@@ -18,6 +17,7 @@ export const MATCH_STATUS = {
 const ORDER = ['ready', 'duplicate', 'conflict', 'waiting_verification', 'no_account'];
 
 export default function AccountMatches({ onChanged }) {
+  const confirm = useConfirm();
   const [state, setState] = useState({ status: 'loading', rows: [], error: '' });
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -35,7 +35,7 @@ export default function AccountMatches({ onChanged }) {
   const ready = state.rows.filter((r) => r.status === 'ready');
 
   const applyAll = async () => {
-    if (!window.confirm(`Link ${ready.length} player${ready.length === 1 ? '' : 's'} to their verified accounts?`)) return;
+    if (!(await confirm({ title: `Link ${ready.length} player${ready.length === 1 ? '' : 's'}?`, description: 'Each player is linked to their verified account.', confirmLabel: 'Link players' }))) return;
     setBusy('apply'); setError(''); setMessage('');
     const { data, error: err } = await supabase.rpc('apply_account_link_matches', { p_expected: ready.map(({ player_id, user_id }) => ({ player_id, user_id })) });
     setBusy('');
@@ -46,7 +46,7 @@ export default function AccountMatches({ onChanged }) {
     onChanged?.();
   };
   const dismiss = async (row) => {
-    if (!window.confirm(`Dismiss the waiting email of ${row.player_name}? The player stays as is, without an account; you can still link them by hand.`)) return;
+    if (!(await confirm({ title: 'Dismiss the waiting email?', description: `${row.player_name} stays as is, without an account. You can still link them by hand.`, confirmLabel: 'Dismiss', tone: 'danger' }))) return;
     setBusy(`dismiss-${row.player_id}`); setError(''); setMessage('');
     const { error: err } = await supabase.rpc('dismiss_player_link_key', { p_player: row.player_id });
     setBusy('');
@@ -55,35 +55,33 @@ export default function AccountMatches({ onChanged }) {
     load();
   };
 
-  return <details className="rounded-2xl border border-white/10 bg-white/[.02] p-5" open>
-    <summary className="cursor-pointer text-sm font-black uppercase tracking-wider text-zinc-300">Account matching</summary>
-    <div className="mt-3 space-y-3">
-      <p className="text-xs text-zinc-500">Players from before accounts were required are matched to verified accounts by their exact email, never by name. Anything not ready stays unlinked for you to resolve.</p>
-      {state.status === 'loading' && <p className="text-sm text-zinc-500"><Loader2 size={13} className="inline animate-spin" /> Loading matches...</p>}
-      {state.status === 'error' && <p role="alert" className="text-sm text-red-300">The matches could not be loaded ({state.error}). <button type="button" onClick={load} className="underline">Try again</button></p>}
-      {state.status === 'ready' && !state.rows.length && <p className="text-sm text-zinc-500">No players are waiting for an account.</p>}
+  return <Card as="details" open className="space-y-4 p-4">
+    <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-ink">Account matching</summary>
+    <div className="space-y-4">
+      <p className="text-sm text-mut">Players from before accounts were required are matched to verified accounts by their exact email, never by name. Anything not ready stays unlinked for you to resolve.</p>
+      {state.status === 'loading' && <p className="text-sm text-mut">Loading matches...</p>}
+      {state.status === 'error' && <Notice tone="error" role="alert">The matches could not be loaded ({state.error}). <Button variant="quiet" size="sm" onClick={load}>Try again</Button></Notice>}
+      {state.status === 'ready' && !state.rows.length && <p className="text-sm text-mut">No players are waiting for an account.</p>}
       {state.status === 'ready' && state.rows.length > 0 && <>
-        <ul aria-label="Match counts" className="flex flex-wrap gap-2 text-xs">
-          {ORDER.map((k) => <li key={k} className="rounded-full border border-white/10 px-3 py-1 text-zinc-300">{MATCH_STATUS[k].label}: <span className="font-bold text-white">{counts[k]}</span></li>)}
+        <ul aria-label="Match counts" className="flex flex-wrap gap-2">
+          {ORDER.map((k) => <li key={k}><Pill>{MATCH_STATUS[k].label}: <span className="font-display text-sm tabular-nums text-ink">{counts[k]}</span></Pill></li>)}
         </ul>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={applyAll} disabled={!ready.length || busy === 'apply'} className={primaryButton}>
-            {busy === 'apply' ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Link all {ready.length} ready match{ready.length === 1 ? '' : 'es'}
-          </button>
-          <button type="button" onClick={load} className={ghostButton}><RefreshCw size={13} /> Refresh</button>
+          <Button onClick={applyAll} disabled={!ready.length || busy === 'apply'}>{busy === 'apply' ? 'Linking...' : `Link all ${ready.length} ready match${ready.length === 1 ? '' : 'es'}`}</Button>
+          <Button variant="secondary" onClick={load}>Refresh</Button>
         </div>
-        <table aria-label="Account matches" className="w-full text-left text-xs">
-          <thead><tr className="text-zinc-500"><th className="p-1">Player</th><th className="p-1">Email</th><th className="p-1">Result</th><th className="p-1"><span className="sr-only">Actions</span></th></tr></thead>
-          <tbody>{[...state.rows].sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status)).map((r) => <tr key={r.player_id} className={r.status === 'ready' ? 'text-emerald-200' : 'text-zinc-300'}>
-            <td className="p-1">{r.player_name}{r.player_place && <span className="block text-zinc-500">{r.player_place}</span>}</td>
-            <td className="p-1">{r.email}</td>
-            <td className="p-1" title={MATCH_STATUS[r.status]?.help}>{MATCH_STATUS[r.status]?.label || r.status}</td>
-            <td className="p-1">{r.status !== 'ready' && <button type="button" onClick={() => dismiss(r)} disabled={busy === `dismiss-${r.player_id}`} aria-label={`Dismiss ${r.player_name}`} className={ghostButton}><X size={12} /> Dismiss</button>}</td>
+        <Table caption="Account matches">
+          <thead><tr><th scope="col">Player</th><th scope="col">Email</th><th scope="col">Result</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+          <tbody>{[...state.rows].sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status)).map((r) => <tr key={r.player_id}>
+            <td>{r.player_name}{r.player_place && <span className="block text-sm text-mut">{r.player_place}</span>}</td>
+            <td className="text-mut">{r.email}</td>
+            <td><span title={MATCH_STATUS[r.status]?.help} className={r.status === 'ready' ? 'font-semibold text-acc2' : 'text-mut'}>{MATCH_STATUS[r.status]?.label || r.status}</span></td>
+            <td className="text-right">{r.status !== 'ready' && <Button variant="quiet" size="sm" onClick={() => dismiss(r)} disabled={busy === `dismiss-${r.player_id}`} aria-label={`Dismiss ${r.player_name}`}>Dismiss</Button>}</td>
           </tr>)}</tbody>
-        </table>
+        </Table>
       </>}
-      {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
-      {message && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</p>}
+      {error && <Notice tone="error" role="alert">{error}</Notice>}
+      {message && <Notice tone="success" role="status">{message}</Notice>}
     </div>
-  </details>;
+  </Card>;
 }

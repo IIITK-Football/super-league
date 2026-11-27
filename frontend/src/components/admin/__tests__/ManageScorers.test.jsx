@@ -47,36 +47,40 @@ const rpc = async (name, args) => {
 };
 vi.mock('../../../lib/supabase', () => ({ supabase: { from, rpc } }));
 const { default: ManageScorers } = await import('../ManageScorers');
+const { ConfirmProvider } = await import('../../ui');
+const { pick, trigger } = await import('./listbox');
+const { readToasts } = await import('../../ui/toastStore');
+const renderScorers = (props = {}) => render(<ConfirmProvider><ManageScorers {...props} /></ConfirmProvider>);
 
 beforeEach(() => { seed(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-const pick = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
-async function fill(query, accountId) {
+async function fill(query, account) {
   fireEvent.change(screen.getByLabelText('Find scorer'), { target: { value: query } });
-  await waitFor(() => expect(within(screen.getByLabelText('Scorer')).getAllByRole('option').length).toBeGreaterThan(1));
-  pick('Scorer', accountId);
-  pick('Division', 'd1');
-  await waitFor(() => expect(screen.getByRole('option', { name: '2026 (current)' })).toBeTruthy());
-  pick('Season', 's1');
+  await waitFor(() => expect(trigger('Scorer').textContent).toMatch(/Choose from the search results/));
+  await pick('Scorer', account);
+  await pick('Division', 'Freshers');
+  await waitFor(() => expect(trigger('Season').disabled).toBe(false));
+  await pick('Season', '2026 (current)');
+  await waitFor(() => expect(trigger('Match').disabled).toBe(false));
 }
 
 describe('ManageScorers', () => {
   it('lists assignments by directory label with their scope, and shows the empty state', async () => {
-    render(<ManageScorers />);
+    renderScorers();
     const list = await screen.findByRole('list', { name: 'Scorer assignments' });
     expect(within(list).getByText('Sam Scorer (sam@iiitkottayam.ac.in)')).toBeTruthy();
     expect(list.textContent).toMatch(/Every match of Freshers 2026/);
     expect(list.textContent).toMatch(/No expiry/);
     expect(document.body.textContent).not.toMatch(/\bu1\b/);
     cleanup(); db.scorer_assignments = [];
-    render(<ManageScorers />);
+    renderScorers();
     expect(await screen.findByText('No scorers are assigned yet.')).toBeTruthy();
   });
 
   it('reports a failed load and can retry', async () => {
     db.listError = { message: 'permission denied' };
-    render(<ManageScorers />);
+    renderScorers();
     expect(await screen.findByText(/Assignments could not be loaded \(permission denied\)/)).toBeTruthy();
     db.listError = null;
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
@@ -84,20 +88,19 @@ describe('ManageScorers', () => {
   });
 
   it('assigns a scorer to a whole season, then reloads the list', async () => {
-    render(<ManageScorers />);
+    renderScorers();
     await screen.findByRole('list', { name: 'Scorer assignments' });
-    await fill('sam', 'u1');
+    await fill('sam', /^Sam Scorer/);
     fireEvent.click(screen.getByRole('button', { name: /assign scorer/i }));
-    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/can now score every match of the season/));
+    await waitFor(() => expect(readToasts().at(-1)?.description).toMatch(/can now score every match of the season/));
     expect(db.calls).toEqual([{ name: 'assign_scorer', p_user: 'u1', p_season: 's1', p_match: null, p_expires_at: null }]);
   });
 
   it('assigns a scorer to one match with an expiry', async () => {
-    render(<ManageScorers />);
+    renderScorers();
     await screen.findByRole('list', { name: 'Scorer assignments' });
-    await fill('sam', 'u1');
-    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha vs Beta/ })).toBeTruthy());
-    pick('Match', 'm1');
+    await fill('sam', /^Sam Scorer/);
+    await pick('Match', /Alpha vs Beta/);
     fireEvent.change(screen.getByLabelText('Expires'), { target: { value: '2030-01-01T10:00' } });
     fireEvent.click(screen.getByRole('button', { name: /assign scorer/i }));
     await waitFor(() => expect(db.calls).toHaveLength(1));
@@ -106,28 +109,34 @@ describe('ManageScorers', () => {
   });
 
   it('warns, without blocking, when the scorer captains a team in that match', async () => {
-    render(<ManageScorers />);
+    renderScorers();
     await screen.findByRole('list', { name: 'Scorer assignments' });
-    await fill('cara', 'u2');
-    await waitFor(() => expect(screen.getByRole('option', { name: /Alpha vs Beta/ })).toBeTruthy());
-    pick('Match', 'm1');
+    await fill('cara', /^Cara Cap/);
+    await pick('Match', /Alpha vs Beta/);
     expect((await screen.findByRole('note')).textContent).toMatch(/Cara Cap.* captains Alpha in this match.*explicit assignment/);
     expect(screen.getByRole('button', { name: /assign scorer/i }).disabled).toBe(false);
   });
 
   it('shows the database refusal and keeps the list', async () => {
     db.rpcError = { code: '42501', message: 'Only a dictator can assign scorers' };
-    render(<ManageScorers />);
+    renderScorers();
     await screen.findByRole('list', { name: 'Scorer assignments' });
-    await fill('sam', 'u1');
+    await fill('sam', /^Sam Scorer/);
     fireEvent.click(screen.getByRole('button', { name: /assign scorer/i }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/Only a dictator can assign scorers/);
   });
 
+  it('starts from the account chosen in Access control', async () => {
+    renderScorers({ person: { user_id: 'u9', label: 'Cy Keeper (cy@iiitkottayam.ac.in)' } });
+    await screen.findByRole('list', { name: 'Scorer assignments' });
+    expect(trigger('Scorer').textContent).toBe('Cy Keeper (cy@iiitkottayam.ac.in)');
+  });
+
   it('revokes an assignment after confirming, and shows the empty state', async () => {
-    render(<ManageScorers />);
+    renderScorers();
     await screen.findByRole('list', { name: 'Scorer assignments' });
     fireEvent.click(screen.getByRole('button', { name: /revoke/i }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Revoke' }));
     await screen.findByText('No scorers are assigned yet.');
     expect(db.calls).toEqual([{ name: 'revoke_scorer', p_assignment: 'a1' }]);
   });

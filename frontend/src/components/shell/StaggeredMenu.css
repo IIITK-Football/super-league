@@ -1,0 +1,117 @@
+/* The staggered menu drawer. Overlay covers the viewport but only the panel takes pointer events, so the page and the
+   header button stay usable while it is closed. Colour, type and radius come from the app tokens. */
+.sm {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.sm-layers,
+.sm-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: clamp(300px, 40vw, 460px);
+}
+
+.sm-layers {
+  z-index: 1;
+}
+
+.sm-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.sm-panel {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 7.5rem 1.75rem 1.75rem;
+  background: var(--color-surf);
+  border-left: 1px solid var(--color-line);
+  box-shadow: -30px 0 60px -40px rgb(0 0 0 / 0.8);
+  pointer-events: auto;
+  overscroll-behavior: contain;
+}
+
+.sm-panel-inner {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.sm-panel-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sm-panel-itemWrap {
+  overflow: hidden;
+  line-height: 1;
+}
+
+.sm-panel-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  padding: 0.45rem 0;
+  color: var(--color-mut);
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  text-decoration: none;
+  transition: color 0.25s ease;
+}
+
+.sm-panel-item:hover,
+.sm-panel-item:focus-visible {
+  color: var(--color-ink);
+}
+
+.sm-panel-item.is-active {
+  color: var(--color-ink);
+}
+
+.sm-panel-itemNum {
+  flex: 0 0 auto;
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--sm-accent, var(--color-mut));
+  font-variant-numeric: tabular-nums;
+}
+
+.sm-panel-itemLabel {
+  display: inline-block;
+  will-change: transform;
+  transform-origin: 50% 100%;
+}
+
+.sm-panel-item:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+@media (max-width: 640px) {
+  .sm-layers,
+  .sm-panel {
+    width: 100%;
+  }
+
+  .sm-panel {
+    padding: 6.5rem 1.25rem 1.5rem;
+    border-left: 0;
+  }
+}

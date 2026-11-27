@@ -2,9 +2,9 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-// Pages that must never be left automatically after sign-in: the login page handles its own
+// Pages that must never be left automatically after sign-in: the sign-in pages handle their own
 // redirect, and the reset page must stay until the new password is saved.
-const STAY_PUT = new Set(['/login', '/reset-password']);
+const STAY_PUT = new Set(['/login', '/hq-login', '/reset-password']);
 
 export function GlobalAuthRedirect() {
   const { user } = useAuth();

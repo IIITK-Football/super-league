@@ -1,10 +1,38 @@
-import React, { useState } from 'react';
-import { Shield, Key } from 'lucide-react';
-import { GlassPanel } from '../components/GlassPanel';
-import { supabase } from '../lib/supabase'; // Or use your API route!
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Mail, KeyRound } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { COLLEGE_EMAIL_MESSAGE, isCollegeEmail } from '../lib/authRules';
+import { friendly, roleHome } from '../lib/authApi';
+import { appRoles } from '../context/AuthContext';
 import { TurnstileWidget, turnstileSiteKey } from '../components/TurnstileWidget';
+import { Field, Notice, TextInput } from '../components/ui';
 
+// The Super League mark, drawn in the ink colour through a mask of the logo file.
+const MARK_MASK = {
+  maskImage: 'url(/slklogo3.png)', WebkitMaskImage: 'url(/slklogo3.png)', maskSize: 'contain', WebkitMaskSize: 'contain',
+  maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat', maskPosition: 'center', WebkitMaskPosition: 'center',
+};
+const PILL = 'inline-flex min-h-11 w-full items-center justify-center rounded-pill bg-ink px-6 text-sm font-black uppercase tracking-[0.2em] text-bg transition hover:opacity-85 disabled:pointer-events-none disabled:opacity-40';
+
+// The centred glass card every sign-in screen shares: the mark, a big heading, then the form.
+function AuthShell({ heading, children }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-12 text-ink">
+      <section className="glass flex w-full max-w-md flex-col gap-8 rounded-card p-6 sm:p-10">
+        <span role="img" aria-label="Super League, IIIT Kottayam" className="block size-12 bg-ink" style={MARK_MASK} />
+        <h1 className="font-display text-4xl text-ink sm:text-5xl">{heading}</h1>
+        {children}
+      </section>
+    </main>
+  );
+}
+
+
+
+// Staff sign-in at /hq-login. Same account and rules as /login; it differs only in where it is linked from. After
+// sign-in each person goes to the workspace their roles open (or home when they hold none).
 export function AdminLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,91 +41,58 @@ export function AdminLogin() {
   const [captchaToken, setCaptchaToken] = useState(null);
   const [captchaReset, setCaptchaReset] = useState(0);
 
+  const fail = (message) => {
+    setError(message);
+    setLoading(false);
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    if (!isCollegeEmail(email)) {
-      setError(COLLEGE_EMAIL_MESSAGE);
-      setLoading(false);
-      return;
-    }
+    if (!isCollegeEmail(email)) return fail(COLLEGE_EMAIL_MESSAGE);
 
     // Turnstile is verified by Supabase Auth; here we only make sure it was completed.
-    if (turnstileSiteKey() && !captchaToken) {
-      setError('Please complete the verification first.');
-      setLoading(false);
-      return;
-    }
+    if (turnstileSiteKey() && !captchaToken) return fail('Please complete the verification first.');
 
-    // Using Supabase client directly to instantly update your AuthContext session
     const credentials = { email: email.trim(), password };
     if (captchaToken) credentials.options = { captchaToken };
-    const { error } = await supabase.auth.signInWithPassword(credentials);
+    const { error: signInError } = await supabase.auth.signInWithPassword(credentials);
 
     // Tokens are single-use: ask for a fresh one after every attempt.
     setCaptchaToken(null);
     setCaptchaReset((n) => n + 1);
+    if (signInError) return fail(friendly(signInError));
 
-    if (error) {
-      setError(/captcha/i.test(error.message || '') ? 'The verification did not complete. Please try the verification again.' : "Invalid admin credentials.");
-      setLoading(false);
-    } else {
-      // Success! Redirect to the dashboard
-      window.location.href = '/dictator';
-    }
+    const { data: held, error: rolesError } = await supabase.rpc('my_roles');
+    if (rolesError) return fail('Signed in, but we could not load your access. Try again.');
+    window.location.assign(roleHome(appRoles(held)));
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <GlassPanel className="max-w-md w-full p-10 border border-white/10 bg-black/80">
-        <div className="flex justify-center mb-6">
-          <Shield className="w-16 h-16 text-zinc-500" />
-        </div>
-        <h1 className="text-3xl font-black text-center text-white uppercase tracking-widest mb-8">
-          Command Access
-        </h1>
-        
-        {error && (
-          <div className="bg-red-500/20 text-red-400 p-3 rounded-lg mb-6 text-sm font-bold text-center border border-red-500/30">
-            {error}
-          </div>
-        )}
+    <AuthShell heading="Staff sign in">
+      <div className="space-y-3">
+        <p className="eyebrow">Super League staff</p>
+        <p className="text-mut">For captains, scorers, editors and dictators. Use your college account.</p>
+      </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label htmlFor="hq-email" className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Admin Email</label>
-            <input
-              id="hq-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-white/30"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="hq-passcode" className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Passcode</label>
-            <input
-              id="hq-passcode"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-white/30"
-              required
-            />
-          </div>
-          <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-white text-black font-black uppercase tracking-widest py-4 rounded-xl flex justify-center items-center gap-2 hover:bg-zinc-200 transition-colors disabled:opacity-50"
-          >
-            {loading ? "Authenticating..." : <><Key size={18} /> Authorize</>}
-          </button>
-        </form>
-      </GlassPanel>
-    </div>
+      {error && <Notice tone="error" role="alert">{error}</Notice>}
+
+      <form onSubmit={handleLogin} className="flex flex-col gap-5" noValidate>
+        <Field label="Admin email">
+          {(p) => <TextInput {...p} icon={Mail} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />}
+        </Field>
+        <Field label="Passcode">
+          {(p) => <TextInput {...p} icon={KeyRound} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />}
+        </Field>
+        <TurnstileWidget onToken={setCaptchaToken} resetKey={captchaReset} />
+        <button type="submit" disabled={loading} className={PILL}>
+          {loading ? 'Signing in...' : 'Sign in'}
+        </button>
+      </form>
+
+      <Link to="/login" className="eyebrow inline-flex min-h-11 items-center hover:text-ink">Sign in as a student</Link>
+    </AuthShell>
   );
 }

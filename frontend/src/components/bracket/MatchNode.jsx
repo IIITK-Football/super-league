@@ -1,4 +1,3 @@
-import React from 'react';
 import './MatchNode.css';
 
 export function MatchNode({ match, onSelectWinner, disabled, isFinal, officialAdvances, roundCapacity }) {

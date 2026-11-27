@@ -1,146 +1,128 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { MotionConfig, motion } from 'motion/react';
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Users, Shield, Calendar, Newspaper, Activity, LogOut, Menu, X ,Calculator, Layers, History} from 'lucide-react';
-import { GlassPanel } from '../components/GlassPanel';
-import LiveController from '../components/admin/LiveController';
-import ScheduleMatches from '../components/admin/ScheduleMatches';
-import ManageNews from '../components/admin/ManageNews';
-import GradePredictions from '../components/admin/GradePredictions';
-import ManageCaptains from '../components/admin/ManageCaptains';
-import ManageScorers from '../components/admin/ManageScorers';
-import ManageRoles from '../components/admin/ManageRoles';
-import ManageDivisions from '../components/admin/ManageDivisions';
-import ManageRosters from '../components/admin/ManageRosters';
-import AuditHistory from '../components/admin/AuditHistory';
-export function AdminDashboard() {
-  const { user, hasRole, roles, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState('live');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // NEW: Mobile menu state
+import { Sheet, buttonClasses } from '../components/ui';
+import { SPRING } from '../components/ui/springs';
+import { cn } from '../utils/cn';
+import { GROUPS, OVERVIEW, allows, navFor, toolById } from './workspace/tools';
+import { Overview } from './workspace/Overview';
 
-  // The grants held now (my_roles), never a UI label. A dictator gets every tab; a scorer only Live Matches (the match
-  // workspace); nobody else gets in. Row level security and the API enforce the same rules.
-  const isDictator = hasRole('dictator');
-  const isScorer = hasRole('scorer');
-  if (!roles) return <div className="min-h-screen bg-black flex items-center justify-center text-zinc-500 font-bold uppercase tracking-widest">Verifying Clearance...</div>;
+const RAIL_KEY = 'sl.workspace.rail';
+const readRail = () => { try { return localStorage.getItem(RAIL_KEY) === '1'; } catch { return false; } };
+const saveRail = (value) => { try { localStorage.setItem(RAIL_KEY, value ? '1' : '0'); } catch { /* per-viewer convenience only */ } };
 
-  // The Ultimate Kick-Out: No user OR neither a dictator nor a scorer!
-  if (!user || (!isDictator && !isScorer)) return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-10 space-y-4">
-      <h1 className="text-4xl font-black text-red-500 uppercase tracking-widest">403 Forbidden</h1>
-      <p className="text-zinc-500 tracking-widest uppercase text-sm">You do not have command clearance.</p>
+// Sidebar entries in their groups; the overview sits on top without a group.
+function grouped(items) {
+  return [{ group: null, items: items.filter((i) => !i.group) },
+    ...GROUPS.map((group) => ({ group, items: items.filter((i) => i.group === group) }))].filter((g) => g.items.length);
+}
+
+// mode: 'full' (labels always, the phone sheet), 'rail' (icons only) or 'auto' (icons on tablets, labels from lg).
+function NavList({ items, currentId, mode, highlight, onPick }) {
+  const hide = { full: '', rail: 'sr-only', auto: 'max-lg:sr-only' }[mode];
+  return grouped(items).map(({ group, items: list }) => (
+    <div key={group ?? 'top'}>
+      {group && mode !== 'full' && <span aria-hidden="true" className={cn('mx-auto my-2 block h-px w-6 bg-line', mode === 'auto' && 'lg:hidden')} />}
+      {group && <p className={cn('eyebrow px-3 pb-1.5 pt-4', mode === 'rail' ? 'hidden' : mode === 'auto' && 'max-lg:hidden')}>{group}</p>}
+      <ul className="space-y-1">
+        {list.map(({ id, path, label, icon: Icon }) => {
+          const active = id === currentId;
+          return (
+            <li key={id}>
+              <Link
+                to={path}
+                onClick={onPick}
+                aria-current={active ? 'page' : undefined}
+                title={mode === 'full' ? undefined : label}
+                className={cn('relative flex min-h-11 items-center gap-3 rounded-ctl px-3 text-sm font-bold transition-colors duration-200',
+                  active ? 'text-bg' : 'text-mut hover:bg-ink/[0.06] hover:text-ink',
+                  mode === 'rail' && 'justify-center', mode === 'auto' && 'max-lg:justify-center')}
+              >
+                {active && <motion.span layoutId={highlight} transition={SPRING} className="absolute inset-0 rounded-ctl bg-ink shadow-[0_8px_24px_-10px_rgb(0_0_0/0.7)]" />}
+                <Icon size={18} aria-hidden="true" className="relative shrink-0" />
+                <span className={cn('relative truncate', hide)}>{label}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </div>
-  );
+  ));
+}
 
-  const tabs = isDictator ? [
-    { id: 'live', label: 'Live Matches', icon: Activity, color: 'text-red-500' },
-    { id: 'schedule', label: 'Schedule', icon: Calendar },
-    { id: 'captains', label: 'Captains', icon: Users },
-    { id: 'scorers', label: 'Scorers', icon: Activity },
-    { id: 'roles', label: 'Access Control', icon: Shield },
-    { id: 'grading', label: 'Grade Fantasy', icon: Calculator, color: 'text-[#E8C881]' },
-    { id: 'news', label: 'Newsletter', icon: Newspaper },
-    { id: 'divisions', label: 'Divisions & Seasons', icon: Layers },
-    { id: 'rosters', label: 'Teams & Rosters', icon: Users },
-    { id: 'audit', label: 'Audit History', icon: History },
-  ] : [
-    { id: 'live', label: 'Live Matches', icon: Activity, color: 'text-red-500' },
-  ];
+// The staff workspace: a sidebar of the tools the grants open (an icon rail on tablets or when collapsed, a sheet on
+// phones), and the chosen tool under its header. Each tool has its own address. Row level security and the API
+// enforce the same rules; a tool left out of the sidebar is not the authorization.
+export function AdminDashboard({ toolId = 'overview' }) { // eslint-disable-line react/prop-types
+  const { user, roles } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [rail, setRail] = useState(readRail);
+  const [sheet, setSheet] = useState(false);
+  const items = navFor(roles);
+  const current = toolId === 'overview' ? OVERVIEW : toolById(toolId);
+
+  // A link to a form on the page (#add-fixture) scrolls to it once it has rendered.
+  useEffect(() => {
+    if (!location.hash) return undefined;
+    const timer = setTimeout(() => document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+    return () => clearTimeout(timer);
+  }, [location.hash]);
+
+  if (!current || !allows(current, roles)) return null;
+  // One tool (an editor, a captain): nothing to navigate between, so no sidebar.
+  const solo = items.length === 1;
+  const toggleRail = () => setRail((value) => { saveRail(!value); return !value; });
+  const Icon = current.icon;
 
   return (
-    // FIX: Change to flex-col on mobile, flex-row on desktop
-    <div className="min-h-screen bg-black text-white flex flex-col md:flex-row pt-20">
-      
-      {/* --- MOBILE TOP BAR --- */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/10 bg-black/80 backdrop-blur-md z-30">
-        <h1 className="text-lg font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
-          Admin Command
-        </h1>
-        <button 
-          onClick={() => setIsMobileMenuOpen(true)} 
-          className="p-2 text-zinc-400 hover:text-white transition-colors"
-        >
-          <Menu size={24} />
-        </button>
-      </div>
-
-      {/* --- MOBILE OVERLAY --- */}
-      {/* Clicks outside the sidebar on mobile will close the menu */}
-      {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* --- SIDEBAR --- */}
-      <div className={`
-        fixed md:static inset-y-0 left-0 z-50 w-64 border-r border-white/10 bg-zinc-950 md:bg-black/50 p-6 flex flex-col transition-transform duration-300 ease-in-out
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
-        <div className="flex items-center justify-between mb-10">
-          <h1 className="text-xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500 hidden md:block">
-            Admin Command
-          </h1>
-          <h1 className="text-lg font-black uppercase tracking-widest text-zinc-400 md:hidden">
-            Menu
-          </h1>
-          <button 
-            onClick={() => setIsMobileMenuOpen(false)} 
-            className="md:hidden p-2 text-zinc-400 hover:text-white rounded-lg transition-colors"
-          >
-            <X size={24} />
+    <MotionConfig reducedMotion="user">
+      <div className={cn(!solo && 'md:grid md:grid-cols-[auto_minmax(0,1fr)] md:gap-6 lg:gap-8')}>
+        {!solo && <aside aria-label="Workspace" className={cn('glass sticky top-24 hidden max-h-[calc(100vh-7rem)] flex-col self-start overflow-y-auto rounded-card p-2 transition-[width] duration-200 md:flex',
+          rail ? 'w-[60px]' : 'w-[60px] lg:w-60')}>
+          <nav aria-label="Workspace tools" className="flex-1">
+            <NavList items={items} currentId={current.id} mode={rail ? 'rail' : 'auto'} highlight="workspace-active" />
+          </nav>
+          <button type="button" onClick={toggleRail} aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={rail}
+            className="mt-3 hidden min-h-11 items-center justify-center gap-2 rounded-ctl text-xs font-bold uppercase tracking-[0.16em] text-mut transition-colors hover:bg-ink/[0.06] hover:text-ink lg:flex">
+            {rail ? <PanelLeftOpen size={18} aria-hidden="true" /> : <><PanelLeftClose size={18} aria-hidden="true" /><span>Collapse</span></>}
           </button>
+        </aside>}
+
+        <div className="min-w-0 space-y-8">
+          {!solo && <button type="button" onClick={() => setSheet(true)} aria-haspopup="dialog"
+            className="glass flex min-h-12 w-full items-center gap-3 rounded-pill px-4 text-left text-sm font-bold text-ink md:hidden">
+            <Icon size={18} aria-hidden="true" />
+            <span className="flex-1 truncate">{current.label}</span>
+            <span className="eyebrow">Tools</span>
+            <ChevronDown size={16} aria-hidden="true" className="text-mut" />
+          </button>}
+          <Sheet open={sheet} onClose={() => setSheet(false)} title="Workspace">
+            <nav aria-label="Workspace tools" className="pb-2">
+              <NavList items={items} currentId={current.id} mode="full" highlight="workspace-active-sheet" onPick={() => setSheet(false)} />
+            </nav>
+          </Sheet>
+
+          <header className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-4">
+              <span className="glass flex size-14 shrink-0 items-center justify-center rounded-[16px] text-ink sm:size-16"><Icon size={26} aria-hidden="true" /></span>
+              <div className="min-w-0 space-y-2">
+                <h1 className="font-display text-3xl text-ink sm:text-5xl">{current.label}</h1>
+                <p className="text-sm text-mut">{current.purpose}</p>
+              </div>
+            </div>
+            {current.action && <Link to={{ pathname: location.pathname, hash: current.action.to }} className={buttonClasses('primary', 'md')}>
+              <Plus size={16} aria-hidden="true" />{current.action.label}
+            </Link>}
+          </header>
+
+          <section aria-label={current.label}>
+            {current.id === 'overview' ? <Overview /> : current.render({ user, navigate, location })}
+          </section>
         </div>
-        
-        <nav className="flex-1 space-y-2">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setIsMobileMenuOpen(false); // Auto-close menu on mobile when a tab is clicked
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold uppercase tracking-wider text-sm transition-all duration-300 ${
-                  isActive 
-                    ? 'bg-white text-black' 
-                    : 'text-zinc-500 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <Icon size={18} className={isActive ? 'text-black' : tab.color || 'text-zinc-500'} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <button 
-          onClick={signOut}
-          className="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-red-500 font-bold uppercase tracking-wider text-sm transition-colors mt-auto"
-        >
-          <LogOut size={18} /> Sign Out
-        </button>
       </div>
-
-      {/* --- MAIN CONTENT AREA --- */}
-      {/* FIX: Reduced padding on mobile (`p-4 md:p-8`), ensured it takes full width */}
-      <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-full">
-        <GlassPanel className="min-h-full border border-white/10 bg-black/60">
-          {activeTab === 'live' && <LiveController />}
-          {isDictator && activeTab === 'schedule' && <ScheduleMatches />}
-          {isDictator && activeTab === 'captains' && <ManageCaptains />}
-          {isDictator && activeTab === 'scorers' && <ManageScorers />}
-          {isDictator && activeTab === 'roles' && <ManageRoles currentUserId={user.id} />}
-          {isDictator && activeTab === 'grading' && <GradePredictions />}
-          {isDictator && activeTab === 'news' && <ManageNews />}
-          {isDictator && activeTab === 'divisions' && <ManageDivisions />}
-          {isDictator && activeTab === 'rosters' && <ManageRosters />}
-          {isDictator && activeTab === 'audit' && <AuditHistory />}
-        </GlassPanel>
-      </div>
-
-    </div>
+    </MotionConfig>
   );
 }

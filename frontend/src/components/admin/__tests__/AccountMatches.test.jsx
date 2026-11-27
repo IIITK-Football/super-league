@@ -30,6 +30,9 @@ vi.mock('../../../lib/supabase', () => ({ supabase: { rpc: (...a) => rpc(...a), 
 
 import AccountMatches from '../AccountMatches';
 import ManualLink from '../ManualLink';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 const rows = [
   { player_id: 'p1', player_name: 'Ada Striker', player_place: 'Alpha · 2026 (WSL)', email: 'ada@iiitkottayam.ac.in', user_id: 'u1', status: 'ready' },
@@ -41,7 +44,7 @@ const rows = [
   { player_id: 'p7', player_name: 'Fay Nobody', player_place: null, email: 'fay@iiitkottayam.ac.in', user_id: null, status: 'no_account' },
 ];
 
-beforeEach(() => { rpc.mockReset(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
+beforeEach(() => { rpc.mockReset(); globalThis.confirmAnswer = vi.fn(async () => true); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('account matching', () => {
@@ -63,7 +66,7 @@ describe('account matching', () => {
     const onChanged = vi.fn();
     render(<AccountMatches onChanged={onChanged} />);
     const button = await screen.findByRole('button', { name: /Link all 2 ready matches/ });
-    window.confirm.mockReturnValueOnce(false);
+    globalThis.confirmAnswer.mockResolvedValueOnce(false);
     fireEvent.click(button);
     expect(rpc).not.toHaveBeenCalledWith('apply_account_link_matches', expect.anything());
     fireEvent.click(button);

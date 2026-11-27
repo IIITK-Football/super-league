@@ -101,6 +101,9 @@ vi.mock('../../../lib/supabase', () => ({ supabase: { from: (t) => from(t) } }))
 vi.mock('../../../hooks/useApi', () => ({ fetchApi: (...args) => worker(...args) }));
 
 import ManageDivisions, { describeError, parseSettings, validateDivision, validateSeason } from '../ManageDivisions';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 const type = (label, value, scope = screen) => fireEvent.change(scope.getByLabelText(label), { target: { value } });
 const writes = (table, op) => db.calls.filter((c) => c.table === table && c.op === op);
@@ -116,7 +119,7 @@ async function addDivision(name = 'Inter', slug = 'inter') {
 beforeEach(() => {
   seed();
   worker.mockClear();
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  globalThis.confirmAnswer = vi.fn(async () => true);
 });
 afterEach(() => {
   cleanup();
@@ -165,6 +168,17 @@ describe('divisions', () => {
     expect(await screen.findByText('Hidden')).toBeTruthy();
     const list = await screen.findByRole('list', { name: 'Divisions' });
     expect(within(list).getByDisplayValue('Inter')).toBeTruthy();
+  });
+
+  it('derives the slug from the name until the slug is typed by hand, and asks before making a season current', async () => {
+    render(<ManageDivisions />);
+    await screen.findByText(/no divisions yet/i);
+    const form = screen.getByRole('form', { name: 'New division' });
+    type(/division name/i, 'Pradhva Cup', within(form));
+    expect(within(form).getByLabelText(/^slug/i).value).toBe('pradhva-cup');
+    type(/^slug/i, 'pradhva', within(form));
+    type(/division name/i, 'Pradhva Trophy', within(form));
+    expect(within(form).getByLabelText(/^slug/i).value).toBe('pradhva');
   });
 
   it('reports a refused write in words a dictator understands', async () => {
@@ -241,6 +255,7 @@ describe('seasons and sections', () => {
     const seasonList = await screen.findByRole('list', { name: 'Seasons' });
     fireEvent.click(within(seasonList).getByRole('button', { name: 'Publish' }));
     fireEvent.click(await screen.findByRole('button', { name: /make current/i }));
+    expect(globalThis.confirmAnswer).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringMatching(/Make .* current season/), confirmLabel: 'Make current' }));
     await screen.findByText(/is now the current season of Inter/);
     expect(worker).toHaveBeenCalledWith(`/admin/seasons/${db.tables.seasons[0].id}/current`, { method: 'POST' });
     expect(await screen.findByText('Current')).toBeTruthy();

@@ -15,30 +15,60 @@ const AuthContext = createContext({});
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  // A failed load is kept as an error, never read as "no profile" or "no roles".
+  const [profileError, setProfileError] = useState(null);
   // null while loading; an array (possibly empty: a normal user) once known.
   const [roles, setRoles] = useState(null);
+  const [rolesError, setRolesError] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Shown inline on the sign-in page when the account is not a college account.
+  const [accessError, setAccessError] = useState(null);
   const authApi = useMemo(() => createAuthApi(supabase, { origin: window.location.origin }), []);
 
-  // Helper to fetch user's public profile strictly
   const fetchProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        // Explicit columns: the email column is not readable through the Data API (the session has the user's email).
-        .select('id, real_name, nickname, team_flair_id, wc_team_flair, created_at')
-        .eq('id', userId)
-        .maybeSingle();
+    // Explicit columns: the email column is not readable through the Data API (the session has the user's email).
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id, real_name, nickname, team_flair_id, wc_team_flair, created_at')
+      .eq('id', userId)
+      .maybeSingle();
+    return error ? { error } : { data };
+  };
 
-      if (error) {
-        console.error("Error fetching profile:", error);
-        return null;
-      }
-      return data;
-    } catch (err) {
-      console.error(err);
-      return null;
+  const handleSession = async (session) => {
+    setAccessError(null);
+    if (!session?.user) {
+      setUser(null);
+      setProfile(null);
+      setProfileError(null);
+      setRoles(null);
+      setRolesError(null);
+      setLoading(false);
+      return;
     }
+
+    const { user } = session;
+
+    // Domain Lock Check
+    if (!isCollegeEmail(user.email)) {
+      await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
+      setRoles(null);
+      setLoading(false);
+      setAccessError(COLLEGE_EMAIL_MESSAGE);
+      return;
+    }
+
+    // Valid college email allowed, fetch their onboarded profile and roles
+    setUser(user);
+    const profileResult = await fetchProfile(user.id).catch((error) => ({ error }));
+    setProfile(profileResult.data ?? null);
+    setProfileError(profileResult.error ?? null);
+    const { data: held, error: rolesLoadError } = await Promise.resolve(supabase.rpc('my_roles')).catch((error) => ({ error })); // the query builder is thenable only
+    setRoles(rolesLoadError ? null : appRoles(held));
+    setRolesError(rolesLoadError ?? null);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -55,35 +85,11 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleSession = async (session) => {
-    if (!session?.user) {
-      setUser(null);
-      setProfile(null);
-      setRoles(null);
-      setLoading(false);
-      return;
-    }
-
-    const { user } = session;
-
-    // Domain Lock Check
-    if (!isCollegeEmail(user.email)) {
-      await supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
-      setRoles(null);
-      setLoading(false);
-      alert(`Access Denied: ${COLLEGE_EMAIL_MESSAGE}`);
-      return;
-    }
-
-    // Valid college email allowed, fetch their onboarded profile
-    setUser(user);
-    const userProfile = await fetchProfile(user.id);
-    setProfile(userProfile);
-    const { data: held } = await supabase.rpc('my_roles');
-    setRoles(appRoles(held));
-    setLoading(false);
+  // Load the session again after a failed profile or role load.
+  const retryAuth = async () => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    await handleSession(session);
   };
 
   const signOut = async () => {
@@ -91,12 +97,17 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    setProfileError(null);
     setRoles(null);
+    setRolesError(null);
     setLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, roles, hasRole: (r) => Boolean(roles?.includes(r)), loading, ...authApi, signOut, setProfile }}>
+    <AuthContext.Provider value={{
+      user, profile, profileError, roles, rolesError, accessError, retryAuth,
+      hasRole: (r) => Boolean(roles?.includes(r)), loading, ...authApi, signOut, setProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   );

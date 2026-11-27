@@ -1,6 +1,7 @@
 import { publicClient } from '@/lib/supabase/clients';
 import { scopeFromUrl } from '@/lib/scope';
 import { handleError } from '@/lib/errorHandler';
+import { FINAL_STATUSES, MATCH_STATUS } from '@/lib/matchStatus';
 
 export async function GET(request: Request) {
     const supabase = publicClient();
@@ -30,6 +31,9 @@ export async function GET(request: Request) {
             // Fantasy leaders: points from graded predictions on this season's matches
             supabase.rpc('season_fantasy_leaderboard', { p_season: seasonId, p_limit: 5 }),
         ]);
+        for (const res of [newsRes, scorersRes, assistsRes, entriesRes, matchesRes, rankedRes]) {
+            if (res.error) throw res.error;
+        }
         const news = newsRes.data;
         const scorers = scorersRes.data;
         const assists = assistsRes.data;
@@ -53,8 +57,8 @@ export async function GET(request: Request) {
 
         // FIX: Intelligently pick the Hero Match!
         // Priority 1: Find ANY Live Match. Priority 2: Fallback to the next Scheduled Match.
-        const liveMatch = allMatches?.find((m: any) => m.status === 'live');
-        const nextScheduled = allMatches?.find((m: any) => m.status === 'scheduled');
+        const liveMatch = allMatches?.find((m: any) => m.status === MATCH_STATUS.live);
+        const nextScheduled = allMatches?.find((m: any) => m.status === MATCH_STATUS.scheduled);
         let targetMatch: any = liveMatch || nextScheduled || null;
 
         let liveMatchData: any = null;
@@ -62,7 +66,7 @@ export async function GET(request: Request) {
     // 4. PROCESS MATCHES (Calculate Form, Standings)
     allMatches?.forEach((match: any) => {
       // Calculate Stats & Form for COMPLETED matches
-      if (match.status === 'completed'||match.status==='forfeited') {
+      if (FINAL_STATUSES.includes(match.status)) {
         const home = scoreboard[match.home_team_id];
         const away = scoreboard[match.away_team_id];
 
@@ -136,17 +140,21 @@ export async function GET(request: Request) {
                 awayScorers: awayGoals
             };
         }
-        // Round 3: the leaders' nicknames and their flair for this division.
+        // Fantasy leaders' nicknames and each user's flair for this division (both depend on the leaderboard)
         const rankedIds = (ranked ?? []).map((r: any) => r.user_id);
-        const [{ data: names }, { data: flairs }] = rankedIds.length
-            ? await Promise.all([
-                supabase.from('user_profiles').select('id, nickname').in('id', rankedIds),
-                supabase.from('division_flairs').select('user_id, team_name').eq('division_id', scope.division.id).in('user_id', rankedIds),
-            ])
-            : [{ data: [] as { id: string; nickname: string | null }[] }, { data: [] as { user_id: string; team_name: string }[] }];
-        const nicknameById = new Map((names ?? []).map((n: any) => [n.id, n.nickname]));
+        const [namesRes, flairsRes] = await Promise.all([
+            rankedIds.length
+                ? supabase.from('user_profiles').select('id, nickname').in('id', rankedIds)
+                : Promise.resolve({ data: [], error: null }),
+            rankedIds.length
+                ? supabase.from('division_flairs').select('user_id, team_name').eq('division_id', scope.division.id).in('user_id', rankedIds)
+                : Promise.resolve({ data: [], error: null }),
+        ]);
+        if (namesRes.error) throw namesRes.error;
+        if (flairsRes.error) throw flairsRes.error;
+        const nicknameById = new Map((namesRes.data ?? []).map((n: any) => [n.id, n.nickname]));
         const fantasyUsers = (ranked ?? []).map((r: any) => ({ id: r.user_id, nickname: nicknameById.get(r.user_id), points: r.points }));
-        const flairByUser = new Map((flairs ?? []).map((f: any) => [f.user_id, f.team_name]));
+        const flairByUser = new Map((flairsRes.data ?? []).map((f: any) => [f.user_id, f.team_name]));
 
         const fantasyTop = fantasyUsers?.map((user: any) => ({
             id: user.id,

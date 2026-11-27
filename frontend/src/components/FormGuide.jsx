@@ -1,19 +1,24 @@
 import { cn } from '../utils/cn';
 
+// The last results as small marks: W filled with the win colour, D outlined, L muted. Nothing played shows a dash.
+const MARK = {
+  W: 'bg-acc2 text-bg',
+  D: 'border border-mut text-ink',
+  L: 'bg-raise text-mut',
+};
+
 export function FormGuide({ form = [] }) {
+  if (!form.length) return <span className="text-mut">-</span>;
   return (
-    <div className="flex items-center gap-1.5">
-      {form.map((result, i) => {
-        let baseClass = "w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold font-mono transition-transform hover:scale-110";
-        if (result === 'W') baseClass = cn(baseClass, "bg-white text-black");
-        else if (result === 'D') baseClass = cn(baseClass, "bg-transparent border border-white text-white");
-        else if (result === 'L') baseClass = cn(baseClass, "bg-[#1A1A1A] text-zinc-400");
-        return (
-          <div key={`${result}-${i}`} className={baseClass}>
-            {result}
-          </div>
-        );
-      })}
-    </div>
+    <ol aria-label={`Form: ${form.join(', ')}`} className="flex items-center gap-0.5 sm:gap-1">
+      {form.map((result, i) => (
+        <li
+          key={`${result}-${i}`}
+          className={cn('flex size-5 items-center justify-center rounded-full font-display text-[10px] font-black sm:size-6 sm:text-[11px]', MARK[result] ?? MARK.L)}
+        >
+          {result}
+        </li>
+      ))}
+    </ol>
   );
 }

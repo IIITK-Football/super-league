@@ -38,8 +38,8 @@ beforeAll(async () => {
   const wsl = must(await admin.from('divisions').select('id').eq('slug', 'wsl').single()).data!;
   const freshers = must(await admin.from('divisions').select('id').eq('slug', 'freshers').single()).data!;
   made.seasons = must(await admin.from('seasons').insert([
-    { division_id: wsl.id, slug: `${tag}-a`, name: `${tag} A`, starts_on: '2027-01-01', visibility: 'public' },
-    { division_id: freshers.id, slug: `${tag}-b`, name: `${tag} B`, starts_on: '2028-01-01', visibility: 'public' },
+    { division_id: wsl.id, slug: `${tag}-a`, name: `${tag} A`, visibility: 'public', starts_on: '2027-01-01' },
+    { division_id: freshers.id, slug: `${tag}-b`, name: `${tag} B`, visibility: 'public', starts_on: '2028-01-01' },
   ]).select('id')).data!.map((s) => s.id);
   made.teams = must(await admin.from('teams').insert([
     { name: `${tag} Alpha`, short_name: 'ALP' }, { name: `${tag} Beta`, short_name: 'BET' },

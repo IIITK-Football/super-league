@@ -3,14 +3,19 @@
 
 <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="/slk-womens.png" />
+    <!-- Apply a saved light or dark choice before first paint (no flash). Absent choice follows the device. -->
+    <script>try{var t=localStorage.getItem("sl-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Inter for everything (Black for headings and numbers, Black Italic for the wordmark). Montserrat stays for
+         the World Cup pages, which set their own font families. -->
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,800;1,900&family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap"
         rel="stylesheet" />
 
     <!-- Primary Meta Tags -->
@@ -22,14 +27,14 @@
     <meta property="og:url" content="https://super-league.pages.dev/" />
     <meta property="og:title" content="Super League - IIIT Kottayam" />
     <meta property="og:description" content="Welcome to the Super League at IIIT Kottayam!" />
-    <meta property="og:image" content="https://pub-07c808f42c4640ceb3db8a0ef856e898.r2.dev/wsl.png" />
+    <meta property="og:image" content="https://super-league.pages.dev/og-super-league.png" />
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://super-league.pages.dev/" />
     <meta name="twitter:title" content="Super League - IIIT Kottayam" />
     <meta name="twitter:description" content="Welcome to the Super League at IIIT Kottayam!" />
-    <meta name="twitter:image" content="https://pub-07c808f42c4640ceb3db8a0ef856e898.r2.dev/wsl.png" />
+    <meta name="twitter:image" content="https://super-league.pages.dev/og-super-league.png" />
 </head>
 
 <body>

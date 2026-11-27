@@ -1,42 +1,318 @@
 @import "tailwindcss";
 
-@theme {
-  --animate-fade-up: fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-fade-in: fade-in 0.6s ease-out forwards;
-  --animate-slide-right: slide-right 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-float: float 6s ease-in-out infinite;
-  
+/*
+ * Night tokens. Built on the original site's character: true black, white type, Inter Black, letter-spaced labels.
+ * Dark always, like the original; light only when the reader picks it (the toggle sets data-theme).
+ *   acc/accink   actions (white on black, like the original buttons)
+ *   blk/blkink   the one loud block (inverted)
+ *   acc2         wins and positive numbers;  live  live and danger
+ *   --div        the division colour from data, used sparingly (crest fallbacks, a thin rule)
+ */
+@theme static {
+  --color-bg: #050505;
+  --color-surf: #0E0E10;
+  --color-raise: #18181B;
+  --color-ink: #FAFAFA;
+  --color-mut: #8B8B94;
+  --color-line: #222226;
+  --color-acc: #FAFAFA;
+  --color-accink: #050505;
+  --color-blk: #FAFAFA;
+  --color-blkink: #050505;
+  --color-acc2: #5FC48C;
+  --color-live: #EF4444;
+
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+
+  --radius-card: 18px;
+  --radius-ctl: 12px;
+  --radius-pill: 999px;
+
+  --animate-fade-up: fade-up 0.35s cubic-bezier(.2,.7,.2,1) both;
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-sheet-up: sheet-up 0.25s cubic-bezier(.2,.7,.2,1) both;
+  --animate-sheet-in: sheet-in 0.25s cubic-bezier(.2,.7,.2,1) both;
+  --animate-tick: tick 0.45s cubic-bezier(.2,.7,.2,1) both;
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  --animate-marquee: marquee 40s linear infinite;
+
   @keyframes fade-up {
-    0% { opacity: 0; transform: translateY(20px); }
+    0% { opacity: 0; transform: translateY(10px); }
     100% { opacity: 1; transform: translateY(0); }
   }
   @keyframes fade-in {
     0% { opacity: 0; }
     100% { opacity: 1; }
   }
-  @keyframes slide-right {
-    0% { opacity: 0; transform: translateX(-20px); }
-    100% { opacity: 1; transform: translateX(0); }
+  @keyframes sheet-up {
+    0% { transform: translateY(100%); }
+    100% { transform: translateY(0); }
   }
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+  @keyframes sheet-in {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(0); }
   }
+  @keyframes tick {
+    0% { transform: translateY(-45%); opacity: 0.1; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+}
+
+:root {
+  --div: var(--color-ink);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --color-bg: #F4F4F2;
+  --color-surf: #FFFFFF;
+  --color-raise: #ECECE9;
+  --color-ink: #0A0A0B;
+  --color-mut: #66666E;
+  --color-line: #DFDFDB;
+  --color-acc: #0A0A0B;
+  --color-accink: #FFFFFF;
+  --color-blk: #0A0A0B;
+  --color-blkink: #FFFFFF;
+  --color-acc2: #1F7A4A;
+  --color-live: #D42A2A;
+  color-scheme: light;
 }
 
 @layer base {
   body {
-    @apply bg-gradient-to-b from-black to-zinc-950 text-white min-h-screen antialiased;
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  /* Fine film grain over the whole page: depth without colour. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 60;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 }
 
-.glass-panel {
-  @apply bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl hover:bg-white/[0.05] transition-colors duration-500;
+/* Display type: Inter Black, tight, like the original headings. Headings in the display face are set in capitals. */
+.font-display {
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+:is(h1, h2, h3).font-display {
+  text-transform: uppercase;
+  line-height: 0.95;
 }
 
-/* Stagger Delays for Entrance Animations */
-.stagger-1 { animation-delay: 100ms; }
-.stagger-2 { animation-delay: 200ms; }
-.stagger-3 { animation-delay: 300ms; }
-.stagger-4 { animation-delay: 400ms; }
-.stagger-5 { animation-delay: 500ms; }
+/*
+ * Chrome type, like the original site's big headings: the text colour fading from full to about 55% top to bottom,
+ * which reads white to grey on the night ground (and near black to grey in light). Built on currentColor, so it
+ * follows the text colour of an inverted block or a photo overlay. Each descendant carries its own copy, so digits
+ * that animate on their own layer (Scoreline, NumberTicker) still paint. Only white to grey: never a colour gradient.
+ */
+.chrome,
+.chrome *,
+:is(h1, h2).font-display,
+:is(h1, h2).font-display * {
+  background-image: linear-gradient(180deg, currentColor 15%, color-mix(in srgb, currentColor 55%, transparent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Small letter-spaced label, the original site's signature. */
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-mut);
+}
+
+/* A tile: subtle frosted glass with a hairline highlight on its top edge. */
+.glass {
+  background: color-mix(in srgb, var(--color-surf) 72%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-ink) 7%, transparent),
+    0 18px 40px -24px rgb(0 0 0 / 0.75);
+}
+
+/* Lifts a tile toward the reader on hover or keyboard focus. */
+.lift {
+  transition: transform 0.28s cubic-bezier(.2,.7,.2,1), box-shadow 0.28s, border-color 0.28s;
+}
+.lift:hover,
+.lift:focus-visible {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-ink) 18%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-ink) 10%, transparent),
+    0 28px 50px -24px rgb(0 0 0 / 0.85);
+}
+
+/* A soft light that follows the pointer (Spotlight writes --mx and --my). */
+.spotlight {
+  position: relative;
+  isolation: isolate;
+}
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--color-ink) 8%, transparent), transparent 45%);
+}
+.spotlight:hover::before {
+  opacity: 1;
+}
+
+/* A short streak of light that travels around the border of a live element. */
+@property --beam {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.beam {
+  position: relative;
+}
+.beam::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(from var(--beam), transparent 0 78%, color-mix(in srgb, var(--color-live) 90%, white) 88%, transparent 96%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: beam-spin 4s linear infinite;
+}
+@keyframes beam-spin {
+  to { --beam: 360deg; }
+}
+
+/* A top-down football pitch at night: mown stripes and chalk lines, softened. Used behind the featured match. */
+.pitch {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #0b1a10;
+}
+.pitch::before {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  z-index: -2;
+  filter: blur(3px) saturate(0.8);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1050 680' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.55' stroke-width='3'%3E%3Crect x='25' y='25' width='1000' height='630'/%3E%3Cline x1='525' y1='25' x2='525' y2='655'/%3E%3Ccircle cx='525' cy='340' r='92'/%3E%3Crect x='25' y='178' width='165' height='324'/%3E%3Crect x='860' y='178' width='165' height='324'/%3E%3Crect x='25' y='258' width='55' height='164'/%3E%3Crect x='970' y='258' width='55' height='164'/%3E%3Cpath d='M190 270a92 92 0 0 1 0 140M860 270a92 92 0 0 0 0 140'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.6'%3E%3Ccircle cx='525' cy='340' r='5'/%3E%3Ccircle cx='135' cy='340' r='4'/%3E%3Ccircle cx='915' cy='340' r='4'/%3E%3C/g%3E%3C/svg%3E") center / 100% 100% no-repeat,
+    repeating-linear-gradient(90deg, #1c3a24 0 6.25%, #20422a 6.25% 12.5%),
+    #1c3a24;
+}
+.pitch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgb(255 255 255 / 0.10), transparent 55%),
+    linear-gradient(180deg, rgb(5 5 5 / 0.35), rgb(5 5 5 / 0.82));
+}
+
+/* Hides a horizontal scroll row's scrollbar while keeping it scrollable. */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .lift:hover, .lift:focus-visible { transform: none; }
+}
+
+/* Controls. A well is a recessed glass field; focus shows a soft white glow instead of a hard outline. */
+.well {
+  --well-shade: rgb(0 0 0 / 0.35);
+  background: color-mix(in srgb, var(--color-ink) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+  box-shadow: inset 0 1px 2px var(--well-shade);
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.well:hover {
+  border-color: color-mix(in srgb, var(--color-ink) 22%, transparent);
+}
+.well:focus-visible,
+.well:focus-within,
+.well[data-state="open"] {
+  outline: none;
+  border-color: color-mix(in srgb, var(--color-ink) 50%, transparent);
+  box-shadow:
+    inset 0 1px 2px var(--well-shade),
+    0 0 0 4px color-mix(in srgb, var(--color-ink) 9%, transparent),
+    0 0 26px -6px color-mix(in srgb, var(--color-ink) 30%, transparent);
+}
+.well[aria-invalid="true"],
+.well:has([aria-invalid="true"]) {
+  border-color: color-mix(in srgb, var(--color-live) 75%, transparent);
+}
+.well:has(:disabled),
+.well:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+:root[data-theme="light"] .well {
+  --well-shade: rgb(0 0 0 / 0.06);
+  background: color-mix(in srgb, var(--color-surf) 80%, transparent);
+}
+
+/* A floating panel (listbox, toast): denser glass so text stays readable over the page. */
+.float-glass {
+  background: color-mix(in srgb, var(--color-surf) 90%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-ink) 8%, transparent),
+    0 24px 60px -20px rgb(0 0 0 / 0.8);
+}
+:root[data-theme="light"] .float-glass {
+  box-shadow: 0 24px 50px -24px rgb(0 0 0 / 0.25);
+}
+
+/* Native date and time pickers: our own icon is drawn, so the native indicator is invisible but stays clickable over it. */
+.well input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2.75rem;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}

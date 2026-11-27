@@ -141,7 +141,7 @@ async function main() {
     await go(visitor, `/rules?division=${slug}&season=${tag}`);
     await text('Rules have not been published for this season yet.').waitFor();
     await go(admin, '/dictator');
-    await admin.getByRole('button', { name: 'Divisions & Seasons' }).click();
+    await admin.getByRole('link', { name: 'Divisions and seasons' }).click();
     await admin.getByRole('list', { name: 'Divisions', exact: true }).getByRole('listitem').filter({ hasText: `/${slug}` })
       .getByRole('button', { name: 'Seasons', exact: true }).click();
     const seasonRow = admin.getByRole('list', { name: 'Seasons', exact: true }).getByRole('listitem')

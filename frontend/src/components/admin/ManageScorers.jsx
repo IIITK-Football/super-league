@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Activity, Loader2, Save, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useLatestSearch } from '../../hooks/useLatestSearch';
+import { CalendarClock, Search, Timer, Trophy } from 'lucide-react';
+import { Button, DateTimeField, Field, Notice, Select, Combobox, Skeleton, TextInput, toast, useConfirm } from '../ui';
 
 // Scorers. A scorer holds the scorer grant and an assignment scoped to one season (every match of it) or one match, with
 // an optional expiry. The dictator assigns and revokes here through the dictator-only database functions
@@ -9,12 +10,11 @@ import { useLatestSearch } from '../../hooks/useLatestSearch';
 // the person's directory label (verified email, name as context; never a profile email or raw id). Assigning someone
 // who captains a team in that season or match shows a warning: a captain scores their own team's match only with an
 // explicit assignment, and the warning makes that deliberate.
-const inputClass = 'w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-[#d9ff4a]/60';
-const labelClass = 'text-[10px] font-black uppercase tracking-widest text-zinc-500';
 const when = (iso) => (iso ? new Date(iso).toLocaleString() : 'No expiry');
 const named = (m) => `${m.home?.name ?? 'Home'} vs ${m.away?.name ?? 'Away'}`;
 
-export default function ManageScorers() {
+export default function ManageScorers({ person }) { // eslint-disable-line react/prop-types
+  // person: the account chosen in Access control, so the one scorer flow starts from it.
   const [state, setState] = useState({ status: 'loading', rows: [], labels: {}, error: '' });
   const [divisions, setDivisions] = useState([]);
   const [divisionId, setDivisionId] = useState('');
@@ -28,8 +28,9 @@ export default function ManageScorers() {
   const [captainWarning, setCaptainWarning] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
   const latest = useRef({ list: 0, seasons: 0, matches: 0, warning: 0 });
+  const confirm = useConfirm();
+  useEffect(() => { if (person) setPicked({ id: person.user_id, label: person.label }); }, [person]);
   const search = useLatestSearch((text) => supabase.rpc('account_directory', { p_query: text, p_limit: 20 }), query, { minLength: 2 });
 
   const load = async () => {
@@ -94,7 +95,7 @@ export default function ManageScorers() {
   const assign = async () => {
     if (!picked.id) { setError('Find and choose the scorer’s account first.'); return; }
     if (!seasonId) { setError('Choose a season; add a match to limit the assignment to one match.'); return; }
-    setBusy('assign'); setError(''); setMessage('');
+    setBusy('assign'); setError('');
     const { error: err } = await supabase.rpc('assign_scorer', {
       p_user: picked.id,
       p_season: matchId ? null : seasonId,
@@ -103,91 +104,82 @@ export default function ManageScorers() {
     });
     setBusy('');
     if (err) setError(err.code === '23505' ? 'This scorer already has that assignment.' : err.message || 'Could not assign the scorer.');
-    else { setMessage(`${picked.label} can now score ${matchId ? 'that match' : 'every match of the season'}.`); setPicked({ id: '', label: '' }); setExpires(''); }
+    else { toast({ tone: 'success', title: 'Scorer assigned', description: `${picked.label} can now score ${matchId ? 'that match' : 'every match of the season'}.` }); setPicked({ id: '', label: '' }); setExpires(''); }
     load();
   };
 
   const revoke = async (row) => {
     const who = state.labels[row.user_id] || 'this scorer';
-    if (!window.confirm(`Revoke ${who}? Matches already scored keep their data.`)) return;
-    setBusy(row.id); setError(''); setMessage('');
+    const ok = await confirm({ title: `Revoke ${who}?`, description: 'Matches already scored keep their data.', confirmLabel: 'Revoke', tone: 'danger' });
+    if (!ok) return;
+    setBusy(row.id); setError('');
     const { error: err } = await supabase.rpc('revoke_scorer', { p_assignment: row.id });
     setBusy('');
     if (err) setError(err.message);
-    else setMessage(`${who} no longer scores that assignment.`);
+    else toast({ tone: 'success', title: 'Scorer revoked', description: `${who} no longer scores that assignment.` });
     load();
   };
 
-  const options = search.results;
-  return <div className="space-y-6 p-6">
-    <div><h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-tight"><Activity size={20} /> Scorers</h2><p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">Assign a scorer to a season or to one match. Scorers use Live Matches only; they cannot change fixtures, teams, rosters, roles or news.</p></div>
-    {error && <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
-    {message && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</p>}
+  // The chosen person stays in the list even when a search has not returned them.
+  const found = search.results;
+  const options = picked.id && !found.some((a) => a.user_id === picked.id) ? [{ user_id: picked.id, label: picked.label }, ...found] : found;
+  return <div className="space-y-6">
+    {error && <Notice tone="error" role="alert">{error}</Notice>}
 
     <section aria-label="Assignments" className="space-y-3">
-      {state.status === 'loading' && <p className="flex items-center gap-2 text-zinc-500"><Loader2 size={14} className="animate-spin" /> Loading assignments...</p>}
-      {state.status === 'error' && <p role="alert" className="text-sm text-red-300">Assignments could not be loaded ({state.error}). <button type="button" onClick={load} className="underline">Try again</button></p>}
-      {state.status === 'ready' && !state.rows.length && <p className="text-zinc-500">No scorers are assigned yet.</p>}
-      {state.status === 'ready' && state.rows.length > 0 && <ul aria-label="Scorer assignments" className="divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10">
-        {state.rows.map((row) => <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 bg-black/30 p-4">
-          <div className="min-w-0">
-            <p className="break-words font-bold text-white">{state.labels[row.user_id] || 'An account that is no longer available'}</p>
-            <p className="text-xs text-zinc-400">
-              {row.match ? `${named(row.match)} (${row.match.season?.name ?? 'match'})` : `Every match of ${row.season?.division?.name ?? ''} ${row.season?.name ?? 'the season'}`}
-              {' · '}{row.expires_at && new Date(row.expires_at) < new Date() ? <span className="text-amber-300">Expired {when(row.expires_at)}</span> : when(row.expires_at)}
-            </p>
-          </div>
-          <button type="button" onClick={() => revoke(row)} disabled={busy !== ''} className="flex items-center gap-1 rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-red-400 disabled:opacity-40"><Trash2 size={13} /> Revoke</button>
-        </li>)}
+      {state.status === 'loading' && <Skeleton className="h-20 w-full rounded-card" />}
+      {state.status === 'error' && <Notice tone="error" role="alert">Assignments could not be loaded ({state.error}). <Button variant="quiet" size="sm" onClick={load}>Try again</Button></Notice>}
+      {state.status === 'ready' && !state.rows.length && <div className="flex flex-col items-start gap-2 rounded-card border border-dashed border-line p-6 text-sm text-mut">
+        <Timer size={26} aria-hidden="true" />
+        <p className="font-semibold text-ink">No scorers are assigned yet.</p>
+        Assign someone below to score a season or a single match.
+      </div>}
+      {state.status === 'ready' && state.rows.length > 0 && <ul aria-label="Scorer assignments" className="glass divide-y divide-line/70 rounded-card px-2">
+        {state.rows.map((row) => {
+          const expired = row.expires_at && new Date(row.expires_at) < new Date();
+          return <li key={row.id} className="flex flex-wrap items-center gap-3 p-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-ink/[0.07] text-ink">{row.match ? <CalendarClock size={18} aria-hidden="true" /> : <Trophy size={18} aria-hidden="true" />}</span>
+            <div className="min-w-0 flex-1">
+              <p className="break-words font-black uppercase tracking-tight text-ink">{state.labels[row.user_id] || 'An account that is no longer available'}</p>
+              <p className="text-sm text-mut">
+                {row.match ? `${named(row.match)} (${row.match.season?.name ?? 'match'})` : `Every match of ${row.season?.division?.name ?? ''} ${row.season?.name ?? 'the season'}`}
+                {' · '}{expired ? <span className="text-live">Expired {when(row.expires_at)}</span> : when(row.expires_at)}
+              </p>
+            </div>
+            <Button variant="quiet" size="sm" onClick={() => revoke(row)} disabled={busy !== ''} className="text-live">Revoke</Button>
+          </li>;
+        })}
       </ul>}
     </section>
 
-    <section aria-label="Assign a scorer" className="space-y-4 rounded-2xl border border-white/10 bg-white/[.03] p-5">
-      <h3 className="text-sm font-black uppercase tracking-widest text-zinc-300">Assign a scorer</h3>
-      <div className="grid gap-3 md:grid-cols-2">
-        <label className={labelClass}>Find an account
-          <input type="search" aria-label="Find scorer" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" className={`${inputClass} mt-1 normal-case tracking-normal`} />
-        </label>
-        <label className={labelClass}>Scorer
-          <select aria-label="Scorer" value={picked.id} onChange={(e) => setPicked({ id: e.target.value, label: options.find((a) => a.user_id === e.target.value)?.label || '' })} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-            <option value="">{options.length ? 'Choose from the search results' : 'Search to choose an account'}</option>
-            {options.map((a) => <option key={a.user_id} value={a.user_id}>{a.label}</option>)}
-          </select>
-        </label>
-        <p aria-live="polite" className="text-xs text-zinc-500 md:col-span-2">
+    <section id="assign-scorer" aria-label="Assign a scorer" className="glass scroll-mt-28 space-y-5 rounded-card p-5">
+      <h2 className="font-display text-2xl text-ink">Assign a scorer</h2>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field label="Find an account">{(p) => <TextInput {...p} icon={Search} type="search" aria-label="Find scorer" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or college email" />}</Field>
+        <Field label="Scorer">{(p) => <Select {...p} aria-label="Scorer" value={picked.id}
+          onChange={(id) => setPicked({ id, label: found.find((a) => a.user_id === id)?.label || picked.label })}
+          placeholder={options.length ? 'Choose from the search results' : 'Search to choose an account'}
+          options={options.map((a) => ({ value: a.user_id, label: a.label }))} />}</Field>
+        <p aria-live="polite" className="text-sm text-mut md:col-span-2">
           {search.status === 'idle' && query.trim() && 'Type at least two letters.'}
-          {search.status === 'loading' && <span className="inline-flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Searching...</span>}
+          {search.status === 'loading' && 'Searching...'}
           {search.status === 'ready' && (options.length ? `${options.length} account${options.length === 1 ? '' : 's'} found` : 'No account matches.')}
-          {search.status === 'error' && <span role="alert" className="text-red-300">Search failed ({search.error}). <button type="button" onClick={search.retry} className="underline">Try again</button></span>}
+          {search.status === 'error' && <span role="alert" className="text-live">Search failed ({search.error}). <Button variant="quiet" size="sm" onClick={search.retry}>Try again</Button></span>}
         </p>
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
-        <label className={labelClass}>Division
-          <select aria-label="Division" value={divisionId} onChange={(e) => chooseDivision(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-            <option value="">{divisions.length ? 'Choose a division' : 'No divisions yet'}</option>
-            {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-        </label>
-        <label className={labelClass}>Season
-          <select aria-label="Season" value={seasonId} disabled={!divisionId} onChange={(e) => chooseSeason(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-            <option value="">{divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}</option>
-            {seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? ' (current)' : ''}</option>)}
-          </select>
-        </label>
-        <label className={labelClass}>One match (optional)
-          <select aria-label="Match" value={matchId} disabled={!seasonId} onChange={(e) => setMatchId(e.target.value)} className={`${inputClass} mt-1 normal-case tracking-normal`}>
-            <option value="">Every match of the season</option>
-            {matches.map((m) => <option key={m.id} value={m.id}>{named(m)} · {m.date ? new Date(m.date).toLocaleDateString() : 'no date'}</option>)}
-          </select>
-        </label>
-        <label className={labelClass}>Expires (optional)
-          <input type="datetime-local" aria-label="Expires" value={expires} onChange={(e) => setExpires(e.target.value)} className={`${inputClass} mt-1`} />
-        </label>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Field label="Division">{(p) => <Select {...p} aria-label="Division" value={divisionId} onChange={chooseDivision}
+          placeholder={divisions.length ? 'Choose a division' : 'No divisions yet'} options={divisions.map((d) => ({ value: d.id, label: d.name }))} />}</Field>
+        <Field label="Season">{(p) => <Select {...p} aria-label="Season" value={seasonId} disabled={!divisionId} onChange={chooseSeason}
+          placeholder={divisionId && !seasons.length ? 'This division has no seasons' : 'Choose a season'}
+          options={seasons.map((x) => ({ value: x.id, label: `${x.name}${x.is_current ? ' (current)' : ''}` }))} />}</Field>
+        <Field label="One match (optional)">{(p) => <Combobox {...p} aria-label="Match" value={matchId} disabled={!seasonId} onChange={setMatchId}
+          placeholder="Every match of the season" searchPlaceholder="Search teams"
+          options={[{ value: '', label: 'Every match of the season' }, ...matches.map((m) => ({ value: m.id, label: named(m), description: m.date ? new Date(m.date).toLocaleDateString() : 'No date' }))]} />}</Field>
+        <Field label="Expires (optional)">{(p) => <DateTimeField {...p} type="datetime-local" aria-label="Expires" value={expires} onChange={(e) => setExpires(e.target.value)} />}</Field>
       </div>
-      {captainWarning && <p role="note" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">{captainWarning}</p>}
-      <button type="button" onClick={assign} disabled={busy !== '' || !picked.id || !seasonId} className="flex items-center gap-2 rounded-lg bg-[#d9ff4a] px-3 py-2 text-xs font-black uppercase text-black disabled:opacity-40">
-        {busy === 'assign' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Assign scorer
-      </button>
+      {captainWarning && <Notice tone="warning" role="note">{captainWarning}</Notice>}
+      <Button onClick={assign} disabled={busy !== '' || !picked.id || !seasonId}>{busy === 'assign' ? 'Assigning...' : 'Assign scorer'}</Button>
     </section>
   </div>;
 }

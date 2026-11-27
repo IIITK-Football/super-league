@@ -58,7 +58,9 @@ export async function POST(request: Request) {
       return Response.json({ success: true, message, match: fresh, ...extra });
     };
     const markLive = async () => {
-      if (match.status === 'scheduled') await supabase.from('matches').update({ status: 'live' }).eq('id', match_id);
+      if (match.status !== 'scheduled') return;
+      const { error } = await supabase.from('matches').update({ status: 'live' }).eq('id', match_id);
+      if (error) throw error;
     };
 
     switch (action) {

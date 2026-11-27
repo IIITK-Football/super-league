@@ -1,137 +1,105 @@
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
-import { GlassPanel } from '../components/GlassPanel';
+import { EmptyState, ErrorState, NumberTicker, Skeleton } from '../components/ui';
 import { cn } from '../utils/cn';
-import { Loader2 } from 'lucide-react';
-import { Loader } from '../components/Loader';
 
+const PLACE = ['1st', '2nd', '3rd'];
+
+// The top three as a podium: the leader is the big tile, the next two sit beside it.
+function Podium({ rows, label, unit }) {
+  const [first, ...others] = rows;
+  return (
+    <div className="space-y-4">
+      <div className="glass flex flex-col justify-between gap-8 rounded-card p-6 sm:p-8">
+        <div className="space-y-3">
+          <p className="eyebrow">{PLACE[0]} · {label}</p>
+          <p className="font-display text-3xl leading-none text-ink sm:text-4xl">{first.name}</p>
+          {first.club && <p className="eyebrow">{first.club}</p>}
+        </div>
+        <p className="flex items-baseline gap-3">
+          <NumberTicker value={first.stat} className="chrome font-display text-8xl leading-none tabular-nums text-ink" />
+          <span className="eyebrow">{unit}</span>
+        </p>
+      </div>
+      {others.length > 0 && (
+        <div className="grid grid-cols-2 gap-4">
+          {others.map((player, i) => (
+            <div key={player.id || i} className="glass flex flex-col justify-between gap-6 rounded-card p-5">
+              <div className="space-y-2">
+                <p className="eyebrow">{PLACE[i + 1]}</p>
+                <p className="font-display text-xl leading-none text-ink sm:text-2xl">{player.name}</p>
+                {player.club && <p className="eyebrow truncate">{player.club}</p>}
+              </div>
+              <NumberTicker value={player.stat} className="chrome font-display text-5xl leading-none tabular-nums text-ink" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One stat: the podium, then the rest of the ranked list.
+function StatBoard({ caption, label, unit, rows, statKey }) {
+  const ranked = rows.map((p) => ({ ...p, stat: p[statKey] || 0 }));
+  return (
+    <section aria-label={caption} className="space-y-6">
+      <h2 className="font-display text-3xl text-ink sm:text-4xl">{caption}</h2>
+      {ranked.length === 0 ? (
+        <EmptyState title={`No ${label.toLowerCase()} yet`} />
+      ) : (
+        <>
+          <Podium rows={ranked.slice(0, 3)} label={label} unit={unit} />
+          {ranked.length > 3 && (
+            <ol className="glass divide-y divide-line/70 rounded-card px-5 sm:px-6">
+              {ranked.slice(3).map((player, index) => (
+                <li key={`${statKey}-${player.id || index}`} className="flex min-h-14 items-center gap-4 py-3">
+                  <span className="eyebrow w-8 shrink-0 tabular-nums">{index + 4}</span>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate font-black uppercase tracking-tight text-ink">{player.name}</span>
+                    <span className="eyebrow truncate">{player.club}</span>
+                  </div>
+                  <span className={cn('font-display text-3xl leading-none tabular-nums text-ink')}>{player.stat}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+// Player stats: goals and assists for the selected division and season. (Predictions are on the Predictions page.)
 export function Leaderboard() {
-    const { seasonScope } = useLeague();
+  const { seasonScope } = useLeague();
+  const { data: apiResponse, loading, error, retry } = useApi('/leaderboard');
 
-    // Pass the division to the backend so it knows which stats to grab!
-    const { data: apiResponse, loading } = useApi('/leaderboard');
+  const topScorers = apiResponse?.data?.topScorers || [];
+  const topAssists = apiResponse?.data?.topAssists || [];
+  const divisionName = seasonScope.divisionRecord?.name;
 
-    // Extract the separated lists directly from the new backend response
-    const scorersData = apiResponse?.data?.topScorers || [];
-    const assistsData = apiResponse?.data?.topAssists || [];
+  return (
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-14 pb-12">
+      <header className="space-y-3">
+        <p className="eyebrow">{divisionName ? `${divisionName}${seasonScope.season && seasonScope.seasons.length > 1 ? ` ${seasonScope.season.name}` : ''}` : 'Division'}</p>
+        <h1 className="font-display text-4xl text-ink sm:text-6xl">Player stats</h1>
+      </header>
 
-    // Map them so the UI component can read the 'stat' variable easily
-    const topScorers = scorersData.map(p => ({ ...p, stat: p.goalsScored || 0 }));
-    const topAssists = assistsData.map(p => ({ ...p, stat: p.assists || 0 }));
-
-    if (loading) {
-        return <Loader text="Aggregating Player Stats..." fullScreen />;
-    }
-
-    return (
-        <div className="max-w-7xl mx-auto space-y-12 animate-in fade-in duration-500 pb-12">
-            {/* Header */}
-            <div className="text-center space-y-4">
-                <h1 className="text-4xl sm:text-5xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
-                    {seasonScope.divisionRecord?.name || 'Division'}{seasonScope.season && seasonScope.seasons.length > 1 ? ` ${seasonScope.season.name}` : ''} Player Stats
-                </h1>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-                {/* Top Scorers Section */}
-                <GlassPanel className="p-6 sm:p-10 flex flex-col h-full">
-                    <div className="flex items-center gap-4 mb-8">
-                        <div>
-                            <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white">Golden Boot</h2>
-                            <p className="text-zinc-400 text-sm tracking-wider uppercase">Top Goalscorers</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4 flex-1">
-                        <div className="grid grid-cols-[3rem_1fr_4rem] gap-4 px-4 pb-2 border-b border-white/10 text-xs font-bold tracking-widest text-zinc-500">
-                            <div className="text-center">RNK</div>
-                            <div>PLAYER</div>
-                            <div className="text-right">GLS</div>
-                        </div>
-
-                        {topScorers.length > 0 ? topScorers.map((player, index) => (
-                            <div
-                                key={`scorer-${player.id || index}`}
-                                className={cn(
-                                    "grid grid-cols-[3rem_1fr_4rem] gap-4 items-center p-4 rounded-2xl transition-all duration-300",
-                                    index === 0 ? "bg-white/5 border border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.05)]" : "bg-black/40 hover:bg-white/5 border border-white/5"
-                                )}
-                            >
-                                <div className={cn(
-                                    "font-black text-xl text-center",
-                                    index === 0 ? "text-white" : "text-zinc-500"
-                                )}>
-                                    {index + 1}
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-lg text-white transition-colors">{player.name}</h4>
-                                    <p className="text-sm font-medium text-zinc-400 truncate">{player.club}</p>
-                                </div>
-                                <div className="text-right">
-                                    <span className={cn(
-                                        "text-2xl font-black",
-                                        index === 0 ? "text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-400 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" : "text-white"
-                                    )}>
-                                        {player.stat}
-                                    </span>
-                                </div>
-                            </div>
-                        )) : (
-                            <div className="text-center py-10 text-zinc-600 font-bold uppercase tracking-widest text-sm">No goals recorded yet</div>
-                        )}
-                    </div>
-                </GlassPanel>
-
-                {/* Top Assists Section */}
-                <GlassPanel className="p-6 sm:p-10 flex flex-col h-full">
-                    <div className="flex items-center gap-4 mb-8">
-                        <div>
-                            <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white">Playmaker</h2>
-                            <p className="text-zinc-400 text-sm tracking-wider uppercase">Top Assists</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4 flex-1">
-                        <div className="grid grid-cols-[3rem_1fr_4rem] gap-4 px-4 pb-2 border-b border-white/10 text-xs font-bold tracking-widest text-zinc-500">
-                            <div className="text-center">RNK</div>
-                            <div>PLAYER</div>
-                            <div className="text-right">AST</div>
-                        </div>
-
-                        {topAssists.length > 0 ? topAssists.map((player, index) => (
-                            <div
-                                key={`assist-${player.id || index}`}
-                                className={cn(
-                                    "grid grid-cols-[3rem_1fr_4rem] gap-4 items-center p-4 rounded-2xl transition-all duration-300",
-                                    index === 0 ? "bg-white/5 border border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.05)]" : "bg-black/40 hover:bg-white/5 border border-white/5"
-                                )}
-                            >
-                                <div className={cn(
-                                    "font-black text-xl text-center",
-                                    index === 0 ? "text-white" : "text-zinc-500"
-                                )}>
-                                    {index + 1}
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-lg text-white transition-colors">{player.name}</h4>
-                                    <p className="text-sm font-medium text-zinc-400 truncate">{player.club}</p>
-                                </div>
-                                <div className="text-right">
-                                    <span className={cn(
-                                        "text-2xl font-black",
-                                        index === 0 ? "text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-400 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" : "text-white"
-                                    )}>
-                                        {player.stat}
-                                    </span>
-                                </div>
-                            </div>
-                        )) : (
-                            <div className="text-center py-10 text-zinc-600 font-bold uppercase tracking-widest text-sm">No assists recorded yet</div>
-                        )}
-                    </div>
-                </GlassPanel>
-            </div>
-
-        </div >
-    );
+      {loading && (
+        <div aria-busy="true" className="grid gap-12 lg:grid-cols-2">
+          <Skeleton className="h-96 w-full rounded-card" />
+          <Skeleton className="h-96 w-full rounded-card" />
+        </div>
+      )}
+      {!loading && error && <ErrorState title="Could not load player stats" message={error.message} onRetry={retry} />}
+      {!loading && !error && (
+        <div className="grid gap-14 lg:grid-cols-2">
+          <StatBoard caption="Top scorers" label="Goals" unit="goals" rows={topScorers} statKey="goalsScored" />
+          <StatBoard caption="Top assists" label="Assists" unit="assists" rows={topAssists} statKey="assists" />
+        </div>
+      )}
+    </div>
+  );
 }

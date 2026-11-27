@@ -1,41 +1,64 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { API_BASE_URL } from '../../lib/api';
-import { Activity, Trophy, CheckCircle, CheckCircle2, X, Trash2 } from 'lucide-react';
+import { AlarmClockOff, ChevronLeft, Flag, Minus, Pause, Play, Plus, Timer } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { DivisionSwitch } from './DivisionSwitch';
 import { useAuth } from '../../context/AuthContext';
+import { Button, Card, Checkbox, ConfirmDialog, Crest, Field, Notice, NumberField, toast, useConfirm } from '../ui';
+import { formatKickoff } from './adminFormat';
+import { cn } from '../../utils/cn';
+import { MatchPicker } from './live/MatchPicker';
+import { EventSheet } from './live/EventSheet';
+import { EventTimeline, KIND_LABEL, KindIcon } from './live/EventTimeline';
+import { MAX_MINUTE, RUNAWAY_MINUTE, clockMinute, eventMinute, inFirstHalf, minuteLabel, recordedMinute, totalMinute } from './live/clock';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const emptyForm = { id: null, editId: null, version: null, kind: 'goal', team_id: '', player_id: '', assist_id: '', minute: null };
 
 export default function LiveController() {
   const { hasRole } = useAuth();
+  const confirm = useConfirm();
   const [division, setDivision] = useState('super-league');
   const { data: resp, refetch } = useApi(`/admin/matches?status=live,scheduled&division=${division}`);
-  const { data: playersResp } = useApi(`/players?division=${division}`); // the selected division's current season roster 
-  
-  const matches = resp?.data || [];
+  const { data: doneResp, refetch: refetchDone } = useApi(`/admin/matches?status=completed&division=${division}`);
+  const { data: playersResp } = useApi(`/players?division=${division}`); // the selected division's current season roster
+  const { data: teamsResp } = useApi(`/teams?division=${division}`); // crests and colours
+
+  // Live matches first, then fixtures by kick-off.
+  const matches = [...(resp?.data || [])].sort((a, b) => (b.status === 'live') - (a.status === 'live'));
+  // Finished matches kicked off in the last 7 days, latest first. Older results are found by search.
+  const finishedAll = [...(doneResp?.data || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const weekAgo = Date.now() - WEEK_MS;
+  const finished = finishedAll.filter((m) => m.date && new Date(m.date).getTime() >= weekAgo);
+  const older = finishedAll.filter((m) => !finished.includes(m));
+  const [reopenTarget, setReopenTarget] = useState(null);
   const allPlayers = playersResp?.data || [];
+  const teams = new Map((teamsResp?.data || []).map((t) => [t.id, t]));
+  const crest = (id) => teams.get(id);
 
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [loading, setLoading] = useState(false);
-  
-  // --- MATCH CLOCK STATE ---
-  const [liveMinute, setLiveMinute] = useState(0);
-  const [timerRunning, setTimerRunning] = useState(false);
-  const [displayTime, setDisplayTime] = useState('');
-  const [calibration, setCalibration] = useState(0);
 
-  // --- MATCH EVENTS STATE (goals, own goals and cards; the score is a cache of them, never typed in) ---
+  // --- MATCH CLOCK ---
+  // The minute is computed from the stored start and calibration; `now` ticks while the clock runs.
+  const [now, setNow] = useState(Date.now());
+  const [minuteDraft, setMinuteDraft] = useState(null); // a minute typed in Set minute, until it is saved
+  const stopped = selectedMatch?.minute === 'HT' || selectedMatch?.minute === 'FT';
+  const timerRunning = selectedMatch?.status === 'live' && Boolean(selectedMatch?.timer_start_time) && !stopped;
+  const firstHalf = timerRunning && inFirstHalf(selectedMatch);
+  const currentMinute = clockMinute(selectedMatch, now) ?? 0;
+  const runaway = timerRunning && currentMinute > RUNAWAY_MINUTE;
+
+  // --- MATCH EVENTS (goals, own goals and cards; the score is a cache of them, never typed in) ---
   const [events, setEvents] = useState([]);
   const [eventsState, setEventsState] = useState({ status: 'idle', error: '' });
-  const [notice, setNotice] = useState({ type: '', text: '' });
   const [busyId, setBusyId] = useState('');
   const [candidates, setCandidates] = useState(null); // goals to choose from when -1 has no unattributed goal
-  const [showGoalForm, setShowGoalForm] = useState(false);
-  const [showCardForm, setShowCardForm] = useState(false);
-  const [goalForm, setGoalForm] = useState({
-    id: null, editId: null, version: null, team_id: '', player_id: '', assist_id: '', minute: '', is_own_goal: false
-  });
-  const [cardForm, setCardForm] = useState({ id: null, kind: 'yellow', team_id: '', player_id: '', minute: '' });
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+
+  const say = (ok, text) => toast({ title: text, tone: ok ? 'success' : 'error' });
 
   // 1. Fetch the match's events (voided events are corrections and stay out of the list)
   const fetchMatchEvents = async () => {
@@ -53,75 +76,51 @@ export default function LiveController() {
     setEventsState({ status: 'ready', error: '' });
   };
 
-  // 2. Initialize clock & Smart Resume when a match is clicked
   useEffect(() => {
-    if (selectedMatch) {
-      const dbMinute = selectedMatch.minute || "0'";
-      setDisplayTime(dbMinute);
-      const parsed = parseInt(dbMinute);
-      
-      // Timer state from backend instead of local storage
-      const savedStart = selectedMatch.timer_start_time ? new Date(selectedMatch.timer_start_time).getTime() : null;
-      const savedCalib = selectedMatch.timer_calibration !== undefined && selectedMatch.timer_calibration !== null 
-                           ? selectedMatch.timer_calibration 
-                           : (isNaN(parsed) ? 0 : parsed);
-                           
-      setCalibration(savedCalib);
-      
-      // Smart Timer Resume Logic
-      if (selectedMatch.status === 'live' && dbMinute !== 'HT' && dbMinute !== 'FT') {
-        if (!savedStart && timerRunning === false) {
-           // We'll let the user hit start.
-        } else if (savedStart) {
-           setTimerRunning(true);
-        }
-      } else {
-        setTimerRunning(false); 
-      }
-      
-      fetchMatchEvents(); 
-    }
+    if (!selectedMatch) return;
+    setMinuteDraft(null);
+    setNow(Date.now());
+    fetchMatchEvents();
   }, [selectedMatch?.id]);
 
-  // 3. The Auto-Ticker! (Fires every second to compute elapsed time)
+  // The ticker: recompute the minute every second while the clock runs (nothing is written).
   useEffect(() => {
-    let interval;
-    if (timerRunning && selectedMatch && selectedMatch.timer_start_time) {
-      interval = setInterval(() => {
-        const startTime = new Date(selectedMatch.timer_start_time).getTime();
-        const elapsedMinutes = Math.floor((Date.now() - startTime) / 60000);
-        const currentCalib = selectedMatch.timer_calibration || 0;
-        
-        const next = elapsedMinutes + currentCalib;
-        setLiveMinute(next);
-        
-        // Only sync display string every 60 seconds (but do not ping DB)
-        setDisplayTime(prev => {
-          return `${next}'`;
-        });
-      }, 1000); 
-    }
+    if (!timerRunning) return undefined;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [timerRunning, selectedMatch]);
+  }, [timerRunning]);
 
-  // 4. Silent Sync Function
-  const syncTimeToDb = async (timeStr, startTime = undefined, calib = undefined) => {
-    if (!selectedMatch) return;
-    if (timeStr) setDisplayTime(timeStr);
-    
-    const payload = { match_id: selectedMatch.id, action: 'update_time', minute: timeStr };
-    if (startTime !== undefined) payload.timer_start_time = startTime;
-    if (calib !== undefined) payload.timer_calibration = calib;
-
+  // Saves the clock. The screen changes only when the server has stored the change; a refusal is shown as a toast.
+  const [clockBusy, setClockBusy] = useState(false);
+  const saveClock = async (fields) => {
+    setClockBusy(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = API_BASE_URL;
-      await fetch(`${API_URL}/admin/matches/live`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify(payload)
-      });
-    } catch (err) { console.error(err); }
+      const r = await callLive({ action: 'update_time', ...fields });
+      if (!r.ok) { say(false, r.message || 'The clock was not saved.'); return false; }
+      setSelectedMatch((prev) => ({ ...prev, ...fields }));
+      setMinuteDraft(null);
+      setNow(Date.now());
+      return true;
+    } catch {
+      say(false, 'The clock was not saved. Check your connection and try again.');
+      return false;
+    } finally { setClockBusy(false); }
+  };
+
+  const playedNow = () => clockMinute(selectedMatch, Date.now()) ?? 0;
+  const startClock = () => {
+    const from = minuteDraft ?? playedNow();
+    saveClock({ minute: `${from}'`, timer_start_time: new Date().toISOString(), timer_calibration: from });
+  };
+  // Pause and half time store the minutes played and stop the clock; the next start resumes from them.
+  const pauseClock = (at = playedNow()) => saveClock({ minute: `${at}'`, timer_start_time: null, timer_calibration: at });
+  const saveHalfTime = () => saveClock({ minute: 'HT', timer_start_time: null, timer_calibration: timerRunning ? playedNow() : (clockMinute(selectedMatch) ?? 0) });
+  // Set minute: a running clock restarts its stint from the new minute, a stopped one just stores it.
+  const setClock = () => {
+    const at = minuteDraft ?? currentMinute;
+    saveClock(timerRunning
+      ? { minute: `${at}'`, timer_start_time: new Date().toISOString(), timer_calibration: at }
+      : { minute: `${at}'`, timer_calibration: at });
   };
 
   // One call to the live route. A response carries the match's fresh score (a cache of its events) and the event.
@@ -138,345 +137,357 @@ export default function LiveController() {
   };
 
   // Records, corrects or voids an event, then reloads the list. A 409 (a stale version, or "choose the goal") is
-  // explained inline and the list is refreshed, so the scorer sees what changed.
+  // explained and the list is refreshed, so the scorer sees what changed.
   const runEvent = async (payload, busy = 'form') => {
     setBusyId(busy);
-    setNotice({ type: '', text: '' });
     try {
       const r = await callLive(payload);
       if (r.ok) {
-        setNotice({ type: 'ok', text: r.message });
+        say(true, r.message);
         setCandidates(null);
-        setShowGoalForm(false);
-        setShowCardForm(false);
+        setSheetOpen(false);
         refetch();
       } else {
         if (r.status === 409 && r.candidates) setCandidates(r.candidates);
-        setNotice({ type: 'error', text: r.message || 'The change was not saved.' });
+        say(false, r.message || 'The change was not saved.');
       }
       await fetchMatchEvents();
       return r;
-    } catch (err) {
-      setNotice({ type: 'error', text: 'The change was not saved. Check your connection and try again.' });
+    } catch {
+      say(false, 'The change was not saved. Check your connection and try again.');
+      await fetchMatchEvents();
     } finally { setBusyId(''); }
   };
 
-  // Clock and status actions (half time, final whistle) keep their confirmations.
+  // Status actions (final whistle) report success so the caller can follow the server.
   const handleAction = async (action, extraData = {}) => {
     setLoading(true);
     try {
       const r = await callLive({ action, ...extraData });
-      if (r.ok) { setNotice({ type: 'ok', text: r.message }); refetch(); }
-      else setNotice({ type: 'error', text: r.message || 'The action failed.' });
-    } catch (err) { setNotice({ type: 'error', text: 'Action failed. Check your connection.' }); }
+      if (r.ok) { say(true, r.message); refetch(); refetchDone(); return true; }
+      say(false, r.message || 'The action failed.');
+      return false;
+    } catch { say(false, 'Action failed. Check your connection.'); return false; }
     finally { setLoading(false); }
   };
 
-  const submitGoal = (e) => {
+  // The season's format decides whether a tie goes to penalties: knockout seasons always, combined seasons when asked.
+  const [seasonFormat, setSeasonFormat] = useState('league');
+  useEffect(() => {
+    if (!selectedMatch?.season_id) return undefined;
+    let current = true;
+    supabase.from('seasons').select('format').eq('id', selectedMatch.season_id).maybeSingle()
+      .then(({ data }) => { if (current && data) setSeasonFormat(data.format); });
+    return () => { current = false; };
+  }, [selectedMatch?.season_id]);
+  const [whistle, setWhistle] = useState(null); // open final-whistle form: { home, away, koTie }
+  const tied = selectedMatch?.home_score === selectedMatch?.away_score;
+  const finishedMatch = selectedMatch?.status === 'completed';
+  const liveNow = selectedMatch?.status === 'live';
+  const penaltiesAsked = tied && (seasonFormat === 'knockout' || (seasonFormat === 'league_knockout' && whistle?.koTie));
+
+  const endMatch = async () => {
+    let penalties = {};
+    if (penaltiesAsked) {
+      const home = whistle.home.trim();
+      const away = whistle.away.trim();
+      if (!home || !away) throw new Error('Enter both penalty scores.');
+      if (!/^\d+$/.test(home) || !/^\d+$/.test(away)) throw new Error('Penalty scores are whole numbers.');
+      penalties = { home_penalties: Number(home), away_penalties: Number(away) };
+    }
+    const ok = await handleAction('close_match', penalties);
+    if (!ok) throw new Error('The match was not ended. The scores are unchanged.');
+    setSelectedMatch((prev) => ({ ...prev, timer_start_time: null }));
+  };
+
+  // Reopening sends the match back to live at its last recorded minute, with the clock stopped (closing a match
+  // leaves its old start time, which would otherwise run the clock from it). Its scores and events are kept.
+  const reopenMatch = async () => {
+    const { data } = await supabase.from('match_events').select('minute').eq('match_id', selectedMatch.id).is('voided_at', null);
+    const last = Math.max(0, ...(data || []).map((e) => Number(e.minute) || 0));
+    const fields = { minute: `${last}'`, timer_start_time: null, timer_calibration: last };
+    const r = await callLive({ action: 'update_time', ...fields });
+    if (!r.ok) throw new Error(r.message || 'The match was not reopened.');
+    setSelectedMatch((prev) => ({ ...prev, ...fields }));
+    say(true, 'Match reopened. It is live again.');
+    refetch();
+    refetchDone();
+  };
+
+  const askHalfTime = async () => {
+    const ok = await confirm({ title: 'Start half time?', description: 'The clock stops at this minute. The second half starts from it.', confirmLabel: 'Half time' });
+    if (ok) saveHalfTime();
+  };
+
+  const submitEvent = (e) => {
     e.preventDefault();
-    const base = { kind: goalForm.is_own_goal ? 'own_goal' : 'goal', team_id: goalForm.team_id, player_id: goalForm.player_id || null,
-      assist_player_id: goalForm.is_own_goal ? null : (goalForm.assist_id || null), minute: goalForm.minute || null };
-    if (goalForm.editId) runEvent({ action: 'edit_event', event_id: goalForm.editId, version: goalForm.version, changes: base }, goalForm.editId);
-    else runEvent({ action: 'add_event', event: { id: goalForm.id, ...base } });
+    const minute = eventMinute(form.minute, firstHalf);
+    if (form.kind === 'yellow' || form.kind === 'red') {
+      runEvent({ action: 'add_event', event: { id: form.id, kind: form.kind, team_id: form.team_id, player_id: form.player_id, minute } });
+      return;
+    }
+    const base = { kind: form.kind, team_id: form.team_id, player_id: form.player_id || null,
+      assist_player_id: form.kind === 'own_goal' ? null : (form.assist_id || null), minute };
+    if (form.editId) runEvent({ action: 'edit_event', event_id: form.editId, version: form.version, changes: base }, form.editId);
+    else runEvent({ action: 'add_event', event: { id: form.id, ...base } });
   };
 
-  const submitCard = (e) => {
-    e.preventDefault();
-    runEvent({ action: 'add_event', event: { id: cardForm.id, kind: cardForm.kind, team_id: cardForm.team_id, player_id: cardForm.player_id, minute: cardForm.minute || null } });
+  // A new event of a kind, at the clock minute; or a recorded goal to correct.
+  const openSheet = (kind) => {
+    setForm({ ...emptyForm, id: crypto.randomUUID(), kind, minute: currentMinute });
+    setSheetOpen(true);
+  };
+  const editGoal = (event) => {
+    setForm({ ...emptyForm, editId: event.id, version: event.version, kind: event.kind, team_id: event.team_id,
+      player_id: event.player_id || '', assist_id: event.assist_player_id || '', minute: totalMinute(event) });
+    setSheetOpen(true);
   };
 
-  const openGoalForm = (event = null) => {
-    setShowCardForm(false);
-    setGoalForm(event
-      ? { id: null, editId: event.id, version: event.version, team_id: event.team_id, player_id: event.player_id || '', assist_id: event.assist_player_id || '', minute: event.minute ?? '', is_own_goal: event.kind === 'own_goal' }
-      : { id: crypto.randomUUID(), editId: null, version: null, team_id: '', player_id: '', assist_id: '', minute: '', is_own_goal: false });
-    setShowGoalForm(true);
-  };
-
-  const voidEvent = (event) => {
-    const reason = prompt('Why is this event being removed? (a reason is required)');
-    if (!reason || !reason.trim()) return;
-    runEvent({ action: 'void_event', event_id: event.id, version: event.version, reason: reason.trim() }, event.id);
+  // Removing an event is voiding it: the event stays with who and why. The reason is required, in the dialog.
+  const [voidTarget, setVoidTarget] = useState(null);
+  const [voidReason, setVoidReason] = useState('');
+  const voidEvent = (event) => { setVoidReason(''); setVoidTarget(event); };
+  const confirmVoid = async () => {
+    const reason = voidReason.trim();
+    if (!reason) throw new Error('Give a reason to remove this event.');
+    const r = await runEvent({ action: 'void_event', event_id: voidTarget.id, version: voidTarget.version, reason }, voidTarget.id);
+    if (!r?.ok) throw new Error(r?.message || 'The event was not removed.');
   };
 
   const scoreStep = (side, delta) => runEvent({ action: 'score_step', side, delta, id: crypto.randomUUID() }, `${side}${delta}`);
+  // One tap: a goal for the team at the clock minute. The scorer is attributed afterwards (Attribute on the event).
+  const quickGoal = (teamId) => runEvent({ action: 'add_event', event: { id: crypto.randomUUID(), kind: 'goal', team_id: teamId, minute: eventMinute(playedNow(), firstHalf) } }, `goal-${teamId}`);
 
   const unattributedCount = events.filter((e) => e.kind === 'goal' && !e.player_id).length;
-  const eventLabel = (e) => (e.player_id ? getPlayerName(e.player_id) : e.kind === 'goal' || e.kind === 'own_goal' ? 'Unknown scorer' : 'Unknown player');
-
-  const teamPlayers = allPlayers.filter(p => (p.team_id || p.teams?.id) === goalForm.team_id);
-
-  const toggleOwnGoal = (e) => {
-    const isOwn = e.target.checked;
-    setGoalForm(prev => ({ ...prev, is_own_goal: isOwn, assist_id: isOwn ? '' : prev.assist_id }));
-  };
-
-  const handleDivisionSwitch = (newDiv) => {
-    setDivision(newDiv);
-    setSelectedMatch(null);
-    setShowGoalForm(false);
-  };
-
   const getPlayerName = (id) => {
     const player = allPlayers.find(p => p.id === id);
     return player ? `${player.first_name} ${player.last_name}` : 'Unknown Player';
   };
+  const eventLabel = (e) => (e.player_id ? getPlayerName(e.player_id) : e.kind === 'goal' || e.kind === 'own_goal' ? 'Unknown scorer' : 'Unknown player');
 
-  return (
-    <div className="p-6 space-y-8">
-      
-      <div className="flex justify-center mb-4">
-        <DivisionSwitch value={division} onChange={handleDivisionSwitch} />
-      </div>
+  const pickMatch = (m) => { if (m) { setSelectedMatch(m); setSheetOpen(false); setCandidates(null); } };
+  const handleDivisionSwitch = (newDiv) => {
+    setDivision(newDiv);
+    setSelectedMatch(null);
+    setSheetOpen(false);
+  };
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {matches.length > 0 ? matches.map(m => (
-          <button 
-            key={m.id}
-            onClick={() => { setSelectedMatch(m); setShowGoalForm(false); }}
-            className={`p-4 rounded-xl border transition-all ${selectedMatch?.id === m.id ? 'border-white bg-white/10' : 'border-white/10 bg-black/40 hover:bg-white/5'}`}
-          >
-            <div className="flex justify-between text-xs uppercase font-black text-zinc-500 mb-2">
-              <span>{m.division_name} {m.season_name}</span>
-              <span className={m.status === 'live' ? 'text-red-500 animate-pulse' : ''}>{m.status}</span>
-            </div>
-            <div className="font-bold text-lg">{m.home_team_name} vs {m.away_team_name}</div>
-          </button>
-        )) : (
-          <div className="col-span-1 md:col-span-2 text-center py-12 border border-white/5 rounded-2xl bg-black/20">
-            <span className="text-zinc-500 font-bold uppercase tracking-widest text-sm">
-              {hasRole('dictator') ? 'No active or scheduled matches found' : 'No matches assigned to you in this division'}
-            </span>
+  const status = finishedMatch ? 'Full time'
+    : selectedMatch?.minute === 'HT' ? 'Half time'
+      : timerRunning ? `Live · ${minuteLabel(currentMinute, firstHalf)}′`
+        : liveNow ? `Paused · ${minuteLabel(currentMinute)}′`
+          : formatKickoff(selectedMatch?.date) || 'Not started';
+
+  const scoreboardTeam = (side) => {
+    const isHome = side === 'home';
+    const name = isHome ? selectedMatch.home_team_name : selectedMatch.away_team_name;
+    const score = isHome ? selectedMatch.home_score : selectedMatch.away_score;
+    const teamId = isHome ? selectedMatch.home_team_id : selectedMatch.away_team_id;
+    return (
+      <div className="flex min-w-0 flex-col items-center gap-3 text-center">
+        <Crest name={name} src={crest(teamId)?.logo_url} color={crest(teamId)?.team_color} size="lg" className="ring-1 ring-white/15" />
+        <div className="line-clamp-2 min-h-[2lh] font-display text-sm font-black uppercase leading-tight tracking-tight text-white sm:text-lg">{name}</div>
+        <div className="chrome font-display text-7xl font-black leading-none tabular-nums sm:text-8xl" aria-label={`${isHome ? 'Home' : 'Away'} score`}>{score}</div>
+        {!finishedMatch && (
+          <div className="flex w-full max-w-40 gap-2">
+            <Button variant="secondary" disabled={busyId !== ''} onClick={() => scoreStep(side, -1)} aria-label={`Minus one ${side}`} className="size-12 shrink-0 px-0"><Minus size={20} aria-hidden="true" /></Button>
+            <Button disabled={busyId !== ''} onClick={() => quickGoal(teamId)} aria-label={`Goal for ${name}`} className="min-h-12 flex-1 px-0"><Plus size={20} aria-hidden="true" /></Button>
           </div>
         )}
       </div>
+    );
+  };
 
-      {selectedMatch && (
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 animate-in fade-in slide-in-from-bottom-4">
-          <h3 className="text-center text-sm font-black uppercase tracking-widest text-zinc-500 mb-6">Control Center</h3>
-          
-          <div className="flex justify-center items-center gap-8 mb-10">
-            <div className="text-center">
-              <div className="text-4xl font-black" aria-label="Home score">{selectedMatch.home_score}</div>
-              <div className="text-xs font-bold text-zinc-400 uppercase mt-2">{selectedMatch.home_team_name}</div>
-              <div className="mt-3 flex justify-center gap-2">
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('home', 1)} className="rounded-lg bg-white/10 px-3 py-1 text-xs font-black hover:bg-white/20 disabled:opacity-40">+1 Home</button>
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('home', -1)} className="rounded-lg bg-white/10 px-3 py-1 text-xs font-black hover:bg-white/20 disabled:opacity-40" aria-label="Minus one home">−1</button>
-              </div>
-            </div>
-            <div className="text-2xl font-black text-zinc-700">VS</div>
-            <div className="text-center">
-              <div className="text-4xl font-black" aria-label="Away score">{selectedMatch.away_score}</div>
-              <div className="text-xs font-bold text-zinc-400 uppercase mt-2">{selectedMatch.away_team_name}</div>
-              <div className="mt-3 flex justify-center gap-2">
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('away', 1)} className="rounded-lg bg-white/10 px-3 py-1 text-xs font-black hover:bg-white/20 disabled:opacity-40">+1 Away</button>
-                <button type="button" disabled={busyId !== ''} onClick={() => scoreStep('away', -1)} className="rounded-lg bg-white/10 px-3 py-1 text-xs font-black hover:bg-white/20 disabled:opacity-40" aria-label="Minus one away">−1</button>
-              </div>
-            </div>
+  const clockButton = 'min-h-14 flex-1 flex-col gap-1 rounded-ctl px-1 text-[11px] tracking-[0.12em]';
+
+  return (
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+      <div className={cn('min-w-0 space-y-6', selectedMatch && 'hidden lg:block')}>
+        <DivisionSwitch value={division} onChange={handleDivisionSwitch} />
+        <MatchPicker
+          matches={matches}
+          finished={finished}
+          older={older}
+          selectedId={selectedMatch?.id}
+          crest={crest}
+          emptyTitle={hasRole('dictator') ? 'No live or scheduled matches' : 'No matches assigned to you'}
+          emptyText={hasRole('dictator') ? 'Schedule matches in Fixtures, then they appear here.' : 'Ask a dictator to assign you to a match or season.'}
+          onPick={pickMatch}
+          onReopen={(m) => { pickMatch(m); setReopenTarget(m); }}
+        />
+      </div>
+
+      <div className="min-w-0">
+        {!selectedMatch ? (
+          <div className="glass hidden min-h-80 flex-col items-center justify-center gap-3 rounded-card p-8 text-center lg:flex">
+            <Timer size={28} aria-hidden="true" className="text-mut" />
+            <p className="font-display text-2xl font-black uppercase tracking-tight text-ink">Pick a match</p>
+            <p className="max-w-xs text-sm text-mut">Choose a live or scheduled match to run the clock and record events.</p>
           </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-3">
+              <Button variant="quiet" size="sm" onClick={() => setSelectedMatch(null)} className="-ml-2 shrink-0 whitespace-nowrap px-2 lg:hidden"><ChevronLeft size={18} aria-hidden="true" />All matches</Button>
+              <p className="eyebrow min-w-0 truncate lg:ml-0">{[selectedMatch.division_name, selectedMatch.season_name, selectedMatch.venue].filter(Boolean).join(' · ')}</p>
+            </div>
 
-          <div className="bg-black/50 p-6 rounded-2xl border border-white/10 mb-8 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-white/5 pb-4">
-              <h4 className="font-black uppercase tracking-widest text-sm text-zinc-400">Match Clock</h4>
-              <div className="flex items-center gap-3">
-                <span className={`text-4xl font-black tabular-nums ${timerRunning ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-                  {displayTime || `${liveMinute}'`}
+            <div className={cn('pitch rounded-card border border-white/10 px-3 pb-5 pt-4 sm:px-6 sm:pb-7', liveNow && 'beam')}>
+              <h2 className="sr-only">{selectedMatch.home_team_name} vs {selectedMatch.away_team_name}</h2>
+              <div className="flex justify-center">
+                <span className="inline-flex items-center gap-2.5 rounded-pill border border-white/15 bg-black/50 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.25em] text-white backdrop-blur-md">
+                  {timerRunning && (
+                    <span aria-hidden="true" className="relative flex size-2.5">
+                      <span className="absolute inline-flex size-full rounded-full bg-live opacity-75 motion-safe:animate-ping" />
+                      <span className="relative inline-flex size-2.5 rounded-full bg-live" />
+                    </span>
+                  )}
+                  {status}
                 </span>
               </div>
+              <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:gap-6">
+                {scoreboardTeam('home')}
+                <div aria-hidden="true" className="pt-24 font-display text-3xl font-black text-white/40 sm:pt-28">-</div>
+                {scoreboardTeam('away')}
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {!timerRunning ? (
-                <button type="button" onClick={() => { 
-                  const startIso = new Date().toISOString();
-                  setTimerRunning(true); 
-                  syncTimeToDb(`${calibration}'`, startIso, calibration);
-                  // Optimistically update local selectedMatch to prevent jump
-                  setSelectedMatch(prev => ({ ...prev, timer_start_time: startIso, timer_calibration: calibration }));
-                }} className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
-                  ▶ Start
+
+            {runaway && (
+              <div role="alert" className="flex flex-col gap-3 rounded-card border border-live/50 bg-live/10 p-4 sm:flex-row sm:items-center">
+                <AlarmClockOff size={22} aria-hidden="true" className="shrink-0 text-live" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-ink">The clock was left running ({currentMinute} minutes).</p>
+                  <p className="text-sm text-mut">Stop it at 90 or set the right minute below. If the match is over, end it.</p>
+                </div>
+                <Button variant="danger" disabled={clockBusy} onClick={() => pauseClock(90)}>Stop at 90′</Button>
+              </div>
+            )}
+
+            {finishedMatch ? (
+              <Card className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-mut">Finished. Correct the events below, or reopen the match to keep scoring.</p>
+                <Button variant="secondary" onClick={() => setReopenTarget(selectedMatch)}>Reopen match</Button>
+              </Card>
+            ) : (
+              <Card className="space-y-4">
+                <div className="flex items-end justify-between gap-3">
+                  <h3 className="eyebrow whitespace-nowrap">Match clock</h3>
+                  <span className={cn('chrome font-display text-5xl font-black leading-none tabular-nums', runaway && 'text-live')}>
+                    {stopped ? selectedMatch.minute : `${minuteLabel(currentMinute, firstHalf)}′`}
+                  </span>
+                </div>
+                <div role="group" aria-label="Clock" className="well flex gap-1 rounded-ctl p-1">
+                  {!timerRunning ? (
+                    <Button disabled={clockBusy} onClick={startClock} className={clockButton}><Play size={18} aria-hidden="true" />Start</Button>
+                  ) : (
+                    <Button variant="quiet" disabled={clockBusy} onClick={() => pauseClock()} className={clockButton}><Pause size={18} aria-hidden="true" />Pause</Button>
+                  )}
+                  <Button variant={selectedMatch.minute === 'HT' ? 'primary' : 'quiet'} disabled={clockBusy} onClick={askHalfTime} className={clockButton}><Timer size={18} aria-hidden="true" />Half time</Button>
+                  <Button variant="quiet" disabled={loading} onClick={() => setWhistle({ home: '', away: '', koTie: false })} className={clockButton}><Flag size={18} aria-hidden="true" />Full time</Button>
+                </div>
+                <Field label="Set minute">
+                  {(p) => (
+                    <div className="flex items-center gap-2">
+                      <NumberField aria-labelledby={p['aria-labelledby']} min={0} max={MAX_MINUTE} value={minuteDraft ?? currentMinute} onChange={setMinuteDraft} className="flex-1" />
+                      <Button variant="secondary" disabled={clockBusy || minuteDraft === null} onClick={setClock}>Set</Button>
+                    </div>
+                  )}
+                </Field>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-4 gap-2">
+              {['goal', 'own_goal', 'yellow', 'red'].map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => openSheet(kind)}
+                  className="glass lift flex min-h-20 flex-col items-center justify-center gap-2 rounded-card px-1 text-ink outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
+                >
+                  <KindIcon kind={kind} size={24} />
+                  <span className="text-[11px] font-black uppercase tracking-[0.12em]">{kind === 'goal' ? 'Add goal' : KIND_LABEL[kind].replace(' card', '')}</span>
                 </button>
-              ) : (
-                <button type="button" onClick={() => { 
-                  setTimerRunning(false); 
-                  // Update calibration to lock the time
-                  const startTime = selectedMatch.timer_start_time ? new Date(selectedMatch.timer_start_time).getTime() : Date.now();
-                  const elapsed = Math.floor((Date.now() - startTime) / 60000);
-                  const newCalib = elapsed + calibration;
-                  setCalibration(newCalib);
-                  syncTimeToDb(`${newCalib}'`, null, newCalib); 
-                  setSelectedMatch(prev => ({ ...prev, timer_start_time: null, timer_calibration: newCalib }));
-                }} className="bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30 font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
-                  ⏸ Pause
-                </button>
+              ))}
+            </div>
+
+            {unattributedCount > 0 && <Notice tone="warning" role="note">{unattributedCount} goal{unattributedCount === 1 ? '' : 's'} unattributed: choose Attribute on the goal to add its scorer. They count toward the score and toward no player.</Notice>}
+
+            {candidates && (
+              <Card as="div" role="group" aria-label="Choose the goal to correct" className="space-y-3">
+                <p className="text-sm font-semibold text-ink">Which goal should be removed?</p>
+                {candidates.map((c) => (
+                  <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-ctl border border-line p-3 text-sm">
+                    <span>{recordedMinute(c)}′ · {eventLabel(c)}</span>
+                    <Button variant="danger" size="sm" onClick={() => voidEvent(c)}>Void this goal</Button>
+                  </div>
+                ))}
+                <Button variant="quiet" size="sm" onClick={() => setCandidates(null)}>Cancel</Button>
+              </Card>
+            )}
+
+            <EventTimeline
+              events={events}
+              state={eventsState}
+              match={selectedMatch}
+              playerName={getPlayerName}
+              busyId={busyId}
+              onEdit={editGoal}
+              onRemove={voidEvent}
+              onRetry={fetchMatchEvents}
+            />
+
+            <EventSheet
+              open={sheetOpen}
+              onClose={() => setSheetOpen(false)}
+              form={form}
+              setForm={setForm}
+              match={selectedMatch}
+              crest={crest}
+              players={allPlayers}
+              busy={busyId !== ''}
+              onSubmit={submitEvent}
+            />
+
+            <ConfirmDialog
+              open={Boolean(voidTarget)}
+              onOpenChange={(open) => { if (!open) setVoidTarget(null); }}
+              title="Remove this event?"
+              description={voidTarget ? `${recordedMinute(voidTarget)}′ ${eventLabel(voidTarget)}. The event is kept in the history with your reason.` : ''}
+              confirmLabel="Remove event"
+              tone="danger"
+              onConfirm={confirmVoid}
+            >
+              <Field label="Reason" value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="For example, wrong player" />
+            </ConfirmDialog>
+            <ConfirmDialog
+              open={reopenTarget !== null}
+              onOpenChange={(open) => { if (!open) setReopenTarget(null); }}
+              title="Reopen this match?"
+              description={`${selectedMatch.home_team_name} vs ${selectedMatch.away_team_name} goes back to live at its last recorded minute. Scores and events are kept.`}
+              confirmLabel="Reopen match"
+              onConfirm={reopenMatch}
+            />
+            <ConfirmDialog
+              open={whistle !== null}
+              onOpenChange={(open) => { if (!open) setWhistle(null); }}
+              title="End this match?"
+              description={`Final score ${selectedMatch.home_score} to ${selectedMatch.away_score}. The scores are locked for grading.`}
+              confirmLabel="End match"
+              tone="danger"
+              onConfirm={endMatch}
+            >
+              {tied && seasonFormat === 'league_knockout' && (
+                <Checkbox checked={whistle?.koTie ?? false} onChange={(koTie) => setWhistle((w) => ({ ...w, koTie }))} label="This is a knockout tie" />
               )}
-              <button type="button" onClick={() => { 
-                  setTimerRunning(false); 
-                  syncTimeToDb('HT', null, calibration); 
-                  setSelectedMatch(prev => ({ ...prev, timer_start_time: null }));
-              }} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
-                Half Time
-              </button>
-              <div className="flex border border-white/10 rounded-xl overflow-hidden bg-black/60">
-                <input 
-                  type="number" 
-                  value={calibration} 
-                  onChange={e => {
-                    const val = parseInt(e.target.value) || 0;
-                    setCalibration(val);
-                    // If not running, immediately show the updated calibration
-                    if (!timerRunning) {
-                       setLiveMinute(val);
-                       setDisplayTime(`${val}'`);
-                    }
-                  }} 
-                  className="w-full bg-transparent text-white text-center font-bold outline-none" 
-                  placeholder="Calib"
-                />
-                <button type="button" onClick={() => {
-                  syncTimeToDb(timerRunning ? undefined : `${calibration}'`, undefined, calibration);
-                  setSelectedMatch(prev => ({ ...prev, timer_calibration: calibration }));
-                }} className="bg-white/20 px-4 hover:bg-white/30 text-xs font-bold uppercase tracking-widest transition-colors">Set</button>
-              </div>
-            </div>
+              {penaltiesAsked && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field type="number" min="0" label="Home penalties" value={whistle?.home ?? ''} onChange={(e) => setWhistle((w) => ({ ...w, home: e.target.value }))} />
+                  <Field type="number" min="0" label="Away penalties" value={whistle?.away ?? ''} onChange={(e) => setWhistle((w) => ({ ...w, away: e.target.value }))} />
+                </div>
+              )}
+            </ConfirmDialog>
           </div>
-
-          {notice.text && <p role={notice.type === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-lg border p-3 text-sm ${notice.type === 'error' ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>{notice.text}</p>}
-          {unattributedCount > 0 && <p role="note" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">{unattributedCount} goal{unattributedCount === 1 ? '' : 's'} unattributed: choose Attribute on the goal to add its scorer. They count toward the score and toward no player.</p>}
-          {candidates && <div role="group" aria-label="Choose the goal to correct" className="mb-4 space-y-2 rounded-xl border border-white/10 bg-black/50 p-4">
-            <p className="text-xs font-black uppercase tracking-widest text-zinc-400">Which goal should be removed?</p>
-            {candidates.map((c) => <div key={c.id} className="flex items-center justify-between rounded-lg bg-white/5 p-3 text-sm">
-              <span>{c.minute ?? '?'}' · {eventLabel(c)}</span>
-              <button type="button" onClick={() => voidEvent(c)} className="text-xs font-black uppercase tracking-widest text-red-400">Void this goal</button>
-            </div>)}
-            <button type="button" onClick={() => setCandidates(null)} className="text-xs text-zinc-500 underline">Cancel</button>
-          </div>}
-
-          {showCardForm && <form onSubmit={submitCard} className="bg-black/50 border border-white/10 rounded-xl p-6 mb-6 space-y-4">
-            <div className="flex justify-between items-center"><h4 className="font-black uppercase tracking-widest text-sm">Add Card</h4><button type="button" onClick={() => setShowCardForm(false)} className="text-zinc-500 hover:text-white"><X size={18}/></button></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <select aria-label="Card colour" value={cardForm.kind} onChange={e => setCardForm({ ...cardForm, kind: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white"><option value="yellow" className="bg-zinc-900">Yellow card</option><option value="red" className="bg-zinc-900">Red card</option></select>
-              <input type="text" aria-label="Card minute" placeholder="Minute" value={cardForm.minute} onChange={e => setCardForm({ ...cardForm, minute: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white" />
-              <select aria-label="Card team" required value={cardForm.team_id} onChange={e => setCardForm({ ...cardForm, team_id: e.target.value, player_id: '' })} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white"><option value="" className="bg-zinc-900">Select team...</option><option value={selectedMatch.home_team_id} className="bg-zinc-900">{selectedMatch.home_team_name} (Home)</option><option value={selectedMatch.away_team_id} className="bg-zinc-900">{selectedMatch.away_team_name} (Away)</option></select>
-              <select aria-label="Carded player" required disabled={!cardForm.team_id} value={cardForm.player_id} onChange={e => setCardForm({ ...cardForm, player_id: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white"><option value="" className="bg-zinc-900">Select player...</option>{allPlayers.filter(p => (p.team_id || p.teams?.id) === cardForm.team_id).map(p => <option key={p.id} value={p.id} className="bg-zinc-900">{p.first_name} {p.last_name}</option>)}</select>
-            </div>
-            <button type="submit" disabled={busyId !== ''} className="w-full bg-white text-black font-black uppercase tracking-widest py-3 rounded-lg disabled:opacity-40">{busyId !== '' ? 'Saving...' : 'Confirm Card'}</button>
-          </form>}
-
-          {showGoalForm ? (
-            <form onSubmit={submitGoal} className="bg-black/50 border border-white/10 rounded-xl p-6 mb-6 space-y-4">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="font-black uppercase tracking-widest text-sm">{goalForm.editId ? 'Correct Goal' : 'Register Goal'}</h4>
-                <button type="button" onClick={() => setShowGoalForm(false)} className="text-zinc-500 hover:text-white"><X size={18}/></button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-[10px] font-bold uppercase tracking-widest mb-2 ${goalForm.is_own_goal ? 'text-red-400' : 'text-zinc-500'}`}>
-                    {goalForm.is_own_goal ? "Select Offending Team (Own Goal)" : "Select Scoring Team"}
-                  </label>
-                  <select required value={goalForm.team_id} onChange={e => setGoalForm({...goalForm, team_id: e.target.value, player_id: '', assist_id: ''})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white">
-                    <option value="" disabled className="bg-zinc-900 text-white">Select Team...</option>
-                    <option value={selectedMatch.home_team_id} className="bg-zinc-900 text-white">{selectedMatch.home_team_name} (Home)</option>
-                    <option value={selectedMatch.away_team_id} className="bg-zinc-900 text-white">{selectedMatch.away_team_name} (Away)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Minute</label>
-                  <input type="text" placeholder="e.g. 45" aria-label="Minute" value={goalForm.minute} onChange={e => setGoalForm({...goalForm, minute: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Goal Type</label>
-                  <select value={goalForm.is_own_goal ? 'own_goal' : 'regular'} onChange={e => { const isOwn = e.target.value === 'own_goal'; setGoalForm(prev => ({ ...prev, is_own_goal: isOwn, assist_id: isOwn ? '' : prev.assist_id })); }} className={`w-full bg-white/5 border rounded-lg p-3 outline-none text-sm font-bold ${goalForm.is_own_goal ? 'border-red-500/50 text-red-400' : 'border-white/10 text-white'}`}>
-                    <option value="regular" className="bg-zinc-900 text-white">⚽ Regular Goal</option>
-                    <option value="own_goal" className="bg-zinc-900 text-red-400">🔴 Own Goal</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={`block text-[10px] font-bold uppercase tracking-widest mb-2 ${goalForm.is_own_goal ? 'text-red-400' : 'text-zinc-500'}`}>
-                    {goalForm.is_own_goal ? "Player Who Scored Own Goal" : "Goalscorer"}
-                  </label>
-                  <select aria-label="Goalscorer" disabled={!goalForm.team_id} value={goalForm.player_id} onChange={e => setGoalForm({...goalForm, player_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white disabled:opacity-50">
-                    <option value="" className="bg-zinc-900 text-white">Scorer not known yet</option>
-                    {teamPlayers.map(p => <option key={p.id} value={p.id} className="bg-zinc-900 text-white">{p.first_name} {p.last_name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Assist (Optional)</label>
-                  <select disabled={!goalForm.team_id || goalForm.is_own_goal} value={goalForm.assist_id} onChange={e => setGoalForm({...goalForm, assist_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white disabled:opacity-50">
-                    <option value="" className="bg-zinc-900 text-white">{goalForm.is_own_goal ? "No Assists on Own Goals" : "No Assist (Solo)"}</option>
-                    {teamPlayers.filter(p => p.id !== goalForm.player_id).map(p => <option key={p.id} value={p.id} className="bg-zinc-900 text-white">{p.first_name} {p.last_name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <button type="submit" disabled={busyId !== ''} className="w-full bg-white text-black font-black uppercase tracking-widest py-3 rounded-lg hover:bg-zinc-200 transition-colors mt-2">
-                {busyId !== '' ? "Saving..." : goalForm.editId ? "Save correction" : "Confirm Goal"}
-              </button>
-            </form>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <button onClick={() => { setCardForm({ id: crypto.randomUUID(), kind: 'yellow', team_id: '', player_id: '', minute: '' }); setShowGoalForm(false); setShowCardForm(true); }} className="flex items-center justify-center gap-3 bg-yellow-500/10 text-yellow-300 border border-yellow-500/30 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-yellow-500/20 transition-colors">
-                Add Card
-              </button>
-              <button onClick={() => openGoalForm()} className="flex items-center justify-center gap-3 bg-white text-black py-4 rounded-xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-colors">
-                <Trophy size={18} /> Add Goal
-              </button>
-             <button 
-                disabled={loading} 
-                onClick={() => {
-                  let hp = undefined;
-                  let ap = undefined;
-                  if (selectedMatch.home_score === selectedMatch.away_score) {
-                    const hpStr = prompt(`Match is tied! Enter ${selectedMatch.home_team_name} (Home) Penalty Score (leave blank if not applicable):`);
-                    const apStr = prompt(`Enter ${selectedMatch.away_team_name} (Away) Penalty Score (leave blank if not applicable):`);
-                    if (hpStr && apStr) {
-                      hp = parseInt(hpStr);
-                      ap = parseInt(apStr);
-                    }
-                  }
-                  if(confirm("End match and lock scores?")) { 
-                    setTimerRunning(false); 
-                    handleAction('close_match', { home_penalties: hp, away_penalties: ap }); 
-                  } 
-                }} 
-                className="flex items-center justify-center gap-3 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-600/30 transition-colors"
-              >
-                <CheckCircle2 size={18} /> Final Whistle
-              </button>
-                      </div>
-          )}
-
-          <div className="bg-black/50 p-6 rounded-2xl border border-white/10 mt-8 space-y-4 shadow-xl">
-             <h4 className="font-black uppercase tracking-widest text-sm text-zinc-400 mb-2">Match events ({events.length})</h4>
-             {eventsState.status === 'loading' && events.length === 0 && <p className="text-xs text-zinc-500">Loading events...</p>}
-             {eventsState.status === 'error' && <p role="alert" className="text-sm text-red-300">Events could not be loaded ({eventsState.error}). <button type="button" onClick={fetchMatchEvents} className="underline">Try again</button></p>}
-             <div className="space-y-3">
-               {events.length > 0 ? events.map(ev => (
-                 <div key={ev.id} className="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10" data-testid="match-event">
-                   <div>
-                     <div className="text-sm font-bold text-white flex items-center gap-2">
-                       <span className="text-zinc-500 w-8">{ev.minute ?? '?'}'</span>
-                       {eventLabel(ev)}
-                       {ev.kind === 'own_goal' && <span className="text-[10px] bg-red-500/20 text-red-500 px-2 py-0.5 rounded-sm uppercase tracking-widest">Own Goal</span>}
-                       {(ev.kind === 'yellow' || ev.kind === 'red') && <span className={`text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest ${ev.kind === 'red' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-400/20 text-yellow-300'}`}>{ev.kind} card</span>}
-                     </div>
-                     {ev.assist_player_id && <div className="text-[11px] text-zinc-500 mt-1 ml-10">Assist: {getPlayerName(ev.assist_player_id)}</div>}
-                   </div>
-                   <div className="flex items-center gap-3 ml-4">
-                     {busyId === ev.id ? <span className="text-xs text-zinc-500">Saving...</span> : <>
-                       {(ev.kind === 'goal' || ev.kind === 'own_goal') && <button type="button" onClick={() => openGoalForm(ev)} className="text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-white">{ev.player_id ? 'Edit' : 'Attribute'}</button>}
-                       <button type="button" onClick={() => voidEvent(ev)} className="text-zinc-600 hover:text-red-500 transition-colors" title="Void" aria-label="Void event"><Trash2 size={16} /></button>
-                     </>}
-                   </div>
-                 </div>
-               )) : eventsState.status === 'ready' && (
-                 <div className="text-center py-6 text-zinc-600 text-xs font-bold uppercase tracking-widest border border-dashed border-white/10 rounded-xl">
-                   No events recorded yet.
-                 </div>
-               )}
-             </div>
-          </div>
-
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

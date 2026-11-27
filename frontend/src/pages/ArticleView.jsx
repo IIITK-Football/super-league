@@ -1,162 +1,136 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, Newspaper, Share2, Check } from 'lucide-react';
-import { Loader } from '../components/Loader';
-import { API_BASE_URL } from '../lib/api';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, Check, Share2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { formatNewsDate } from '../lib/newsDate';
+import { Button, EmptyState, ErrorState, Skeleton, buttonClasses } from '../components/ui';
 
-const API_URL = API_BASE_URL;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Loads one article. 'missing' is a checked answer (no such row); 'error' is a failed request.
+function useArticle(id) {
+  const [state, setState] = useState({ status: 'loading', article: null });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!UUID.test(id || '')) {
+      setState({ status: 'missing', article: null });
+      return undefined;
+    }
+    setState({ status: 'loading', article: null });
+    supabase.from('newsletter').select('*').eq('id', id).maybeSingle().then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) setState({ status: 'error', article: null });
+      else if (!data) setState({ status: 'missing', article: null });
+      else setState({ status: 'ready', article: data });
+    });
+    return () => { cancelled = true; };
+  }, [id, attempt]);
+
+  return { ...state, retry: () => setAttempt((n) => n + 1) };
+}
 
 export function ArticleView() {
-  const { id } = useParams(); // Grab the ID directly from the URL
-  const navigate = useNavigate();
-  const [article, setArticle] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { id } = useParams();
+  const { status, article, retry } = useArticle(id);
   const [copied, setCopied] = useState(false);
 
-  // Fetch the specific article when the ID changes
-  useEffect(() => {
-    if (!id) return;
-    
-    setLoading(true);
-    fetch(`${API_URL}/news`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.data) {
-          const foundArticle = data.data.find(a => a.id === id);
-          setArticle(foundArticle || null);
-        }
-      })
-      .catch(err => {
-        console.error("Failed to load article", err);
-        setArticle(null);
-      })
-      .finally(() => setLoading(false));
-  }, [id]);
+  const back = (
+    <Link to="/vault" className={buttonClasses('quiet', 'sm', 'px-0')}>
+      <ArrowLeft size={18} aria-hidden="true" />
+      Back to news
+    </Link>
+  );
 
-  const handleShare = () => {
-    if (!id) return;
-    const shareLink = `${window.location.origin}/article/${id}`;
-    navigator.clipboard.writeText(shareLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  if (loading) {
-    return <Loader text="Loading Article..." />;
-  }
-
-  if (!article) {
+  if (status === 'loading') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-zinc-500 space-y-4">
-        <p className="text-lg">Article not found.</p>
-        <button onClick={() => navigate('/vault')} className="text-[#E8C881] hover:underline font-bold">Back to Newsletter</button>
+      <div aria-busy="true" aria-label="Loading article" className="mx-auto max-w-3xl space-y-6">
+        {back}
+        <Skeleton className="h-16 w-3/4" />
+        <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="aspect-[16/9] w-full rounded-card" />
+        <Skeleton className="h-40 w-full" />
       </div>
     );
   }
 
-  // Safely extract fields
-  const title = article.title || article.headline || 'Untitled Article';
-  const summary = article.summary || article.snippet || '';
-  const imageUrl = article.image_url || article.imgUrl;
-  const date = article.date || new Date().toISOString();
-  const author = article.author || 'Super League Media';
-  const category = article.category || 'Official Editorial';
+  if (status === 'error') {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5">
+        {back}
+        <ErrorState title="This article could not load" message="Check your connection and try again." onRetry={retry} />
+      </div>
+    );
+  }
+
+  if (status === 'missing') {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5">
+        {back}
+        <EmptyState title="Article not found">
+          This article does not exist or has been removed.
+        </EmptyState>
+      </div>
+    );
+  }
+
+  const title = article.title || 'Untitled article';
+  const date = formatNewsDate(article.date);
+  const meta = [article.category, date, article.author].filter(Boolean);
+  const blocks = Array.isArray(article.content) ? article.content : [];
+  const paragraphs = typeof article.content === 'string' ? article.content.split('\n').filter((p) => p.trim()) : [];
+
+  const share = () => {
+    navigator.clipboard?.writeText(`${window.location.origin}/article/${article.id}`)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
+      .catch(() => {});
+  };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      
-      {/* Top Navigation */}
-      <div className="flex items-center justify-between mb-6">
-        <button 
-          onClick={() => navigate('/vault')}
-          className="group flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
-        >
-          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-          <span className="text-xs font-bold uppercase tracking-widest">Back to Newsletter</span>
-        </button>
-
-        <button 
-          onClick={handleShare}
-          className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-[10px] sm:text-xs font-bold uppercase tracking-widest text-white border border-white/5"
-        >
-          {copied ? <Check size={14} className="text-green-400" /> : <Share2 size={14} />}
-          <span className="hidden sm:inline">{copied ? 'Link Copied!' : 'Share Article'}</span>
-          <span className="sm:hidden">{copied ? 'Copied!' : 'Share'}</span>
-        </button>
+    <article className="mx-auto max-w-3xl space-y-10 pb-12">
+      <div className="flex items-center justify-between gap-4">
+        {back}
+        <Button variant="secondary" size="sm" onClick={share}>
+          {copied ? <Check size={16} aria-hidden="true" /> : <Share2 size={16} aria-hidden="true" />}
+          {copied ? 'Link copied' : 'Copy link'}
+        </Button>
       </div>
 
-      {/* Hero Header */}
-      {imageUrl ? (
-        <div className="relative w-full h-[30vh] sm:h-[50vh] rounded-3xl overflow-hidden mb-10 border border-white/10 bg-black">
-          <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
-        </div>
-      ) : (
-        <div className="relative w-full h-48 rounded-3xl overflow-hidden mb-10 border border-white/10 bg-zinc-900 flex items-center justify-center">
-          <Newspaper size={48} className="text-zinc-700" />
-        </div>
+      <header className="space-y-5">
+        {meta.length > 0 && <p className="eyebrow">{meta.join(' · ')}</p>}
+        <h1 className="font-display text-4xl leading-none text-ink sm:text-6xl">{title}</h1>
+        {article.summary && <p className="text-xl leading-relaxed text-mut">{article.summary}</p>}
+      </header>
+
+      {article.image_url && (
+        <img src={article.image_url} alt="" className="aspect-[16/9] w-full rounded-card object-cover grayscale" />
       )}
 
-      {/* Article Content */}
-      <div className="max-w-3xl mx-auto px-2 sm:px-6">
-        
-        <div className="mb-8 border-b border-white/10 pb-8 space-y-6">
-          <div className="flex items-center gap-4">
-            <span className="px-3 py-1 bg-white border border-white/20 text-black text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-full">
-              {category}
-            </span>
-            <div className="flex items-center gap-2 text-zinc-400 text-xs font-bold uppercase tracking-widest">
-              <Calendar size={14} />
-              {new Date(date).toLocaleDateString()}
-            </div>
-          </div>
-          
-          <h1 className="text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-400 tracking-tighter leading-tight drop-shadow-sm">
-            {title}
-          </h1>
-
-          <div className="flex items-center gap-3 pt-2">
-            <div className="w-10 h-10 rounded-full bg-zinc-800 border border-white/20 flex items-center justify-center font-black text-white">
-              SL
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white tracking-wide">{author}</p>
-              <p className="text-xs text-zinc-500 font-mono">{category}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="prose prose-invert prose-lg max-w-none font-serif text-zinc-300">
-          {summary && <p className="text-xl font-medium text-[#E8C881] leading-relaxed mb-8">{summary}</p>}
-
-          {Array.isArray(article.content) && article.content.length > 0 ? (
-            article.content.map((block, i) => {
-              if (block.type === 'paragraph') return <p key={i} className="mb-6 leading-relaxed">{block.value}</p>;
-              
-              if (block.type === 'image') return (
-                <figure key={i} className="my-10">
-                  <img src={block.url} alt={block.alt || 'News image'} className="w-full rounded-xl border border-white/10" />
-                  {block.alt && <figcaption className="text-center text-xs text-zinc-500 mt-2 uppercase tracking-widest">{block.alt}</figcaption>}
-                </figure>
-              );
-              
-              if (block.type === 'quote') return (
-                <blockquote key={i} className="my-10 p-6 sm:p-8 bg-zinc-900 border-l-4 border-[#E8C881] rounded-r-xl">
-                  <p className="text-xl sm:text-2xl font-bold italic text-white leading-snug">"{block.value}"</p>
-                  {block.author && <footer className="text-[#E8C881] mt-4 font-black uppercase text-xs tracking-widest">— {block.author}</footer>}
-                </blockquote>
-              );
-              
-              return null;
-            })
-          ) : typeof article.content === 'string' && article.content.trim() !== '' ? (
-            article.content.split('\n').map((paragraph, i) => (
-              paragraph.trim() ? <p key={i} className="mb-6 leading-relaxed">{paragraph}</p> : null
-            ))
-          ) : (
-            <p className="italic text-zinc-500">No additional content available.</p>
-          )}
-        </div>
+      <div className="mx-auto max-w-[65ch] space-y-6 text-lg leading-relaxed text-ink">
+        {blocks.map((block, i) => {
+          if (block.type === 'paragraph') return <p key={i}>{block.value}</p>;
+          if (block.type === 'image') {
+            return (
+              <figure key={i} className="my-10 space-y-3">
+                <img src={block.url} alt={block.alt || ''} className="w-full rounded-card" />
+                {block.alt && <figcaption className="eyebrow text-center">{block.alt}</figcaption>}
+              </figure>
+            );
+          }
+          if (block.type === 'quote') {
+            return (
+              <blockquote key={i} className="my-10 border-l-2 border-ink pl-6">
+                <p className="font-display text-3xl leading-tight text-ink">{block.value}</p>
+                {block.author && <footer className="eyebrow mt-3">{block.author}</footer>}
+              </blockquote>
+            );
+          }
+          return null;
+        })}
+        {paragraphs.map((paragraph, i) => <p key={`p-${i}`}>{paragraph}</p>)}
+        {blocks.length === 0 && paragraphs.length === 0 && <p className="text-mut">This article has no text yet.</p>}
       </div>
-    </div>
+    </article>
   );
 }

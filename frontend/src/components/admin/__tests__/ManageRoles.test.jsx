@@ -25,6 +25,9 @@ vi.mock('../../../lib/supabase', () => ({
   },
 }));
 const { default: ManageRoles } = await import('../ManageRoles');
+const { ConfirmProvider } = await import('../../ui');
+const { readToasts } = await import('../../ui/toastStore');
+const renderRoles = () => render(<ConfirmProvider><ManageRoles currentUserId="me" /></ConfirmProvider>);
 
 beforeEach(() => {
   db.accounts = [
@@ -41,17 +44,17 @@ const rows = () => within(screen.getByRole('list', { name: 'Accounts' })).getAll
 
 describe('ManageRoles', () => {
   it('lists accounts by their directory label, with one checkbox per independent role', async () => {
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(screen.getByText('3 accounts')).toBeTruthy();
-    const boxes = (label) => ['Captain', 'Scorer', 'Editor', 'Dictator'].map((r) => screen.getByLabelText(`${r} for ${label}`).checked);
-    expect(boxes('Ada Lane (ada.l@iiitkottayam.ac.in)')).toEqual([true, false, true, false]); // several grants at once
-    expect(boxes('Ada Lane (ada@iiitkottayam.ac.in)')).toEqual([false, false, false, false]); // a normal user holds none
+    const boxes = (label) => ['Captain', 'Editor', 'Dictator'].map((r) => screen.getByLabelText(`${r} for ${label}`).getAttribute('aria-checked') === 'true');
+    expect(boxes('Ada Lane (ada.l@iiitkottayam.ac.in)')).toEqual([true, true, false]); // several grants at once
+    expect(boxes('Ada Lane (ada@iiitkottayam.ac.in)')).toEqual([false, false, false]); // a normal user holds none
     expect(document.body.textContent).not.toMatch(/\bu1\b|\bu2\b/);
   });
 
   it('searches every word after typing pauses, and shows a clear no-match message', async () => {
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.change(screen.getByLabelText('Search accounts'), { target: { value: 'ada ada.l' } });
     await waitFor(() => expect(rows()).toHaveLength(1));
@@ -61,7 +64,7 @@ describe('ManageRoles', () => {
   });
 
   it('shows only the newest answer when an earlier search answers late', async () => {
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     db.slow = 'boss';
     fireEvent.change(screen.getByLabelText('Search accounts'), { target: { value: 'boss' } });
@@ -75,7 +78,7 @@ describe('ManageRoles', () => {
 
   it('reports a failed search and can retry', async () => {
     db.fail = { message: 'permission denied' };
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     expect(await screen.findByText(/accounts could not be loaded/i)).toBeTruthy();
     db.fail = null;
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
@@ -83,36 +86,54 @@ describe('ManageRoles', () => {
   });
 
   it('grants and removes one role at a time, confirms by the account label, and keeps the dictator from removing their own', async () => {
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     fireEvent.click(screen.getByLabelText('Editor for Ada Lane (ada@iiitkottayam.ac.in)'));
-    expect(await screen.findByText('Granted editor for Ada Lane (ada@iiitkottayam.ac.in).')).toBeTruthy();
+    await waitFor(() => expect(readToasts().at(-1)?.title).toBe('Granted editor for Ada Lane (ada@iiitkottayam.ac.in).'));
     expect(db.writes).toEqual([{ user_id: 'u1', role: 'editor' }]);
-    expect(screen.getByLabelText('Editor for Ada Lane (ada@iiitkottayam.ac.in)').checked).toBe(true);
+    expect(screen.getByLabelText('Editor for Ada Lane (ada@iiitkottayam.ac.in)').getAttribute('aria-checked')).toBe('true');
     fireEvent.click(screen.getByLabelText('Editor for Ada Lane (ada.l@iiitkottayam.ac.in)'));
-    expect(await screen.findByText('Removed editor for Ada Lane (ada.l@iiitkottayam.ac.in).')).toBeTruthy();
+    await waitFor(() => expect(readToasts().at(-1)?.title).toBe('Removed editor for Ada Lane (ada.l@iiitkottayam.ac.in).'));
     expect(db.removed).toEqual([{ user_id: 'u2', role: 'editor' }]);
-    expect(screen.getByLabelText('Captain for Ada Lane (ada.l@iiitkottayam.ac.in)').checked).toBe(true); // other grants untouched
+    expect(screen.getByLabelText('Captain for Ada Lane (ada.l@iiitkottayam.ac.in)').getAttribute('aria-checked')).toBe('true'); // other grants untouched
     fireEvent.click(screen.getByLabelText('Dictator for boss@iiitkottayam.ac.in'));
     expect(await screen.findByText(/cannot remove your own dictator access/i)).toBeTruthy();
     expect(db.removed).toHaveLength(1);
   });
 
-  it('shows the database message when a grant is refused, and does not change the box', async () => {
-    db.writeError = { message: 'new row violates row-level security policy for table "user_roles"' };
-    render(<ManageRoles currentUserId="me" />);
-    await waitFor(() => expect(rows()).toHaveLength(3));
-    fireEvent.click(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)'));
-    expect(await screen.findByText(/row-level security/)).toBeTruthy();
-    expect(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)').checked).toBe(false);
-  });
-
-  it('says when a captain or scorer grant has no assignment, and not when it has one', async () => {
+  it('says when a captain grant has no team assignment, and not when it has one', async () => {
+    renderRoles();
+    expect(await screen.findByText(/Captain role without an assignment/)).toBeTruthy();
+    cleanup();
     db.assignments.captain_assignments = [{ user_id: 'u2' }];
-    render(<ManageRoles currentUserId="me" />);
+    renderRoles();
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(screen.queryByText(/Captain role without an assignment/)).toBeNull();
-    fireEvent.click(screen.getByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)'));
-    expect(await screen.findByText(/Scorer role without an assignment/)).toBeTruthy();
+  });
+
+  it('sends a scorer to the Scorers flow instead of granting the role here', async () => {
+    const onAssignScorer = vi.fn();
+    render(<ConfirmProvider><ManageRoles currentUserId="me" onAssignScorer={onAssignScorer} /></ConfirmProvider>);
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(screen.queryByLabelText('Scorer for Ada Lane (ada@iiitkottayam.ac.in)')).toBeNull();
+    fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Assign as scorer' }));
+    expect(onAssignScorer).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'u1', label: 'Ada Lane (ada@iiitkottayam.ac.in)' }));
+    expect(db.writes).toEqual([]);
+  });
+
+  it('asks before making someone a dictator, naming them, and writes only on confirm', async () => {
+    renderRoles();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    fireEvent.click(screen.getByLabelText('Dictator for Ada Lane (ada@iiitkottayam.ac.in)'));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/Ada Lane \(ada@iiitkottayam\.ac\.in\)/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(db.writes).toEqual([]);
+    expect(screen.getByLabelText('Dictator for Ada Lane (ada@iiitkottayam.ac.in)').getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(screen.getByLabelText('Dictator for Ada Lane (ada@iiitkottayam.ac.in)'));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Make dictator' }));
+    await waitFor(() => expect(readToasts().at(-1)?.title).toBe('Granted dictator for Ada Lane (ada@iiitkottayam.ac.in).'));
+    expect(db.writes).toEqual([{ user_id: 'u1', role: 'dictator' }]);
   });
 });

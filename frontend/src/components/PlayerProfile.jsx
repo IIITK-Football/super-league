@@ -1,33 +1,24 @@
-import React, { useEffect, useState } from 'react';
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Hexagon } from 'lucide-react';
 import { useLeague } from '../context/LeagueContext';
-import { ArrowLeft, Loader2, Shield, Hexagon } from 'lucide-react';
-import { Loader } from './Loader';
 import styles from './PlayerProfile.module.css';
 import { API_BASE_URL } from '../lib/api';
 import FutCard from './players/FutCard';
 import { canonicalAttributes, catalogStyle, statValue } from '../lib/playerCard';
+import { Button, EmptyState, ErrorState, Skeleton } from './ui';
 
+const CORE_STATS = ['Pace', 'Shooting', 'Passing', 'Dribbling', 'Defending', 'Physicality'];
 
-const getStatColor = (val) => {
-    if (val >= 80) return 'bg-[#00e676]';
-    if (val >= 70) return 'bg-[#ffc400]';
-    if (val >= 60) return 'bg-[#ff9100]';
-    return 'bg-[#ff1744]';
-};
-
-
-
+// A player's page: the FUT card, identity, core stats and season history. The card shows the season being browsed.
 export default function PlayerProfile({ onBack }) {
-    // 1. PULL DIVISION FROM CONTEXT
     const { setView, seasonScope } = useLeague();
-    // The card shows the season being browsed; the history below lists every season.
     const seasonId = seasonScope?.season?.id || '';
     const [player, setPlayer] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [status, setStatus] = useState('loading');
+    const [attempt, setAttempt] = useState(0);
 
-
-useEffect(() => {
+    useEffect(() => {
         const raw = sessionStorage.getItem('selectedPlayer');
         if (!raw) {
             setView('teams');
@@ -35,54 +26,64 @@ useEffect(() => {
         }
 
         const base = JSON.parse(raw);
-
-        // 1. THE FIX: Check if we already fetched this player's deep data recently
         const cacheKey = `player_profile_${base.id}_${seasonId}`;
         const cachedProfile = sessionStorage.getItem(cacheKey);
         if (cachedProfile) {
             setPlayer(JSON.parse(cachedProfile));
-            setLoading(false);
-            return; // Exit early! No API call needed.
+            setStatus('ready');
+            return;
         }
 
-        // 2. If not cached, fetch it from the API
+        setStatus('loading');
         fetch(`${API_BASE_URL}/players/${base.id}${seasonId ? `?season_id=${seasonId}` : ''}`)
-            .then(r => r.json())
-            .then(res => {
+            .then((r) => r.json())
+            .then((res) => {
                 if (res.success) {
                     setPlayer(res.data);
-                    // 3. Save the successful result to memory so we never have to fetch it again this session!
+                    setStatus('ready');
                     sessionStorage.setItem(cacheKey, JSON.stringify(res.data));
+                } else {
+                    setStatus('error');
                 }
-                else setError('Failed to load player.');
             })
-            .catch(() => setError('Failed to load player.'))
-            .finally(() => setLoading(false));
-    }, [setView, seasonId]);
+            .catch(() => setStatus('error'));
+    }, [setView, seasonId, attempt]);
 
     const handleBack = () => {
-      sessionStorage.removeItem('selectedPlayer');
-      if (onBack) onBack();
-      else setView('teams');
-  };
+        sessionStorage.removeItem('selectedPlayer');
+        if (onBack) onBack();
+        else setView('teams');
+    };
 
-    if (loading) {
-        return <Loader text="Loading Player..." />;
+    const back = (
+        <Button variant="quiet" onClick={handleBack} className="w-max px-0">
+            <ArrowLeft size={18} aria-hidden="true" />
+            Back to squad
+        </Button>
+    );
+
+    if (status === 'loading') {
+        return (
+            <div aria-busy="true" aria-label="Loading player" className="mx-auto max-w-6xl space-y-6">
+                {back}
+                <div className="grid gap-6 md:grid-cols-[260px_1fr]">
+                    <Skeleton className="mx-auto h-[380px] w-[260px] rounded-card" />
+                    <div className="space-y-4">
+                        <Skeleton className="h-10 w-2/3" />
+                        <Skeleton className="h-24 w-full" />
+                    </div>
+                </div>
+            </div>
+        );
     }
 
-    if (error || !player) {
+    if (status === 'error' || !player) {
         return (
-            <div className="grid place-content-center justify-items-center min-h-[50vh] text-zinc-500 gap-4">
-                <Shield className="w-12 h-12 text-zinc-700" />
-                <span className="font-black tracking-[0.3em] uppercase text-sm">
-                    {error || 'Player not found'}
-                </span>
-                <button
-                    onClick={handleBack}
-                    className="text-xs text-zinc-400 hover:text-white uppercase tracking-widest font-bold transition-colors"
-                >
-                    Back to Teams
-                </button>
+            <div className="mx-auto max-w-3xl space-y-5">
+                {back}
+                {status === 'error'
+                    ? <ErrorState title="This player could not load" message="Check your connection and try again." onRetry={() => setAttempt((n) => n + 1)} />
+                    : <EmptyState title="Player not found">This player is not in this season.</EmptyState>}
             </div>
         );
     }
@@ -91,20 +92,10 @@ useEffect(() => {
     const attrs = canonicalAttributes(player.attributes);
     const bio = attrs.bio || {};
     const playStyle = catalogStyle(attrs.playStyle);
-    const stylesArr = playStyle ? [{ name: playStyle.name, icon_url: playStyle.imageUrl, description: playStyle.description }] : [];
 
     return (
-        <div className="w-full bg-[#0F0E13] min-h-screen text-white p-4 md:p-8 font-sans pb-20 animate-in fade-in duration-300">
-            <button
-                onClick={handleBack}
-                className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 group w-max"
-            >
-                <ArrowLeft
-                    size={20}
-                    className="group-hover:-translate-x-1 transition-transform"
-                />
-                Back to Squad
-            </button>
+        <div className="mx-auto max-w-6xl space-y-8 pb-12">
+            {back}
 
             <div className={styles.mainLayout}>
                 <div className={styles.cardArea}>
@@ -113,95 +104,74 @@ useEffect(() => {
 
                 <div className={styles.headerArea}>
                     <div>
-                        <span className="block text-2xl sm:text-3xl font-bold text-gray-300 leading-tight">
+                        <span className="block font-display text-2xl leading-none text-mut sm:text-3xl">
                             {player.first_name}
                         </span>
-                        <span className="block text-4xl sm:text-5xl lg:text-6xl font-black leading-none">
+                        <span className="block font-display text-6xl leading-[0.9] text-ink sm:text-7xl lg:text-8xl">
                             {player.last_name}
                         </span>
                     </div>
 
-                    <div className={`bg-[#1A1820] w-max rounded-xl p-3 border border-white/5 ${styles.bioGrid}`}>
+                    <dl className={`glass w-max rounded-card p-4 ${styles.bioGrid}`}>
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Position</p>
-                            <span className="bg-white/10 px-2 py-1 rounded text-sm font-bold">
-                                {player.position || '—'}
-                            </span>
+                            <dt className="text-xs text-mut">Position</dt>
+                            <dd className="mt-1 font-semibold text-ink">{player.position || '-'}</dd>
                         </div>
                         <div>
-                            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Pref. Foot</p>
-                            <span className="font-bold text-sm block mt-1">{bio.preferredFoot || '—'}</span>
+                            <dt className="text-xs text-mut">Preferred foot</dt>
+                            <dd className="mt-1 font-semibold text-ink">{bio.preferredFoot || '-'}</dd>
                         </div>
-                    </div>
+                    </dl>
                 </div>
 
-                <div className={styles.attrsArea}>
-                    <div className="bg-[#1A1820] rounded-2xl p-6 border border-white/5 h-full">
-                        <h3 className="text-xl font-black uppercase tracking-widest mb-6 border-b border-white/10 pb-4">
-                            Core Attributes
-                        </h3>
-
-                        <div className={styles.coreAttributesGrid}>
-                            {['Pace', 'Shooting', 'Passing', 'Dribbling', 'Defending', 'Physicality'].map(category => {
-                                // 4. APPLY MULTIPLIER TO PROGRESS BARS
-                                const total = statValue(attrs, category);
-                                const val = total ?? 0;
-
-                                return (
-                                    <div key={category} className="grid gap-2 text-sm">
-                                        <div className="flex justify-between text-gray-300 font-bold uppercase tracking-wider">
-                                            <span>{category}</span>
-                                            <span className="text-white text-lg tabular-nums">{total ?? '—'}</span>
-                                        </div>
-
-                                        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full ${getStatColor(val)}`}
-                                                style={{ width: `${val}%` }}
-                                            />
-                                        </div>
+                <section aria-label="Core attributes" className={`${styles.attrsArea} space-y-5`}>
+                    <h2 className="font-display text-3xl text-ink sm:text-4xl">Core attributes</h2>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {CORE_STATS.map((category) => {
+                            const total = statValue(attrs, category);
+                            return (
+                                <div key={category} className="glass grid gap-4 rounded-card p-5">
+                                    <p className="eyebrow">{category}</p>
+                                    <p className="font-display text-6xl leading-none tabular-nums text-ink">{total ?? '-'}</p>
+                                    <div className="h-1 w-full overflow-hidden rounded-pill bg-raise" role="presentation">
+                                        <div className="h-full bg-acc" style={{ width: `${total ?? 0}%` }} />
                                     </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-
-                {stylesArr.length > 0 && (
-                    <div className={styles.stylesArea}>
-                        {stylesArr.map(style => (
-                            <div
-                                key={style.name}
-                                className="bg-[#1C1C24] rounded-2xl p-5 border border-white/5 grid grid-cols-[auto_1fr] gap-5 items-center shadow-lg"
-                            >
-                                {style.icon_url ? (
-                                    <img
-                                        src={style.icon_url}
-                                        alt={style.name}
-                                        className="w-14 h-14 object-contain drop-shadow-md select-none"
-                                        onContextMenu={(e) => e.preventDefault()}
-                                         draggable="false"
-                                    />
-                                ) : (
-                                    <div className="w-14 h-14 grid place-content-center bg-black/50 rounded-xl border border-white/10">
-                                        <Hexagon size={26} className="text-[#E8C881]" />
-                                    </div>
-                                )}
-
-                                <div className="grid gap-1">
-                                    <span className="font-black text-xl text-white tracking-wide">
-                                        {style.name}
-                                    </span>
-                                    <p className="text-sm text-zinc-400 leading-relaxed">
-                                        {style.description || `Grants unique mechanics and precision on the pitch.`}
-                                    </p>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
+                </section>
+
+                {playStyle && (
+                    <section aria-label="Play style" className={`${styles.stylesArea} glass rounded-card p-5`}>
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-5">
+                            {playStyle.imageUrl ? (
+                                <img
+                                    src={playStyle.imageUrl}
+                                    alt={playStyle.name}
+                                    className="size-14 select-none object-contain"
+                                    onContextMenu={(e) => e.preventDefault()}
+                                    draggable="false"
+                                />
+                            ) : (
+                                <div className="grid size-14 place-content-center rounded-ctl bg-raise">
+                                    <Hexagon size={26} aria-hidden="true" className="text-mut" />
+                                </div>
+                            )}
+                            <div className="grid gap-1">
+                                <span className="eyebrow">Play style</span>
+                                <span className="font-display text-2xl leading-none text-ink">{playStyle.name}</span>
+                                <p className="text-sm leading-relaxed text-mut">
+                                    {playStyle.description || 'A play style from the catalogue.'}
+                                </p>
+                            </div>
+                        </div>
+                    </section>
                 )}
 
-                <SeasonHistory player={player} />
+                <div className={styles.historyArea}>
+                    <SeasonHistory player={player} />
+                </div>
             </div>
         </div>
     );
@@ -212,41 +182,41 @@ useEffect(() => {
 export function SeasonHistory({ player }) {
     const seasons = player?.seasons || [];
     return (
-        <section aria-label="Season history" className="col-span-full bg-[#1A1820] rounded-2xl p-6 border border-white/5">
-            <h3 className="text-xl font-black uppercase tracking-widest mb-4 border-b border-white/10 pb-4">Season history</h3>
+        <section aria-label="Season history" className="col-span-full space-y-5">
+            <h2 className="font-display text-3xl text-ink sm:text-4xl">Season history</h2>
             {seasons.length === 0 ? (
-                <p className="text-sm text-zinc-500">No seasons played yet.</p>
+                <p className="text-sm text-mut">No seasons played yet.</p>
             ) : (
-                <div className="overflow-x-auto">
+                <div className="glass overflow-x-auto rounded-card p-2 sm:p-4">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="text-left text-[10px] uppercase tracking-wider text-gray-400">
-                                <th className="py-2 pr-4">Season</th>
-                                <th className="py-2 pr-4">Team</th>
-                                <th className="py-2 pr-4">No.</th>
-                                <th className="py-2 pr-4">Pos.</th>
-                                <th className="py-2 pr-4 text-right">Goals</th>
-                                <th className="py-2 text-right">Assists</th>
+                            <tr className="text-left text-xs text-mut">
+                                <th scope="col" className="px-2 py-2 pr-4 font-semibold">Season</th>
+                                <th scope="col" className="py-2 pr-4 font-semibold">Team</th>
+                                <th scope="col" className="py-2 pr-4 font-semibold">No.</th>
+                                <th scope="col" className="py-2 pr-4 font-semibold">Pos.</th>
+                                <th scope="col" className="py-2 pr-4 text-right font-semibold">Goals</th>
+                                <th scope="col" className="py-2 text-right font-semibold">Assists</th>
                             </tr>
                         </thead>
                         <tbody>
                             {seasons.map((line) => (
-                                <tr key={line.season.id} className="border-t border-white/5">
-                                    <td className="py-2 pr-4 font-bold">{line.division?.name ? `${line.division.name} ` : ''}{line.season.name}</td>
-                                    <td className="py-2 pr-4 text-zinc-300">{line.team?.name || '—'}</td>
-                                    <td className="py-2 pr-4 tabular-nums">{line.jersey_number ?? '—'}</td>
-                                    <td className="py-2 pr-4">{line.position || '—'}</td>
-                                    <td className="py-2 pr-4 text-right tabular-nums">{line.goals}</td>
-                                    <td className="py-2 text-right tabular-nums">{line.assists}</td>
+                                <tr key={line.season.id} className="border-t border-line/70">
+                                    <td className="px-2 py-3 pr-4 font-black uppercase tracking-tight text-ink">{line.division?.name ? `${line.division.name} ` : ''}{line.season.name}</td>
+                                    <td className="py-3 pr-4 text-ink">{line.team?.name || '-'}</td>
+                                    <td className="py-3 pr-4 tabular-nums">{line.jersey_number ?? '-'}</td>
+                                    <td className="py-3 pr-4">{line.position || '-'}</td>
+                                    <td className="py-3 pr-4 text-right font-display text-3xl leading-none tabular-nums text-ink">{line.goals}</td>
+                                    <td className="py-3 pr-2 text-right font-display text-3xl leading-none tabular-nums text-ink">{line.assists}</td>
                                 </tr>
                             ))}
                         </tbody>
                         {player.career && (
                             <tfoot>
-                                <tr className="border-t border-white/20 font-black">
-                                    <td className="py-2 pr-4" colSpan={4}>Career ({player.career.seasons} {player.career.seasons === 1 ? 'season' : 'seasons'})</td>
-                                    <td className="py-2 pr-4 text-right tabular-nums">{player.career.goals}</td>
-                                    <td className="py-2 text-right tabular-nums">{player.career.assists}</td>
+                                <tr className="border-t border-ink font-bold">
+                                    <td className="px-2 py-3 pr-4" colSpan={4}>Career ({player.career.seasons} {player.career.seasons === 1 ? 'season' : 'seasons'})</td>
+                                    <td className="py-3 pr-4 text-right font-display text-3xl leading-none tabular-nums">{player.career.goals}</td>
+                                    <td className="py-3 pr-2 text-right font-display text-3xl leading-none tabular-nums">{player.career.assists}</td>
                                 </tr>
                             </tfoot>
                         )}

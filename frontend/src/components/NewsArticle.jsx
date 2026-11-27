@@ -1,38 +1,29 @@
-import { GlassPanel } from './GlassPanel';
-import { useLeague } from '../context/LeagueContext';
+/* eslint-disable react/prop-types -- this codebase does not use prop-types */
+import { formatNewsDate } from '../lib/newsDate';
 
+// A news card: image, headline and date. Wrap it in a link; it does not navigate by itself.
 export function NewsArticle({ article }) {
-  const { setView, setSelectedArticle } = useLeague();
-
-  // Support both DB field names (title/image_url) and legacy aliases
-  const headline = article.headline || article.title;
+  const headline = article.headline || article.title || 'Untitled article';
   const imgUrl = article.imgUrl || article.image_url;
+  const date = formatNewsDate(article.date);
 
   return (
-    <GlassPanel 
-      className="overflow-hidden group cursor-pointer transition-all duration-300 hover:border-white/30 active:scale-[0.98] flex flex-col h-full"
-      onClick={() => {
-        setSelectedArticle(article);
-        setView('article');
-      }}
-    >
-      {/* Image Section */}
+    <article className="glass lift group flex h-full flex-col overflow-hidden rounded-card">
       {imgUrl && (
-        <div className="relative h-48 sm:h-56 overflow-hidden shrink-0">
-          <img 
-            src={imgUrl}
-            alt={headline}
-            className="w-full h-full object-cover md:grayscale opacity-100 md:opacity-80 md:group-hover:grayscale-0 md:group-hover:opacity-100 md:group-hover:scale-105 transition-all duration-700 ease-out"
-          />
+        <div className="overflow-hidden">
+          {/* Black and white at rest, full colour on hover: the original site's photo treatment. */}
+          <img src={imgUrl} alt="" className="aspect-[16/10] w-full object-cover grayscale transition duration-500 group-hover:scale-[1.03] group-hover:grayscale-0" />
         </div>
       )}
-      
-      {/* Headline Only Section */}
-      <div className="p-5 sm:p-6 flex-1 flex flex-col justify-center">
-        <h4 className="text-lg sm:text-xl font-black text-white leading-tight group-hover:text-zinc-200 transition-colors uppercase tracking-tight line-clamp-3">
-          {headline}
-        </h4>
+      <div className="flex flex-1 flex-col gap-2 p-4 sm:p-5">
+        {(article.category || date) && (
+          <p className="eyebrow flex gap-2">
+            {article.category && <span>{article.category}</span>}
+            {date && <time dateTime={article.date}>{date}</time>}
+          </p>
+        )}
+        <h3 className="font-display text-xl leading-tight text-ink sm:text-2xl">{headline}</h3>
       </div>
-    </GlassPanel>
+    </article>
   );
 }

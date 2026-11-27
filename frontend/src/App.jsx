@@ -1,12 +1,13 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Navigate, Outlet, Route, RouterProvider, createBrowserRouter, createRoutesFromElements, useLocation, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LeagueProvider } from './context/LeagueContext';
-import { TopNavbar } from './components/TopNavbar';
+import { ConfirmProvider, Toaster } from './components/ui';
+import { AppShell } from './components/shell/AppShell';
 import { Loader } from './components/Loader';
-import { useLocation } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { ResetPassword } from './pages/ResetPassword';
 import { GlobalAuthRedirect } from './components/GlobalAuthRedirect';
+import { ErrorState } from './components/ui';
 
 // Pages
 import { Home } from './pages/Home';
@@ -24,43 +25,59 @@ import { Matches } from './pages/Matches';
 import { Vault } from './pages/Vault';
 import { Rules } from './pages/Rules';
 import { LeagueLanding } from './pages/LeagueLanding';
-import { TeamBuilder } from './pages/TeamBuilder';
+import { NotFound } from './pages/NotFound';
 import { RoleWorkspace } from './pages/RoleWorkspace';
 import { LEGACY_REDIRECTS, LegacyRedirect } from './routes/legacyRedirects';
 import { DivisionHomeRoute } from './pages/DivisionHomeRoute';
 import { SectionGate } from './pages/SectionGate';
 import MatchTimeline from './components/MatchTimeline';
 
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useLeague } from './context/LeagueContext';
-// A smart wrapper to protect routes that require login
-function ProtectedRoute({ children }) {
-  const { user, profile, loading } = useAuth();
+// Protects routes that need a signed-in account with a nickname. A failed profile load is an error with a retry, not a
+// request to set up a profile that may already exist.
+export function ProtectedRoute({ children }) {
+  const { user, profile, profileError, loading, retryAuth } = useAuth();
   const location = useLocation();
 
-  if (loading) return <div className="min-h-screen bg-black flex justify-center items-center"><Loader /></div>;
+  if (loading) return <div className="min-h-screen bg-bg flex justify-center items-center"><Loader /></div>;
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-  
-  if (!profile?.nickname || !profile?.wc_team_flair) return <Onboarding />;
+  if (profileError) {
+    return <div className="min-h-screen bg-bg p-4 flex items-center justify-center"><ErrorState title="Could not load your profile" message="Check your connection, then try again." onRetry={retryAuth} className="max-w-md w-full" /></div>;
+  }
+  if (!profile?.nickname) return <Onboarding />;
 
-  const isWc = location.pathname === '/wc';
-
-  return (
-    <div className={`min-h-screen pt-24 pb-12 px-4 sm:px-6 mx-auto ${isWc ? 'max-w-full' : 'max-w-7xl'}`}>
-      <TopNavbar />
-      <main className="animate-in fade-in duration-500">{children}</main>
-    </div>
-  );
+  return children;
 }
 
-// A wrapper for public routes (so they still get the Navbar)
-function PublicRoute({ children }) {
-  return (
-    <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 mx-auto max-w-7xl">
-      <TopNavbar />
-      <main className="animate-in fade-in duration-500">{children}</main>
-    </div>
-  );
+// The app shell is mounted once for every page that has it, so moving between pages never reloads the header.
+function ShellLayout() {
+  return <AppShell><Outlet /></AppShell>;
+}
+
+// The developer-only page that renders every UI primitive in both themes (not in production builds).
+const DevUi = import.meta.env.DEV ? lazy(() => import('./pages/DevUi')) : null;
+const UiGallery = import.meta.env.DEV ? lazy(() => import('./pages/UiGallery')) : null;
+
+// A division in the address (/<division>/matches and so on) sets the division the page reads. It renders nothing for
+// the one render before the division is set, so a page never fetches another division's data.
+function DivisionScope({ children }) {
+  const { division: urlDivision } = useParams();
+  const { division, setDivision } = useLeague();
+
+  useEffect(() => {
+    setDivision(urlDivision);
+  }, [urlDivision, setDivision]);
+
+  return urlDivision === division ? children : null;
+}
+
+// Old division-less addresses (/matches, /vault, /rules, /teams) open the same page in the division in view.
+export function DivisionRedirect({ to }) {
+  const { division } = useLeague();
+  const { search } = useLocation();
+  const requested = new URLSearchParams(search).get('division') || division;
+  return <Navigate to={`/${encodeURIComponent(requested)}/${to}${search}`} replace />;
 }
 
 function WcRoute() {
@@ -74,61 +91,71 @@ function WcRoute() {
 }
 
 function LeagueDashboardRoute() {
-  return <PublicRoute><DivisionHomeRoute><Home /></DivisionHomeRoute></PublicRoute>;
+  return <DivisionHomeRoute><Home /></DivisionHomeRoute>;
 }
 
-function AuthenticatedRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-black" />;
-  if (!user) return <Navigate to="/login" replace />;
-  return children;
-}
+// Routes live in one data router so useBlocker (for unsaved edits) works anywhere in the tree.
+export const routes = createRoutesFromElements(
+  <Route element={<><GlobalAuthRedirect /><Outlet /></>}>
+    {/* Admin Routes (No Standard Navbar) */}
+    <Route path="/login" element={<Login />} />
+    <Route path="/reset-password" element={<ResetPassword />} />
+    <Route path="/hq-login" element={<AdminLogin />} />
+    {LEGACY_REDIRECTS.map(({ from, to }) => <Route key={from} path={from} element={<LegacyRedirect to={to} />} />)}
 
+    {/* Public App Routes */}
+    <Route path="/" element={<LeagueLanding />} />
+    {DevUi && <Route path="/dev/ui" element={<Suspense fallback={null}><DevUi /></Suspense>} />}
+    {UiGallery && <Route path="/ui-gallery" element={<Suspense fallback={null}><UiGallery /></Suspense>} />}
+
+    {/* Every page below shares one app shell. */}
+    <Route element={<ShellLayout />}>
+      <Route path="/:division" element={<LeagueDashboardRoute />} />
+      <Route path="/team-builder" element={<RoleWorkspace requiredRole="captain" />} />
+      <Route path="/editor" element={<RoleWorkspace requiredRole="editor" />} />
+      <Route path="/dictator" element={<RoleWorkspace requiredRole="dictator" />} />
+      <Route path="/dictator/:tool" element={<RoleWorkspace requiredRole="dictator" />} />
+      <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
+      <Route path="/standings/:division" element={<SectionGate section="standings"><Standings /></SectionGate>} />
+
+      {/* Division sections: the division is in the address. A season ranks below every named section. */}
+      <Route path="/:division/:season" element={<LeagueDashboardRoute />} />
+      <Route path="/:division/matches" element={<DivisionScope><SectionGate section="fixtures"><Matches /></SectionGate></DivisionScope>} />
+      <Route path="/:division/teams" element={<DivisionScope><SectionGate section="teams"><Teams /></SectionGate></DivisionScope>} />
+      <Route path="/:division/teams/:teamId" element={<DivisionScope><SectionGate section="teams"><Teams /></SectionGate></DivisionScope>} />
+      <Route path="/:division/news" element={<DivisionScope><SectionGate section="news"><Vault /></SectionGate></DivisionScope>} />
+      <Route path="/:division/rules" element={<DivisionScope><SectionGate section="rules"><Rules /></SectionGate></DivisionScope>} />
+      <Route path="/matches" element={<DivisionRedirect to="matches" />} />
+      <Route path="/teams" element={<DivisionRedirect to="teams" />} />
+      <Route path="/vault" element={<DivisionRedirect to="news" />} />
+      <Route path="/rules" element={<DivisionRedirect to="rules" />} />
+      <Route path="/matches/:id" element={<MatchTimeline />} />
+
+      {/* Note the :id syntax! This catches /article/12345 */}
+      <Route path="/article/:id" element={<SectionGate section="news"><ArticleView /></SectionGate>} />
+
+      <Route path="/wc" element={<WcRoute />} />
+
+      {/* Protected Routes (Require Login/Profile) */}
+      <Route path="/fantasy" element={<ProtectedRoute><SectionGate section="fantasy"><Fantasy /></SectionGate></ProtectedRoute>} />
+      <Route path="/leaderboard" element={<SectionGate section="stats"><Leaderboard /></SectionGate>} />
+      <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+
+      {/* Catch-all for bad URLs */}
+      <Route path="*" element={<NotFound />} />
+    </Route>
+  </Route>,
+);
+const router = createBrowserRouter(routes);
 
 function App() {
   return (
     <AuthProvider>
       <LeagueProvider>
-        <BrowserRouter>
-        <GlobalAuthRedirect />
-          <Routes>
-            {/* Admin Routes (No Standard Navbar) */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/hq-login" element={<AdminLogin />} />
-            {LEGACY_REDIRECTS.map(({ from, to }) => <Route key={from} path={from} element={<LegacyRedirect to={to} />} />)}
-
-            {/* Public App Routes */}
-            <Route path="/" element={<LeagueLanding />} />
-            <Route path="/:division" element={<LeagueDashboardRoute />} />
-            <Route path="/:division/:season" element={<LeagueDashboardRoute />} />
-            <Route path="/team-builder" element={<RoleWorkspace requiredRole="captain" />} />
-            <Route path="/editor" element={<RoleWorkspace requiredRole="editor" />} />
-            <Route path="/dictator" element={<RoleWorkspace requiredRole="dictator" />} />
-            <Route path="/standings" element={<Navigate to="/standings/super-league" replace />} />
-            <Route path="/standings/:division" element={<PublicRoute><SectionGate section="standings"><Standings /></SectionGate></PublicRoute>} />
-            <Route path="/teams" element={<PublicRoute><SectionGate section="teams"><Teams /></SectionGate></PublicRoute>} />
-            
-            {/* Navigation Sections */}
-            <Route path="/matches" element={<PublicRoute><SectionGate section="fixtures"><Matches /></SectionGate></PublicRoute>} />
-            <Route path="/matches/:id" element={<PublicRoute><MatchTimeline /></PublicRoute>} />
-            <Route path="/vault" element={<PublicRoute><SectionGate section="news"><Vault /></SectionGate></PublicRoute>} />
-            <Route path="/rules" element={<PublicRoute><SectionGate section="rules"><Rules /></SectionGate></PublicRoute>} />
-            
-            {/* Note the :id syntax! This catches /article/12345 */}
-            <Route path="/article/:id" element={<PublicRoute><SectionGate section="news"><ArticleView /></SectionGate></PublicRoute>} />
-
-            <Route path="/wc" element={<PublicRoute><WcRoute /></PublicRoute>} />
-            
-            {/* Protected Routes (Require Login/Profile) */}
-            <Route path="/fantasy" element={<ProtectedRoute><SectionGate section="fantasy"><Fantasy /></SectionGate></ProtectedRoute>} />
-            <Route path="/leaderboard" element={<ProtectedRoute><SectionGate section="stats"><Leaderboard /></SectionGate></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
-            
-            {/* Catch-all for bad URLs */}
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </BrowserRouter>
+        <ConfirmProvider>
+          <RouterProvider router={router} />
+          <Toaster />
+        </ConfirmProvider>
       </LeagueProvider>
     </AuthProvider>
   );

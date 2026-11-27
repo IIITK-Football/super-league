@@ -6,6 +6,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlayerAccountLink from '../PlayerAccountLink';
+// Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
+vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
+globalThis.confirmAnswer = vi.fn(async () => true);
 
 const rpc = vi.fn();
 vi.mock('../../../lib/supabase', () => ({ supabase: { rpc: (...a) => rpc(...a) } }));
@@ -22,7 +25,7 @@ const typeSearch = async (text) => {
   vi.useRealTimers();
 };
 
-beforeEach(() => { rpc.mockReset(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
+beforeEach(() => { rpc.mockReset(); globalThis.confirmAnswer = vi.fn(async () => true); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('the player account panel', () => {
@@ -33,7 +36,7 @@ describe('the player account panel', () => {
     rerender(<PlayerAccountLink player={player} status={{ linked: true, email: 'ada@iiitkottayam.ac.in' }} onChanged={onChanged} />);
     expect(screen.getByText(/Linked to/).textContent).toMatch(/ada@iiitkottayam.ac.in.*read-only/);
     expect(screen.queryByRole('textbox')).toBeNull();
-    window.confirm.mockReturnValueOnce(false);
+    globalThis.confirmAnswer.mockResolvedValueOnce(false);
     fireEvent.click(screen.getByRole('button', { name: /unlink/i }));
     expect(rpc).not.toHaveBeenCalled();
     rpc.mockResolvedValue({ data: null, error: null });

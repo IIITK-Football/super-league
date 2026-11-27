@@ -240,6 +240,8 @@ INSERT INTO public.divisions (slug, name, short_name, sort_order, visibility, cr
 SELECT slug, name, short_name, sort_order, 'public', NULL FROM _mega_division_defs
 ON CONFLICT (slug) DO NOTHING;
 
+UPDATE public.divisions SET logo_url = '/slk-womens.png' WHERE slug = 'wsl' AND logo_url IS NULL;
+
 INSERT INTO public.seasons (division_id, slug, name, status, is_current, format, visibility, created_by)
 SELECT d.id, '2026', '2026', 'active', NOT EXISTS (SELECT 1 FROM public.seasons c WHERE c.division_id = d.id AND c.is_current), def.format, 'public', NULL
 FROM _mega_division_defs def JOIN public.divisions d ON d.slug = def.slug

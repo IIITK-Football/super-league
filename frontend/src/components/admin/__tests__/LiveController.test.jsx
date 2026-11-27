@@ -6,16 +6,20 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = { events: [], eventsError: null, requests: [], responses: [], selects: 0 };
-const match = { id: 'm1', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Alpha', away_team_name: 'Beta', home_score: 1, away_score: 0, status: 'live', minute: "20'", division_name: 'D', season_name: 'S' };
+const db = { events: [], eventsError: null, requests: [], responses: [], selects: 0, format: 'league' };
+const match = { id: 'm1', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Alpha', away_team_name: 'Beta', home_score: 1, away_score: 0, status: 'live', minute: "20'", division_name: 'D', season_name: 'S', season_id: 's1' };
 const players = [
   { id: 'p1', first_name: 'Ada', last_name: 'Striker', team_id: 't1' },
   { id: 'p2', first_name: 'Bea', last_name: 'Winger', team_id: 't1' },
   { id: 'p3', first_name: 'Cy', last_name: 'Keeper', team_id: 't2' },
 ];
 
+const finished = { ...match, id: 'm2', home_team_id: 't1', away_team_id: 't2', home_team_name: 'Gamma', away_team_name: 'Delta', home_score: 2, away_score: 2, status: 'completed', minute: 'FT', date: new Date().toISOString() };
 vi.mock('../../../hooks/useApi', () => ({
-  useApi: (endpoint) => ({ data: endpoint.startsWith('/players') ? { data: players } : { data: [match] }, refetch: vi.fn(), loading: false }),
+  useApi: (endpoint) => ({
+    data: endpoint.startsWith('/players') ? { data: players } : endpoint.includes('status=completed') ? { data: [finished, { ...finished, id: 'm3', home_team_name: 'Old', away_team_name: 'Gone', date: new Date(Date.now() - 30 * 86400000).toISOString() }] } : { data: [match] },
+    refetch: vi.fn(), loading: false,
+  }),
 }));
 vi.mock('../DivisionSwitch', () => ({ DivisionSwitch: () => null }));
 vi.mock('../../../context/AuthContext', () => ({ useAuth: () => ({ hasRole: (r) => r === 'scorer' }) }));
@@ -23,33 +27,51 @@ vi.mock('../../../lib/api', () => ({ API_BASE_URL: 'http://api.test' }));
 vi.mock('../../../lib/supabase', () => ({
   supabase: {
     auth: { getSession: async () => ({ data: { session: { access_token: 'tok' } } }) },
-    from: () => {
+    from: (table) => {
+      if (table === 'seasons') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { format: db.format }, error: null }) }) }) };
       const b = { select: () => b, eq: () => b, is: () => b, order: () => b, then: (res, rej) => Promise.resolve().then(() => { db.selects += 1; return db.eventsError ? { data: null, error: { message: db.eventsError } } : { data: db.events.map((e) => ({ ...e })), error: null }; }).then(res, rej) };
       return b;
     },
   },
 }));
+const { ConfirmProvider, Toaster, dismissToast } = await import('../../ui');
+const { readToasts } = await import('../../ui/toastStore');
 const { default: LiveController } = await import('../LiveController');
+const renderLive = () => render(<ConfirmProvider><LiveController /><Toaster /></ConfirmProvider>);
+
+// Opens a searchable picker by its label and chooses the option whose label matches.
+async function choose(label, option) {
+  fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(await screen.findByRole('option', { name: option }));
+}
+// A NumberField commits a typed value when it loses focus.
+function typeNumber(field, value) {
+  fireEvent.change(field, { target: { value } });
+  fireEvent.blur(field);
+}
 
 const goal = (over) => ({ id: 'e1', team_id: 't1', kind: 'goal', player_id: null, assist_player_id: null, minute: 20, added_minute: null, version: 1, ...over });
 
 beforeEach(() => {
+  match.home_score = 1; match.away_score = 0; db.format = 'league';
   db.events = [goal({})]; db.eventsError = null; db.requests = []; db.responses = []; db.selects = 0;
+  readToasts().forEach((t) => dismissToast(t.id));
   vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
     db.requests.push(JSON.parse(init.body));
     const next = db.responses.shift() ?? { status: 200, body: { success: true, message: 'Done.', match: { home_score: 2, away_score: 0 } } };
     return { ok: next.status < 400, status: next.status, json: async () => next.body };
   }));
-  vi.spyOn(window, 'prompt').mockReturnValue('wrong player');
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  vi.spyOn(window, 'prompt').mockImplementation(() => { throw new Error('window.prompt must not be used'); });
+  vi.spyOn(window, 'confirm').mockImplementation(() => { throw new Error('window.confirm must not be used'); });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 async function openMatch() {
-  render(<LiveController />);
-  fireEvent.click(await screen.findByText(/Alpha vs Beta/));
+  renderLive();
+  fireEvent.click(await screen.findByRole('button', { name: /^Alpha vs Beta/ }));
   await screen.findByText(/Match events \(/);
 }
+
 
 describe('LiveController on match events', () => {
   it('lists the events, flags a goal without a scorer and offers Attribute', async () => {
@@ -63,34 +85,42 @@ describe('LiveController on match events', () => {
   it('shows the empty state and an error with retry', async () => {
     db.events = [];
     await openMatch();
-    expect(screen.getByText('No events recorded yet.')).toBeTruthy();
+    expect(screen.getByText('No events recorded yet')).toBeTruthy();
     cleanup();
     db.eventsError = 'permission denied';
-    render(<LiveController />);
-    fireEvent.click(await screen.findByText(/Alpha vs Beta/));
+    renderLive();
+    fireEvent.click(await screen.findByRole('button', { name: /^Alpha vs Beta/ }));
     expect(await screen.findByText(/Events could not be loaded \(permission denied\)/)).toBeTruthy();
     db.eventsError = null;
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(await screen.findByText('Match events (0)')).toBeTruthy();
   });
 
-  it('+1 Home sends one score_step request and shows the fresh score and message', async () => {
+  it('Goal for a team records a goal at the clock minute with no scorer, as one add_event request', async () => {
     await openMatch();
-    fireEvent.click(screen.getByRole('button', { name: '+1 Home' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Goal for Alpha' }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Done.'));
     expect(db.requests).toHaveLength(1);
-    expect(db.requests[0]).toMatchObject({ match_id: 'm1', action: 'score_step', side: 'home', delta: 1 });
-    expect(db.requests[0].id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(db.requests[0]).toMatchObject({ match_id: 'm1', action: 'add_event', event: { kind: 'goal', team_id: 't1', minute: '20' } });
+    expect(db.requests[0].event.player_id).toBeUndefined();
+    expect(db.requests[0].event.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(screen.getByLabelText('Home score').textContent).toBe('2');
+  });
+
+  it('-1 removes the newest unattributed goal of that side as one score_step request', async () => {
+    await openMatch();
+    fireEvent.click(screen.getByLabelText('Minus one home'));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    expect(db.requests[0]).toMatchObject({ match_id: 'm1', action: 'score_step', side: 'home', delta: -1 });
   });
 
   it('attributes the goal with the version the scorer saw, as one edit_event request', async () => {
     await openMatch();
     fireEvent.click(screen.getByRole('button', { name: 'Attribute' }));
-    expect(screen.getByText('Correct Goal')).toBeTruthy();
-    expect(screen.getByDisplayValue('Alpha (Home)')).toBeTruthy(); // the goal's team is preselected
-    fireEvent.change(screen.getByLabelText('Goalscorer'), { target: { value: 'p1' } });
-    fireEvent.change(screen.getByLabelText('Minute'), { target: { value: '22' } });
+    expect(screen.getByText('Correct goal')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Alpha (Home)' }).getAttribute('aria-checked')).toBe('true'); // the goal's team is preselected
+    await choose('Goalscorer', /Ada Striker/);
+    typeNumber(screen.getByLabelText('Minute'), '22');
     fireEvent.click(screen.getByRole('button', { name: 'Save correction' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
     expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'edit_event', event_id: 'e1', version: 1, changes: { kind: 'goal', team_id: 't1', player_id: 'p1', assist_player_id: null, minute: '22' } });
@@ -101,19 +131,22 @@ describe('LiveController on match events', () => {
     await openMatch();
     const loadsBefore = db.selects;
     fireEvent.click(screen.getByRole('button', { name: 'Attribute' }));
-    fireEvent.change(screen.getByLabelText('Goalscorer'), { target: { value: 'p1' } });
+    await choose('Goalscorer', /Ada Striker/);
     fireEvent.click(screen.getByRole('button', { name: 'Save correction' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/changed since you loaded it/);
     expect(db.requests).toHaveLength(1);
     await waitFor(() => expect(db.selects).toBeGreaterThan(loadsBefore));
   });
 
-  it('voids an event with a required reason, and sends nothing when no reason is given', async () => {
+  it('voids an event only after a reason is given in a confirm dialog', async () => {
     await openMatch();
-    window.prompt.mockReturnValueOnce('');
     fireEvent.click(screen.getByLabelText('Void event'));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove event' }));
+    expect(await within(dialog).findByText('Give a reason to remove this event.')).toBeTruthy();
     expect(db.requests).toHaveLength(0);
-    fireEvent.click(screen.getByLabelText('Void event'));
+    fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'wrong player' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove event' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
     expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'void_event', event_id: 'e1', version: 1, reason: 'wrong player' });
   });
@@ -126,25 +159,124 @@ describe('LiveController on match events', () => {
     const chooser = await screen.findByRole('group', { name: 'Choose the goal to correct' });
     expect(within(chooser).getByText(/Ada Striker/)).toBeTruthy();
     fireEvent.click(within(chooser).getByRole('button', { name: 'Void this goal' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'wrong player' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove event' }));
     await waitFor(() => expect(db.requests).toHaveLength(2));
     expect(db.requests[1]).toMatchObject({ action: 'void_event', event_id: 'e1', version: 3, reason: 'wrong player' });
   });
 
   it('adds a card with a player, as one add_event request', async () => {
     await openMatch();
-    fireEvent.click(screen.getByRole('button', { name: 'Add Card' }));
-    fireEvent.change(screen.getByLabelText('Card team'), { target: { value: 't2' } });
-    fireEvent.change(screen.getByLabelText('Carded player'), { target: { value: 'p3' } });
-    fireEvent.change(screen.getByLabelText('Card minute'), { target: { value: '55' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Card' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yellow' }));
+    expect(screen.getByRole('button', { name: 'Confirm card' }).disabled).toBe(true); // a card needs a player
+    fireEvent.click(screen.getByRole('radio', { name: 'Beta (Away)' }));
+    await choose('Player', /Cy Keeper/);
+    typeNumber(screen.getByLabelText('Minute'), '55');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm card' }));
     await waitFor(() => expect(db.requests).toHaveLength(1));
     expect(db.requests[0]).toMatchObject({ action: 'add_event', event: { kind: 'yellow', team_id: 't2', player_id: 'p3', minute: '55' } });
+  });
+
+  it('half time keeps the minutes played, as Pause does, and the second half resumes from them', async () => {
+    await openMatch();
+    typeNumber(screen.getByRole('spinbutton'), '30');
+    fireEvent.click(screen.getByRole('button', { name: 'Set' }));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    await waitFor(() => expect(db.requests).toHaveLength(2));
+    const started = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(started + 12 * 60000);
+    fireEvent.click(screen.getByRole('button', { name: 'Half time' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Half time' }));
+    await waitFor(() => expect(db.requests).toHaveLength(3));
+    expect(db.requests[2]).toMatchObject({ action: 'update_time', minute: 'HT', timer_start_time: null, timer_calibration: 42 });
+    Date.now.mockRestore();
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    await waitFor(() => expect(db.requests).toHaveLength(4));
+    expect(db.requests[3]).toMatchObject({ action: 'update_time', minute: "42'", timer_calibration: 42 });
+  });
+
+  it('does not start the clock on screen when the server refuses the save, and says why', async () => {
+    db.responses = [{ status: 500, body: { success: false, message: 'Database timeout' } }];
+    await openMatch();
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Database timeout/);
+    expect(screen.queryByRole('button', { name: /pause/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /start/i })).toBeTruthy();
+  });
+
+  it('shows the clock as running only after the server stored the start', async () => {
+    await openMatch();
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    expect(await screen.findByRole('button', { name: /pause/i })).toBeTruthy();
+    expect(db.requests[0]).toMatchObject({ action: 'update_time', minute: "20'", timer_calibration: 20 });
+    expect(db.requests[0].timer_start_time).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('takes a tied knockout to penalties: both scores are required, and only then is the match closed', async () => {
+    match.away_score = 1; db.format = 'knockout';
+    await openMatch();
+    fireEvent.click(screen.getByRole('button', { name: 'Full time' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(within(dialog).getByLabelText('Home penalties'), { target: { value: '4' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End match' }));
+    expect(await within(dialog).findByText('Enter both penalty scores.')).toBeTruthy();
+    expect(db.requests).toHaveLength(0);
+    fireEvent.change(within(dialog).getByLabelText('Away penalties'), { target: { value: '3' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End match' }));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    expect(db.requests[0]).toMatchObject({ action: 'close_match', home_penalties: 4, away_penalties: 3 });
+  });
+
+  it('asks for no penalties in a league match, even a draw', async () => {
+    match.away_score = 1;
+    await openMatch();
+    fireEvent.click(screen.getByRole('button', { name: 'Full time' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).queryByLabelText('Home penalties')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'End match' }));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'close_match' });
+  });
+
+  it('lists finished matches; Correct opens its events, and Reopen asks first', async () => {
+    renderLive();
+    expect(screen.getByRole('heading', { name: 'Finished matches' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen Gamma vs Delta' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(db.requests).toHaveLength(0);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reopen match' }));
+    await waitFor(() => expect(db.requests).toHaveLength(1));
+    // The clock comes back stopped at that minute, never running from the old start time.
+    expect(db.requests[0]).toEqual({ match_id: 'm2', action: 'update_time', minute: "20'", timer_start_time: null, timer_calibration: 20 });
+  });
+
+  it('warns when the clock was left running past 130 minutes, and one tap stops it at 90', async () => {
+    match.timer_start_time = new Date(Date.now() - 269 * 60000).toISOString(); match.timer_calibration = 20;
+    try {
+      await openMatch();
+      const warning = screen.getByRole('alert');
+      expect(warning.textContent).toMatch(/left running \(289 minutes\)/);
+      fireEvent.click(within(warning).getByRole('button', { name: /Stop at 90/ }));
+      await waitFor(() => expect(db.requests).toHaveLength(1));
+      expect(db.requests[0]).toEqual({ match_id: 'm1', action: 'update_time', minute: "90'", timer_start_time: null, timer_calibration: 90 });
+      await waitFor(() => expect(screen.queryByText(/The clock was left running/)).toBeNull());
+    } finally { delete match.timer_start_time; delete match.timer_calibration; }
   });
 
   it('shows a server refusal inline', async () => {
     db.responses = [{ status: 403, body: { success: false, message: 'Forbidden: you are not assigned to score this match.' } }];
     await openMatch();
-    fireEvent.click(screen.getByRole('button', { name: '+1 Away' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Goal for Beta' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/not assigned to score/);
+  });
+});
+
+describe('LiveController finished matches', () => {
+  it('lists only matches that kicked off in the last 7 days', async () => {
+    renderLive();
+    expect(await screen.findByRole('button', { name: 'Correct Gamma vs Delta' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Correct Old vs Gone' })).toBeNull();
   });
 });

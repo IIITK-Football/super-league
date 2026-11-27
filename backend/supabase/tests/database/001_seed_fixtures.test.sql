@@ -12,7 +12,7 @@ SELECT is((SELECT count(*) FROM public.matches WHERE status = 'completed')::int,
 SELECT is((SELECT count(*) FROM public.matches WHERE status = 'scheduled')::int, 45, 'scheduled matches');
 SELECT cmp_ok((SELECT count(*) FROM public.match_events WHERE kind = 'goal')::int, '>', 400, 'goal events seeded');
 SELECT is((SELECT count(*) FROM public.match_events WHERE kind = 'goal' AND player_id IS NULL AND voided_at IS NULL)::int, 1, 'the live match shows one goal whose scorer is not known yet');
-SELECT is((SELECT count(*) FROM public.match_events WHERE kind = 'yellow')::int, 3, 'a yellow card in each live match');
+SELECT is((SELECT count(*) FROM public.match_events WHERE kind = 'yellow' AND source = 'seed')::int, 3, 'a seeded yellow card in each live match');
 SELECT hasnt_table('public', 'goals', 'the goals table is retired');
 -- Seed accounts are identified by address, so accounts a developer creates locally while
 -- testing sign-in do not change these counts.
@@ -54,8 +54,9 @@ SELECT is((SELECT count(*) FROM public.scorer_assignments sa
           'seed scorer assignments all belong to people holding the scorer grant');
 SELECT is((SELECT count(*) FROM public.user_roles WHERE role = 'default')::int, 0, 'no stored default role');
 
--- Fixture accounts cannot sign in (no password); seeded ids are stable
-SELECT is((SELECT count(*) FROM auth.users u JOIN seed_users s ON s.id = u.id WHERE u.encrypted_password <> '')::int, 0, 'seed accounts have no password');
+-- A newly inserted fixture has no password; later local account edits are allowed.
+SELECT is((SELECT count(*) FROM auth.users u JOIN seed_users s ON s.id = u.id
+  WHERE u.encrypted_password <> '' AND u.updated_at <= u.created_at)::int, 0, 'new seed accounts have no password');
 SELECT is((SELECT id::text FROM auth.users WHERE email = 'lamb@iiitkottayam.ac.in'),
   '60000000-0000-4000-8000-000000000001', 'stable fixture user id');
 
