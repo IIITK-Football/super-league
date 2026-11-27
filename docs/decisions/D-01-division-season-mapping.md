@@ -50,7 +50,7 @@ All division data belongs to a season unless it describes the division itself or
 | Standings, form, top scorers and assisters | Season | Computed from that season's matches (`season_player_stats`) |
 | Fantasy predictions | Season | Through their match |
 | Fantasy points and leaderboard | Season | `season_fantasy_points` and `season_fantasy_leaderboard()`; `user_profiles.points` is removed |
-| Sections, navigation, format, rules text | Season | `season_sections`, `seasons.format`, `seasons.rules_md` |
+| Sections, navigation, format, rules text | Season | `season_sections`, `seasons.format`, `season_rules_versions` |
 | Division identity, branding, order | Division | `divisions` |
 | Team identity (name, logo, colour) | Division-wide | `teams`: one club identity across seasons; only participation is per season |
 | Supporter flair | Division | `division_flairs`: a fan supports a club in a division |

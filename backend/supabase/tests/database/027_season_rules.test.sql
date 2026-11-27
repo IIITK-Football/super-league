@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(25);
+SELECT plan(26);
 
 INSERT INTO auth.users (id, aud, role, email) VALUES
   ('c2700000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', 'rules-dictator@iiitkottayam.ac.in'),
@@ -8,17 +8,18 @@ INSERT INTO public.user_roles (user_id, role) VALUES
   ('c2700000-0000-4000-8000-000000000001', 'dictator'),
   ('c2700000-0000-4000-8000-000000000002', 'editor');
 
--- Backfill: an original division keeps the rules the site showed, a season with text keeps the text, others get none.
+-- Backfill: a season of an original division gets the rules the site showed; any other division gets none.
 INSERT INTO public.divisions (id, slug, name, visibility) VALUES
   ('c2700000-0000-4000-8000-00000000000d', 'rules-test', 'Rules test', 'public');
-INSERT INTO public.seasons (id, division_id, slug, name, visibility, rules_md) VALUES
-  ('c2700000-0000-4000-8000-0000000000a1', 'c2700000-0000-4000-8000-00000000000d', 'text', 'Text', 'public', E'Line one\nLine two'),
-  ('c2700000-0000-4000-8000-0000000000a2', 'c2700000-0000-4000-8000-00000000000d', 'none', 'None', 'public', NULL);
+INSERT INTO public.seasons (id, division_id, slug, name, visibility) VALUES
+  ('c2700000-0000-4000-8000-0000000000a1', (SELECT id FROM public.divisions WHERE slug = 'wsl'), 'rules-old', 'Old', 'public'),
+  ('c2700000-0000-4000-8000-0000000000a2', 'c2700000-0000-4000-8000-00000000000d', 'none', 'None', 'public');
 
-SELECT is(public.backfill_season_rules(), 1, 'only the season with text is backfilled');
+SELECT hasnt_column('public', 'seasons', 'rules_md', 'the old rules text column is retired');
+SELECT is(public.backfill_season_rules(), 1, 'only the original division season is backfilled');
 SELECT is(public.backfill_season_rules(), 0, 'the backfill is repeatable');
-SELECT is((SELECT blocks #>> '{0,body}' FROM season_rules_versions WHERE season_id = 'c2700000-0000-4000-8000-0000000000a1'),
-  E'Line one\nLine two', 'the text is preserved verbatim');
+SELECT is((SELECT blocks FROM season_rules_versions WHERE season_id = 'c2700000-0000-4000-8000-0000000000a1'),
+  public.legacy_rules_blocks('wsl'), 'it holds the rules the site showed');
 SELECT ok(public.rules_blocks_valid(public.legacy_rules_blocks('wsl'))
   AND public.rules_blocks_valid(public.legacy_rules_blocks('super-league')), 'the migrated rule sets are valid');
 SELECT is((SELECT count(*) FROM seasons s JOIN divisions d ON d.id = s.division_id
