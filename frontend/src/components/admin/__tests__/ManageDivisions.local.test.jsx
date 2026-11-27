@@ -93,7 +93,10 @@ describe.skipIf(!TARGET)('ManageDivisions through the local Worker and Data API'
     holder.client = account.client;
     vi.stubGlobal('fetch', (input, init) => {
       const url = typeof input === 'string' ? new URL(input, 'http://localhost') : null;
-      return url?.pathname.startsWith('/api/') ? app.request(url, init) : nativeFetch(input, init);
+      if (url?.pathname.startsWith('/api/')) return app.request(url, init);
+      // The Worker runs in this process, but its abort signal is jsdom's class, which Node's fetch rejects. The test
+      // has its own timeouts, so the signal is left out here.
+      return nativeFetch(input, init && { ...init, signal: undefined });
     });
   }
 
@@ -165,7 +168,10 @@ describe.skipIf(!TARGET)('ManageDivisions through the local Worker and Data API'
 
     // The division has a season, so deleting it is refused and explained; the data stays.
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    fireEvent.click(within(screen.getByDisplayValue('SL Check Inter').closest('li')).getByRole('button', { name: /delete sl check inter/i }));
+    // The screen reports success before it has reloaded; the buttons stay disabled until then.
+    const remove = () => within(screen.getByDisplayValue('SL Check Inter').closest('li')).getByRole('button', { name: /delete sl check inter/i });
+    await waitFor(() => expect(remove().disabled).toBe(false), { timeout: 15000 });
+    fireEvent.click(remove());
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/archive it instead/i), { timeout: 15000 });
     expect((await admin.from('seasons').select('id').eq('division_id', division.data.id)).data).toHaveLength(1);
   }, 90000);

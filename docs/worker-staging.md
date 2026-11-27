@@ -14,7 +14,7 @@ before the approved release (`docs/release.md`).
 | Build command | *(empty)* |
 | Deploy command | `node api/scripts/deploy-staging.mjs` |
 | Build watch paths | include `api/*`, `backend/app/api/*`, `backend/lib/*` |
-| Build variables | `NODE_VERSION=22` |
+| Build variables | `NODE_VERSION=24` |
 
 Workers Builds installs dependencies at the root from `pnpm-lock.yaml` (pnpm comes from `packageManager` in
 `package.json`). The deploy command (`api/scripts/deploy-staging.mjs`) refuses unless it runs inside Workers Builds

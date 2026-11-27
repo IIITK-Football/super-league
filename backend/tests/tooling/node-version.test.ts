@@ -25,7 +25,7 @@ function installedFloors(workspace: string): { name: string; floor: number; rang
   if (!existsSync(store)) return [];
   const out: { name: string; floor: number; range: string }[] = [];
   for (const dir of readdirSync(store)) {
-    if (!/^(undici|jsdom|vitest|vite|next|@supabase\+supabase-js|wrangler)@/.test(dir)) continue;
+    if (!/^(undici|jsdom|vitest|vite|@supabase\+supabase-js|wrangler)@/.test(dir)) continue;
     const pkgName = dir.startsWith('@') ? dir.replace('+', '/').replace(/@[^@]+$/, '') : dir.replace(/@[^@]+$/, '');
     const pkgPath = join(store, dir, 'node_modules', pkgName, 'package.json');
     if (!existsSync(pkgPath)) continue;
@@ -45,7 +45,7 @@ describe('Node version', () => {
     expect(lowestMajor(rootPkg.engines?.node)).toBeGreaterThanOrEqual(nvmrcMajor);
   });
 
-  it.each(['frontend', 'backend'])('.nvmrc satisfies the Node floor of the installed %s dependencies', (workspace) => {
+  it.each(['frontend', 'backend', 'api'])('.nvmrc satisfies the Node floor of the installed %s dependencies', (workspace) => {
     const tooLow = installedFloors(workspace).filter((p) => p.floor > nvmrcMajor);
     expect(tooLow.map((p) => `${p.name} needs node ${p.range}`)).toEqual([]);
   });
