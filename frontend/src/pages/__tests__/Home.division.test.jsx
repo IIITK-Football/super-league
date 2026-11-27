@@ -122,4 +122,17 @@ describe('division home', () => {
     const link = await screen.findByRole('link', { name: 'Ada Lovelace' });
     expect(link.getAttribute('href')).toBe('/teams?player=p9');
   });
+
+  it('offers controls to move and pause the news carousel', async () => {
+    responses.dashboard = { json: { success: true, data: { ...dashboardPayload.data,
+      news: [{ id: 'one', title: 'First article' }, { id: 'two', title: 'Second article' }] } } };
+    renderHome();
+    const carousel = await screen.findByRole('region', { name: 'News carousel' });
+    const rail = carousel.querySelector('ul');
+    rail.scrollTo = vi.fn();
+    fireEvent.click(screen.getByRole('button', { name: 'Next news' }));
+    expect(rail.scrollTo).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Pause news carousel' }));
+    expect(screen.getByRole('button', { name: 'Play news carousel' })).toBeTruthy();
+  });
 });

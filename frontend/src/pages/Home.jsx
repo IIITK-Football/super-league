@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { SeasonSelect } from '../components/SeasonSelect';
@@ -19,9 +19,9 @@ const time = (m) => (m.date ? new Date(m.date).getTime() : 0);
 function SectionHead({ title, to, action }) {
   return (
     <div className="flex items-end justify-between gap-4">
-      <h2 className="font-display text-3xl text-ink sm:text-4xl">{title}</h2>
+      <h2 className="font-display text-2xl text-ink sm:text-4xl">{title}</h2>
       {to && (
-        <Link to={to} className="eyebrow group inline-flex min-h-11 items-center gap-1.5 hover:text-ink">
+        <Link to={to} className="eyebrow group inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap hover:text-ink">
           {action}
           <ArrowRight size={13} aria-hidden="true" className="transition-transform group-hover:translate-x-0.5" />
         </Link>
@@ -69,18 +69,52 @@ function Leader({ label, unit, player }) {
 }
 
 function NewsCarousel({ articles, division }) {
-  const [start, setStart] = useState(0);
-  const visible = articles.map((_, index) => articles[(start + index) % articles.length]);
-  return <section className="space-y-4" aria-label="News carousel">
-    <div className="flex items-end justify-between gap-3">
+  const rail = useRef(null);
+  const [reduced, setReduced] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+  const [playing, setPlaying] = useState(true);
+  const [interacting, setInteracting] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!query) return undefined;
+    const update = () => setReduced(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  const move = useCallback((direction) => {
+    const list = rail.current;
+    if (!list || !list.children.length) return;
+    const cards = [...list.children];
+    const first = cards[0].offsetLeft;
+    const end = Math.max(0, list.scrollWidth - list.clientWidth);
+    const current = cards.reduce((closest, card, index) =>
+      Math.abs(card.offsetLeft - first - list.scrollLeft) < Math.abs(cards[closest].offsetLeft - first - list.scrollLeft) ? index : closest, 0);
+    const next = (current + direction + cards.length) % cards.length;
+    const left = direction > 0 && list.scrollLeft >= end - 1 ? 0
+      : direction < 0 && list.scrollLeft <= 0 ? end : cards[next].offsetLeft - first;
+    list.scrollTo({ left, behavior: reduced ? 'instant' : 'smooth' });
+  }, [reduced]);
+
+  useEffect(() => {
+    if (!playing || interacting || reduced || articles.length < 2) return undefined;
+    const timer = window.setInterval(() => move(1), 6000);
+    return () => window.clearInterval(timer);
+  }, [playing, interacting, reduced, articles.length, move]);
+
+  return <section className="min-w-0 space-y-4" aria-label="News carousel" aria-roledescription="carousel"
+    onMouseEnter={() => setInteracting(true)} onMouseLeave={() => setInteracting(false)}
+    onFocusCapture={() => setInteracting(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setInteracting(false); }}>
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
       <SectionHead title="News" to={`/${division}/news`} action="All news" />
-      {articles.length > 1 && <div className="flex gap-2">
-        <button type="button" aria-label="Previous news" onClick={() => setStart((i) => (i - 1 + articles.length) % articles.length)} className="glass rounded-full p-3"><ArrowLeft size={18} /></button>
-        <button type="button" aria-label="Next news" onClick={() => setStart((i) => (i + 1) % articles.length)} className="glass rounded-full p-3"><ArrowRight size={18} /></button>
+      {articles.length > 1 && <div className="flex items-center gap-2">
+        {!reduced && <button type="button" aria-label={playing ? 'Pause news carousel' : 'Play news carousel'} onClick={() => setPlaying((value) => !value)} className="glass rounded-full p-3">{playing ? <Pause size={16} /> : <Play size={16} />}</button>}
+        <button type="button" aria-label="Previous news" onClick={() => move(-1)} className="glass rounded-full p-3"><ArrowLeft size={16} /></button>
+        <button type="button" aria-label="Next news" onClick={() => move(1)} className="glass rounded-full p-3"><ArrowRight size={16} /></button>
       </div>}
     </div>
-    <ul className="no-scrollbar -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-      {visible.map((article) => <li key={article.id} className="w-[85%] shrink-0 snap-start md:w-[calc((100%-2rem)/3)]">
+    <ul ref={rail} className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2">
+      {articles.map((article) => <li key={article.id} className="w-[min(85%,22rem)] shrink-0 snap-start md:w-[calc((100%-2rem)/3)]">
         <Link to={`/article/${article.id}`} className="block h-full rounded-card"><NewsArticle article={article} /></Link>
       </li>)}
     </ul>
@@ -186,10 +220,10 @@ export function Home() {
       {rail.length > 0 && (
         <section className="space-y-4">
           <SectionHead title="Recent matches" to={`/${division}/matches`} action="View all" />
-          <ul className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
+          <ul className="no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2">
             {rail.map((m) => (
-              <li key={m.id} className="w-[19rem] shrink-0 snap-start sm:w-[22rem]">
-                <MatchStrip match={m} className="h-full" />
+              <li key={m.id} className="w-[min(85%,16rem)] shrink-0 snap-start">
+                <MatchStrip match={m} className="h-full !p-3" />
               </li>
             ))}
           </ul>
