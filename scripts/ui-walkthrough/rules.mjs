@@ -201,7 +201,11 @@ async function main() {
     await clickWrite(rules.getByRole('button', { name: 'Publish' }), 'POST', `${base}/publish`);
     await rules.getByText('Matches version 2').waitFor();
     await go(visitor, `/rules?division=${slug}&season=${tag}`);
-    await text('Students and alumni').waitFor();
+    await text('Students and alumni').waitFor().catch(async (error) => {
+      const body = await visitor.locator('body').innerText({ timeout: 1000 }).catch(() => '');
+      const answer = await visitor.request.get(`${site}/api/rules?division=${slug}&season=${tag}`, { headers: access }).then((r) => r.text());
+      throw new Error(`Version 2 did not show. Page: ${body.slice(0, 500)} API: ${answer.slice(0, 600)}`, { cause: error });
+    });
     await rules.getByRole('button', { name: 'View version 1' }).click();
     await rules.getByRole('region', { name: 'Version 1' }).getByText('Enrolled students only').waitFor();
     const stored = await db.select('season_rules_versions', `season_id=eq.${season}&select=version,blocks&order=version`);
