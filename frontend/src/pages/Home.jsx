@@ -163,7 +163,7 @@ function NewsCarousel({ articles, division }) {
         <button type="button" aria-label="Next news" onClick={() => move(1)} className="glass rounded-full p-3"><ArrowRight size={16} /></button>
       </div>}
     </div>
-    <ul ref={stage} className="relative h-[23rem] overflow-hidden sm:h-[27rem]" style={{ touchAction: 'pan-y' }}
+    <ul ref={stage} className="relative isolate h-[23rem] overflow-hidden sm:h-[27rem]" style={{ touchAction: 'pan-y' }}
       onTouchStart={(event) => { touch.current = event.touches[0].clientX; setInteracting(true); }}
       onTouchEnd={(event) => {
         const delta = event.changedTouches[0].clientX - touch.current;

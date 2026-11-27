@@ -129,6 +129,7 @@ describe('division home', () => {
     renderHome();
     const carousel = await screen.findByRole('region', { name: 'News carousel' });
     const rail = carousel.querySelector('ul');
+    expect(rail.classList.contains('isolate')).toBe(true);
     expect(rail.children).toHaveLength(2);
     const before = rail.children[0].style.transform;
     fireEvent.click(screen.getByRole('button', { name: 'Next news' }));
