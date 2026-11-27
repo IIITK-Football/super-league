@@ -1,0 +1,11 @@
+{
+  "id": "SL-040",
+  "attestations": [
+    {
+      "checkId": "C1",
+      "by": "oreoruuser",
+      "at": "2026-11-27T04:00:46.843Z",
+      "note": "Recorded at the owner's direction. All four lifecycle scenarios passed through the real app on localhost and staging at c7b8318, including public visibility, section gating, stored state and the audit actor."
+    }
+  ]
+}

@@ -29,23 +29,24 @@ handoff, so each sync is a fast-forward.
   prototypes. Read them before the matching item, reuse what is useful, and
   note what was reused in CURRENT.md. Do not merge them as they are.
 
-## Handing back to Claude
+## Publishing to staging and handing back to Claude
 
-Commit everything and update CURRENT.md. The owner (or Claude at the start of
-its session) runs `git merge --ff-only codex/work` in the main checkout and
-pushes `develop`.
+Commit each locally verified stage and update CURRENT.md. In the main checkout,
+fast-forward `develop` from `codex/work` and push `develop` through the existing
+staging workflow. Use the provided Cloudflare Access service token for the
+staging walkthrough. Record the deployed commit and results in CURRENT.md.
 
 ## Safety boundaries (Claude's guard does not cover Codex)
 
-- Local Supabase only, on port 54322. Never use linked or remote Supabase
-  commands, never connect to or change hosted staging or production, and
-  never touch the `superLeagueBackup` project (port 55322).
+- Use local Supabase on port 54322 for development. On hosted staging, use
+  the approved `develop` deployment workflow and the repo's staging verification
+  scripts. Never use linked or remote Supabase CLI commands, access production,
+  or touch the `superLeagueBackup` project (port 55322).
 - Never stop, prune or delete Docker containers, networks or volumes.
 - Never print or commit secrets from `.env*`, Supabase state, CI or
   Cloudflare.
-- Nothing touching `main`, production, GitHub or Supabase settings,
-  credentials or deployments; those are the owner's. Do not push; Claude or
-  the owner pushes `develop`.
+- Publish staging through `develop`. The owner manages `main`, production,
+  service settings, credentials, and deployments outside the staging workflow.
 - No force push, no branch deletion, no fixup, WIP or merge commits.
 - Never ask for Computer Use permission or invoke Computer Use when it would
   prompt for approval. Use available connectors, APIs or CLI tools instead.

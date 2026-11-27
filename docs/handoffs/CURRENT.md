@@ -7,7 +7,8 @@ handoff steps.
 ## Status
 
 - Phase 3 merged in PR #193 at `af61b3f`. Both local branches were fast-forwarded to that release before SL-040.
-- Phase 4 is active. SL-040 is in progress and C1 requires the local and staging walkthroughs and owner attestation.
+- Phase 4 is active. SL-040 is done. Local and staging walkthroughs passed on `c7b8318` and C1 was attested at the owner’s direction.
+- The owner confirmed on 2026-11-27 that Codex fast-forwards and pushes `develop` at verified staging handoffs and uses the provided Cloudflare Access token for staging.
 - `d426640` implements the division and season lifecycle, the audited Worker routes, the dictator workspace, and data-driven public navigation and section gating. The new management routes live in the Worker so the existing API test group covers them.
 
 - `6a6647e` fixes landing navigation cleanup. `e4f6112` keeps the selected season in the URL when the division has no current season.
@@ -16,16 +17,15 @@ handoff steps.
 
 - The guarded local reset applied `20261206000000_division_season_lifecycle.sql` and the demo seed on port 54322.
 - All 596 pgTAP checks passed. The `divisions`, `api-services`, `frontend-components`, and `fantasy` groups passed. Both TypeScript checks, the walkthrough guard tests, and the strict coverage check passed.
-- The local Worker parity runner passed 37 checks across all eight groups on `d426640`. The real-app walkthrough passed all four scenarios on `e4f6112`. See the [walkthrough](../walkthroughs/SL-040.md).
+- The local Worker parity runner passed 37 checks across all eight groups on `d426640`. The real-app walkthrough passed all four scenarios locally and on staging at `c7b8318`. The item completion groups passed. See the [walkthrough](../walkthroughs/SL-040.md).
 
 ## Exact next step
 
-1. The owner or Claude fast-forwards the main checkout's `develop` from `codex/work` and publishes it. Run the staging walkthrough from `scripts/ui-walkthrough/divisions.mjs --target staging`, then the owner attests C1.
-2. Continue with SL-044, versioned rules, after SL-040 satisfies its handoff checks.
+Start SL-044, the versioned rules editor, with `pnpm work start SL-044`. Review its tracked acceptance scenarios before implementation.
 
 ## In flight
 
-Staging walkthrough and owner attestation for C1. The pre-existing untracked `.pnpm-store/` remains local.
+No product files in flight. The pre-existing untracked `.pnpm-store/` remains local.
 
 ## Local database
 

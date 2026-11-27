@@ -1,7 +1,7 @@
 {
   "item": "SL-040",
   "target": "local",
-  "servedCommit": "e4f6112faadedf5efac6af1def1189796365605e",
+  "servedCommit": "c7b83185a6a8dc4cf46c4ebe4575b6319d9403ca",
   "steps": [
     {
       "scenario": "create, publish, reorder and select",
