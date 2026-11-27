@@ -123,7 +123,7 @@ describe('division home', () => {
     expect(link.getAttribute('href')).toBe('/teams?player=p9');
   });
 
-  it('offers controls to move and pause the news carousel', async () => {
+  it('offers controls to move the news carousel', async () => {
     responses.dashboard = { json: { success: true, data: { ...dashboardPayload.data,
       news: [{ id: 'one', title: 'First article' }, { id: 'two', title: 'Second article' }] } } };
     renderHome();
@@ -135,7 +135,6 @@ describe('division home', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next news' }));
     await waitFor(() => expect(rail.children[0].style.transform).not.toBe(before));
     expect(rail.children[0].style.transform).not.toContain('rotate');
-    fireEvent.click(screen.getByRole('button', { name: 'Pause news carousel' }));
-    expect(screen.getByRole('button', { name: 'Play news carousel' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /pause news carousel/i })).toBeNull();
   });
 });

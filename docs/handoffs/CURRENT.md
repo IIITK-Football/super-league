@@ -16,6 +16,7 @@ handoff steps.
 - Latest carousel: continuous looping motion with card depth computed from position, pause and reduced-motion support. Focused tests, build and phone-width browser checks passed.
 - Orbit refinement: news cards travel around a slower ellipse with gradual depth fading, touch controls, pause and reduced-motion handling. Focused tests, build, lint and mobile browser checks passed.
 - Fixed carousel cards covering the sticky navigation by isolating their stacking context; verified desktop scroll positions and the mobile menu in the browser.
+- Removed the carousel pause button at the owner's request. Motion stops after keyboard focus or touch, and remains off for reduced motion; refreshing restarts it.
 
 - 2026-11-27: Claude holds the work, in the main checkout on `develop`.
 - SL-040 and SL-044 are done, so Phase 4 is complete (`pnpm work phase 4` confirms it). Every active test group passed on 2026-11-27 after the toolchain update.

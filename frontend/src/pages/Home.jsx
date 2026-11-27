@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useLeague } from '../context/LeagueContext';
 import { useApi } from '../hooks/useApi';
 import { SeasonSelect } from '../components/SeasonSelect';
@@ -75,8 +75,8 @@ function NewsCarousel({ articles, division }) {
   const touch = useRef(null);
   const swiped = useRef(false);
   const [reduced, setReduced] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
-  const [playing, setPlaying] = useState(true);
   const [interacting, setInteracting] = useState(false);
+  const [stopped, setStopped] = useState(false);
   const [visible, setVisible] = useState(() => typeof IntersectionObserver === 'undefined');
   const [stepping, setStepping] = useState(false);
   const multiple = articles.length > 1;
@@ -131,7 +131,7 @@ function NewsCarousel({ articles, division }) {
   };
 
   useEffect(() => {
-    const autoplay = multiple && playing && !interacting && !reduced && visible;
+    const autoplay = multiple && !stopped && !interacting && !reduced && visible;
     if (!autoplay && !stepping) return undefined;
     let frame;
     let last;
@@ -150,21 +150,20 @@ function NewsCarousel({ articles, division }) {
     };
     frame = window.requestAnimationFrame(animate);
     return () => window.cancelAnimationFrame(frame);
-  }, [articles.length, multiple, playing, interacting, reduced, visible, stepping, positionCards]);
+  }, [articles.length, multiple, stopped, interacting, reduced, visible, stepping, positionCards]);
 
   return <section className="min-w-0 space-y-4" aria-label="News carousel" aria-roledescription="carousel"
     onMouseEnter={() => setInteracting(true)} onMouseLeave={() => setInteracting(false)}
-    onFocusCapture={() => setInteracting(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setInteracting(false); }}>
+    onFocusCapture={() => { setStopped(true); setInteracting(true); }} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setInteracting(false); }}>
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
       <SectionHead title="News" to={`/${division}/news`} action="All news" />
       {multiple && <div className="flex items-center gap-2">
-        {!reduced && <button type="button" aria-label={playing ? 'Pause news carousel' : 'Play news carousel'} onClick={() => setPlaying((value) => !value)} className="glass rounded-full p-3">{playing ? <Pause size={16} /> : <Play size={16} />}</button>}
         <button type="button" aria-label="Previous news" onClick={() => move(-1)} className="glass rounded-full p-3"><ArrowLeft size={16} /></button>
         <button type="button" aria-label="Next news" onClick={() => move(1)} className="glass rounded-full p-3"><ArrowRight size={16} /></button>
       </div>}
     </div>
     <ul ref={stage} className="relative isolate h-[23rem] overflow-hidden sm:h-[27rem]" style={{ touchAction: 'pan-y' }}
-      onTouchStart={(event) => { touch.current = event.touches[0].clientX; setInteracting(true); }}
+      onTouchStart={(event) => { touch.current = event.touches[0].clientX; setStopped(true); setInteracting(true); }}
       onTouchEnd={(event) => {
         const delta = event.changedTouches[0].clientX - touch.current;
         if (multiple && Math.abs(delta) > 35) {
