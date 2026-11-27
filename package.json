@@ -1,10 +1,10 @@
 {
   "name": "super-league",
   "private": true,
-  "packageManager": "pnpm@11.29.0",
+  "packageManager": "pnpm@12.23.0",
   "engines": {
     "node": ">=24.15",
-    "pnpm": ">=11"
+    "pnpm": ">=12"
   },
   "scripts": {
     "install:all": "pnpm install --frozen-lockfile",

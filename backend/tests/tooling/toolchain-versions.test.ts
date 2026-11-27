@@ -18,7 +18,7 @@ describe('toolchain versions', () => {
   });
 
   it('pnpm settings are in the workspace file, and each package keeps its own lockfile', () => {
-    expect(JSON.parse(read('package.json')).packageManager).toMatch(/^pnpm@11\./);
+    expect(JSON.parse(read('package.json')).packageManager).toMatch(/^pnpm@12\./);
     expect(read('pnpm-workspace.yaml')).toMatch(/^sharedWorkspaceLockfile: false$/m);
     expect(existsSync(join(repo, '.npmrc'))).toBe(false);
     // Install scripts run only for the packages listed here, and no release-age exception is committed.
