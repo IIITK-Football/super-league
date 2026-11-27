@@ -24,6 +24,7 @@ export const routes: [path: string, load: Loader][] = [
   ['/players/:player_id', () => import('../../backend/app/api/players/[player_id]/route')],
   ['/news', () => import('../../backend/app/api/news/route')],
   ['/leaderboard', () => import('../../backend/app/api/leaderboard/route')],
+  ['/rules', () => import('./seasonRules').then((module) => module.rulesPublic)],
   // Division fantasy
   ['/predictions/leaderboard', () => import('../../backend/app/api/predictions/leaderboard/route')],
   ['/predictions/history', () => import('../../backend/app/api/predictions/history/route')],
@@ -37,6 +38,10 @@ export const routes: [path: string, load: Loader][] = [
   ['/admin/seasons/:id', () => import('./divisionLifecycle').then((module) => module.seasonDetail)],
   ['/admin/seasons/:id/current', () => import('./divisionLifecycle').then((module) => module.seasonCurrent)],
   ['/admin/seasons/:id/sections', () => import('./divisionLifecycle').then((module) => module.seasonSections)],
+  ['/admin/seasons/:id/rules', () => import('./seasonRules').then((module) => module.rulesWorkspace)],
+  ['/admin/seasons/:id/rules/draft', () => import('./seasonRules').then((module) => module.rulesDraft)],
+  ['/admin/seasons/:id/rules/publish', () => import('./seasonRules').then((module) => module.rulesPublish)],
+  ['/admin/seasons/:id/rules/versions/:version', () => import('./seasonRules').then((module) => module.rulesVersion)],
   ['/admin/matches', () => import('../../backend/app/api/admin/matches/route')],
   ['/admin/matches/live', () => import('../../backend/app/api/admin/matches/live/route')],
   ['/admin/newsletter', () => import('../../backend/app/api/admin/newsletter/route')],
