@@ -7,7 +7,8 @@ handoff steps.
 ## Status
 
 - 2026-11-27: Claude holds the work, in the main checkout on `develop`.
-- SL-040 and SL-044 are done. Phase 4 is not yet closed with `pnpm work phase`.
+- SL-040 and SL-044 are done, so Phase 4 is complete (`pnpm work phase 4` confirms it). Every active test group passed on 2026-11-27 after the toolchain update.
+- The owner asked to stop before SL-045: do not plan or start it until they say so.
 - Maintenance the owner asked for, after SL-044: the Next.js runtime is removed (`5a86178`) and the toolchain is updated (through `a77a2b4`): Node 24, pnpm 12, Vite 8, Vitest 5, React 19, TypeScript 7, current GitHub Actions, current minor and patch releases, and Worker compatibility date 2026-11-20.
 
 ## Held back on purpose
@@ -23,21 +24,25 @@ handoff steps.
 - At `9a3fd4a`: CI, Cloudflare Pages, the staging Worker build and the staging database run passed. Staging walkthroughs `rules`, `parity` and `match-events` passed. `divisions` failed intermittently when two public reads from an idle browser tab took over 12 seconds; with a 40-second staging timeout it passed 6 of 6, the slow reads answering after 10 to 14 seconds. One of 16 plain idle-gap page loads showed the same stall (12.6 s, reused HTTP/2 connection), and 40 direct reads from Node all answered within 1.1 s. The cause is unconfirmed: the connection from this machine is the likely one, and `@supabase/supabase-js` also changed (2.99 to 2.119).
 - Before this, the `database`, `tooling` and `rosters` tests had stale expectations from SL-040 and SL-044 (schema counts, hidden-season fixtures) that the item completions never ran. They are fixed in `5a86178`.
 
+## Staging stall
+
+A bare browser `fetch` to the staging Data API, with no app code, took 14.4 s once in 30 tries after an idle gap; 30 tries without HTTP/2 and 30 from Node did not stall. The `divisions` walkthrough failures are therefore a browser connection stall from this machine, not the app or the library upgrade. The walkthrough allows 40 s on staging.
+
 ## Using the toolchain locally
 
-- Node 24.15 or later (`.nvmrc`) and pnpm 12. A global pnpm 10 cannot switch to pnpm 12 (`ENOEXEC`): run `npm install -g pnpm@12.23.0`.
+- Node 24.15 or later (`.nvmrc`) and pnpm 12. The owner's machine has Node 24.22.3 and pnpm 12.23.0 (conda `swe`), verified on 2026-11-27.
 - pnpm refuses releases younger than a day and runs install scripts only for `esbuild` and `workerd` (`pnpm-workspace.yaml`).
+- No `devEngines` entry: `.nvmrc` is the one place that sets Node.
 
 ## Exact next step
 
-1. Before the next release, open the staging site on another network after leaving a tab idle, and watch for public pages stuck on “Loading seasons…”.
-2. Start SL-045 (needs a plan first). It stores the accepted rules version id (`season_rules_versions.id`) and adds the player's view of that version; `season_rules(p_season)` serves only the latest.
+1. **Release, on the owner's go-ahead only:** follow “Next release” in [`docs/release.md`](../release.md). Public season pages are unavailable between the deploy and the production migrations.
+2. SL-045, only when the owner asks. It stores the accepted rules version id (`season_rules_versions.id`) and adds the player's view of that version; `season_rules(p_season)` serves only the latest.
 
 ## Owner actions
 
-- Upgrade the local Node and pnpm as above.
-- Cloudflare: set the build variable `NODE_VERSION` to 24 for both Workers and Pages (it overrides `.nvmrc`), and review the Pages compatibility date.
-- Optional: enable Dependabot alerts; delete the unused `Preview` and `Production` GitHub environments.
+- Before the release: confirm `NODE_VERSION` is 24 in Cloudflare (the owner reported the Cloudflare and GitHub settings done on 2026-11-27).
+- After the release: check Dependabot's first run, whose pnpm 12 support is unconfirmed.
 
 ## In flight
 

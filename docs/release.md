@@ -200,3 +200,33 @@ Migrations `20261202000000_match_events` and `20261202000001_retire_legacy_match
 - Local edge-case rehearsal: `pnpm db:rehearse-match-events --yes` (assist equal to the scorer, own goal with assist, non-numeric minute, score-only matches, JSON-only goal; and a blocker case, more goal rows than the score, which stops the migration with nothing changed).
 
 **Release steps** (the owner): merge with a merge commit; wait for the verified pre-migration backup; approve `Database Production`; then read `match_event_migration_report` grouped by finding in the production SQL Editor and compare with the numbers above (they can differ if matches changed since the backup).
+
+## Next release: season setup, versioned rules and the toolchain
+
+Prepared 2026-11-27 from `develop`; `main` is at `af61b3f`. Nothing here has run in production.
+
+### Migrations (after `20261205000003`)
+| Migration | What it does | Rollback |
+|---|---|---|
+| `20261206000000_division_season_lifecycle` | New divisions and seasons start hidden, current-season rules, section labels, the lifecycle functions and `section_flags` | Forward-only; additive for existing rows |
+| `20261207000000_season_rules_versions` | Rules drafts and immutable versions; turns the rules the site shows today into version 1 and fails on any mismatch | Forward-only; older code ignores the tables |
+| `20261207000001_retire_rules_md` | Drops `seasons.rules_md` after checking every text has a version | Add the column again and fill it from version 1 |
+
+### Public pages are unavailable between the deploy and the migrations
+- The **new** Worker reads `section_flags`, so season pages fail until `20261206000000` is applied.
+- The **current** site reads `rules_md`, so it breaks once `20261207000001` is applied.
+
+Merging deploys the site and Worker at once, while the migrations wait for the backup and your approval. Pick a quiet time, and approve `Database Production` as soon as the backup passes and the new site and Worker builds are green.
+
+### Steps (owner)
+1. Before merging: in Cloudflare, `NODE_VERSION` is `24` wherever it is set for the Pages project and the production Worker.
+2. Open the pull request from `develop` into `main`; the `gate` runs every test group. Merge it with a merge commit.
+3. Wait for the verified production backup and the green Pages and Worker builds, then approve `Database Production`. Cancel any older waiting production run.
+4. Check the public home, a season's matches, standings and rules for each division, and `/dictator` → Divisions & seasons → Rules.
+5. Run **Actions → Database backup** (production) once more: it is the first run of the scheduled backup on the new toolchain.
+
+The pre-migration backup is also the first run on Node 24, pnpm 12 and the new action versions. If it fails, no migration runs: stop and fix forward.
+
+### Also in this release
+The Next.js runtime is removed, dependencies and tools are updated, and `.github/dependabot.yml` starts working once it is on `main`.
+
