@@ -205,7 +205,7 @@ export default function ManageDivisions() {
   };
 
   const deleteDivision = async (division) => {
-    if (!(await confirm(`Delete the division "${division.name}"? This only works while it has no seasons.`))) return;
+    if (!(await confirm({ title: `Delete ${division.name}?`, description: 'This only works while the division has no seasons.', confirmLabel: 'Delete division', tone: 'danger' }))) return;
     return write(`division-${division.id}`, `/admin/divisions/${division.id}`, 'DELETE', undefined,
       `Division "${division.name}" deleted.`, () => {
         if (selectedDivision?.id === division.id) {

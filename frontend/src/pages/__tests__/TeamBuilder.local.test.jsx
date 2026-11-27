@@ -171,7 +171,7 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
     holder.user = { id: boss.id, roles: ['dictator'] };
     render(<ConfirmProvider><MemoryRouter><TeamBuilder /></MemoryRouter><Toaster /></ConfirmProvider>);
     await screen.findByRole('button', { name: new RegExp(`${tag}Zed`) }, { timeout: 15000 }); // starts on the team they captain
-    await pick(/Division/, new RegExp(tag));
+    await pick(/Division/, `SL Check ${tag}`);
     await waitFor(() => expect(screen.getByRole('button', { name: /Season/ }).disabled).toBe(false), { timeout: 15000 });
     await pick(/Season/, /2026/);
     await waitFor(() => expect(screen.getByRole('button', { name: /Team/ }).disabled).toBe(false), { timeout: 15000 });
@@ -180,7 +180,7 @@ describe.skipIf(!TARGET)(`TeamBuilder through the real Data API (${TARGET ?? 'sk
     setNumber(/jersey number/i, 21);
     fireEvent.click(screen.getByRole('button', { name: /save player profiles/i }));
     await waitFor(() => expect(screen.getByText(/^Saved \d players?$/)).toBeTruthy(), { timeout: 15000 });
-    expect(must(await admin.from('roster_memberships').select('jersey_number').eq('id', made.places[0]).single()).jersey_number).toBe(21);
+    await waitFor(async () => expect(must(await admin.from('roster_memberships').select('jersey_number').eq('id', made.places[0]).single()).jersey_number).toBe(21), { timeout: 15000 });
     must(await admin.from('roster_memberships').update({ jersey_number: 11 }).eq('id', made.places[0])); // the next case expects 11
   }, 60000);
 

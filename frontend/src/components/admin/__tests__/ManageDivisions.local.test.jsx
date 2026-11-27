@@ -24,7 +24,6 @@ vi.mock('../../../lib/supabase', () => ({
 }));
 
 import ManageDivisions from '../ManageDivisions';
-import { readToasts } from '../../ui/toastStore';
 // Confirmations are answered by globalThis.confirmAnswer (a vi.fn); the dialog itself is covered by the screens that use it.
 vi.mock('../../ui', async (importOriginal) => ({ ...(await importOriginal()), useConfirm: () => globalThis.confirmAnswer }));
 globalThis.confirmAnswer = vi.fn(async () => true);
@@ -74,7 +73,7 @@ async function removeSyntheticDivisions() {
 }
 
 const type = (scope, label, value) => fireEvent.change(scope.getByLabelText(label), { target: { value } });
-const statusText = async (re) => waitFor(() => expect(readToasts().map((t) => t.title).join('\n')).toMatch(re), { timeout: 15000 });
+const statusText = async (re) => waitFor(() => expect(screen.getByRole('status').textContent).toMatch(re), { timeout: 15000 });
 
 describe.skipIf(!TARGET)('ManageDivisions through the local Worker and Data API', () => {
   let dictator;
@@ -155,7 +154,9 @@ describe.skipIf(!TARGET)('ManageDivisions through the local Worker and Data API'
     await statusText(/is now the current season/);
     expect((await admin.from('seasons').select('is_current').eq('id', season.data.id).single()).data.is_current).toBe(true);
 
-    fireEvent.click(await screen.findByRole('button', { name: /^sections$/i }, { timeout: 15000 }));
+    const sectionsButton = await screen.findByRole('button', { name: /^sections$/i }, { timeout: 15000 });
+    await waitFor(() => expect(sectionsButton.disabled).toBe(false), { timeout: 15000 });
+    fireEvent.click(sectionsButton);
     const list = await screen.findByRole('list', { name: 'Sections' }, { timeout: 15000 });
     const fantasy = within(list).getByLabelText('Fantasy enabled');
     fireEvent.click(fantasy);
@@ -171,10 +172,12 @@ describe.skipIf(!TARGET)('ManageDivisions through the local Worker and Data API'
     expect((await admin.from('divisions').select('archived_at').eq('id', division.data.id).single()).data.archived_at).toBeTruthy();
 
     // The division has a season, so deleting it is refused and explained; the data stays.
+    globalThis.confirmAnswer.mockClear();
     // The screen reports success before it has reloaded; the buttons stay disabled until then.
     const remove = () => within(screen.getByDisplayValue('SL Check Inter').closest('li')).getByRole('button', { name: /delete sl check inter/i });
     await waitFor(() => expect(remove().disabled).toBe(false), { timeout: 15000 });
     fireEvent.click(remove());
+    await waitFor(() => expect(globalThis.confirmAnswer).toHaveBeenCalledWith(expect.objectContaining({ title: 'Delete SL Check Inter?', confirmLabel: 'Delete division' })));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/archive it instead/i), { timeout: 15000 });
     expect((await admin.from('seasons').select('id').eq('division_id', division.data.id)).data).toHaveLength(1);
   }, 90000);
